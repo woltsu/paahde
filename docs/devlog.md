@@ -2440,10 +2440,10 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
 ## Knockback
 
 - **What:** every hit pushes what it hits (`shared/knockback.ts`). A weapon gives a push (`PUSH`, kg·m/s: the mace
-  900, the rifle 200, the pistol 80, thrown scrap 60) and what's hit moves off at push / its mass (`mass` on every
+  1500, the rifle 200, the pistol 80, thrown scrap 60) and what's hit moves off at push / its mass (`mass` on every
   `ENEMIES` entry, shared/enemies.ts) along the blow, slowing under `KNOCK_DRAG`, so it slides v / 5 m in all. Crawlers
   (100 kg) and drones (40 kg) feel any hit, weak point or not: on a crawler the pistol slides it ~0.2 m, the rifle
-  ~0.5 m, the mace ~2.3 m and (`STAGGER`, 4 m/s) knocks it out of its lunge into the rest after a miss; a drone is thrown
+  ~0.5 m, the mace ~3.8 m and (`STAGGER`, 4 m/s) knocks it out of its lunge into the rest after a miss; a drone is thrown
   along the beam (2 m/s pistol, 5 m/s rifle) and one shot down carries the knock into its fall. Guardians (40 t), jets,
   the harvester and the bosses work out under `KNOCK_MIN` and stay put (the scripted ones, which move on paths, take no
   knock at all).

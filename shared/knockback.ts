@@ -7,7 +7,7 @@ import { ENEMIES, type EnemyKind } from './enemies.ts';
 
 export type Pusher = 'mace' | 'rifle' | 'pistol' | 'throw';
 /** What a hit of each weapon pushes with (kg·m/s): the mace swings hard; the rifle's beam kicks more than the pistol's. */
-export const PUSH: Record<Pusher, number> = { mace: 900, rifle: 200, pistol: 80, throw: 60 };
+export const PUSH: Record<Pusher, number> = { mace: 1500, rifle: 200, pistol: 80, throw: 60 };
 /** How fast a knock dies away (1/s). */
 export const KNOCK_DRAG = 5;
 /** Knocks slower than this (m/s) aren't applied: the heavy things. */
