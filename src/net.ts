@@ -258,6 +258,10 @@ export class Net {
   constructor(browserId: string) {
     this.browserId = browserId;
     this.connect();
+    // Leaving the page (tab closed, reload, navigated away) says goodbye at once, so the server takes our character
+    // out of the world now instead of leaving it standing to be killed. Back from the back/forward cache, the close
+    // handler's reconnect brings us in again.
+    addEventListener('pagehide', () => this.ws?.close(1000, 'page hidden'));
   }
 
   get connected() {

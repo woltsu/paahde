@@ -149,7 +149,7 @@ type Player = {
   gassed: number; // seconds of poison gas breathed (shared/gas.ts gasExposure); GAS_S kills
   lastTend: { at: number };
   ws: WebSocket;
-  alive: boolean;
+  heardAt: number; // performance.now() of the last message or pong from them (the heartbeat drops a silent socket)
   hands: Hands; // what the client says it holds, relayed in snapshots
   slot: number; // selected hotbar slot (-1 none)
   aim: boolean; // gun raised to aim (cosmetic, relayed in snapshots)
@@ -197,9 +197,11 @@ wss.on('connection', (ws) => {
   if (lives <= 0) return ws.close(4410, 'game over');
   ws.on('pong', () => {
     const p = players.get(ws);
-    if (p) p.alive = true;
+    if (p) p.heardAt = performance.now();
   });
   ws.on('message', (data) => {
+    const heard = players.get(ws);
+    if (heard) heard.heardAt = performance.now();
     let msg: unknown;
     try {
       msg = JSON.parse(String(data));
@@ -301,22 +303,26 @@ wss.on('connection', (ws) => {
     }
     if (p) return onCrash(p, msg);
   });
-  ws.on('close', () => {
-    const p = players.get(ws);
-    if (!p) return;
-    corpses.expire(playingOwners());
-    save(p);
-    crash.leaveAll(p.id);
-    vehicleSrv.release(p.id, p.state.riding ? p.state : undefined); // the bike stays where they left
-    players.delete(ws);
-    if (p.ready) leftAt.set(p.browserId, performance.now());
-    if (![...players.values()].some((o) => o.browserId === p.browserId)) {
-      items.forget(p.browserId);
-    }
-  });
+  ws.on('close', () => leave(ws));
   // Drop clients that never say hello.
   setTimeout(() => players.has(ws) || ws.close(1008, 'no hello'), 5000);
 });
+
+/** They're gone: out of the world at once (no longer seen, targeted or hurt), saved, their bike left where it stands.
+ *  On the socket's close, or sooner: when their close frame arrives (the tick loop), or the heartbeat gives up on them. */
+function leave(ws: WebSocket) {
+  const p = players.get(ws);
+  if (!p) return;
+  corpses.expire(playingOwners());
+  save(p);
+  crash.leaveAll(p.id);
+  vehicleSrv.release(p.id, p.state.riding ? p.state : undefined); // the bike stays where they left
+  players.delete(ws);
+  if (p.ready) leftAt.set(p.browserId, performance.now());
+  if (![...players.values()].some((o) => o.browserId === p.browserId)) {
+    items.forget(p.browserId);
+  }
+}
 
 async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: unknown, wantedColor: unknown, wantedLook: unknown) {
   if (typeof browserId !== 'string' || !UUID.test(browserId)) return ws.close(1008, 'bad browserId');
@@ -361,7 +367,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   const p: Player = {
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,
-    heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, alive: true, hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: 0, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
+    heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, heardAt: performance.now(), hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: 0, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
   };
   players.set(ws, p);
   everJoined = true;
@@ -1255,6 +1261,9 @@ setInterval(() => {
   // Something blocked the event loop: every player's snapshots and bots are late by this much.
   if (elapsed > LATE_TICK_S) trace('tick', { ms: Math.round(elapsed * 1000), players: players.size });
   const tod = timeOfDayAt(now + epoch);
+  // A closing socket (their close frame came, or we sent ours) can take a while to finish closing (ws waits up to 30 s
+  // for the TCP close): they've left already, so nothing should see or hit their character meanwhile.
+  for (const ws of players.keys()) if (ws.readyState !== ws.OPEN) leave(ws);
   for (const p of players.values()) {
     if (p.down) {
       if (Date.now() >= p.down.until) respawn(p);
@@ -1443,17 +1452,21 @@ setInterval(() => {
   power.save();
 }, SAVE_INTERVAL_MS);
 
-// Heartbeat: keeps NATs/proxies from dropping idle sockets and terminates dead ones.
+// Heartbeat: keeps NATs/proxies from dropping idle sockets and terminates dead ones. A tab killed with its network
+// (sleep, Wi-Fi gone, a crash) sends no close: its character would stand there to be killed until we notice, so
+// notice soon. Browsers answer pings without the page's JS, so a hidden tab still answers.
+const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS) || 2500;
+const SILENT_MS = HEARTBEAT_MS * 4;
 setInterval(() => {
+  const now = performance.now();
   for (const p of players.values()) {
-    if (!p.alive) {
+    if (now - p.heardAt > SILENT_MS) {
       p.ws.terminate();
       continue;
     }
-    p.alive = false;
     p.ws.ping();
   }
-}, 25_000);
+}, HEARTBEAT_MS);
 
 // Watchtower stops the container with SIGTERM on every deploy: persist everyone, then tell
 // clients the server is restarting (1012) so they reconnect.

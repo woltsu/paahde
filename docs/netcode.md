@@ -78,7 +78,12 @@ at our scale and the whole team can read and change it. Alternatives, if needs g
 
 - **Deploys restart the server.** On SIGTERM it saves everyone and closes sockets with code 1012.
   Clients reconnect with exponential backoff plus jitter and resume from the saved position.
-- **Heartbeat.** The server pings every 25 s and drops dead sockets.
+- **Leaving.** A player who leaves is out of the world at once: not seen, targeted or hurt. The client closes its
+  socket on `pagehide`; the server takes the player out as soon as the socket stops being open (its close frame, not
+  the TCP close ws may wait 30 s for), or when the heartbeat gives up on it (`server/world.ts` `leave`).
+- **Heartbeat.** The server pings every 2.5 s and drops a socket it hasn't heard from (no pong, no message) for 10 s:
+  a tab gone with its network (sleep, Wi-Fi) sends no close. Browsers answer pings without the page's JS, so hidden
+  tabs stay.
 - **Caddy reloads.** `stream_close_delay 5m` keeps WebSockets open when the host Caddy config reloads.
 - **Server time.** Physics advances at 60 Hz regardless of incoming packet rate. Each step consumes at most one
   queued input; the queue holds 12 (200 ms), and older overflow is acknowledged as discarded. A late server callback
