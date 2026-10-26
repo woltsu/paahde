@@ -2,7 +2,8 @@
 // first-person hands and props when present. Drag to orbit, wheel to zoom. ?clip=Run shows one clip large.
 // ?walk: the characters walk circles over rolling dunes instead, to check foot planting and leg IK;
 // &heading=1.57 strafes right, 3.14 backs up (travel direction relative to facing).
-// ?item=laser_rifle puts that item in every hand; &aim raises it to aim (&pitch=0.3 aims up).
+// ?item=laser_rifle puts that item in every hand; &aim raises it to aim (&pitch=0.3 aims up). ?item=scrap_mace&swing
+// swings the mace every SWING_EVERY s; &swing=0.35 holds the stroke that many seconds in.
 // &target=x,y,z: where the camera looks (default 0,1,0).
 // ?gear=255 wears and carries that gear (shared/gear.ts wornGear | carriedGear bits).
 // ?look=0,38354534400 dresses the characters in those looks (shared/look.ts packLook), one after another.
@@ -59,6 +60,10 @@ let pitch = 0.12;
 let dist = 11;
 
 const item = params.get('item');
+const swinging = params.has('swing');
+const swingHeld = params.get('swing') ? Number(params.get('swing')) : null;
+const SWING_EVERY = 1.5;
+let swungAt = 0;
 const gear = Number(params.get('gear') ?? 0);
 const aiming = params.has('aim');
 const drinking = params.has('drink'); // ?item=canteen&drink: at the mouth
@@ -146,6 +151,11 @@ label.textContent = clips.join(' · ');
 renderer.setAnimationLoop((time) => {
   timer.update(time);
   const dt = Math.min(timer.getDelta(), 0.1);
+  if (swingHeld !== null) for (const { m } of models) m.swing?.(performance.now() - swingHeld * 1000);
+  else if (swinging && time / 1000 - swungAt > SWING_EVERY) {
+    swungAt = time / 1000;
+    for (const { m } of models) m.swing?.();
+  }
   for (const { m, clip, bike } of models) {
     // drive through update() so the clip-selection logic is exercised too
     const pose = {

@@ -23,7 +23,7 @@ import type { ServerMsg } from '../shared/protocol.ts';
 const FAN: [number, number][] = [[0, 0], [0.2, 0], [-0.2, 0], [0.4, 0], [-0.4, 0], [0.6, -0.1], [-0.6, -0.1],
   [0, -0.25], [0.25, -0.25], [-0.25, -0.25], [0, -0.5], [0, 0.15]];
 /** The whoosh, as the stroke comes round (ms after the press; the blow lands at MACE_STRIKE_MS). */
-const SWISH_MS = MACE_STRIKE_MS - 120;
+const SWISH_MS = MACE_STRIKE_MS - 90;
 /** Steps (m) the blow is marched along the view to find the sand. */
 const SAND_STEP = 0.1;
 

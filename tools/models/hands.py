@@ -49,7 +49,7 @@
 #   GrinderIdle / GrinderWalk  two-handed: the right fist round the motor housing, the left fist round the side handle
 # Scrap mace (src/models/mace.ts, drawn on the empty `MaceMount`, in the pistol's frame, the shaft along +Z):
 #   MaceIdle / MaceWalk  in both fists like a bat, shouldered up the right side of the view
-#   MaceSwing (0.9 s one-shot)  wound back over the right shoulder, a wide flat stroke through the middle, low left, back
+#   MaceSwing (0.7 s one-shot)  wound back over the right shoulder, a wide flat stroke through the middle, low left, back
 # Hand tools (tools/models/handtools.py; nodes `Shovel`, `Detector`, `ScrapChunk` on the right hand, own atlases):
 #   ShovelIdle / ShovelWalk  carried in the right fist under the T grip, blade out ahead low in the view
 #   ShovelDig (1.2 s loop)  both hands: drive it in, lever, lift the scoop into view, flick it out to the left
@@ -1466,21 +1466,21 @@ for name, frames, fn in (('GrinderIdle', 90, grinder_idle), ('GrinderWalk', 22, 
     S.clip(name, frames, fn)
 # ============================================================================== mace clips
 # The scrap mace (src/models/mace.ts, built in the pistol's glTF frame like the grinder: natural +Y = its +Z, the shaft
-# towards the head), ~1.55 m, in both fists like a bat: the RIGHT fist at the origin, the LEFT one MC_LEFT below it
+# towards the head), ~1.75 m, in both fists like a bat: the RIGHT fist at the origin, the LEFT one MC_LEFT below it
 # towards the pommel, both thumbs towards the head. MaceIdle / MaceWalk: shouldered up the right side of the view, the
 # head up in the top right corner. MaceSwing (one-shot, MC_SWING_FRAMES): wound back over the right shoulder, brought
 # round in a wide flat stroke from the right through the middle of the view (the blow lands at MC_STRIKE, the game's
 # MACE_STRIKE_MS), followed through low to the left and back to the shoulder.
-MC_R, MC_LEFT, MC_HEAD = 0.022, -0.24, 1.12  # shaft radius, the left fist's place and the head's centre on the shaft (natural y)
+MC_R, MC_LEFT, MC_HEAD = 0.022, -0.24, 1.2  # shaft radius, the left fist's place and the head's centre on the shaft (natural y)
 MC_R_CONTACT = capsule_sdf(V((0, -0.05, 0)), V((0, 0.05, 0)), MC_R)
 MC_L_CONTACT = capsule_sdf(V((0, MC_LEFT - 0.05, 0)), V((0, MC_LEFT + 0.05, 0)), MC_R)
 MC_SDF_NAT = (lambda sh, hd: lambda p: min(sh(p), hd(p)))(
-    capsule_sdf(V((0, -0.34, 0)), V((0, MC_HEAD - 0.1, 0)), MC_R), lambda p: (p - V((0, MC_HEAD, 0))).length - 0.13)
+    capsule_sdf(V((0, -0.34, 0)), V((0, MC_HEAD - 0.1, 0)), MC_R), lambda p: (p - V((0, MC_HEAD, 0))).length - 0.16)
 MC_FACE = (0.4, -0.3, 0.85)  # a hint for the mace's natural +Z (its bent plate), roughly square to the swing
 # (right fist x y z, towards the head) in view space (x right, y ahead, z up), the face hint added below
 MC_CARRY = (0.20, 0.30, -0.12, 0.28, 0.60, 0.75)
 MC_STRIKE = 0.5
-MC_SWING_FRAMES = 27  # 0.9 s at 30 fps; MC_STRIKE of it is the game's MACE_STRIKE_MS
+MC_SWING_FRAMES = 21  # 0.7 s at 30 fps; MC_STRIKE of it is the game's MACE_STRIKE_MS
 MC_SWING = [(0.0, MC_CARRY),
             (0.30, (0.34, 0.30, -0.06, 0.50, 0.10, 0.86)),  # wound back, the head up over the right shoulder
             (0.42, (0.34, 0.42, -0.16, 0.80, 0.55, 0.15)),  # coming round flat from the right, side on
