@@ -31,7 +31,7 @@ export class DebugMenu {
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
-    fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}) {
+    fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {}) {
     const style = document.createElement('style');
     style.textContent = `
 #debugMenu { position: fixed; top: 48px; right: 12px; width: 230px; padding: 10px 12px; display: none;
@@ -80,6 +80,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <div class="row"><input id="dbgItemN" type="number" min="1" value="1" style="width:4em" title="How many (stackable items)">
 <select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${['Scrap', 'Basic', 'Quality', 'Space'].map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
 <button id="dbgGive">Give</button></div>
+<div class="row">Motorcycle <button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken</button><button id="dbgBikeWorking" title="A working motorcycle 3 m in front of you, Scrap parts, yours once you ride it (for everyone)">Working</button></div>
 <div class="row">Test lab <button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div>
 <label title="No heat build-up for you (the meter drops to zero)"><input id="dbgNoHeat" type="checkbox"> Disable heat</label>
 <label title="No random sandstorms in this world (clears the ones blowing)"><input id="dbgNoWeather" type="checkbox"> Disable weather</label>
@@ -104,6 +105,8 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);
+    p.querySelector('#dbgBikeBroken')!.addEventListener('click', () => spawnBike(false));
+    p.querySelector('#dbgBikeWorking')!.addEventListener('click', () => spawnBike(true));
     const item = p.querySelector<HTMLInputElement>('#dbgItem')!;
     const itemN = p.querySelector<HTMLInputElement>('#dbgItemN')!;
     const itemTier = p.querySelector<HTMLSelectElement>('#dbgItemTier')!;

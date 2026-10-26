@@ -412,6 +412,11 @@ export class Net {
     if (this.connected) this.send({ t: 'debugHit' });
   }
 
+  /** Debug menu: a motorcycle in front of us, broken or `working`. */
+  debugBike(working: boolean) {
+    if (this.connected) this.send({ t: 'debugBike', working });
+  }
+
   /** Carry off the small machine at a crash site: hidden now, confirmed (it lands in the bag) or put back by the server. */
   crashTake(id: string) {
     if (!this.connected || crashTaken.has(id)) return;

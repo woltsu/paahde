@@ -259,6 +259,12 @@ wss.on('connection', (ws) => {
     if (msg.t === 'debugGear' && p) return onDebugGear(p, msg.tier);
     if (msg.t === 'debugGive' && p) return onDebugGive(p, msg.kind, msg.n, msg.tier);
     if (msg.t === 'debugHit' && p) return hurt(p, 'laser', KILL, [0, 3, 6]);
+    if (msg.t === 'debugBike' && p) {
+      const f = p.state.facing, v = vehicleSrv.debugSpawn(p.state.x - Math.sin(f) * 3, p.state.z - Math.cos(f) * 3, f, msg.working === true);
+      sendShared(vehicleBox(v.id));
+      if (v.up) sendShared(cargoBox(v.id));
+      return;
+    }
     if (msg.t === 'debugVortexVisit' && p && !p.down && !p.state.riding) {
       // Out on the sand 600 m from the nearest sand vortex (just outside its pull), on the side you're on.
       const now = performance.now();

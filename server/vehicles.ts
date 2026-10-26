@@ -95,6 +95,14 @@ export class VehicleServer {
     this.add(x, z, 0.6, parts, false, 'home');
   }
 
+  /** Debug menu: a motorcycle at `x`, `z` facing `heading`, broken (parts as found) or `working` (stood up with Scrap
+   *  parts, nobody's until ridden). Returns it. */
+  debugSpawn(x: number, z: number, heading: number, working: boolean): Vehicle {
+    return this.db.tx(() => (working
+      ? this.add(x, z, heading, scrapParts(KIND), true, 'debug')
+      : this.add(x, z, heading, brokenParts(KIND, Math.random), false, 'debug')));
+  }
+
   /** Finds wanted lying broken at the crash sites at once (none in the lab: no desert). */
   private wantFinds() {
     return LAB ? 0 : (FINDS[KIND]?.n ?? 0);
