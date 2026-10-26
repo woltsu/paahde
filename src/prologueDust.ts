@@ -11,7 +11,7 @@
 
 const TRAIL_PIXELS = 2.5e6; // the trail buffer, at most (16 bytes a pixel); finer than css px on a dense screen
 const MAX_PIXELS = 4.2e6; // the canvas's backing store, at most
-const FADE = 0.09; // how much of the trails fades per frame (at 60 fps)
+const FADE = 0.06; // how much of the trails fades per frame (at 60 fps)
 const SCALE = 16384; // trail fixed point: units per 1.0 of brightness
 
 const COMMON = /* wgsl */ `
@@ -99,13 +99,13 @@ fn wind(p: vec2f, layer: f32) -> vec2f {
 }
 
 // The sand's colours, a loop round the desert: maroon, rust, burnt orange, amber, gold, bone, ash, sienna.
-fn tint(p: vec2f, depth: f32, s: ptr<function, u32>) -> u32 {
+fn tint(pos: vec2f, depth: f32, s: ptr<function, u32>) -> u32 {
   var pal = array<vec3f, 8>(
     vec3f(110.0, 44.0, 30.0), vec3f(181.0, 80.0, 42.0), vec3f(224.0, 123.0, 40.0), vec3f(240.0, 164.0, 64.0),
     vec3f(222.0, 182.0, 98.0), vec3f(240.0, 228.0, 204.0), vec3f(170.0, 150.0, 128.0), vec3f(138.0, 90.0, 52.0),
   );
   // a slow noise map of the screen picks along the loop (give or take, grain by grain), another lightens or darkens
-  let q = p / (min(u.size.x, u.size.y) * 0.5);
+  let q = 4.0 * pos / (min(u.size.x, u.size.y) * 0.5);
   let x = noise(vec3f(q, u.time * 0.02 + 40.0)) * 6.0 + 4.0 + (rnd(s) - 0.5) * 1.2;
   let k = i32(floor(x));
   var c = mix(pal[k & 7], pal[(k + 1) & 7], smoothstep(0.0, 1.0, fract(x))) / 255.0;
@@ -156,7 +156,7 @@ fn step(@builtin(global_invocation_id) id: vec3u) {
   g.vel += (wind(g.pos, layer) * speed - g.vel) * (1.0 - exp(-u.dt * mix(6.0, 1.6, g.depth)));
   // and a little Brownian jostle, which the pull back to the wind smooths into a wobble (more for the light ones)
   let jostle = vec2f(rnd(&s) + rnd(&s) + rnd(&s), rnd(&s) + rnd(&s) + rnd(&s)) * 2.0 - 3.0;
-  g.vel += jostle * mix(0.6, 0.15, g.depth) * speed * sqrt(u.dt);
+  g.vel += jostle * mix(1.0, 0.3, g.depth) * speed * sqrt(u.dt);
   let start = g.pos;
   g.pos += g.vel * u.dt;
   // off one edge, on at the other (so the sand stays evenly spread); now and then one is lifted away and set down
@@ -187,8 +187,8 @@ fn step(@builtin(global_invocation_id) id: vec3u) {
     deposit(mix(a, b, k / n), bright, c);
   }
   // a near grain catching the light
-  let ph = f32(g.seed & 65535u) * 0.0153;
-  if (g.depth > 0.8 && sin(ph + u.time * 3.1) * sin(ph * 1.7 + u.time * 1.3) > 0.97) { deposit(b, 1.6, vec3f(1.0)); }
+  // let ph = f32(g.seed & 65535u) * 0.0153;
+  // if (g.depth > 0.8 && sin(ph + u.time * 3.1) * sin(ph * 1.7 + u.time * 1.3) > 0.97) { deposit(b, 1.6, vec3f(1.0)); }
 }
 `;
 
