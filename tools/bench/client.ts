@@ -53,8 +53,10 @@ try {
   const file = existsSync(out) ? readdirSync(out).find((f) => f.endsWith('.json')) : undefined;
   if (!file) {
     // What tools/perf.ts said last (not the page's shader warnings), for the report.
+    // An error it threw is said by its own line (the lines before it are Node's code frame).
     const said = `${perf.stdout ?? ''}\n${perf.stderr ?? ''}`.split('\n').filter((l) => l.trim() && !/warning:|^\s+(at |-)|Vertex attribute/.test(l));
-    throw new Error(`tools/perf.ts ${perf.error ? perf.error.message : `exited ${perf.status}`}: ${said.slice(-5).join(' | ')}`);
+    const thrown = said.findLast((l) => /^\w*Error: /.test(l));
+    throw new Error(`tools/perf.ts ${perf.error ? perf.error.message : `exited ${perf.status}`}: ${thrown ?? said.slice(-5).join(' | ')}`);
   }
   const r = JSON.parse(readFileSync(join(out, file), 'utf8'));
   if (!r.valid) throw new Error(`invalid run: ${r.invalidReasons.join('; ')}${r.gameplay?.events?.length ? ` (${JSON.stringify(r.gameplay.events)})` : ''}`);

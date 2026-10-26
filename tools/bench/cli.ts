@@ -52,7 +52,11 @@ function runOnce(suite: string, dir: string): Promise<Sample> {
     child.on('close', (code) => {
       const line = out.trim().split('\n').pop() ?? '';
       if (code === 0 && line.startsWith('{')) res(JSON.parse(line) as Sample);
-      else rej(new Error(`${suite} exited ${code}: ${err.trim().split('\n').filter((l) => !/warning:|^\s+at /.test(l)).slice(-6).join(' | ')}`));
+      else {
+        // an error it threw by its own line (not Node's code frame before it), else the last it said
+        const said = err.trim().split('\n').filter((l) => !/warning:|^\s+at /.test(l));
+        rej(new Error(`${suite} exited ${code}: ${said.findLast((l) => /^\w*Error: /.test(l)) ?? said.slice(-6).join(' | ')}`));
+      }
     });
   });
 }
