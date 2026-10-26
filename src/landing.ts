@@ -275,11 +275,13 @@ export function leave() {
   shown = null;
 }
 
-/** The start: Join, Create, Character (src/lookView.ts), Options. */
+/** The start: Join, Create, Character (src/lookView.ts), Options. Over an ended game (the end screens) Join and Create,
+ *  and Main menu: the start screen as its own page, the game behind gone (as the Esc menu's, src/menu.ts). */
 function intro(why?: string): HTMLElement {
   const buttons = document.createElement('div');
   buttons.className = 'buttons';
-  buttons.innerHTML = `<button class="join">${TEXT.landing.join}</button><button class="create">${TEXT.landing.create}</button>${why ? '' : `<button class="lookBtn">${TEXT.landing.character}</button><button class="optionsBtn">${TEXT.menu.options}</button>`}`;
+  buttons.innerHTML = `<button class="join">${TEXT.landing.join}</button><button class="create">${TEXT.landing.create}</button>${why ? `<button class="mainMenu">${TEXT.menu.mainMenu}</button>` : `<button class="lookBtn">${TEXT.landing.character}</button><button class="optionsBtn">${TEXT.menu.options}</button>`}`;
+  buttons.querySelector('.mainMenu')?.addEventListener('click', () => location.assign(urlOf({ v: 'intro' })));
   buttons.querySelector('.join')!.addEventListener('click', () => nav({ v: 'join', tab: 'mine' }));
   buttons.querySelector('.create')!.addEventListener('click', () => nav({ v: 'create' }));
   buttons.querySelector('.lookBtn')?.addEventListener('click', () => nav({ v: 'look' }));
