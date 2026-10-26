@@ -5,12 +5,14 @@
 // instead, all in 2D.
 // A tab's first load tells the whole prologue and keeps the cover up until it is told (or a key or click skips it);
 // a reload in the same tab (a deploy, src/update.ts), or any load once this browser has joined a game, shows only
-// the title.
+// the title. `&prologue` in the address (e.g. `?w=lab&prologue`) tells the whole prologue every time and keeps the cover
+// up for good, to look at it.
 import { createPrologue, FONT_URL, PROLOGUE_S } from './prologueRunner';
 
 let off: (() => void) | null = null;
 let progress: (p: number) => void = () => {};
 let until = 0; // performance.now() the cover may lift at
+const KEEP = new URLSearchParams(location.search).has('prologue');
 
 function start() {
   const cover = document.getElementById('cover');
@@ -22,8 +24,9 @@ function start() {
   } catch {
     // no storage: tell it every time
   }
-  until = full ? performance.now() + PROLOGUE_S * 1000 : 0;
-  const skip = () => (until = 0);
+  if (KEEP) full = true;
+  until = KEEP ? Infinity : full ? performance.now() + PROLOGUE_S * 1000 : 0;
+  const skip = () => (until = KEEP ? Infinity : 0);
   const c = document.createElement('canvas');
   cover.prepend(c);
   const size = () => ({ w: innerWidth, h: innerHeight, dpr: window.devicePixelRatio || 1 });
