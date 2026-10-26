@@ -112,14 +112,19 @@ export type Kind = typeof GUARDIAN | typeof CRAWLER;
  *  CRAWLER_CHASE_MS, it backs off for CRAWLER_CALM_MS. One bite kills. */
 export const BITE_DAMAGE = KILL;
 export const BITE_MS = 1500;
-/** The lunge: within `reach` of you a crawler stops and crouches, turning to face you, for LUNGE_WIND_MS; then it springs in a straight line at where you are then, at LUNGE_SPEED, LUNGE_OVER m past it.
- *  It bites whoever it passes within LUNGE_HIT_R of (m, horizontally); keep moving and it misses. A miss leaves it
- *  standing for LUNGE_REST_MS. */
-export const LUNGE_WIND_MS = 500;
+/** The lunge: within `reach` of you a crawler stops and crouches, turning to face you, for LUNGE_WIND_MS; then it
+ *  springs in a straight line at where you'll be (led by how you're moving), at LUNGE_SPEED, LUNGE_OVER m past it.
+ *  It bites whoever it passes within LUNGE_HIT_R of (m, horizontally: your body and no more) where it's drawn,
+ *  BOT_DELAY_MS behind the server: only once you see it spring, and where you see it. Change course as it springs
+ *  and it misses. A miss leaves it standing for LUNGE_REST_MS. */
+export const LUNGE_WIND_MS = 1000;
 export const LUNGE_SPEED = 18;
 export const LUNGE_OVER = 2;
-export const LUNGE_HIT_R = 0.6;
+export const LUNGE_HIT_R = 0.4;
 export const LUNGE_REST_MS = 700;
+/** How far behind the server clock (ms) clients draw the walkers and drones (src/world/botFrames.ts): two updates
+ *  and some jitter. */
+export const BOT_DELAY_MS = 250;
 /** A crawler's lunge as sent ('bots' gun, shared/protocol.ts): none, crouched to spring, springing, standing after. */
 export const LUNGE_NONE = -1, LUNGE_WIND = 1, LUNGE_DASH = 2, LUNGE_REST = 3;
 export const CRAWLER_CHASE_MS = 10_000;

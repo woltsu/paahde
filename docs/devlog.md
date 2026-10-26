@@ -2389,20 +2389,26 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
 ## Crawler lunge
 
 - **What:** a crawler no longer bites on touch. Within `reach` (5 m) of its prey it stops and crouches for
-  `LUNGE_WIND_MS` (0.5 s), turning to face you, then springs in a straight line at where you are then (`LUNGE_SPEED`
-  18 m/s, `LUNGE_OVER` 2 m past it). It bites (`BITE_DAMAGE`) whoever it passes within `LUNGE_HIT_R` (0.6 m: your body and its mandibles) of and
-  backs off as before; a miss leaves it standing for `LUNGE_REST_MS` (0.7 s). One lunge per `BITE_MS`. Server:
+  `LUNGE_WIND_MS` (1 s; was 0.5), turning to face you, then springs in a straight line at where you'll be, led by how
+  you're moving (`LUNGE_SPEED` 18 m/s, `LUNGE_OVER` 2 m past it). It bites (`BITE_DAMAGE`) whoever it passes within
+  `LUNGE_HIT_R` (0.4 m: your body and no more; was 1, then 0.6) of and backs off as before. The bite is tested where
+  the crawler is drawn, `BOT_DELAY_MS` behind the server (a trail of its spring, `trailAt`): live only once you see it
+  spring, and where you see it (it used to bite from the server's first tick, while it was still drawn crouched); a miss leaves it standing for `LUNGE_REST_MS` (0.7 s). One lunge per `BITE_MS`. Server:
   `lunge` in server/guardians.ts; constants in shared/guardians.ts.
-- **Sent** in the crawler's `gun` slot of 'bots' (`LUNGE_NONE/WIND/DASH/REST`). The client crouches it (sinks, rears
-  back and quivers; noses down springing, src/world/guardians.ts) and plays a quickening rattle (`guardianSound.rattle`,
-  −24.8 LUFS momentary close by, −13.4 dBTP) as soon as the latest message says it crouches, since the drawn walkers
+- **Sent** in the crawler's `gun` slot of 'bots' (`LUNGE_NONE/WIND/DASH/REST`). The client crouches it (src/world/guardians.ts:
+  sinks almost to its belly, rears its front up, wiggles its back end harder and harder like a cat about to pounce, its
+  eye flaring and flickering; springing, it stretches up and noses down) and plays a rattle quickening right up to the
+  spring (`guardianSound.rattle`: −24.6 LUFS momentary close by at unity, −13.5 dBTP; −30 momentary at 3 m in the real
+  mix at master 0.4, tools/audio-measure.mjs `--components crawler`) as soon as the latest message says it crouches, since the drawn walkers
   are `BOT_DELAY_MS` behind and the wind-up would be half over. The snap and shake now come when a crawler that was
   lunging at you stops close by.
 - **Dodging** (headless sim, a pack of six summoned on a player for 30 s, 20 runs): standing still every lunge hits;
   walking straight away 63% (the overshoot catches you); strafing round at 7.5 m/s 16%; zig-zagging 49% (at a 1 m
-  bite: 97, 42, 67%). Move across its line, not away from it. It only ever bites mid-spring: running into you, crouched
-  or standing after a miss, it does nothing. A first version crept in while crouched and locked from 0–2 m, which no strafe dodges;
-  it holds still now.
+  bite: 97, 42, 67%). With the 1 s wind-up: 100, 42, 12, 34%. Bitten where it's drawn, aimed where you were: 100, 0, 0,
+  12%: any steady movement dodged it, so it leads you now: 100, 98, 0, 11% (circling curves off its straight lead).
+  Keep on the same way and it has you; change course as it springs. It only ever bites mid-spring: running into you,
+  crouched or standing after a miss, it does nothing. A first version crept in while crouched and locked from 0–2 m,
+  which no strafe dodges; it holds still now.
 
 
 ## The scrap mace

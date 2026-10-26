@@ -50,7 +50,7 @@ The fixture stands at a fixed generated spawn. Exploration uses an 8 m/s regiona
 storm uses 23 m/s wind and the game's storm music policy (silence). Combat adds a local rifle shot every 0.4 s,
 a walker footfall every 1.2 s at about 23 m, a blast every 2.7 s at about 36 m, a worm warning every 6 s at
 about 38 m, one drone and epic music. Multiplayer adds three remote shooters at 25–65 m, three drones and storm
-wind. The final combat captures also include a nearby crawler's 500 ms lunge warning every 5 s.
+wind. The final combat captures also include a nearby crawler's lunge warning (`LUNGE_WIND_MS`, 500 ms then) every 5 s.
 
 Measured with Chrome 156 on macOS, 48 kHz PCM and FFmpeg 9.0.2:
 

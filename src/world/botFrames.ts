@@ -2,12 +2,11 @@
 // past and interpolated between the two messages around that time, like remote players (src/net.ts). Past the latest
 // one (a network stall) they carry on as they were going for up to EXTRAP_MS, then stop and wait.
 import type { ServerMsg } from '../../shared/protocol.ts';
-import { CRAWLER, F_STRIDE, GUARDIAN, type Kind } from '../../shared/guardians.ts';
+import { BOT_DELAY_MS, CRAWLER, F_STRIDE, GUARDIAN, type Kind } from '../../shared/guardians.ts';
 
 type BotsMsg = Extract<ServerMsg, { t: 'bots' }>;
 
-/** How far behind the server clock (ms) they're drawn: two updates and some jitter. */
-export const BOT_DELAY_MS = 250;
+export { BOT_DELAY_MS };
 /** How long (ms) past the latest message they're drawn carrying on before they stop. */
 const EXTRAP_MS = 250;
 export const G_STRIDE = 13;

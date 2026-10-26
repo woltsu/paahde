@@ -164,8 +164,8 @@ class GuardianSound {
     const ctx = audio.ctx, sound = placed({ x, y, z }, ear, RATTLE_GAIN, 4, 40, { warning: true, duration: s + 0.1 });
     if (!ctx || !sound) return;
     const { t, input: p } = sound;
-    // Clicks closer and closer together, each a little higher and louder.
-    for (let at = 0, gap = 0.07; at < s; at += gap, gap = Math.max(0.018, gap * 0.85)) {
+    // Clicks closer and closer together right up to the spring, each a little higher and louder.
+    for (let at = 0; at < s; at += 0.09 - 0.072 * (at / s)) {
       const k = at / s, when = t + at + Math.random() * 0.006;
       const o = ctx.createOscillator();
       o.type = 'square';

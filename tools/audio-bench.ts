@@ -11,6 +11,7 @@ import { wormSound } from '../src/wormSound.ts';
 import { listen } from '../src/echo.ts';
 import { spawnPoint } from '../shared/sim.ts';
 import { heightAt } from '../shared/terrain.ts';
+import { LUNGE_WIND_MS } from '../shared/guardians.ts';
 
 const windSound = new WindSound(), crashSound = new CrashSound();
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -58,7 +59,7 @@ Object.assign(window, { measureAudio: async (scenario: 'exploration' | 'storm' |
     if (enabled('steps') && t >= nextStep) { nextStep = t + 1.2; const q = at(20, -12); guardianSound.footfall(q.x, q.y, q.z, 1, ear); }
     if (enabled('booms') && t >= nextBoom) { nextBoom = t + 2.7; const q = at(-30, -20); guardianSound.boom(q.x, q.y, q.z, ear); }
     if (enabled('tells') && t >= nextTell) { nextTell = t + 6; wormSound.tell(at(35, -15), ear, 1.72); }
-    if (enabled('crawler') && t >= nextCrawler) { nextCrawler = t + 5; const q = at(3, -2); guardianSound.rattle(q.x, q.y, q.z, 0.5, ear); }
+    if (enabled('crawler') && t >= nextCrawler) { nextCrawler = t + 5; const q = at(3, -2); guardianSound.rattle(q.x, q.y, q.z, LUNGE_WIND_MS / 1000, ear); }
     if (enabled('drones')) guardianSound.drones([{ id: 1, ...at(20, -20) }, ...(multi ? [{ id: 2, ...at(-25, -15) }, { id: 3, ...at(35, 10) }] : [])], ear);
   }, 1000 / 60);
   try {

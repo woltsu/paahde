@@ -12,7 +12,7 @@ import type { Vortex } from '../shared/vortex.ts';
 import { PACK_BACK_S } from '../shared/enemies.ts';
 import { coreCrashSites, crashSite, type CrashSite, LEVEL_R } from '../shared/crashsites.ts';
 import {
-  ALERT_R, BITE_DAMAGE, BITE_MS, BLAST_R, BODY_H, BOLT_R, BOLT_RANGE, BOLT_SPEED, CHARGE_MS, CRAWLER, CRAWLER_CALM_MS,
+  ALERT_R, BITE_DAMAGE, BITE_MS, BLAST_R, BOT_DELAY_MS, BODY_H, BOLT_R, BOLT_RANGE, BOLT_SPEED, CHARGE_MS, CRAWLER, CRAWLER_CALM_MS,
   CRAWLER_CHASE_MS, CRUSH_SLACK, LUNGE_DASH, LUNGE_HIT_R, LUNGE_NONE, LUNGE_OVER, LUNGE_REST, LUNGE_REST_MS, LUNGE_SPEED,
   LUNGE_WIND, LUNGE_WIND_MS, FIRE_MS, FIRE_R, footTop, GUARDIAN, GUN_DEPRESS, gunPivot, KINDS, type Kind, lineOfSight,
   MUZZLE, NIGHT_SUN, REST_R, restSpot, SETTLE, STEP_DIST, STEP_MAX, STEP_MIN,
@@ -103,9 +103,9 @@ type Guardian = {
   /** Guardians' feet (crawlers' are only drawn, src/world/guardians.ts); yaw last tick; standing still for (s). */
   feet: Foot[] | null; lastYaw: number; still: number;
   /** Crawlers: which way round what's in its way (server/pack.ts); the lunge (LUNGE_*) since when, springing along
-   *  unit (lx, lz) with `left` m to go. */
+   *  unit (lx, lz) with `left` m to go; where it has sprung (t ms, x, z, ...), for its bite where it's drawn. */
   skirt: Skirt;
-  lunge: number; lungeAt: number; lx: number; lz: number; left: number;
+  lunge: number; lungeAt: number; lx: number; lz: number; left: number; trail: number[];
   /** Knocked back (shared/knockback.ts): sliding at (kx, kz) m/s, dying away. */
   kx: number; kz: number;
 };
@@ -172,7 +172,7 @@ export class GuardianServer {
       tx: home.x, tz: home.z, guardUntil: 0, prey: -1, huntAt: 0, px: 0, pz: 0, knownAt: 0, calmUntil: 0, shotUntil: 0, bitAt: 0,
       aiming: false, ax: 0, ay: 0, az: 0, chargeAt: -1, firedAt: 0, missileAt: 0,
       points: weakPoints(kind, legs).length, broken: 0, deadAt: -1, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
-      lunge: LUNGE_NONE, lungeAt: 0, lx: 0, lz: 0, left: 0, kx: 0, kz: 0,
+      lunge: LUNGE_NONE, lungeAt: 0, lx: 0, lz: 0, left: 0, trail: [], kx: 0, kz: 0,
     };
     g.lastYaw = g.yaw;
     if (kind === GUARDIAN) this.plantFeet(g);
@@ -614,13 +614,19 @@ export class GuardianServer {
         g.lunge = LUNGE_NONE;
         return;
       }
-      const dx = p.x - g.x, dz = p.z - g.z, d = Math.hypot(dx, dz) || 1;
+      let dx = p.x - g.x, dz = p.z - g.z, d = Math.hypot(dx, dz) || 1;
       if (now - g.lungeAt < LUNGE_WIND_MS) {
         const rate = k.huntTurn * dt;
         g.yaw = wrap(g.yaw + Math.max(-rate, Math.min(rate, wrap(Math.atan2(dx, dz) - g.yaw))));
         g.speed = 0;
         return;
       }
+      // Springs at where you'll be when it's seen to get there (BOT_DELAY_MS, then the flight): keep going the same way
+      // and it has you; dodge once you see it spring.
+      const v = this.vel.get(p.id), lead = BOT_DELAY_MS / 1000 + d / LUNGE_SPEED;
+      dx += (v?.vx ?? 0) * lead;
+      dz += (v?.vz ?? 0) * lead;
+      d = Math.hypot(dx, dz) || 1;
       g.lunge = LUNGE_DASH;
       g.lungeAt = g.bitAt = now;
       g.lx = dx / d;
@@ -628,30 +634,38 @@ export class GuardianServer {
       g.left = d + LUNGE_OVER;
       g.yaw = Math.atan2(dx, dz);
       g.speed = LUNGE_SPEED;
+      g.trail = [now, g.x, g.z];
     }
     if (g.lunge === LUNGE_DASH) {
       const x0 = g.x, z0 = g.z, step = Math.min(g.left, LUNGE_SPEED * dt);
       this.moveTo(g, x0 + g.lx * step, z0 + g.lz * step, true);
       g.left -= step;
-      const hit = exposed.find((p) => segDist(p.x, p.z, x0, z0, g.x, g.z) < LUNGE_HIT_R);
-      if (hit) {
-        // Bites, and backs off.
-        bitten.set(hit.id, (bitten.get(hit.id) ?? 0) + BITE_DAMAGE);
-        g.lunge = LUNGE_NONE;
-        g.speed = 0;
-        g.prey = -1;
-        g.calmUntil = now + CRAWLER_CALM_MS;
-        this.patrolPoint(g);
-      } else if (g.left <= 0 || Math.hypot(g.x - x0, g.z - z0) < step * 0.5) {
-        // Missed (or ran into a wreck, or the start's edge).
+      g.trail.push(now, g.x, g.z);
+      if (g.left <= 0 || Math.hypot(g.x - x0, g.z - z0) < step * 0.5) {
+        // Done (or ran into a wreck, or the start's edge): stands there, its spring still being drawn for a moment.
         g.lunge = LUNGE_REST;
         g.lungeAt = now;
         g.speed = 0;
       }
-      return;
+    } else {
+      g.speed = 0;
+      if (now - g.lungeAt >= LUNGE_REST_MS) g.lunge = LUNGE_NONE;
     }
+    // The bite, where players see it: along the stretch of its spring drawn this tick, BOT_DELAY_MS behind (so not
+    // while it's still drawn crouched).
+    const t1 = now - BOT_DELAY_MS, t0 = Math.max(t1 - dt * 1000, g.trail[0] ?? Infinity);
+    if (t1 < t0 || t0 > g.trail[g.trail.length - 3]) return;
+    const [ax, az] = trailAt(g.trail, t0), [bx, bz] = trailAt(g.trail, t1);
+    const hit = exposed.find((p) => segDist(p.x, p.z, ax, az, bx, bz) < LUNGE_HIT_R);
+    if (!hit) return;
+    // Bites, and backs off.
+    bitten.set(hit.id, (bitten.get(hit.id) ?? 0) + BITE_DAMAGE);
+    g.lunge = LUNGE_NONE;
+    g.trail = [];
     g.speed = 0;
-    if (now - g.lungeAt >= LUNGE_REST_MS) g.lunge = LUNGE_NONE;
+    g.prey = -1;
+    g.calmUntil = now + CRAWLER_CALM_MS;
+    this.patrolPoint(g);
   }
 
   /** Steps to (nx, nz), kept off the start (and out of wrecks and scrap: crawlers). */
@@ -910,6 +924,16 @@ export class GuardianServer {
   crashes(): Kill[] {
     return this.drones.crashes();
   }
+}
+
+/** Where a crawler's spring (trail: t ms, x, z, ...) had it at time t (its ends before and after). */
+function trailAt(trail: number[], t: number): [number, number] {
+  for (let i = 3; i < trail.length; i += 3) {
+    if (t > trail[i]) continue;
+    const k = (t - trail[i - 3]) / Math.max(1, trail[i] - trail[i - 3]);
+    return [trail[i - 2] + (trail[i + 1] - trail[i - 2]) * k, trail[i - 1] + (trail[i + 2] - trail[i - 1]) * k];
+  }
+  return [trail[trail.length - 2], trail[trail.length - 1]];
 }
 
 /** How far (m) (px, pz) is from the segment (ax, az)–(bx, bz). */
