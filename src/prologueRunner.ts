@@ -2,7 +2,8 @@
 // paragraphs fading in over it a letter at a time, then the title card, and a loading bar. On a reload
 // in the same tab (src/prologue.ts) only the title comes up.
 // Plain canvas 2D that knows nothing of the page: it runs in a worker (src/prologueWorker.ts, src/prologue.ts)
-// because the main thread is busy building the world while this is up.
+// because the main thread is busy building the world while this is up. Where WebGPU is, the dust is drawn on a canvas
+// underneath by src/prologueDust.ts and this one only lays the text and the bar over it (`dust(false)`).
 import { TEXT } from '../shared/text.ts';
 
 type Ctx = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
@@ -44,6 +45,8 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   let bg: CanvasGradient | null = null;
   let vignette: CanvasGradient | null = null;
 
+  let ownDust = true; // drawing the backdrop and the dust here, not just the text over another canvas
+  let last = { w: 1, h: 1, dpr: 1 };
   let clock = 0;
   let target = 0; // loading progress asked for, and the eased value drawn
   let shown = 0;
@@ -130,12 +133,21 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   }
 
   function resize(cw: number, ch: number, deviceRatio: number) {
+    last = { w: cw, h: ch, dpr: deviceRatio };
     w = Math.max(1, cw);
     h = Math.max(1, ch);
     dpr = Math.min(deviceRatio, 2, Math.sqrt(MAX_PIXELS / (w * h)));
     g.canvas.width = Math.round(w * dpr);
     g.canvas.height = Math.round(h * dpr);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    if (!ownDust) {
+      n = 0;
+      buckets = [];
+      trail = makeCanvas(1, 1);
+      tg = trail.getContext('2d') as Ctx;
+      return;
+    }
     ts = Math.min(1, Math.sqrt(TRAIL_PIXELS / (w * h)));
     trail = makeCanvas(Math.round(w * ts), Math.round(h * ts));
     tg = trail.getContext('2d') as Ctx;
@@ -170,7 +182,6 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
       spawn(i, true);
     }
     buckets = lists.map((l) => Int32Array.from(l));
-    layout();
   }
 
   /** The wind at (x, y): a domain-warped field of sines that drifts in time, so eddies form, wander and let go,
@@ -284,13 +295,15 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
 
   function draw() {
     g.globalAlpha = 1;
-    g.fillStyle = bg!;
-    g.fillRect(0, 0, w, h);
-    g.globalAlpha = ramp(clock / 1.5);
-    g.drawImage(trail, 0, 0, w, h);
-    g.globalAlpha = 1;
-    g.fillStyle = vignette!;
-    g.fillRect(0, 0, w, h);
+    if (ownDust) {
+      g.fillStyle = bg!;
+      g.fillRect(0, 0, w, h);
+      g.globalAlpha = ramp(clock / 1.5);
+      g.drawImage(trail, 0, 0, w, h);
+      g.globalAlpha = 1;
+      g.fillStyle = vignette!;
+      g.fillRect(0, 0, w, h);
+    } else g.clearRect(0, 0, w, h);
     text();
     // the loading bar near the bottom: a dim track, filled in gold from the left
     const tw = Math.round(Math.min(360, w * 0.5));
@@ -306,13 +319,20 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   return {
     resize,
     relayout: layout,
+    /** Whether to draw the dust here (the default), or leave it to a canvas underneath (src/prologueDust.ts). */
+    dust(on: boolean) {
+      ownDust = on;
+      resize(last.w, last.h, last.dpr);
+    },
     progress: (p: number) => (target = Math.max(target, p)),
     frame(dt: number) {
       dt = Math.min(0.05, dt);
       clock += dt;
       shown += (target - shown) * Math.min(1, dt * 4);
-      step(dt);
-      dust();
+      if (ownDust) {
+        step(dt);
+        dust();
+      }
       draw();
     },
   };

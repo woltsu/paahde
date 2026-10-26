@@ -2469,3 +2469,20 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   their wrecks cleared. Debug menu packs are now told apart by `summoned` (they alone may come near the start).
 - **Economy sim:** a night-only roaming meet on the crawler (`{ at: 'roam', where: 'open', perMin: 0.2, night: true }`;
   `night` is new on roaming meets): about half the packs pass by unnoticed.
+
+## Prologue dust on the GPU
+
+- **What:** the loading cover's blown sand (src/prologueDust.ts) now runs in WebGPU compute shaders in the prologue's
+  worker: 40k–300k grains (was 3.5k–16k on the CPU) on a curl-noise wind, so they ride along the eddies and drift
+  downwind; a slight pull onto the noise's zero contour gathers them into gold ribbons that form, wander and let go.
+  Each grain has a depth: far ones dim, slow and following the air closely, near ones bright, fast and heavy enough to
+  lag through the eddies' turns. Grains wrap round the edges, so the sand stays evenly spread.
+- **How:** raw WebGPU, not three/webgpu (this runs before the game bundle has downloaded). Per frame a `fade` pass
+  dims the trail buffer (two fixed-point u32 channels per pixel: brightness, and brightness × hue), a `step` pass moves
+  each grain and splats its segment with bilinear `atomicAdd`s (one sample per trail px, ink by length, so slow and
+  fast grains read alike), and a full-screen triangle draws the backdrop gradient, the trails (ochre → gold → pale by
+  mean hue) and the vignette, dithered. Its canvas lies under the 2D one (src/prologue.ts), which then draws only the
+  text and the loading bar (`dust(false)` in src/prologueRunner.ts). A frame is skipped while the GPU is still busy
+  with the last one (shader warmup on the main thread).
+- **Fallback:** no WebGPU in the worker, a failed device or pipeline, or a lost device: the old canvas-2D dust, as
+  before. No OffscreenCanvas: everything on the page in 2D, as before.
