@@ -251,8 +251,9 @@ export const FINDS: Record<string, { n: number; level: SiteLevel }> = {
   motorcycle: { n: 3, level: 1 }, storm_detector: { n: 2, level: 1 }, wristpad: { n: 2, level: 1 },
   // The shield plate (shared/gear.ts): out where things first try to kill you.
   shield: { n: 3, level: 1 },
-  // The guns (shared/rifle.ts): the pistol near home, the rifle out on crawler ground, to take on the guardians with.
-  laser_pistol: { n: 4, level: 0 }, laser_rifle: { n: 8, level: 1 },
+  // The guns (shared/rifle.ts): the pistol near home, as common as the bottle (its heat sink is hammered out of scrap,
+  // its wiring comes off the pod), so the first gun comes early; the rifle out on crawler ground, for the guardians.
+  laser_pistol: { n: 8, level: 0 }, laser_rifle: { n: 8, level: 1 },
   // The jammer (shared/jammer.ts): out where the roaming drones and the jets first come after you.
   jammer: { n: 5, level: 1 },
   // The receivers that call the bosses (shared/bosses.ts): out on guardian ground.
