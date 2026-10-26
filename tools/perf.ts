@@ -69,8 +69,9 @@ const chrome: ChildProcess = spawn(CHROME, [
   '--enable-unsafe-webgpu', '--enable-webgpu-developer-features', // (precise GPU timestamps: otherwise rounded to 0.1 ms)
   '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
   '--window-size=1280,800', ...(flag('headless') ? ['--headless=new'] : []),
-  // --software: no graphics card (a CI runner): WebGL2 drawn by SwiftShader on the CPU
-  ...(flag('software') ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu'] : []), 'about:blank',
+  // --software: no graphics card (a CI runner): WebGL2 drawn by SwiftShader on the CPU. No GPU watchdog: on a slow runner a
+  // shader warm-up task can take long enough for it to drop the context, and src/recovery.ts then stops the game for good.
+  ...(flag('software') ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu', '--disable-gpu-watchdog'] : []), 'about:blank',
 ], { stdio: 'ignore' });
 const stop = () => {
   chrome.kill();
@@ -173,9 +174,12 @@ try {
       if (phase === 'recording') await traceStart();
     }
     if (phase === 'done') break;
+    // src/recovery.ts gave up (graphics lost, or the server wants another protocol): it never comes back, so fail now
+    const gaveUp = (await evaluate(`document.getElementById('graphicsRecovery')?.firstChild?.textContent ?? ''`)) as string;
+    if (gaveUp) throw new Error(`the game stopped at ${((Date.now() - t0) / 1000).toFixed(0)} s: "${gaveUp}"${problems.length ? ` (${[...new Set(problems)].slice(0, 3).join(' | ')})` : ''}`);
     await sleep(500);
   }
-  if (phase !== 'done') throw new Error('the run did not finish (the game never became playable?)');
+  if (phase !== 'done') throw new Error(`the run did not finish (the game never became playable?)${problems.length ? ` (${[...new Set(problems)].slice(0, 3).join(' | ')})` : ''}`);
   await traceStop();
   if (flag('shot')) {
     // the view where the walk ended (it stands still there), then again with one option changed, to compare the two pictures
