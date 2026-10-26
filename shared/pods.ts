@@ -10,8 +10,9 @@
 // Together they are a small scrap-field site: a starter machine thrown out by each (podSites: machine sites "pod:<n>"
 // like a crash site's, shared/crash.ts, carried off and back on the starter timer, server/crash.ts), and a starter kit
 // lying about them: scrap, cloth, and the pod's console and power box, torn out (podLootSpot, POD_LOOT in
-// shared/tables.ts, rolled in shared/lootRoll.ts, laid out by server/loot.ts). The first broken motorcycle lies by the
-// first pod (shared/lootRoll.ts homeBikeSpot).
+// shared/tables.ts, rolled in shared/lootRoll.ts, laid out by server/loot.ts). Each player finds a broken motorcycle
+// of their own lying by their pod: the first player's is the world's first (shared/lootRoll.ts homeBikeSpot), the
+// others' round it (arrivalBikeSpot; server/vehicles.ts arrive).
 //
 // Solid (collidePods in sim.ts step(); a top within a step of the feet is ground, anything taller a wall) and they cast
 // shade (podCasters, shared/shade.ts). Same determinism rules as shared/scrap.ts in the collision: + - * /, Math.sqrt,
@@ -141,7 +142,7 @@ export function atPodTap(x: number, y: number, z: number, margin = 0): boolean {
  *  smokes or goes spent. */
 export const POD_WRECK = -2;
 /** Where each pod's machine lies, pod-local (x, z): off its right flank, by its tail (the hatch is on its left). */
-const MACHINE_SPOT: [number, number] = [3.4, -1.2];
+export const POD_MACHINE_SPOT: [number, number] = [3.4, -1.2];
 
 let sites: CrashSite[] | null = null;
 
@@ -154,7 +155,7 @@ export function podSites(): CrashSite[] {
   return (sites = PODS.map((pod, index) => {
     let u = r() * total, kind = kinds[0][0];
     for (const [k, w] of kinds) if ((u -= w) < 0) { kind = k; break; }
-    const p = podToWorld(pod, MACHINE_SPOT[0], MACHINE_SPOT[1]);
+    const p = podToWorld(pod, POD_MACHINE_SPOT[0], POD_MACHINE_SPOT[1]);
     return { id: `pod:${index}`, wreck: POD_WRECK, index, level: 0, ...p, yaw: r() * 6.2831853, kind, seed: (r() * 4294967296) >>> 0 };
   }));
 }
@@ -169,11 +170,11 @@ export function podSiteById(id: unknown): CrashSite | null {
 // ---- what lies about them ------------------------------------------------------------------------------------------
 
 /** Where loot lies by a pod, pod-local (x, z): ahead of its nose, by its flanks, along its furrow. */
-const LOOT_SPOTS: [number, number][] = [[-2.6, 4.2], [2.8, 3.5], [3.2, 1.2], [-3.4, -2.6], [2.4, -4.5], [-2.2, -7], [1.6, -10]];
+export const POD_LOOT_SPOTS: [number, number][] = [[-2.6, 4.2], [2.8, 3.5], [3.2, 1.2], [-3.4, -2.6], [2.4, -4.5], [-2.2, -7], [1.6, -10]];
 
 /** A spot to lay something out by one of the pods, from `rand` (shared/lootRoll.ts podFindSpot). */
 export function podLootSpot(rand: () => number): { x: number; z: number } {
   const pod = PODS[Math.floor(rand() * PODS.length)];
-  const [lx, lz] = LOOT_SPOTS[Math.floor(rand() * LOOT_SPOTS.length)];
+  const [lx, lz] = POD_LOOT_SPOTS[Math.floor(rand() * POD_LOOT_SPOTS.length)];
   return podToWorld(pod, lx + (rand() - 0.5) * 2.4, lz + (rand() - 0.5) * 2.4); // a scatter, not heaps
 }

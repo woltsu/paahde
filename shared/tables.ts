@@ -262,10 +262,11 @@ export const FINDS: Record<string, { n: number; level: SiteLevel }> = {
 };
 
 /** One broken motorcycle lies on the sand by the first crashed pod in a new world (server/vehicles.ts,
- *  shared/lootRoll.ts homeBikeSpot), so a bike is in sight from the first step out: it has these slots fitted (scrap
+ *  shared/lootRoll.ts homeBikeSpot), so a bike is in sight from the first step out, and each new player after the
+ *  first finds another of their own round their pod (arrivalBikeSpot): it has these slots fitted (scrap
  *  tier). Its battery comes out of the pod's power box (POD_LOOT, on the dismantling bench) and its bearing is hammered
  *  out of scrap at the workbench (RECIPE_TABLE bearing_scrap): nothing at the pods gives one (POD_MACHINES), so the bike
- *  comes after the workbench. Repaired where it lies, it is the world's (everyone's) first bike. */
+ *  comes after the workbench. Repaired where it lies, it is whoever stood it up's (like any bike). */
 export const HOME_BIKE = { fitted: ['motor'] as PartId[] };
 
 /** Lying about the crashed pods players arrive in (shared/pods.ts, server/loot.ts): a starter kit, kept whole. `kit`: how

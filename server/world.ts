@@ -364,6 +364,9 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
     if (c) state = spawnState(c.x, c.z);
   }
   grantKits(items, db, browserId);
+  // Their own broken bike by their pod (before the list goes out to them; the others are told now).
+  const bike = row?.name ? null : vehicleSrv.arrive(browserId, podOf(browserId));
+  if (bike !== null) sendShared(vehicleBox(bike));
   const p: Player = {
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,

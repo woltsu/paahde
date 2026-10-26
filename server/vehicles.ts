@@ -1,5 +1,6 @@
 // Server side of vehicles (shared/vehicles.ts): the `vehicles` table, the broken motorcycles lying in the world (one
-// by the first crashed pod in a new world, HOME_BIKE; FINDS.motorcycle at the crash sites, a new one a while after one
+// by the first crashed pod in a new world, HOME_BIKE, and one more by their pod for each new player after the first,
+// arrive(); FINDS.motorcycle at the crash sites, a new one a while after one
 // is stood up), standing one up once its part slots are filled (its item is in box veh<id>: parts are fitted there
 // like a building's, server/items.ts fit / unfit), and getting on and off: mount() puts the player on it at once
 // (shared/sim.ts riding), and whoever rides it carries it with them until they get off (or die, or leave), when it
@@ -10,12 +11,13 @@ import { cargoBox, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bikeLevel, GEAR, isVehicle, partsOf, repaired, scrapParts } from '../shared/gear.ts';
 import { partKind, type ItemData } from '../shared/items.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
-import { brokenParts, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
+import { arrivalBikeSpot, brokenParts, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import type { PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { TEXT } from '../shared/text.ts';
+import { placed } from '../shared/placed.ts';
 import { inReach, parked, setVehicles, vehicles, type Vehicle } from '../shared/vehicles.ts';
 import { LAB } from '../shared/world.ts';
 import type { openDb } from './db.ts';
@@ -29,13 +31,17 @@ const REACH_SLACK = 1.5;
 const FIND_RESPAWN_MS = 3 * 60_000;
 /** The world's DB setting that says the motorcycle items were made vehicles (v12, migrate()). */
 const MIGRATED = 'vehicles';
+/** The world's DB setting that says a new player has had the home bike as theirs to find (arrive()). */
+const HOME_GIVEN = 'home_bike_given';
+/** A player's grant (db markGrant) that says their own broken motorcycle has been laid out (arrive()). */
+const ARRIVAL_GRANT = 'arrival_bike';
 const KIND = 'motorcycle';
 
 export class VehicleServer {
   private db: Db;
   private items: ItemServer;
   private changed = false;
-  /** Where each came from ('home', 'find', 'old'). */
+  /** Where each came from ('home', 'arrival', 'find', 'old'). */
   private src = new Map<number, string>();
   /** Whose each is (browser ID), if anyone's. */
   private owner = new Map<number, string>();
@@ -88,11 +94,35 @@ export class VehicleServer {
     return v;
   }
 
+  /** A home bike's parts: HOME_BIKE.fitted, scrap tier. */
+  private homeParts() {
+    return GEAR[KIND].slots.map((s) => ('part' in s && HOME_BIKE.fitted.includes(s.part) ? partKind(s.part, 'scrap') : null));
+  }
+
   /** The broken motorcycle by the first crashed pod, once in a world (HOME_BIKE). */
   private spawnHome() {
     const { x, z } = homeBikeSpot();
-    const parts = GEAR[KIND].slots.map((s) => ('part' in s && HOME_BIKE.fitted.includes(s.part) ? partKind(s.part, 'scrap') : null));
-    this.add(x, z, 0.6, parts, false, 'home');
+    this.add(x, z, 0.6, this.homeParts(), false, 'home');
+  }
+
+  /**
+   * A new player (browser ID `browserId`, first join to this world) arrives in pod `pod`: a broken motorcycle of their
+   * own lies by it (HOME_BIKE), once. The first one's is the home bike (if it's still lying broken); everyone after
+   * gets another, round the pod (shared/lootRoll.ts arrivalBikeSpot). It's the world's like any other until stood up.
+   * None in the lab. Returns the new one's id, if one was laid out.
+   */
+  arrive(browserId: string, pod: number): number | null {
+    if (LAB || this.db.hasGrant(browserId, ARRIVAL_GRANT)) return null;
+    return this.db.tx(() => {
+      this.db.markGrant(browserId, ARRIVAL_GRANT);
+      const home = vehicles.find((v) => this.src.get(v.id) === 'home');
+      if (!this.db.getSetting(HOME_GIVEN)) {
+        this.db.setSetting(HOME_GIVEN, 1);
+        if (home && !home.up) return null;
+      }
+      const at = arrivalBikeSpot(pod, [...vehicles, ...placed]);
+      return at ? this.add(at.x, at.z, at.heading, this.homeParts(), false, 'arrival').id : null;
+    });
   }
 
   /** Debug menu: a motorcycle at `x`, `z` facing `heading`, broken (parts as found) or `working` (stood up with Scrap

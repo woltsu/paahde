@@ -14,8 +14,8 @@ import { SCRAP_CELL, scrapPieces } from './scrap.ts';
 import { PART_IDS, partOf, pickTier } from './parts.ts';
 import { GUNS, PISTOL, RIFLE } from './rifle.ts';
 import { rocksNear } from './rocks.ts';
-import { PODS, podLootSpot } from './pods.ts';
-import { nearPod, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
+import { POD_LOOT_SPOTS, POD_MACHINE_SPOT, PODS, podLootSpot } from './pods.ts';
+import { nearPod, onPodGround, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
 import type { JetKind } from './jetbreak.ts';
 import {
   BOSS_SPOILS, BROKEN_GEAR, CACHES, DRONE_JET_SPOILS, FINDS, HARVESTER_SCRAP, HARVESTER_SPOILS, JET_RELIC_ODDS, JET_SCRAP,
@@ -108,26 +108,57 @@ export function nearPiles() {
   return out;
 }
 
+/** Clear sand for a bike lying broken: no rock, no scrap pile's pieces near (x, z). */
+function clearSand(x: number, z: number): boolean {
+  if (rocksNear(x, z, 3)) return false;
+  const ix = Math.floor(x / SCRAP_CELL), iz = Math.floor(z / SCRAP_CELL);
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if (scrapPieces(ix + dx, iz + dz).some((p) => Math.hypot(p.x - x, p.z - z) < 4)) return false;
+  }
+  return true;
+}
+
 /** Where the home bike lies: by the first crashed pod (shared/pods.ts, POD_BIKE_SPOTS), on clear sand in plain view;
  *  with no pods (the dev lab), out in front of where you start, off the middle a little. The same spot every time. */
 export function homeBikeSpot() {
-  const clear = (x: number, z: number) => {
-    if (rocksNear(x, z, 3)) return false;
-    const ix = Math.floor(x / SCRAP_CELL), iz = Math.floor(z / SCRAP_CELL);
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      if (scrapPieces(ix + dx, iz + dz).some((p) => Math.hypot(p.x - x, p.z - z) < 4)) return false;
-    }
-    return true;
-  };
   if (PODS.length) for (const [lx, lz] of POD_BIKE_SPOTS) {
     const p = podToWorld(PODS[0], lx, lz);
-    if (clear(p.x, p.z)) return p;
+    if (clearSand(p.x, p.z)) return p;
   }
   for (const d of [22, 28, 34, 16, 42]) for (const a of [0.35, -0.35, 0.6, -0.6, 0, 0.9, -0.9]) {
     const x = LAB_SPAWN.x + Math.sin(a) * d, z = LAB_SPAWN.z + Math.cos(a) * d;
-    if (clear(x, z)) return { x, z };
+    if (clearSand(x, z)) return { x, z };
   }
   return { x: LAB_SPAWN.x + 8, z: LAB_SPAWN.z + 20 };
+}
+
+/** How far apart the arrivals' bikes lie from each other and from anything else lying or standing there (m). */
+const ARRIVAL_BIKE_GAP = 3.5;
+
+/** Where a newly arrived player's own broken motorcycle lies (HOME_BIKE; the first player's is the home bike itself):
+ *  round their pod `pod` (shared/pods.ts podOf), ring by ring outward, on clear sand off the pod's hull and furrow, its
+ *  machine and its loot, and ARRIVAL_BIKE_GAP from everything in `taken` (the vehicles and placed things there now).
+ *  Ahead of the pod first, in view from its hatch. Null with no pods (the dev lab). The same spot for the same `taken`. */
+export function arrivalBikeSpot(pod: number, taken: { x: number; z: number }[]): { x: number; z: number; heading: number } | null {
+  if (!PODS.length) return null;
+  const p = PODS[((pod % PODS.length) + PODS.length) % PODS.length];
+  const free = (x: number, z: number) => taken.every((t) => Math.hypot(t.x - x, t.z - z) >= ARRIVAL_BIKE_GAP);
+  const offPod = (lx: number, lz: number) => Math.hypot(lx - POD_MACHINE_SPOT[0], lz - POD_MACHINE_SPOT[1]) > 4 &&
+    POD_LOOT_SPOTS.every(([sx, sz]) => Math.hypot(lx - sx, lz - sz) > 2.5);
+  let last: { x: number; z: number } | null = null;
+  for (let ring = 0; ring < 9; ring++) {
+    const r = 6 + ring * 2.5, n = Math.floor((2 * Math.PI * r) / ARRIVAL_BIKE_GAP);
+    for (let i = 0; i < n; i++) {
+      // From straight ahead (+Z, pod-local), alternating left and right round the ring.
+      const k = Math.ceil(i / 2) * (i % 2 ? 1 : -1), a = (k * 2 * Math.PI) / n + (ring % 2) * (Math.PI / n);
+      const lx = Math.sin(a) * r, lz = Math.cos(a) * r;
+      const w = podToWorld(p, lx, lz);
+      if (nearPod(w.x, w.z, 2) || onPodGround(w.x, w.z, 0.5) || !offPod(lx, lz) || !clearSand(w.x, w.z)) continue;
+      last = w;
+      if (free(w.x, w.z)) return { ...w, heading: a + 1.3 };
+    }
+  }
+  return last && { ...last, heading: 0.6 };
 }
 
 /** Where a find of FINDS level `level` lies: among the debris of a crash site of that level (`sites`: the ones finds lie

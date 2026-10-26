@@ -312,7 +312,8 @@ export function openDb(path: string) {
   const deleteWire = db.prepare('DELETE FROM wires WHERE id = ?');
   // Vehicles (shared/vehicles.ts, server/vehicles.ts): where each stands and whether it's been repaired (stood up). Its
   // item is in box `veh<id>`, its cargo in `cargo<id>` (items). src: 'home' (the first one, by the crashed pod),
-  // 'find' (lying at a crash site), 'old' (a motorcycle item from before vehicles), 'debug' (the debug menu's).
+  // 'arrival' (another new player's, by their pod), 'find' (lying at a crash site), 'old' (a motorcycle item from
+  // before vehicles), 'debug' (the debug menu's).
   db.exec(`CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL,
     heading REAL NOT NULL, up INTEGER NOT NULL, src TEXT NOT NULL)`);
