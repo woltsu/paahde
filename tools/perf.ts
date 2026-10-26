@@ -169,7 +169,7 @@ try {
       console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)} s: ${phase}`);
       if (phase === 'settling' && trace === 'startup') await traceStop();
       // --peaceful: no heat and no weather for this player (the debug menu's switches), so a long load in the sun or a
-      // storm doesn't end the run (CI: tools/bench/client.ts)
+      // storm doesn't end the run
       if (flag('peaceful')) await evaluate('window.__dbg && (window.__dbg.net.debugHeat(true), window.__dbg.net.debugWeather(true))');
       if (phase === 'recording') await traceStart();
     }

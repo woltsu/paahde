@@ -7,13 +7,12 @@ import { COUNT_UNITS, type Sample } from './common.ts';
 export type SuiteRuns = { base: Sample[]; head: Sample[]; errors: { base?: string; head?: string } };
 export type Results = { base: string; head: string; suites: Record<string, SuiteRuns>; skipped: string[] };
 
-/** What a suite is, and how far its times must move to be flagged (they wobble more in a browser than in a loop). */
+/** What a suite is, and how far its times must move to be flagged (they wobble more under load than in a loop). */
 export const SUITES: Record<string, { title: string; threshold: number }> = {
   worldgen: { title: 'World generation (shared/, from the seed)', threshold: 0.1 },
   physics: { title: 'Movement physics (shared/sim.ts)', threshold: 0.1 },
   ai: { title: 'Enemies and weather (server/, a simulated minute)', threshold: 0.1 },
   server: { title: 'World server under load (8 players, everything summoned)', threshold: 0.15 },
-  client: { title: 'Client in headless Chrome (software rendering, low settings)', threshold: 0.15 },
 };
 const COUNT_THRESHOLD = 0.02;
 

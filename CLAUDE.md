@@ -10,7 +10,7 @@ Every push to `main` deploys to dev (https://dev.paahde.herkku.org/) within a fe
 - `npm run dev` — server (:8787, auto-restarts) + Vite (http://localhost:5173). Dev rooms: `http://localhost:5173/?w=lab` (every machine, part, gear, and grinder; `shared/lab.ts`) and `http://localhost:5173/?w=bench` (desert shots + live look tuner; `src/artBench.ts`).
 - `npm run preview` — build, then run the production server (serves `dist/` + `/ws` on :8787).
 - `npm run econ -- --base origin/main` — economy simulator (`docs/econsim.md`: 200 simulated worlds vs base). Run after changing loot tables, drops, recipes, gear slots, or site layout. CI runs it on every push to `main` (summary + Discord flags).
-- `npm run bench -- --base origin/main` — benchmarks (`docs/bench.md`: world gen, physics, enemies, bot-load server, headless Chrome client vs base). CI runs it on pushes to `main` that touch the game (summary + Discord flags).
+- `npm run bench -- --base origin/main` — benchmarks (`docs/bench.md`: world gen, physics, enemies, bot-load server vs base). CI runs it on pushes to `main` that touch the game (summary + Discord flags).
 
 ## Layout (grep `docs/codemap.md` by section/filename for subsystem details)
 

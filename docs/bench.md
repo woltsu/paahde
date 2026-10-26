@@ -7,18 +7,15 @@ automatic, every-commit kind.
 ## Running it
 
 - `npm run bench -- --base origin/main`: every suite at this tree and at `origin/main` (a temporary git worktree of
-  it, these benchmarks copied in, your `node_modules` linked), in turns, then the report. A few minutes for the Node
-  suites; the client suite adds about 6 min (it builds both trees and needs Chrome).
-- `npm run bench -- --suites worldgen,physics`: only some suites (`worldgen`, `physics`, `ai`, `server`, `client`);
+  it, these benchmarks copied in, your `node_modules` linked), in turns, then the report. A few minutes.
+- `npm run bench -- --suites worldgen,physics`: only some suites (`worldgen`, `physics`, `ai`, `server`);
   without `--base` both sides are this tree, so every "change" in the report is the noise.
-- `--rounds n` runs each side n times (defaults: 7 for the Node cases, 3 for the server, 2 for the client, after one client
-  run thrown away: the first Chrome on a fresh CI runner starts a second slower).
-- One suite by hand: `node tools/bench/case.ts worldgen|physics|ai`, `node tools/bench/server.ts [dir] [--types]`,
-  `node tools/bench/client.ts [dir]` (after `npx vite build`). Each prints its numbers as one JSON line.
+- `--rounds n` runs each side n times (defaults: 7 for the Node cases, 3 for the server).
+- One suite by hand: `node tools/bench/case.ts worldgen|physics|ai`, `node tools/bench/server.ts [dir] [--types]`. Each prints its numbers as one JSON line.
 
-CI (`.github/workflows/bench.yml`) installs and builds the pushed commit and the one before, runs
+CI (`.github/workflows/bench.yml`) installs the pushed commit and the one before, runs
 `tools/bench/cli.ts ab ../base --suites auto` (only the suites the changed files can move: `shared/` moves everything,
-`server/` the AI and the server, `src/`, `public/` and the packages the client) and puts the report in the run's
+`server/` the AI and the server, the packages the server) and puts the report in the run's
 summary. Changes it flags go to Discord (`BENCH_DISCORD_WEBHOOK`, else the economy simulator's webhook). It only
 reports: it never blocks a deploy.
 
@@ -43,12 +40,10 @@ All of it runs in the bench world (`bench0001`: its id is its seed, so the deser
   dev spawns sending input at 60 Hz. Three seconds in, one makes it midnight and they summon everything; four seconds
   later 30 s are measured: CPU per second, how busy the event loop is, the 60 Hz loop (mean, p99, max), memory, and
   what each player is sent (KB/s, messages/s). `--types` breaks the sending down by message type.
-- **client** (`client.ts`): the production build served by that tree's own server, `tools/perf.ts --software` in
-  headless Chrome (no graphics card: WebGL2 by SwiftShader on the CPU), low settings at 480×300, a 15 s spin on the
-  spot beside a scrap field at 9:36 (the same views every run). The startup timeline (renderer ready, joined, models
-  in, loaded, playable, long tasks), the game's CPU time per frame (the median: at ~40 frames a p90 is a few stalls) and its render submission, draws and
-  triangles, and the software rasterizer's time per frame (a rough measure of what a frame asks of a graphics card:
-  it grows with triangles and pixels). Real GPU numbers need a real GPU: `npm run perf`.
+
+The client is not benchmarked here: a client suite (`tools/perf.ts --software` in headless Chrome, WebGL2 by SwiftShader on
+the CPU) was dropped, as it took up to half an hour of every run and then failed more often than it measured. Measure
+rendering on a real graphics card with `npm run perf` (`docs/perf.md`).
 
 ## Telling a change from noise
 
@@ -56,13 +51,13 @@ Times can't be kept from one machine to the next, so the base is measured again 
 turns (base, head, head, base, ...), each run a fresh process. For every number the report gives both medians, the
 change, and a 95 % bootstrap interval for it (each side's runs resampled). It flags (🔺 worse, 🟢 better):
 
-- a time that moved by at least its suite's threshold (10 % for the Node cases, 15 % for the server and the client)
+- a time that moved by at least its suite's threshold (10 % for the Node cases, 15 % for the server)
   with its interval clear of no change, and at least 0.05 ms;
-- a count (draws, triangles, sites, scrap pieces) that moved by 2 % or more;
+- a count (sites, scrap pieces) that moved by 2 % or more;
 - a changed checksum (↺): the code does something else now, not only at another speed.
 
 Measured A/A (this tree against itself): the Node cases agree within a few %, the server within about 5 % (its tick
-maximum and p99 wobble more, ±15 %), the client within 3 % (draws and triangles exactly).
+maximum and p99 wobble more, ±15 %).
 
 A suite that fails at the base (a benchmark newer than the code it measures, say) is reported and left out; one
 that fails at the pushed commit is reported as a failure.

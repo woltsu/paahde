@@ -2,21 +2,21 @@ name: Benchmarks
 
 # At every push to main that touches the game: tools/bench (docs/bench.md) at this commit and at the one before, in turns on
 # the same runner (times can't be kept from one machine to the next, so the base is measured again every time), and what
-# moved past the noise: world generation, physics, the enemies, the world server under load, the client in headless Chrome.
+# moved past the noise: world generation, physics, the enemies and the world server under load.
 # Only the suites the changed files can move are run. The report goes in the run's summary; what it flags goes to Discord
 # (the BENCH_DISCORD_WEBHOOK secret, else the economy sim's ECON_DISCORD_WEBHOOK). It reports only: it never blocks a deploy
 # (that's deploy.yml) and its failure breaks nothing.
 on:
   push:
     branches: [main]
-    paths: ['shared/**', 'server/**', 'src/**', 'public/**', 'index.html', 'vite.config.ts', 'package.json', 'package-lock.json', 'tools/bench/**', 'tools/perf.ts']
+    paths: ['shared/**', 'server/**', 'package.json', 'package-lock.json', 'tools/bench/**']
   workflow_dispatch:
     inputs:
       base:
         description: Commit to compare with (default the one before)
         required: false
       suites:
-        description: auto (what the change can move), all, or a list (worldgen,physics,ai,server,client)
+        description: auto (what the change can move), all, or a list (worldgen,physics,ai,server)
         required: false
         default: auto
       always:
@@ -53,13 +53,12 @@ jobs:
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE=$(git rev-parse HEAD~1); fi
           echo "sha=$(git rev-parse "$BASE")" >> "$GITHUB_OUTPUT"
 
-      # Each commit with its own packages and its own client build (tools/bench/client.ts serves dist/).
-      - name: Install and build both commits
+      # Each commit with its own packages.
+      - name: Install both commits
         run: |
           npm ci
-          npx vite build
           git worktree add --detach ../base ${{ steps.base.outputs.sha }}
-          (cd ../base && npm ci && npx vite build) || echo "::warning::the base commit did not build: its client is not measured"
+          (cd ../base && npm ci) || echo "::warning::the base commit did not install: it is not measured"
 
       - name: Benchmark
         env:

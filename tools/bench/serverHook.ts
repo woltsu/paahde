@@ -1,4 +1,4 @@
-// Loaded into a world process with `node --import` by tools/bench/server.ts (and the server of tools/bench/client.ts), so the
+// Loaded into a world process with `node --import` by tools/bench/server.ts, so the
 // game's code is measured as it is, not changed for it: Math.random seeded (both commits roll the same dice), and every
 // setInterval callback timed by its period (server/world.ts's 60 Hz loop, the power second, the save). Asked over IPC
 // ('bench-reset' starts the window, 'bench-stats' answers with it), it tells how long the loops took, the CPU used and
