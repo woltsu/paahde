@@ -1,13 +1,15 @@
 // The prologue's blown sand on the GPU (src/prologueRunner.ts draws the text over it, src/prologueWorker.ts runs both).
 // A few hundred thousand grains ride a curl-noise wind (divergence-free, so they gather into streamers and eddies that
 // drift up the screen and let go), each with its own depth: far grains are dim, slow and follow the air closely, near ones
-// bright, fast and heavy enough to cut across the eddies. Per frame, three passes:
-//   fade: the trail buffer (two fixed-point channels per pixel: brightness, and brightness x hue) dims a little;
+// bright, fast and heavy enough to cut across the eddies. A grain's colour comes from where it is set down: a slow noise
+// map over the screen picks it along a loop of desert colours, so the sand comes in drifts of rust, amber, bone, ash.
+// Per frame, three passes:
+//   fade: the trail buffer (four fixed-point channels per pixel: brightness, and brightness x r, g, b) dims a little;
 //   move: each grain steps and splats its segment into the trail with atomic adds (bilinear, so sub-pixel smooth);
 //   draw: a full-screen triangle lays the dark backdrop, the trails and the vignette.
 // Raw WebGPU rather than three/webgpu: this runs before the game's bundle has downloaded, in a worker of its own.
 
-const TRAIL_PIXELS = 3.5e6; // the trail buffer, at most (8 bytes a pixel); finer than css px on a dense screen
+const TRAIL_PIXELS = 2.5e6; // the trail buffer, at most (16 bytes a pixel); finer than css px on a dense screen
 const MAX_PIXELS = 4.2e6; // the canvas's backing store, at most
 const FADE = 0.09; // how much of the trails fades per frame (at 60 fps)
 const SCALE = 16384; // trail fixed point: units per 1.0 of brightness
@@ -43,7 +45,7 @@ struct Grain {
   pos: vec2f,
   vel: vec2f,
   depth: f32, // 0 far .. 1 near
-  hue: f32,   // 0 ochre .. 1 pale
+  tint: u32,  // its colour (rgba8)
   pace: f32,  // its own speed; 0 until first placed
   seed: u32,
 }
@@ -96,7 +98,25 @@ fn wind(p: vec2f, layer: f32) -> vec2f {
   return (vec2f(-0.08, -0.65) + vec2f(grad.y, -grad.x) * 0.3 + gather) * (0.45 + s * s * 1.1);
 }
 
-fn deposit(p: vec2f, a: f32, b: f32) {
+// The sand's colours, a loop round the desert: maroon, rust, burnt orange, amber, gold, bone, ash, sienna.
+fn tint(p: vec2f, depth: f32, s: ptr<function, u32>) -> u32 {
+  var pal = array<vec3f, 8>(
+    vec3f(110.0, 44.0, 30.0), vec3f(181.0, 80.0, 42.0), vec3f(224.0, 123.0, 40.0), vec3f(240.0, 164.0, 64.0),
+    vec3f(222.0, 182.0, 98.0), vec3f(240.0, 228.0, 204.0), vec3f(170.0, 150.0, 128.0), vec3f(138.0, 90.0, 52.0),
+  );
+  // a slow noise map of the screen picks along the loop (give or take, grain by grain), another lightens or darkens
+  let q = p / (min(u.size.x, u.size.y) * 0.5);
+  let x = noise(vec3f(q, u.time * 0.02 + 40.0)) * 6.0 + 4.0 + (rnd(s) - 0.5) * 1.2;
+  let k = i32(floor(x));
+  var c = mix(pal[k & 7], pal[(k + 1) & 7], smoothstep(0.0, 1.0, fract(x))) / 255.0;
+  c *= max(1.0, 0.75 / max(c.r, max(c.g, c.b))); // (the dark ones lifted, or they'd vanish on the dark)
+  c *= 0.75 + 0.25 * (noise(vec3f(q * 2.1 + 9.0, u.time * 0.03)) + 1.0);
+  // near grains catch the light
+  c = mix(c, pal[5] / 255.0, depth * 0.25);
+  return pack4x8unorm(vec4f(saturate(c), 0.0));
+}
+
+fn deposit(p: vec2f, a: f32, rgb: vec3f) {
   let f = p - 0.5;
   let c = vec2i(floor(f));
   let t = f - floor(f);
@@ -105,9 +125,11 @@ fn deposit(p: vec2f, a: f32, b: f32) {
     let q = c + o;
     if (q.x < 0 || q.y < 0 || f32(q.x) >= u.trail.x || f32(q.y) >= u.trail.y) { continue; }
     let w = select(1.0 - t.x, t.x, o.x == 1) * select(1.0 - t.y, t.y, o.y == 1);
-    let i = 2u * (u32(q.y) * u.tw + u32(q.x));
+    let i = 4u * (u32(q.y) * u.tw + u32(q.x));
     atomicAdd(&trail[i], u32(a * w * SCALE));
-    atomicAdd(&trail[i + 1u], u32(b * w * SCALE));
+    atomicAdd(&trail[i + 1u], u32(a * rgb.r * w * SCALE));
+    atomicAdd(&trail[i + 2u], u32(a * rgb.g * w * SCALE));
+    atomicAdd(&trail[i + 3u], u32(a * rgb.b * w * SCALE));
   }
 }
 
@@ -122,9 +144,9 @@ fn step(@builtin(global_invocation_id) id: vec3u) {
     g.seed = pcg(i * 2654435761u + 1u);
     s = g.seed;
     g.depth = pow(rnd(&s), 1.5);
-    g.hue = mix(rnd(&s), 0.45 + rnd(&s) * 0.55, g.depth);
     g.pace = 0.55 + rnd(&s) * rnd(&s) * 1.4;
     g.pos = vec2f(rnd(&s), rnd(&s)) * u.size;
+    g.tint = tint(g.pos, g.depth, &s);
     fresh = true;
   }
   let layer = floor(g.depth * 3.999);
@@ -142,7 +164,12 @@ fn step(@builtin(global_invocation_id) id: vec3u) {
   let m = vec2f(20.0);
   let wrapped = g.pos + (u.size + 2.0 * m) * (vec2f(g.pos < -m) - vec2f(g.pos > u.size + m));
   if (any(wrapped != g.pos) || rnd(&s) < 0.1 * u.dt) {
-    g.pos = select(wrapped, vec2f(rnd(&s), rnd(&s)) * u.size, all(wrapped == g.pos));
+    if (all(wrapped == g.pos)) {
+      g.pos = vec2f(rnd(&s), rnd(&s)) * u.size;
+      g.tint = tint(g.pos, g.depth, &s);
+    } else {
+      g.pos = wrapped;
+    }
     g.vel = wind(g.pos, layer) * speed;
     grains[i] = g;
     return;
@@ -154,13 +181,14 @@ fn step(@builtin(global_invocation_id) id: vec3u) {
   let b = g.pos * u.ts;
   let len = distance(a, b);
   let n = clamp(ceil(len), 1.0, 8.0);
+  let c = unpack4x8unorm(g.tint).rgb;
   let bright = mix(0.035, 0.42, g.depth * g.depth) * max(len, 0.3) / n;
   for (var k = 1.0; k <= n; k += 1.0) {
-    deposit(mix(a, b, k / n), bright, bright * g.hue);
+    deposit(mix(a, b, k / n), bright, c);
   }
   // a near grain catching the light
   let ph = f32(g.seed & 65535u) * 0.0153;
-  if (g.depth > 0.8 && sin(ph + u.time * 3.1) * sin(ph * 1.7 + u.time * 1.3) > 0.97) { deposit(b, 1.6, 1.6); }
+  if (g.depth > 0.8 && sin(ph + u.time * 3.1) * sin(ph * 1.7 + u.time * 1.3) > 0.97) { deposit(b, 1.6, vec3f(1.0)); }
 }
 `;
 
@@ -180,13 +208,13 @@ fn fade(@builtin(global_invocation_id) id: vec3u) {
 const DRAW = /* wgsl */ `${COMMON}
 @group(0) @binding(1) var<storage, read> trail: array<u32>;
 
-fn texel(c: vec2i) -> vec2f {
+fn texel(c: vec2i) -> vec4f {
   let q = clamp(c, vec2i(0), vec2i(u.trail) - 1);
-  let i = 2u * (u32(q.y) * u.tw + u32(q.x));
-  return vec2f(f32(trail[i]), f32(trail[i + 1u])) / SCALE;
+  let i = 4u * (u32(q.y) * u.tw + u32(q.x));
+  return vec4f(f32(trail[i]), f32(trail[i + 1u]), f32(trail[i + 2u]), f32(trail[i + 3u])) / SCALE;
 }
 
-fn sample(p: vec2f) -> vec2f {
+fn sample(p: vec2f) -> vec4f {
   let f = p - 0.5;
   let c = vec2i(floor(f));
   let t = f - floor(f);
@@ -207,12 +235,10 @@ fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let r = length(u.size) * 0.5;
   var col = mix(srgb(21, 16, 11), srgb(5, 4, 3), saturate(length(p - u.size * vec2f(0.5, 0.45)) / r));
 
-  // the trails: ochre through gold to pale by their mean hue, thick where many grains cross
+  // the trails: in their grains' mean colour, thick and paler where many cross
   let d = sample(p * u.ts);
-  let hue = saturate(d.y / max(d.x, 1e-5));
-  var ink = mix(srgb(150, 108, 52), srgb(222, 180, 98), saturate(hue * 1.6));
-  ink = mix(ink, srgb(250, 238, 212), saturate(hue * 1.6 - 0.75));
-  ink = mix(ink, srgb(255, 248, 230), saturate(d.x - 1.2) * 0.6);
+  var ink = d.yzw / max(d.x, 1e-5);
+  ink = mix(ink, srgb(255, 248, 230), saturate(d.x - 1.2) * 0.5);
   col = mix(col, ink, (1.0 - exp(-d.x * 1.7)) * u.fadeIn);
 
   col *= 1.0 - 0.7 * saturate((length(p - u.size * 0.5) / r - 0.45) / 0.55);
@@ -282,7 +308,7 @@ export async function createGpuDust(canvas: OffscreenCanvas | HTMLCanvasElement)
     const tw = Math.ceil(w * ts);
     const th = Math.ceil(h * ts);
     count = Math.round(Math.min(300000, Math.max(40000, w * h * 0.12)));
-    trailWords = tw * th * 2;
+    trailWords = tw * th * 4;
     grains?.destroy();
     trail?.destroy();
     grains = device.createBuffer({ size: count * 32, usage: GPUBufferUsage.STORAGE }); // zeroed: placed on their first step

@@ -2486,3 +2486,8 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   with the last one (shader warmup on the main thread).
 - **Fallback:** no WebGPU in the worker, a failed device or pipeline, or a lost device: the old canvas-2D dust, as
   before. No OffscreenCanvas: everything on the page in 2D, as before.
+- **Later:** the wind blows up the screen, each grain has a little Brownian jostle (on its velocity, so a wobble),
+  and grains come in colours: where a grain is set down, a slow noise map picks its colour along a loop of maroon,
+  rust, burnt orange, amber, gold, bone, ash and sienna (a lightness map and a per-grain jitter on top), so the sand
+  comes in drifts. The trail buffer keeps brightness and brightness × r, g, b, and draws their mean colour. The 2D
+  fallback keeps its fixed colours.
