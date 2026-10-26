@@ -1,4 +1,4 @@
-// The loading cover's picture: sand dust blown through a slowly turning flow field on the dark, the prologue's
+// The loading cover's picture: sand dust blown up through a slowly turning flow field on the dark, the prologue's
 // paragraphs fading in over it a letter at a time, then the title card, and a loading bar. On a reload
 // in the same tab (src/prologue.ts) only the title comes up.
 // Plain canvas 2D that knows nothing of the page: it runs in a worker (src/prologueWorker.ts, src/prologue.ts)
@@ -77,8 +77,8 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   let blockBottom = 0;
 
   function spawn(i: number, anywhere: boolean) {
-    px[i] = anywhere ? rnd() * w : -rnd() * 40;
-    py[i] = rnd() * h;
+    px[i] = rnd() * w;
+    py[i] = anywhere ? rnd() * h : h + rnd() * 40;
     ox[i] = px[i];
     oy[i] = py[i];
   }
@@ -185,7 +185,7 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   }
 
   /** The wind at (x, y): a domain-warped field of sines that drifts in time, so eddies form, wander and let go,
-   *  on top of a steady wind to the right. Sets the heading and a gust factor. */
+   *  on top of a steady wind up the screen. Sets the heading and a gust factor. */
   let heading = 0;
   let gust = 1;
   function wind(x: number, y: number, t: number) {
@@ -195,7 +195,7 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
     const qx = u + 0.9 * Math.sin(v * 1.7 + t * 0.11);
     const qy = v + 0.9 * Math.sin(u * 1.3 - t * 0.09);
     heading = Math.sin(qx * 1.9 + t * 0.05) * Math.cos(qy * 2.3 - t * 0.07) * 2.6 + Math.sin((qx + qy) * 0.8 + t * 0.13) * 0.9;
-    const s = Math.sin(u * 0.6 - v * 0.3 - t * 0.35);
+    const s = Math.sin(-u * 0.3 - v * 0.6 - t * 0.35);
     gust = 0.45 + s * s * 1.1;
   }
 
@@ -208,11 +208,12 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
       const L = LAYERS[layer[i]];
       wind(x, y, clock + layer[i] * 7);
       const sp = L.speed * gust * pace[i] * dt;
-      px[i] = x + (Math.cos(heading) * 0.85 + 0.65) * sp;
-      py[i] = y + (Math.sin(heading) * 0.85 - 0.08) * sp;
+      // (and a little Brownian jitter)
+      px[i] = x + (Math.cos(heading) * 0.85 - 0.08 + (rnd() - 0.5) * 0.5) * sp;
+      py[i] = y + (Math.sin(heading) * 0.85 - 0.65 + (rnd() - 0.5) * 0.5) * sp;
       const nx = px[i];
       const ny = py[i];
-      if (nx > w + 20 || ny < -20 || ny > h + 20 || nx < -60 || rnd() < 0.003) spawn(i, rnd() < 0.5);
+      if (ny < -20 || nx < -20 || nx > w + 20 || ny > h + 60 || rnd() < 0.003) spawn(i, rnd() < 0.5);
     }
   }
 

@@ -1,6 +1,6 @@
 // The prologue's blown sand on the GPU (src/prologueRunner.ts draws the text over it, src/prologueWorker.ts runs both).
 // A few hundred thousand grains ride a curl-noise wind (divergence-free, so they gather into streamers and eddies that
-// drift downwind and let go), each with its own depth: far grains are dim, slow and follow the air closely, near ones
+// drift up the screen and let go), each with its own depth: far grains are dim, slow and follow the air closely, near ones
 // bright, fast and heavy enough to cut across the eddies. Per frame, three passes:
 //   fade: the trail buffer (two fixed-point channels per pixel: brightness, and brightness x hue) dims a little;
 //   move: each grain steps and splats its segment into the trail with atomic adds (bilinear, so sub-pixel smooth);
@@ -69,7 +69,7 @@ fn noise(p: vec3f) -> f32 {
 
 // the wind's field coordinates at a css position: one unit is about half the screen's short side, sliding downwind
 fn field(p: vec2f, t: f32) -> vec2f {
-  return p / (min(u.size.x, u.size.y) * 0.45) - vec2f(t * 0.035, 0.0);
+  return p / (min(u.size.x, u.size.y) * 0.45) + vec2f(0.0, t * 0.035);
 }
 
 fn rnd(s: ptr<function, u32>) -> f32 {
@@ -81,7 +81,7 @@ fn potential(q: vec2f, t: f32) -> f32 {
   return noise(vec3f(q, t * 0.06)) + 0.45 * noise(vec3f(q * 2.3 + vec2f(5.2, 1.3), t * 0.11));
 }
 
-// The air's velocity (css px/s for a grain of speed 1): a steady wind to the right, the curl of a slowly changing
+// The air's velocity (css px/s for a grain of speed 1): a steady wind up the screen, the curl of a slowly changing
 // potential on top (it runs along the potential's contours), a slight pull onto its zero contour so grains gather into
 // ribbons that form, wander and let go as it changes, and gust bands sweeping through. Each depth layer feels its own
 // stretch of the field.
@@ -92,8 +92,8 @@ fn wind(p: vec2f, layer: f32) -> vec2f {
   let grad = vec2f(potential(q + vec2f(e, 0.0), t) - potential(q - vec2f(e, 0.0), t),
                    potential(q + vec2f(0.0, e), t) - potential(q - vec2f(0.0, e), t)) / (2.0 * e);
   let gather = -potential(q, t) * grad * 0.3;
-  let s = sin(q.x * 1.6 - q.y * 0.8 - t * 0.35);
-  return (vec2f(0.65, -0.08) + vec2f(grad.y, -grad.x) * 0.3 + gather) * (0.45 + s * s * 1.1);
+  let s = sin(-q.x * 0.8 - q.y * 1.6 - t * 0.35);
+  return (vec2f(-0.08, -0.65) + vec2f(grad.y, -grad.x) * 0.3 + gather) * (0.45 + s * s * 1.1);
 }
 
 fn deposit(p: vec2f, a: f32, b: f32) {
@@ -132,6 +132,9 @@ fn step(@builtin(global_invocation_id) id: vec3u) {
   if (fresh) { g.vel = wind(g.pos, layer) * speed; }
   // light grains follow the air at once, heavy near ones lag behind its turns
   g.vel += (wind(g.pos, layer) * speed - g.vel) * (1.0 - exp(-u.dt * mix(6.0, 1.6, g.depth)));
+  // and a little Brownian jostle, which the pull back to the wind smooths into a wobble (more for the light ones)
+  let jostle = vec2f(rnd(&s) + rnd(&s) + rnd(&s), rnd(&s) + rnd(&s) + rnd(&s)) * 2.0 - 3.0;
+  g.vel += jostle * mix(0.6, 0.15, g.depth) * speed * sqrt(u.dt);
   let start = g.pos;
   g.pos += g.vel * u.dt;
   // off one edge, on at the other (so the sand stays evenly spread); now and then one is lifted away and set down
