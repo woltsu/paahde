@@ -6,7 +6,8 @@
 // src/models/jammer.ts, the receivers src/models/receiver.ts.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { parsePart } from '../../shared/items.ts';
+import { parsePart, URANIUM } from '../../shared/items.ts';
+import { URANIUM_LOOK } from '../../shared/parts.ts';
 import { TIERS } from '../../shared/salvage.ts';
 import { loadPart } from '../teardown/junk';
 import { jammerModel } from './jammer';
@@ -203,7 +204,7 @@ const PART_HELD = 0.22;
 export function heldModel(kind: string, loaded: () => void): THREE.Object3D {
   const make = HELD[kind];
   if (make) return shadows(make(loaded));
-  const part = parsePart(kind);
+  const part = parsePart(kind) ?? (kind === URANIUM ? { part: 'uranium' as const, tier: TIERS.indexOf(URANIUM_LOOK) } : null);
   if (!part) return shadows(crate());
   const g = new THREE.Group();
   loadPart(part.part, TIERS[part.tier]).then((m) => {

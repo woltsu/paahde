@@ -9,8 +9,8 @@ function finalReceiverFixture() {
   const sim = new Sim('sim0000', 0);
   sim.chest = [
     { id: 100, kind: 'workbench', n: 1 }, { id: 101, kind: 'dismantle_bench', n: 1 },
-    { id: 102, kind: 'receiver_colossus', n: 1, parts: ['uranium_basic', 'servo_heart', 'relay_basic'] },
-    { id: 103, kind: 'receiver_worm', n: 1, parts: ['uranium_basic', 'hive_core', 'queen_eye', null] },
+    { id: 102, kind: 'receiver_colossus', n: 1, parts: ['uranium', 'servo_heart', 'relay_basic'] },
+    { id: 103, kind: 'receiver_worm', n: 1, parts: ['uranium', 'hive_core', 'queen_eye', null] },
   ];
   sim.bag.fill(null);
   sim.bag[0] = { id: 104, kind: 'laser_rifle', n: 1, parts: ['wiring', 'battery_quality', 'heatsink_quality', 'scrap'] };

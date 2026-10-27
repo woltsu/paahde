@@ -49,6 +49,8 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   pod_powerbox: { label: TEXT.machines.pod_powerbox, stack: 1, size: [2, 2] },
   // Parts taken out of machines (shared/parts.ts): `<part>_<tier>`, e.g. battery_space.
   ...Object.fromEntries(Object.entries(partItems()).map(([k, v]) => [k, { ...v, size: PART_SIZES[partOf(k)!.part] }])),
+  // The uranium cell has no tier (shared/parts.ts UNTIERED): it drives a receiver's call (shared/gear.ts), nothing else.
+  uranium: { label: TEXT.parts.uranium, stack: 1, size: PART_SIZES.uranium },
   // Crafted at the workbench (shared/crafting.ts) and put down on a shelter's floor from the hotbar (shared/placed.ts).
   plant_bed: { label: TEXT.items.plant_bed, stack: 1, size: [3, 2] },
   uv_lamp: { label: TEXT.items.uv_lamp, stack: 1, size: [1, 2] },
@@ -133,6 +135,10 @@ export const CLOTH = 'cloth';
 export const WIRING = 'wiring';
 /** Wiring coils from before they became wiring (server/db.ts migrates them, one wiring each). */
 export const OLD_COILS = ['coil_scrap', 'coil_basic', 'coil_quality', 'coil_space'];
+/** The uranium cell, with no tier (shared/parts.ts UNTIERED). */
+export const URANIUM = 'uranium';
+/** Uranium cells from when they had a tier (server/db.ts migrates them to URANIUM). */
+export const OLD_URANIUM = TIERS.map((t) => `uranium_${t}`);
 /** What scrap-pile piece kind `kind` (SCRAP_KINDS index) gives. */
 export const scrapItem = (kind: number) => SCRAP_KINDS[kind]?.item ?? SCRAP;
 /** What a crash-site debris piece (CRASH_KINDS node name) gives: the burnt seat is cloth, the rest scrap. */

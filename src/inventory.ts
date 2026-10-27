@@ -20,8 +20,8 @@ import { WELL, wellSpec } from '../shared/wells.ts';
 import { buildingId, cargoId, fittedBox, takeOnly, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bagShape, EQUIP_LABELS, EQUIP_SLOTS, fitsSlot, GEAR, isGear, partsOf, quality, repaired, slotLabel, tierOf } from '../shared/gear.ts';
 import { type Boxes, boxShape, holdsCargo, tryMove } from '../shared/moves.ts';
-import { chargeOf, findSpot, HOTBAR, ITEMS, makeItem, partAt, scrapItem, setData, TOOLS, sizeOf, strandedAt, type Item, type Shape, type Slots } from '../shared/items.ts';
-import { partOf } from '../shared/parts.ts';
+import { chargeOf, findSpot, HOTBAR, ITEMS, makeItem, partAt, scrapItem, setData, TOOLS, sizeOf, strandedAt, URANIUM, type Item, type Shape, type Slots } from '../shared/items.ts';
+import { partOf, URANIUM_LOOK } from '../shared/parts.ts';
 import { COMPONENTS, RARITY, SALVAGE, TIERS } from '../shared/salvage.ts';
 import { countMatching, HAND_RECIPES, RECIPES, type Recipe } from '../shared/crafting.ts';
 import { capacity, cells } from '../shared/power.ts';
@@ -188,6 +188,8 @@ for (const k of [...Object.keys(GEAR), 'grinder', 'plant_bed', 'uv_lamp', 'bedro
   'robot_arm', 'control_cabinet', 'winch', 'solenoid_valve', 'beacon', 'pod_console', 'pod_powerbox', 'workbench', 'dismantle_bench', 'storage_chest']) ICONS[k] = fit(`items/${k}`);
 // Wiring is what a wiring coil comes out as (shared/parts.ts UNTIERED): the coil's render.
 ICONS.wiring = fit('items/coil_basic');
+// The uranium cell has no tier (shared/parts.ts UNTIERED): one of its renders.
+ICONS[URANIUM] = fit(`items/uranium_${URANIUM_LOOK}`);
 // The enemies' and bosses' own parts (tools/blender/relics.py).
 for (const k of ['drone_transponder', 'brood_gland', 'servo_heart', 'hive_core', 'queen_eye', 'furnace_heart']) ICONS[k] = fit(`items/${k}`);
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;

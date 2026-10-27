@@ -8,7 +8,7 @@
 // once per world on it); with `again`, at most once per `again` ms. `say` may list several wordings; one is picked at random.
 import type { Loot } from '../shared/loot.ts';
 import type { Vehicle } from '../shared/vehicles.ts';
-import type { Item, Slots } from '../shared/items.ts';
+import { URANIUM, type Item, type Slots } from '../shared/items.ts';
 import { isGear, repaired } from '../shared/gear.ts';
 import { partOf } from '../shared/parts.ts';
 import { RECEIVERS, RELICS } from '../shared/bosses.ts';
@@ -150,7 +150,7 @@ export const LINES: Line[] = [
   { id: 'got.scrap', on: 'got', when: (_, it) => it.kind === 'scrap', say: TEXT.speech.gotScrap },
   { id: 'got.cloth', on: 'got', when: (_, it) => it.kind === 'cloth', say: TEXT.speech.gotCloth },
   { id: 'got.part.space', on: 'got', when: (_, it) => partOf(it.kind)?.tier === 'space', say: TEXT.speech.gotSpacePart },
-  { id: 'got.part', on: 'got', when: (_, it) => !!partOf(it.kind), say: TEXT.speech.gotPart },
+  { id: 'got.part', on: 'got', when: (_, it) => !!partOf(it.kind) || it.kind === URANIUM, say: TEXT.speech.gotPart },
   { id: 'got.plant_bed', on: 'got', when: (_, it) => it.kind === 'plant_bed', say: TEXT.speech.gotPlantBed },
   { id: 'got.uv_lamp', on: 'got', when: (_, it) => it.kind === 'uv_lamp', say: TEXT.speech.gotUvLamp },
   { id: 'got.bedroll', on: 'got', when: (_, it) => it.kind === 'bedroll', say: TEXT.speech.gotBedroll },

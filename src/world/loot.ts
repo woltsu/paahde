@@ -10,7 +10,8 @@ import { GEAR, isGear, repaired, tierOf } from '../../shared/gear.ts';
 import { applyTier } from '../tierLook';
 import { RECEIVERS, RELICS } from '../../shared/bosses.ts';
 import { RELIC_DROPS } from '../../shared/tables.ts';
-import { CLOTH, parsePart, SCRAP, WIRING } from '../../shared/items.ts';
+import { CLOTH, parsePart, SCRAP, URANIUM, WIRING } from '../../shared/items.ts';
+import { URANIUM_LOOK } from '../../shared/parts.ts';
 import { SCRAP_KINDS } from '../../shared/scrap.ts';
 import type { Scrap } from './scrap';
 import { wrenchModel } from '../models/wrench';
@@ -276,14 +277,16 @@ export class LootView {
     const obj = new THREE.Group();
     let rims: THREE.Mesh[] | null = null;
     let pool: THREE.Mesh | null = null;
-    // (Wiring lies there as a Scrap-tier coil, which is what it comes out of: shared/parts.ts UNTIERED.)
-    const part = parsePart(l.kind) ?? (l.kind === WIRING ? { part: 'coil' as const, tier: 0 } : null);
+    // (Wiring lies there as a Scrap-tier coil, which is what it comes out of: shared/parts.ts UNTIERED. The uranium cell
+    // has no tier either: one of its models, glowing like a relic.)
+    const cell = l.kind === URANIUM;
+    const part = parsePart(l.kind) ?? (l.kind === WIRING ? { part: 'coil' as const, tier: 0 } : cell ? { part: 'uranium' as const, tier: TIERS.indexOf(URANIUM_LOOK) } : null);
     // Broken gear, parts and relics glow along their edges, with a faint pool on the sand around them: small and
     // dark, they'd otherwise be lost on the sand (a boss's spoils scattered over its wreck, a kill's drop). The colour
     // tells their quality: a part's tier, gear's tier from the parts it still has (tierOf).
     const item = { id: 0, kind: l.kind, n: 1, parts: l.parts };
     const glow = isGear(l.kind) ? !repaired(item) : !!part || RELIC_KINDS.has(l.kind);
-    const hex = glowColor(isGear(l.kind) ? tierOf(item) : part ? part.tier : null);
+    const hex = glowColor(isGear(l.kind) ? tierOf(item) : part && !cell ? part.tier : null);
     if (glow) {
       rims = obj.userData.rims = [];
       obj.userData.glow = hex;

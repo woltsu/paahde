@@ -14,9 +14,12 @@ export const PART_IDS = Object.keys(PART_LABELS) as PartId[];
 /** Quality word in front of the part's name. */
 export const TIER_LABELS: Record<Tier, string> = TEXT.tiers;
 
-/** Parts that come out of a machine as a basic material instead, with no tier (shared/items.ts): a wiring coil is
- *  unwound into wiring. They still sit in the machines as parts (src/teardown) and roll in the loot tables as parts. */
-export const UNTIERED: Partial<Record<PartId, string>> = { coil: 'wiring' };
+/** Parts that come out of a machine as an item with no tier (shared/items.ts): a wiring coil is unwound into wiring, a
+ *  uranium cell is just a uranium cell (no quality: it only drives a receiver's call). They still sit in the machines as
+ *  parts (src/teardown) and roll in the loot tables as parts (their tier is rolled and thrown away). */
+export const UNTIERED: Partial<Record<PartId, string>> = { coil: 'wiring', uranium: 'uranium' };
+/** The tier whose model and icon the uranium cell borrows (public/models/items/uranium_<tier>.glb). */
+export const URANIUM_LOOK: Tier = 'basic';
 
 /** Item kind of a part. */
 export const partItem = (part: PartId, tier: Tier) => UNTIERED[part] ?? `${part}_${tier}`;

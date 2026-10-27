@@ -43,7 +43,7 @@ const SCRAP: PartSlot = { scrap: ['scrap'], label: TEXT.items.scrap };
 const CLOTH: PartSlot = { scrap: ['cloth'], label: TEXT.items.cloth };
 const WIRING: PartSlot = { scrap: ['wiring'], label: TEXT.items.wiring };
 /** The receivers' slots: the uranium cell that drives the call, and an enemy's or boss's own part. */
-const CELL: PartSlot = { part: 'uranium', rare: true };
+const CELL: PartSlot = { scrap: ['uranium'], label: TEXT.parts.uranium, rare: true }; // no tier (shared/parts.ts UNTIERED)
 const own = (kind: keyof typeof TEXT.items): PartSlot => ({ scrap: [kind], label: TEXT.items[kind], rare: true });
 const RECEIVER = { better: 'how steady its needle', use: TEXT.gearUse.receiver };
 

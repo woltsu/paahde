@@ -70,6 +70,8 @@ const pickFrom: (items: Item[], r: Recipe) => number[] | null = (crafting as { p
 const fitUsed: <P extends { kind: string }>(kind: string, used: P[]) => (P | null)[] = (crafting as { fitUsed?: typeof crafting.fitUsed }).fitUsed
   ?? ((kind, used) => GEAR[kind].slots.map((s) => { const j = used.findIndex((p) => fitsSlot(s, p.kind)); return j < 0 ? null : used.splice(j, 1)[0]; }));
 const WIRING = 'wiring';
+/** Parts that come out with no tier (shared/parts.ts UNTIERED): counted with the parts, as Scrap. */
+const UNTIERED_KINDS = [WIRING, 'uranium'];
 /** The base materials (shared/items.ts): stacked in the chest, a need of their own. */
 const MATERIALS = [SCRAP, CLOTH, WIRING];
 /** What an item counts as for needs: its part, or its own kind (scrap, cloth, wiring, a relic, a piece of gear). */
@@ -246,8 +248,8 @@ export class Sim {
   /** Count a part coming in, by where it came from. */
   private got(kind: string, src: Source) {
     this.recordStages();
-    // (Wiring is a machine's coil: counted with the parts, as Scrap.)
-    const p = parsePart(kind) ?? (kind === WIRING ? { tier: 0 } : null);
+    // (Wiring is a machine's coil, the uranium cell has no tier: counted with the parts, as Scrap.)
+    const p = parsePart(kind) ?? (UNTIERED_KINDS.includes(kind) ? { tier: 0 } : null);
     if (!p) return;
     const part = keyOf(kind);
     (this.out.sources[part] ??= {})[src] = (this.out.sources[part]?.[src] ?? 0) + 1;
@@ -267,7 +269,7 @@ export class Sim {
     const key = keyOf(it.kind);
     if (--it.n <= 0) this.chest.splice(this.chest.indexOf(it), 1);
     this.needCache = null;
-    if (parsePart(it.kind) || it.kind === WIRING) this.out.used[key] = (this.out.used[key] ?? 0) + 1;
+    if (parsePart(it.kind) || UNTIERED_KINDS.includes(it.kind)) this.out.used[key] = (this.out.used[key] ?? 0) + 1;
     return it.kind;
   }
 
@@ -349,7 +351,7 @@ export class Sim {
         }
       }
       // A spare: worth less the more of it there is.
-      if (!v) v = (MATERIALS.includes(key) ? 0.02 : parsePart(kind) ? 0.01 : 0) * 10 / (10 + (this.stock.get(key) ?? 0));
+      if (!v) v = (MATERIALS.includes(key) ? 0.02 : parsePart(kind) || kind === 'uranium' ? 0.01 : 0) * 10 / (10 + (this.stock.get(key) ?? 0));
     }
     return v;
   }

@@ -9,13 +9,18 @@
 //   message      a short line for events ("Bag full"), fading out
 //   fly          "+ Motor · Quality" flying from the part to the hotbar when a part is taken
 import { kbd } from '../bindings';
+import { UNTIERED } from '../../shared/parts.ts';
 import { RARITY, type PartId, type Tier } from '../../shared/salvage.ts';
 import { TEXT } from '../../shared/text.ts';
 import { tdListeners, tdPrefs } from './prefs.ts';
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
-export const partName = (part: PartId, tier: Tier) => TEXT.partTaken(TEXT.parts[part], RARITY[tier].name);
+/** "Motor · Quality"; just "Uranium cell" for a part that comes out with no tier (shared/parts.ts UNTIERED). */
+export const partName = (part: PartId, tier: Tier) => (UNTIERED[part] ? TEXT.parts[part] : TEXT.partTaken(TEXT.parts[part], RARITY[tier].name));
 export const rarityColor = (tier: Tier) => hex(RARITY[tier].color);
+/** A part's colour in the tags: its tier's, plain for an untiered one. */
+export const partColor = (part: PartId, tier: Tier) => (UNTIERED[part] ? UNTIERED_COLOR : rarityColor(tier));
+const UNTIERED_COLOR = '#e8e2d6';
 
 const MSG_MS = 2600;
 const RING_R = 30;
@@ -278,7 +283,7 @@ export class TeardownUi {
     const el = document.createElement('div');
     el.className = 'tdFly';
     el.textContent = `+ ${partName(part, tier)}`;
-    el.style.setProperty('--c', rarityColor(tier));
+    el.style.setProperty('--c', partColor(part, tier));
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     document.body.append(el);

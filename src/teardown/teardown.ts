@@ -18,7 +18,7 @@ import { teardownSound } from '../teardownSound.ts';
 import { Rope } from './rope.ts';
 import { boltTurns } from './boltGesture.ts';
 import { animateMarker, attachAll, lowestOffset, pieceEmpty, restPiece, setSheen, settle, shinyOf, wake, PART_GLOW, slotOpen, stepReady, type Junk, type Piece, type Slot, type Step, type Target } from './junk.ts';
-import { partName, rarityColor, TeardownUi, type Counts } from './ui.ts';
+import { partColor, partName, TeardownUi, type Counts } from './ui.ts';
 import { playerHands } from '../water.ts';
 import { uiSound } from '../uiSound.ts';
 import { lower, TEXT } from '../../shared/text.ts';
@@ -602,7 +602,7 @@ export class TeardownView {
     if (t.type === 'part') {
       const s = t.slot;
       const title = partName(s.part as PartId, s.tier as Tier);
-      const color = rarityColor(s.tier as Tier);
+      const color = partColor(s.part as PartId, s.tier as Tier);
       if (slotOpen(s)) return { title, color, action: '' };
       return { title, color, action: this.listSteps(s.piece.holds), locked: true };
     }
@@ -1210,7 +1210,7 @@ export class TeardownView {
     for (const s of j.slots) {
       if (!slotOpen(s)) continue;
       const p = this.screen(s.piece.obj, TAG_UP * j.scale * j.root.scale.x);
-      if (p) tags.push({ ...p, text: partName(s.part as PartId, s.tier as Tier), color: rarityColor(s.tier as Tier) });
+      if (p) tags.push({ ...p, text: partName(s.part as PartId, s.tier as Tier), color: partColor(s.part as PartId, s.tier as Tier) });
     }
     this.ui.tags(tags);
 

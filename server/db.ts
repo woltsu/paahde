@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { Obituary } from '../shared/protocol.ts';
-import { addItem, BAG_COLS, BAG_ROWS, BAG_SLOTS, HOTBAR, OLD_COILS, OLD_SCRAP, SCRAP, WIRING, type Item, type ItemData, type Slots } from '../shared/items.ts';
+import { addItem, BAG_COLS, BAG_ROWS, BAG_SLOTS, HOTBAR, OLD_COILS, OLD_SCRAP, OLD_URANIUM, SCRAP, URANIUM, WIRING, type Item, type ItemData, type Slots } from '../shared/items.ts';
 
 export type PlayerRow = { id: string; color: number; x: number; z: number; heat: number; sips: number; name?: string | null };
 
@@ -403,6 +403,17 @@ export function openDb(path: string) {
       }
     });
     if (n) console.log(`items: ${n} wiring coils are wiring now`);
+  }
+  // v13: the uranium cell lost its tier (`uranium_<tier>` → `uranium`): in boxes, fitted in gear (JSON parts), dropped
+  // and lying in the world.
+  {
+    const old = OLD_URANIUM.map((k) => `'${k}'`).join(', ');
+    tx(() => {
+      for (const t of ['items', 'dropped', 'world_loot']) {
+        db.exec(`UPDATE ${t} SET kind = '${URANIUM}' WHERE kind IN (${old})`);
+        for (const k of OLD_URANIUM) db.prepare(`UPDATE ${t} SET parts = REPLACE(parts, ?, ?) WHERE parts LIKE ?`).run(`"${k}"`, `"${URANIUM}"`, `%"${k}"%`);
+      }
+    });
   }
   // v12 (above): finds and caches have their own state too (a found battery's charge).
   if (!(db.prepare('PRAGMA table_info(world_loot)').all() as { name: string }[]).some((c) => c.name === 'data')) {
