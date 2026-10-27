@@ -122,11 +122,13 @@ function openKeyboard(input: HTMLInputElement | HTMLTextAreaElement) {
   document.body.append(root); show(); focus(root.querySelector('button'));
 }
 
-// Capture on window before gameplay listeners: Tab belongs to the open menu, never closes it or moves the player.
+// Capture on window before gameplay listeners: Tab belongs to the open menu and moves focus there, except that the
+// inventory's own key (Tab by default) closes the inventory again (src/inventory.ts toggles it, ignoring repeats).
 window.addEventListener('keydown', (e) => {
   if (dispatching) return;
   const root = menuRoot();
   if (!root || document.pointerLockElement || root.querySelector('.listening') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (root.id === 'invOverlay' && isBound('inventory', e.code)) return;
   navigating = true; document.body.classList.add('ui-navigation');
   const active = document.activeElement as HTMLElement | null;
   if (e.code === 'Tab') {
