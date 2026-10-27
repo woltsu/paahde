@@ -11,6 +11,8 @@ import type { ClientMsg, NetSummary, StallEvent } from '../shared/protocol.ts';
 
 /** A gap this long (ms) between snapshots, frames or an input and its ack counts as a stall. */
 const STALL_MS = 250;
+/** A frame this long (ms) is a stall of ours: shorter than STALL_MS, a hitch that still makes everything jump. */
+const FRAME_STALL_MS = 100;
 /** Snapshots stamped this far apart (ms) by the server: its loop was late (they go out every 50 ms). */
 const SERVER_LATE_MS = 150;
 /** Snapshots this close together (ms) after a stall came in its burst. */
@@ -132,7 +134,7 @@ export class Telemetry {
       this.frames++;
       this.shownMs += ms;
       this.frameMax = Math.max(this.frameMax, ms);
-      if (ms > STALL_MS) {
+      if (ms > FRAME_STALL_MS) {
         this.block = { end: now, ms };
         this.add({ k: 'frame', ms: Math.round(ms), ago: 0, at: now });
       }

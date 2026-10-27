@@ -632,7 +632,8 @@ const BOT_GRACE_MS = 5000;
 let botAccum = 0;
 function tickBots(elapsed: number, now: number, tod: number) {
   botAccum += elapsed;
-  if (botAccum < 1 / BOT_HZ) return;
+  // A little early is fine (dt is what passed): six ~16.7 ms ticks make a tenth, not seven (~9 Hz, uneven).
+  if (botAccum < 1 / BOT_HZ - 0.005) return;
   const dt = Math.min(botAccum, 0.5);
   botAccum = 0;
   const wall = Date.now();

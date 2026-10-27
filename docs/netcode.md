@@ -86,7 +86,9 @@ at our scale and the whole team can read and change it. Alternatives, if needs g
   tabs stay.
 - **Caddy reloads.** `stream_close_delay 5m` keeps WebSockets open when the host Caddy config reloads.
 - **Server time.** Physics advances at 60 Hz regardless of incoming packet rate. Each step consumes at most one
-  queued input; the queue holds 12 (200 ms), and older overflow is acknowledged as discarded. A late server callback
+  queued input; the queue holds 12 (200 ms), and older overflow is acknowledged as discarded. A queue that
+  hasn't been under two inputs for a second (a client hitch's burst, which a queue drained at the rate it fills would
+  keep as standing input delay) drops the extra oldest ones the same way (`server/inputQueue.ts`). A late server callback
   catches up at most six steps. Extra packets cannot speed movement or slow gravity.
 - **Hidden tabs and stalls.** The server holds the last controls for up to 250 ms, then uses no keys while
   physics keeps running. The client keeps at most 120 pending inputs; after a longer acknowledgment stall it stops

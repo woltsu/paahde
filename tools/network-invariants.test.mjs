@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { InputQueue, MAX_QUEUED_INPUTS, HOLD_INPUT_MS } from '../server/inputQueue.ts';
+import { InputQueue, MAX_QUEUED_INPUTS, HOLD_INPUT_MS, QUEUE_SLACK, DRAIN_TICKS } from '../server/inputQueue.ts';
 import { decodeChunk, encodeChunk, packPlayerPose, unpackPlayerPose } from '../shared/network.ts';
 import { TerrainServer, newTerrainView } from '../server/terrain.ts';
 import { edits, TerrainEdits, EDIT_CHUNK } from '../shared/terrain.ts';
@@ -37,6 +37,23 @@ test('bounded delayed input acknowledgments leave exactly the replayable suffix'
   while (q.length) { consumed.push(q.take(1000).seq); assert.equal(q.ack, consumed.at(-1)); }
   assert.deepEqual(consumed, Array.from({ length: MAX_QUEUED_INPUTS }, (_, i) => 101 - MAX_QUEUED_INPUTS + i));
   q.clear(); assert.equal(q.ack, 100); assert.equal(q.take(1000), null);
+});
+
+test('a burst after a client hitch does not stay behind as input delay', () => {
+  const q = new InputQueue();
+  let seq = 0;
+  for (let i = 0; i < 9; i++) q.receive({ seq: ++seq, input: 0, yaw: 0, pitch: 0 }, 0); // one 150 ms frame's inputs at once
+  for (let tick = 1; tick <= DRAIN_TICKS * 3; tick++) { q.receive({ seq: ++seq, input: 0, yaw: 0, pitch: 0 }, tick); q.take(tick); }
+  assert.ok(q.length <= QUEUE_SLACK, `still ${q.length} inputs behind`);
+  assert.equal(q.ack, seq - q.length);
+  // Jitter that sometimes empties the queue keeps every input.
+  const j = new InputQueue();
+  let sent = 0, taken = 0;
+  for (let tick = 1; tick <= DRAIN_TICKS * 3; tick++) {
+    if (tick % 4 === 0) for (let i = 0; i < 4; i++) j.receive({ seq: ++sent, input: 0, yaw: 0, pitch: 0 }, tick);
+    if (j.length && j.take(tick)) taken++;
+  }
+  assert.equal(j.ack, taken);
 });
 
 test('remote pose flags and terrain chunks round-trip without changing owner physics', () => {
