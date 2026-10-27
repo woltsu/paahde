@@ -348,6 +348,7 @@ const RIDE_EYE_AHEAD = 0.15;
 const locator = new LocatorBar();
 const hud = new InventoryHud(net, renderer.domElement);
 const survival = new Survival(net);
+survival.wheelBusy = () => fly.active;
 const speech = new Speech();
 // Once the first thing said on arriving is read, how to look in the bag.
 speech.onSaid = (id, showS) => { if (id === 'start') setTimeout(() => hud.oneTimeHint('inventory'), showS * 1000); };

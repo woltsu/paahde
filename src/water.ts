@@ -17,7 +17,7 @@ import { receiverBoss, type BossKind } from '../shared/bosses.ts';
 import { THROWABLE } from '../shared/throw.ts';
 import { MACE } from '../shared/mace.ts';
 import { HOTBAR_ACTIONS, isBound, kbd } from './bindings';
-import { tools, useHeld } from './input';
+import { aimHeld, stepSlot, tools, useHeld } from './input';
 import { rumble } from './gamepad';
 import { chargeBar, itemIcon, itemLabel } from './inventory';
 import type { Net } from './net';
@@ -149,6 +149,9 @@ const SUN_ICON = `<svg class="sunIcon" viewBox="0 0 16 16" fill="none" stroke="#
 const SHADE_ICON = `<svg class="shadeIcon" viewBox="0 0 16 16"><title>${TEXT.hud.inShade}</title>
 <circle cx="10" cy="6.5" r="3" fill="#ffc46b" opacity="0.45"/><path d="M10 1.4v1.3M14.6 6.5h-1.3M13.3 3.2l-.9.9M6.7 3.2l.9.9" stroke="#ffc46b" stroke-width="1.4" stroke-linecap="round" opacity="0.45"/>
 <path d="M0.5 14.5C3 8.5 6 7 9 8.6c2.2 1.2 4.4 3.6 6.5 5.9z" fill="#7a5a3e" stroke="#2a160a" stroke-width="0.8"/></svg>`;
+/** The mouse wheel's hotbar steps: px of travel per step after a gesture's first, at most one per WHEEL_GAP ms; a
+ *  pause of WHEEL_QUIET ms starts a new gesture (which steps at once). */
+const WHEEL_STEP = 150, WHEEL_GAP = 180, WHEEL_QUIET = 220;
 export class Survival {
   /** A storm's static has the electronics dead (src/storm.ts toolsDown): no clock or thermometer. */
   toolsDown = false;
@@ -170,6 +173,11 @@ export class Survival {
   private fade = document.createElement('div');
 
   private selected = -1; // hotbar slot, -1 = empty hands
+  /** The wheel is someone else's right now (src/main.ts: the fly camera's speed). */
+  wheelBusy: () => boolean = () => false;
+  private wheelAt = -Infinity; // the last wheel event (performance.now())
+  private wheelStepAt = -Infinity; // the last hotbar step it made
+  private wheelTravel = 0; // deltaY since then, in px
   private shown = 0; // eased meter value
   private stroke = 0; // seconds at a full meter, counted as the server does (it decides the death)
   private actionAt = 0; // performance.now() when the current sip / refill started
@@ -232,6 +240,23 @@ export class Survival {
       if (e.repeat || n < 0) return;
       this.select(this.selected === n ? -1 : n);
     });
+    // The mouse wheel steps through the hotbar as the pad's LB / RB do (down: next), while in the game and the wheel
+    // isn't zooming a scope or the spyglass (or the fly camera's speed). The pad's own synthetic wheel (its d-pad zoom)
+    // doesn't. One notch is one step: a gesture's first event steps, then each WHEEL_STEP of travel at most every
+    // WHEEL_GAP ms, so a trackpad's long smooth swipe doesn't spin through the whole bar.
+    addEventListener('wheel', (e) => {
+      if (!e.isTrusted || !document.pointerLockElement || tools.frozen || this.wheelBusy() || aimHeld() || playerHands.scoped) return;
+      const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+      if (!dy) return;
+      const now = performance.now();
+      const fresh = now - this.wheelAt > WHEEL_QUIET || Math.sign(dy) !== Math.sign(this.wheelTravel);
+      this.wheelAt = now;
+      this.wheelTravel = fresh ? dy : this.wheelTravel + dy;
+      if (!fresh && (Math.abs(this.wheelTravel) < WHEEL_STEP || now - this.wheelStepAt < WHEEL_GAP)) return;
+      this.wheelTravel = Math.sign(dy) * 1e-6;
+      this.wheelStepAt = now;
+      this.select(stepSlot(this.selected, Math.sign(dy), HOTBAR_ACTIONS.length, this.net.boxes.bag));
+    }, { passive: true });
     net.onDied = () => {
       rumble(1, 1, 500);
       this.deadUntil = performance.now() + DOWN_MS;

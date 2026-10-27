@@ -16,7 +16,7 @@
 // The game must have the mouse captured, as with the keyboard: a click starts it (browsers don't let a pad do that).
 import { HOTBAR_ACTIONS, setDevice, slots, usingPad, type Action } from './bindings';
 import { BTN, PAD_GAME, PAD_HOLD, padStyle } from './padMap';
-import { addMouse, aimDown, tools } from './input';
+import { addMouse, aimDown, stepSlot, tools } from './input';
 import type { FirstPersonCamera } from './camera';
 import { hidePadCursor } from './padCursor';
 import { comfort } from './comfort';
@@ -117,12 +117,7 @@ export function pollPad(dt: number, view: FirstPersonCamera, canvas: HTMLElement
   // Hotbar: LB / RB step through the filled slots and empty hands (a slot's key picks it; its own key again empties the hands).
   const step = pressed(RB) ? 1 : pressed(LB) ? -1 : 0;
   if (step) {
-    const n = HOTBAR_ACTIONS.length;
-    let s = tools.slot;
-    for (let i = 0; i <= n; i++) {
-      s = ((s + 1 + step + n + 1) % (n + 1)) - 1;
-      if (s < 0 || bag?.[s]) break;
-    }
+    const s = stepSlot(tools.slot, step, HOTBAR_ACTIONS.length, bag);
     if (s !== tools.slot) tap(code(HOTBAR_ACTIONS[s < 0 ? tools.slot : s]));
   }
 

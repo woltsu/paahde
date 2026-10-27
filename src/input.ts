@@ -169,6 +169,17 @@ export function readInput(): number {
   return input;
 }
 
+/** The hotbar slot `step` (±1) on from `slot` (-1: empty hands), skipping empty slots: the pad's LB / RB and the
+ *  mouse wheel walk the filled slots and empty hands in a loop. `n`: the hotbar's size. */
+export function stepSlot(slot: number, step: number, n: number, bag: readonly unknown[] | undefined): number {
+  let s = slot;
+  for (let i = 0; i <= n; i++) {
+    s = ((s + 1 + step + n + 1) % (n + 1)) - 1;
+    if (s < 0 || bag?.[s]) break;
+  }
+  return s;
+}
+
 /** Use button (left mouse or E) held down: drinks while the canteen is held, fires a gun, throws scrap... */
 export function useHeld(): boolean {
   return !tools.frozen && !tools.engaged && actionHeld('use');
