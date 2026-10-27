@@ -31,6 +31,10 @@ when you find it stale.
 
 ## Levels (docs/levels.md)
 
+- `shared/levels.ts` — `Level` (ground, solids, ceiling, bounds, spawns, exits and its properties: `indoors`,
+  `climate`, `weather`, `enemies`, `building`, `things`), the `LEVELS` registry, `level(id)`; `desertLevel` wraps the
+  desert's ground and collisions. `PlayerState.level` (`shared/sim.ts`) says which one a player is in; only the server
+  changes it. `players.level`/`y` in the DB
 - `src/levels/stage.ts` — `Stage`: what the client draws for one level, one root per stage in the one scene; the
   active stage owns fog, environment, background and the post profile (`Post.setProfile`, `src/post.ts` `PostProfile`),
   and its root's lights are the scene's only lights

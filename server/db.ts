@@ -4,7 +4,9 @@ import { DatabaseSync } from 'node:sqlite';
 import type { Obituary } from '../shared/protocol.ts';
 import { addItem, BAG_COLS, BAG_ROWS, BAG_SLOTS, HOTBAR, OLD_COILS, OLD_SCRAP, OLD_URANIUM, SCRAP, URANIUM, WIRING, type Item, type ItemData, type Slots } from '../shared/items.ts';
 
-export type PlayerRow = { id: string; color: number; x: number; z: number; heat: number; sips: number; name?: string | null };
+/** level: the level they were in (shared/levels.ts, 0 the desert); y: their feet there (in the desert it is the sand's
+ *  height, from x and z, and rows from before levels have 0). */
+export type PlayerRow = { id: string; color: number; x: number; y: number; z: number; level: number; heat: number; sips: number; name?: string | null };
 
 /** An item's own state (shared/items.ts ItemData) to and from its `data` column: NULL when it has none. */
 const jsonData = (data: ItemData | undefined) => (data && Object.keys(data).length ? JSON.stringify(data) : null);
@@ -38,12 +40,14 @@ export function openDb(path: string) {
   if (!cols.some((c) => c.name === 'name')) db.exec('ALTER TABLE players ADD COLUMN name TEXT');
   // v6: time played in this world (ms, while in the game), shown on the main menu's list of your games.
   if (!cols.some((c) => c.name === 'played')) db.exec('ALTER TABLE players ADD COLUMN played INTEGER NOT NULL DEFAULT 0');
+  // v7: levels (shared/levels.ts, docs/levels.md): the level they are in, and y saved again (a level has floors, not sand).
+  if (!cols.some((c) => c.name === 'level')) db.exec('ALTER TABLE players ADD COLUMN level INTEGER NOT NULL DEFAULT 0');
 
-  const get = db.prepare('SELECT id, color, x, z, heat, sips, name FROM players WHERE id = ?');
+  const get = db.prepare('SELECT id, color, x, y, z, level, heat, sips, name FROM players WHERE id = ?');
   const putName = db.prepare('UPDATE players SET name = ? WHERE id = ?');
   const upsert = db.prepare(`
-    INSERT INTO players (id, color, x, y, z, heat, sips, played) VALUES (?, ?, ?, 0, ?, ?, ?, ?)
-    ON CONFLICT (id) DO UPDATE SET color = excluded.color, x = excluded.x, z = excluded.z, heat = excluded.heat,
+    INSERT INTO players (id, color, x, y, z, level, heat, sips, played) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (id) DO UPDATE SET color = excluded.color, x = excluded.x, y = excluded.y, z = excluded.z, level = excluded.level, heat = excluded.heat,
       sips = excluded.sips, played = played + excluded.played, last_seen = datetime('now')
   `);
 
@@ -609,7 +613,7 @@ export function openDb(path: string) {
     visitCrash: (site: number, at: number) => insertVisited.run(site, at),
     getPlayer: (id: string) => get.get(id) as PlayerRow | undefined,
     /** `played`: ms played since the last save, added to the total. */
-    savePlayer: (p: PlayerRow, played = 0) => upsert.run(p.id, p.color, p.x, p.z, p.heat, p.sips, Math.round(played)),
+    savePlayer: (p: Omit<PlayerRow, 'name'>, played = 0) => upsert.run(p.id, p.color, p.x, p.y, p.z, p.level, p.heat, p.sips, Math.round(played)),
     setName: (id: string, name: string) => putName.run(name, id),
     loadChunks(): { cx: number; cz: number; data: Int32Array }[] {
       return (allChunks.all() as { cx: number; cz: number; data: Uint8Array }[]).map((r) => ({

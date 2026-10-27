@@ -25,6 +25,7 @@ Every push to `main` deploys to dev (https://dev.paahde.herkku.org/) within a fe
 ### Read before touching
 
 - Netcode, `shared/sim.ts`: `docs/netcode.md`
+- Levels (places other than the desert), stages, `shared/levels.ts`, `src/levels/`: `docs/levels.md`
 - `tools/blender/machines/`, `src/teardown/`, jets: `docs/machines.md`
 - First-person hands, held items: `docs/viewmodel-hands.md`; character bodies & look pieces: `docs/character.md`
 - Loot, drops, recipes, gear slots, site layout: `docs/econsim.md`
@@ -37,6 +38,7 @@ Every push to `main` deploys to dev (https://dev.paahde.herkku.org/) within a fe
 ## Rules & Conventions
 
 - **Multiplayer (`docs/netcode.md`):** Server is authoritative; clients send only input bitmasks. Anything that moves a player must be in `shared/sim.ts` and deterministic (fixed `DT`, no `Math.random()`/`Date.now()`/frame time) or client prediction will rubber-band. The browser ID is a secret credential: never include it in messages to other clients.
+- **Levels (`docs/levels.md`):** Anything that moves a player reads ground and solids through `level(s.level)` in `shared/sim.ts`, never the desert's functions directly. Desert systems (weather, enemies, heat) take players through the server's level gate, by property (`weather`, `enemies`, `climate`), never `level === DATACENTER`. A level's lights come from its light pool; a stage never adds lights to the scene outside its root.
 - **Node type stripping:** `server/` and `shared/` run with Node's native type stripping: import with `.ts` extensions, and no enums, namespaces, or constructor parameter properties (`erasableSyntaxOnly`).
 - **Three.js WebGPU:** Import from `three/webgpu` (never `three`; `WebGPURenderer` falls back to WebGL2). Use node materials (`MeshStandardNodeMaterial`, etc.) and TSL (`three/tsl`) for custom shaders (`ShaderMaterial`/GLSL does not work). `await renderer.init()` before first render; loop with `renderer.setAnimationLoop`.
 - **Relative URLs & credits:** Served under `/dadajam/` (`base: './'`). Never use absolute URLs like `/models/x.glb`; use `./models/x.glb` or `import url from './x.glb?url'`. Every third-party asset in `public/` gets an entry in `public/credits.txt` (title, author, URL, licence, changes).

@@ -82,6 +82,7 @@ import { isTrophy, trophyFree } from '../shared/trophies.ts';
 import { CALM, LIVES, WORLD_ID } from '../shared/world.ts';
 import { TEXT } from '../shared/text.ts';
 import { pickupLimit, type PickupLimit } from './pickupLimit.ts';
+import { DESERT, level } from '../shared/levels.ts';
 
 /** Nobody on for this long: the world saves and exits until someone comes back. */
 const EMPTY_EXIT_MS = 10 * 60_000;
@@ -337,8 +338,10 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   const atPod = spawn === 'pod';
   const pod = spawnPoint(podOf(browserId));
   let state = row && !atPod ? spawnState(row.x, row.z) : spawnState(pod.x, pod.z);
+  // Someone who left in a level (shared/levels.ts) is back where they stood in it (its frame's x, y, z).
+  if (row && !atPod && row.level !== DESERT && level(row.level).id === row.level) state = spawnState(row.x, row.z, row.y, row.level);
   // Someone who left in a shelter starts outside its door.
-  const left = row && !atPod && overShelter(row.x, row.z, 0.5) ? shelterAt(row.x, row.z) : null;
+  const left = row && !atPod && state.level === DESERT && overShelter(row.x, row.z, 0.5) ? shelterAt(row.x, row.z) : null;
   if (left) state = spawnState(left.x + left.dx * 4, left.z + left.dz * 4);
   if (spawn === 'shelter') {
     // Dev helper: 6 m outside the door of the nearest shelter.
@@ -1430,12 +1433,12 @@ function send(ws: WebSocket, msg: ServerMsg): boolean {
 
 function save(p: Player) {
   // Lying dead: they come back at their bedroll or their pod.
-  const at = p.down ? homeOf(p) : p.state;
+  const at = p.down ? { ...homeOf(p), y: 0, level: DESERT } : p.state;
   // Play time counts only once they're in the game (ready), not on the loading screen.
   const now = Date.now();
   const played = p.ready ? now - p.savedAt : 0;
   p.savedAt = now;
-  db.savePlayer({ id: p.browserId, color: p.color, x: at.x, z: at.z, heat: p.heat.heat, sips: p.heat.sips }, played);
+  db.savePlayer({ id: p.browserId, color: p.color, x: at.x, y: at.y, z: at.z, level: at.level, heat: p.heat.heat, sips: p.heat.sips }, played);
 }
 
 function playingOwners(): Set<string> {

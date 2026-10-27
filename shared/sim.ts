@@ -14,16 +14,13 @@
 // - Rock (shared/rocks.ts) holds: bare rock up to ROCK_CLIMB_TAN doesn't slide; steeper rock is a wall you
 //   can't walk up, only jump onto. Off its edge you fall or slide.
 // - Sand bike (a motorcycle standing in the world, shared/vehicles.ts): see stepBike() below.
-import { collideOutdoor } from './capsules.ts';
+// - Levels (shared/levels.ts): the ground, solids and ceiling come from level(s.level), the desert's or another's; a level
+//   with flat floors has no slopes, slip faces or rock, and no weather or walkers reach one without them.
 import { LAB_SPAWN } from './lab.ts';
-import { collideShelter, sandHidden, shelterCeiling } from './shelters.ts';
-import { collideCrash } from './crashsites.ts';
-import { collideMachines } from './machineBoxes.ts';
-import { collideJetWrecks } from './jetcrash.ts';
 import { bikeEngine, bikeTopSpeed } from './gear.ts';
 import { GUARDIAN, KINDS, LEG_POST_H, LEG_POST_R } from './guardians.ts';
-import { collideScrap } from './scrap.ts';
-import { collidePods, podSpawn } from './pods.ts';
+import { podSpawn } from './pods.ts';
+import { DESERT, inBox, level, type Level, type LevelId } from './levels.ts';
 import { WIND } from './dunes.ts';
 import { heightAt, onRock } from './terrain.ts';
 
@@ -122,6 +119,7 @@ export type PlayerState = {
   bike: number; // the motorcycle being ridden (shared/gear.ts bikeLevel): 0 none, else 1 + its quality; set by the server
   nose: number; // the bike's pitch (rad, + = nose up): along the sand on the ground, steered by throttle/brake in the air
   noseSpin: number; // how fast it is pitching (rad/s), in the air
+  level: LevelId; // the level they are in (shared/levels.ts): 0 the desert. Only the server changes it, never step()
 };
 
 // Input is a bitmask so it is tiny on the wire and trivially comparable.
@@ -146,18 +144,21 @@ export function yawFromQ(q: number): number {
   return (q / YAW_STEPS) * Math.PI * 2;
 }
 
-/** The sand's height as ground for feet that were at `prevY`: none inside a shelter's entrance and rooms. */
-function sandAt(x: number, z: number, prevY: number): number {
-  return sandHidden(x, z, prevY) ? -Infinity : heightAt(x, z);
-}
-
-export function spawnState(x = spawnPoint().x, z = spawnPoint().z, y = heightAt(x, z)): PlayerState {
+/** Standing still at (x, y, z) in the desert, or in `lvl` (where y must be given: there is no terrain to stand on). */
+export function spawnState(x = spawnPoint().x, z = spawnPoint().z, y = heightAt(x, z), lvl: LevelId = DESERT, facing = 0): PlayerState {
   return {
-    x, y, z, vx: 0, vy: 0, vz: 0, facing: 0,
+    x, y, z, vx: 0, vy: 0, vz: 0, facing,
     grounded: true, airJumps: AIR_JUMPS, jumpHeld: false, landTicks: 0,
     sliding: false, crouching: false, slideCool: 0, slideSpent: false, riding: false, bikeHeld: false, heading: 0, bike: 0,
-    nose: 0, noseSpin: 0,
+    nose: 0, noseSpin: 0, level: lvl,
   };
+}
+
+/** Standing at level `lvl`'s spawn `n` (mod how many it has). */
+export function levelSpawn(lvl: LevelId, n = 0): PlayerState {
+  const L = level(lvl);
+  const p = L.spawns[((n % L.spawns.length) + L.spawns.length) % L.spawns.length];
+  return p ? spawnState(p.x, p.z, p.y, L.id, p.facing) : spawnState();
 }
 
 const SLOPE_E = 0.3;
@@ -230,11 +231,19 @@ const tmpSlope = { gx: 0, gz: 0 };
 const flatSlope = { gx: 0, gz: 0 };
 const tmpCollide = { x: 0, z: 0, vx: 0, vz: 0 };
 
+/** On a level's flat floor, or (in the desert) standing on something above the sand: flat ground, no slope. */
+const onFlat = (L: Level, x: number, y: number, z: number) => L.flat || y > heightAt(x, z) + 0.02;
+
 /**
  * Advance one tick. `yawQ` is the quantized camera yaw: yaw 0 looks down -Z, and increases
  * counter-clockwise seen from above (three.js camera rotation.y convention).
  */
 export function step(s: PlayerState, input: number, yawQ: number, storm = 0, legs: readonly number[] = NO_LEGS, pull: Pull = NO_PULL): PlayerState {
+  const L = level(s.level);
+  // The desert's storms, vortices and walkers' feet are in its frame: they don't reach into a level without them.
+  if (!L.weather) { storm = 0; pull = NO_PULL; }
+  if (!L.enemies) legs = NO_LEGS;
+  if (L.flat && s.riding) s = { ...s, riding: false }; // no bike off the sand (the server takes you off it at the door)
   const yaw = yawFromQ(yawQ);
   const bikeDown = (input & BIKE) !== 0;
   if (!s.bike && s.riding) s = { ...s, riding: false }; // gone from under you
@@ -243,7 +252,7 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     s = { ...s, riding: false, bike: 0 };
   }
   // Getting on is at once too: the server puts you on it (server/vehicles.ts mount).
-  if (s.riding) return stepBike(s, input, bikeDown, storm, legs, pull);
+  if (s.riding) return stepBike(s, L, input, bikeDown, storm, legs, pull);
   const fwd = (input & FORWARD ? 1 : 0) - (input & BACK ? 1 : 0);
   const strafe = (input & RIGHT ? 1 : 0) - (input & LEFT ? 1 : 0);
   // Camera forward is (-sin yaw, -cos yaw), right is (cos yaw, -sin yaw).
@@ -290,7 +299,7 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   if (sliding) {
     vx += airX * DT;
     vz += airZ * DT;
-    const onScrap = s.y > heightAt(s.x, s.z) + 0.02;
+    const onScrap = onFlat(L, s.x, s.y, s.z);
     const g = onScrap ? flatSlope : slopeAt(s.x, s.z, tmpSlope);
     const steep = Math.hypot(g.gx, g.gz);
     if (steep > 1e-4) {
@@ -321,7 +330,7 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     }
   } else if (s.grounded) {
     // Standing on scrap (above the sand) is flat ground: no slope drag, no slip-face slide.
-    const onScrap = s.y > heightAt(s.x, s.z) + 0.02;
+    const onScrap = onFlat(L, s.x, s.y, s.z);
     const g = onScrap ? flatSlope : slopeAt(s.x, s.z, tmpSlope);
     const steep = Math.hypot(g.gx, g.gz);
     if (steep > (onScrap || !onRock(s.x, s.z) ? SLIP_TAN : ROCK_CLIMB_TAN)) {
@@ -377,19 +386,16 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   c.z = s.z + vz * DT;
   c.vx = vx;
   c.vz = vz;
-  const scrapTop = Math.max(collideScrap(c, y, s.y, PLAYER_RADIUS, STEP_UP), collideCrash(c, y, s.y, PLAYER_RADIUS, STEP_UP),
-    collideMachines(c, y, s.y, PLAYER_RADIUS, STEP_UP), collideJetWrecks(c, y, s.y, PLAYER_RADIUS, STEP_UP), collidePods(c, y, s.y, PLAYER_RADIUS, STEP_UP));
-  const builtTop = Math.max(collideShelter(c, y, s.y, PLAYER_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z),
-    collideOutdoor(c, y, s.y, PLAYER_RADIUS, PLAYER_HEIGHT, STEP_UP));
+  const top = L.collide(c, y, s.y, PLAYER_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z);
   if (legs.length) collideLegs(c, y, PLAYER_RADIUS, legs);
-  blockRock(c, s.x, s.z, Math.max(y, s.y));
+  if (!L.flat) blockRock(c, s.x, s.z, Math.max(y, s.y));
   vx = c.vx;
   vz = c.vz;
   const x = c.x;
   const z = c.z;
-  const ground = Math.max(sandAt(x, z, s.y), scrapTop, builtTop);
+  const ground = Math.max(L.ground(x, z, s.y), top);
   // Under the roof: bump your head.
-  const ceiling = shelterCeiling(x, z, s.y, PLAYER_HEIGHT, PLAYER_RADIUS);
+  const ceiling = L.ceiling(x, z, s.y, PLAYER_HEIGHT, PLAYER_RADIUS);
   if (y > ceiling) {
     y = ceiling;
     if (vy > 0) vy = 0;
@@ -412,9 +418,11 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   }
 
   if (grounded) airJumps = AIR_JUMPS;
+  // Out of a level's bounds (through a gap, or put there): back at its first spawn.
+  if (L.bounds && !inBox(L.bounds, x, y, z)) return levelSpawn(L.id);
   return {
     x, y, z, vx, vy, vz, facing, grounded, airJumps, jumpHeld: jumpDown, landTicks, sliding, crouching, slideCool,
-    slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0,
+    slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0, level: s.level,
   };
 }
 
@@ -472,7 +480,7 @@ const BIKE_LAND_WORST = 1;
 const BIKE_SKEW_LOSS = 0.85;
 export const BIKE_HARD_LANDING = 22; // impact (m/s into the sand) that costs speed and bogs the engine; src/bikeLandSound.ts crashes above it
 
-function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: number, legs: readonly number[], pull: Pull): PlayerState {
+function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, storm: number, legs: readonly number[], pull: Pull): PlayerState {
   const top = bikeTopSpeed(s.bike - 1), engine = bikeEngine(s.bike - 1);
   const throttle = (input & FORWARD ? 1 : 0) - (input & BACK ? 1 : 0);
   const steer = (input & LEFT ? 1 : 0) - (input & RIGHT ? 1 : 0); // + turns left (heading grows counter-clockwise)
@@ -487,7 +495,7 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
   const hop = s.grounded && !jumpDown && s.jumpHeld; // on letting go of the wheelie
 
   if (s.grounded) {
-    const onScrap = s.y > heightAt(s.x, s.z) + 0.02;
+    const onScrap = onFlat(L, s.x, s.y, s.z);
     const g = onScrap ? flatSlope : slopeAt(s.x, s.z, tmpSlope);
     // Gravity along the slope (its horizontal part), split into forward and sideways.
     const k = (GRAVITY * BIKE_SLOPE_G) / (1 + g.gx * g.gx + g.gz * g.gz);
@@ -533,18 +541,14 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
   c.vx = vx;
   c.vz = vz;
   const airborneY = s.y + (vy + GRAVITY * DT) * DT;
-  const scrapTop = Math.max(collideScrap(c, airborneY, s.y, BIKE_RADIUS, STEP_UP), collideCrash(c, airborneY, s.y, BIKE_RADIUS, STEP_UP),
-    collideMachines(c, airborneY, s.y, BIKE_RADIUS, STEP_UP), collideJetWrecks(c, airborneY, s.y, BIKE_RADIUS, STEP_UP),
-    collidePods(c, airborneY, s.y, BIKE_RADIUS, STEP_UP));
-  const builtTop = Math.max(collideShelter(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z),
-    collideOutdoor(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP));
+  const solidTop = L.collide(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z);
   if (legs.length) collideLegs(c, airborneY, BIKE_RADIUS, legs);
-  blockRock(c, s.x, s.z, Math.max(airborneY, s.y), BIKE_WALL_TAN);
+  if (!L.flat) blockRock(c, s.x, s.z, Math.max(airborneY, s.y), BIKE_WALL_TAN);
   vx = c.vx;
   vz = c.vz;
   const x = c.x;
   const z = c.z;
-  const ground = Math.max(sandAt(x, z, s.y), scrapTop, builtTop);
+  const ground = Math.max(L.ground(x, z, s.y), solidTop);
   const hs = Math.hypot(vx, vz);
 
   let y: number;
@@ -574,7 +578,7 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
     if (y <= ground) {
       // Landing: what goes into the sand is the speed across the slope, not the fall speed, so touching down
       // on a down-slope along the flight path is smooth. A hard one costs speed and bogs the engine down.
-      const g = ground > heightAt(x, z) + 0.02 ? flatSlope : slopeAt(x, z, tmpSlope);
+      const g = onFlat(L, x, ground, z) ? flatSlope : slopeAt(x, z, tmpSlope);
       const impact = g.gx * vx + g.gz * vz - vy;
       if (impact > BIKE_HARD_LANDING) landTicks = Math.min(MAX_LAND_TICKS, Math.round(impact - BIKE_HARD_LANDING) * 2 + 8);
       // Not on both wheels (the nose off the slope): the bike slams over onto them, and that costs speed too.
@@ -593,11 +597,11 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
   }
   if (grounded) {
     // On the ground the nose lies along the sand (flat on scrap and floors).
-    const g = y > heightAt(x, z) + 0.02 ? flatSlope : slopeAt(x, z, tmpSlope);
+    const g = onFlat(L, x, y, z) ? flatSlope : slopeAt(x, z, tmpSlope);
     nose = Math.atan(g.gx * nfx + g.gz * nfz);
     noseSpin = 0;
   }
-  const ceiling = shelterCeiling(x, z, s.y, PLAYER_HEIGHT, BIKE_RADIUS);
+  const ceiling = L.ceiling(x, z, s.y, PLAYER_HEIGHT, BIKE_RADIUS);
   if (y > ceiling) {
     y = ceiling;
     if (vy > 0) vy = 0;
@@ -606,7 +610,7 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
   return {
     x, y, z, vx, vy, vz, facing: h, grounded, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks,
     sliding: false, crouching: false, slideCool: s.slideCool, slideSpent: s.slideSpent, riding: true, bikeHeld: bikeDown, heading: h, bike: s.bike,
-    nose, noseSpin,
+    nose, noseSpin, level: s.level,
   };
 }
 

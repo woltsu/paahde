@@ -100,7 +100,7 @@ at our scale and the whole team can read and change it. Alternatives, if needs g
 
 ## Bandwidth and backpressure
 
-The schema version is 2. Each `snap` contains a complete `state` for owner reconciliation and compact pose tuples
+The schema version is 3 (3: `PlayerState.level`, docs/levels.md). Each `snap` contains a complete `state` for owner reconciliation and compact pose tuples
 for ready players within 1200 m (plus the owner). Boolean pose flags are packed; remote positions/velocities round
 to millimetres. Colour, look, held item and gear are sent as whole appearance patches only when they change or
 re-enter range. Owner simulation fields retain the previous precision.

@@ -961,7 +961,7 @@ export class Net {
       grounded: server.grounded, airJumps: server.airJumps, jumpHeld: server.jumpHeld, landTicks: server.landTicks,
       sliding: server.sliding, crouching: server.crouching, slideCool: server.slideCool, slideSpent: server.slideSpent,
       riding: server.riding, bikeHeld: server.bikeHeld, heading: server.heading, bike: server.bike,
-      nose: server.nose ?? 0, noseSpin: server.noseSpin ?? 0,
+      nose: server.nose ?? 0, noseSpin: server.noseSpin ?? 0, level: server.level ?? 0,
     };
     for (const p of this.pending) s = step(s, p.input, p.yaw, p.drag, this.legPosts, p.pull);
     this.errorX += this.me.x - s.x;

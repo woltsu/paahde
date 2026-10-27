@@ -20,7 +20,7 @@ import type { BossKind, BossSnap } from './bosses.ts';
 import type { ChunkData, PlayerAppearance, PlayerPose } from './network.ts';
 
 /** Wire/schema compatibility, independent of the build SHA. Bump when old clients cannot safely play. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export type ClientMsg =
   // First message after connecting. browserId is a random UUID kept in localStorage.
