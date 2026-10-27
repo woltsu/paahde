@@ -174,20 +174,27 @@ export function isSlipFace(x: number, z: number): boolean {
   return Math.hypot(g.gx, g.gz) > (onRock(x, z) ? ROCK_CLIMB_TAN : SLIP_TAN);
 }
 
-/** Would moving from (fx, fz) to (x, z) with feet at `feet` walk into a rock face? */
-function rockWall(fx: number, fz: number, x: number, z: number, feet: number): boolean {
+/** Would moving from (fx, fz) to (x, z) with feet at `feet` walk into a rock face (or, given `sandTan`, sand rising
+ *  steeper than that along the move)? */
+function rockWall(fx: number, fz: number, x: number, z: number, feet: number, sandTan: number): boolean {
   const mx = x - fx, mz = z - fz;
   const run = Math.sqrt(mx * mx + mz * mz);
-  if (run < 1e-6 || heightAt(x, z) < feet + 0.05 || !onRock(x, z)) return false;
+  if (run < 1e-6 || heightAt(x, z) < feet + 0.05) return false;
+  const rock = onRock(x, z);
+  if (!rock && sandTan === Infinity) return false;
   const g = slopeAt(x, z, tmpSlope);
-  return (g.gx * mx + g.gz * mz) / run > ROCK_CLIMB_TAN;
+  if ((g.gx * mx + g.gz * mz) / run <= (rock ? ROCK_CLIMB_TAN : sandTan)) return false;
+  // A steep sand lip (a dug edge) lower than a step is driven over; only a face rising past it is a wall.
+  return rock || heightAt(x + (mx / run) * WALL_LOOK, z + (mz / run) * WALL_LOOK) > feet + STEP_UP;
 }
+const WALL_LOOK = 0.5;
 
-/** Stop a move from (fx, fz) to c that runs into a rock face: slide along it on one axis if that is free. */
-function blockRock(c: { x: number; z: number; vx: number; vz: number }, fx: number, fz: number, feet: number) {
-  if (!rockWall(fx, fz, c.x, c.z, feet)) return;
-  if (!rockWall(fx, fz, c.x, fz, feet)) { c.z = fz; c.vz = 0; return; }
-  if (!rockWall(fx, fz, fx, c.z, feet)) { c.x = fx; c.vx = 0; return; }
+/** Stop a move from (fx, fz) to c that runs into a rock face (or sand steeper than `sandTan`): slide along it on one
+ *  axis if that is free. */
+function blockRock(c: { x: number; z: number; vx: number; vz: number }, fx: number, fz: number, feet: number, sandTan = Infinity) {
+  if (!rockWall(fx, fz, c.x, c.z, feet, sandTan)) return;
+  if (!rockWall(fx, fz, c.x, fz, feet, sandTan)) { c.z = fz; c.vz = 0; return; }
+  if (!rockWall(fx, fz, fx, c.z, feet, sandTan)) { c.x = fx; c.vx = 0; return; }
   c.x = fx;
   c.z = fz;
   c.vx = 0;
@@ -440,6 +447,12 @@ const BIKE_WHEELBASE = 1.36;
 const BIKE_STEER = 0.55; // max steer angle (rad) at a standstill…
 const BIKE_STEER_FADE = 9; // …divided by (1 + speed / this)
 const BIKE_SLOPE_G = 0.75; // fraction of gravity that acts along the slope (tyres sink in, the rest is lost)
+/** tan(36°): sand steeper than this gives way under the tyres (the dunes' 32° slip faces still ride): the engine only
+ *  digs in and the bike slides back down, as a walker does on a slip face. Momentum carries it a little way up. */
+const BIKE_SLIP_TAN = 0.73;
+const BIKE_SLIP_POWER = 0.2; // the engine's and brakes' share that still holds on a slip face
+/** tan(60°): sand rising steeper than this along the move is a wall to the bike (rock is one past ROCK_CLIMB_TAN). */
+const BIKE_WALL_TAN = 1.73;
 const BIKE_AIR_SPIN = 1.4; // rad/s of heading change in the air
 const BIKE_HOP = 6.5;
 const BIKE_LAUNCH_EPS = 0.03; // the ground must fall this far below the ballistic path to leave it
@@ -480,10 +493,22 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
     const k = (GRAVITY * BIKE_SLOPE_G) / (1 + g.gx * g.gx + g.gz * g.gz);
     vf += k * (g.gx * fx + g.gz * fz) * DT;
     vr += k * (g.gx * rx + g.gz * rz) * DT;
-    // Engine and brakes. A hard landing chokes the engine for a moment.
-    const power = landTicks > 0 ? 0.4 : 1;
-    if (throttle > 0) vf += (vf < 0 ? BIKE_BRAKE : engine * power * Math.max(0, 1 - vf / top)) * DT;
-    else if (throttle < 0) vf = vf > 0 ? Math.max(0, vf - BIKE_BRAKE * DT) : Math.max(-BIKE_REVERSE, vf - engine * 0.5 * DT);
+    // Too steep (sand past BIKE_SLIP_TAN, rock past ROCK_CLIMB_TAN): the slope gives way as under a walker, gravity
+    // minus kinetic friction pulls the bike down it, and the wheel only digs in.
+    const steep = Math.hypot(g.gx, g.gz);
+    const slip = steep > (onScrap || !onRock(s.x, s.z) ? BIKE_SLIP_TAN : ROCK_CLIMB_TAN);
+    if (slip) {
+      const cos = 1 / Math.sqrt(1 + steep * steep);
+      const slide = (-GRAVITY * (steep * cos - SLIDE_FRICTION * cos) + SLIDE_PUSH) * DT;
+      const ux = -g.gx / steep, uz = -g.gz / steep; // downhill
+      vf += slide * (ux * fx + uz * fz);
+      vr += slide * (ux * rx + uz * rz);
+    }
+    // Engine and brakes (neither holds much on a slip face). A hard landing chokes the engine for a moment.
+    const grip = slip ? BIKE_SLIP_POWER : 1, brake = BIKE_BRAKE * grip;
+    const power = (landTicks > 0 ? 0.4 : 1) * grip;
+    if (throttle > 0) vf += (vf < 0 ? brake : engine * power * Math.max(0, 1 - vf / top)) * DT;
+    else if (throttle < 0) vf = vf > 0 ? Math.max(0, vf - brake * DT) : Math.max(-BIKE_REVERSE, vf - engine * 0.5 * grip * DT);
     const resist = (BIKE_ROLL + BIKE_DRAG * vf * vf) * DT;
     vf = vf > 0 ? Math.max(0, vf - resist) : Math.min(0, vf + resist);
     // The storm's push, before the tyres: mostly a head- or tailwind, they hold most of the sideways part.
@@ -514,7 +539,7 @@ function stepBike(s: PlayerState, input: number, bikeDown: boolean, storm: numbe
   const builtTop = Math.max(collideShelter(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z),
     collideOutdoor(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP));
   if (legs.length) collideLegs(c, airborneY, BIKE_RADIUS, legs);
-  blockRock(c, s.x, s.z, Math.max(airborneY, s.y));
+  blockRock(c, s.x, s.z, Math.max(airborneY, s.y), BIKE_WALL_TAN);
   vx = c.vx;
   vz = c.vz;
   const x = c.x;
