@@ -2,8 +2,9 @@
 // for DOWN_MS before the server respawns you at your bedroll or the pod. A blast that kills you throws the body: `blastPush` is
 // the launch velocity (m/s) the server sends with the death ('died' and the snapshot's `down`).
 
-/** How long a dead player lies there before respawning (ms). */
-export const DOWN_MS = 7000;
+/** How long a dead player lies there before respawning (ms); the last few seconds of it are black on their screen,
+ *  with a hint (src/water.ts, src/deathDust.ts). */
+export const DOWN_MS = 9500;
 
 /** Launch speed at the centre of a blast that kills (m/s), falling off to a quarter at its edge. */
 const BLAST_PUSH = 14;

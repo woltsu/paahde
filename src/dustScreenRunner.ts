@@ -1,15 +1,23 @@
-// The loading cover's picture: sand dust blown up through a slowly turning flow field on the dark, the prologue's
-// paragraphs fading in over it a letter at a time, then the title card, and a loading bar. On a reload
-// in the same tab (src/prologue.ts) only the title comes up.
-// Plain canvas 2D that knows nothing of the page: it runs in a worker (src/prologueWorker.ts, src/prologue.ts)
-// because the main thread is busy building the world while this is up. Where WebGPU is, the dust is drawn on a canvas
-// underneath by src/prologueDust.ts and this one only lays the text and the bar over it (`dust(false)`).
-import { TEXT } from '../shared/text.ts';
+// A dust screen's picture: sand dust blown up through a slowly turning flow field on the dark, with the cards of its
+// script (DustScript) fading in over it a letter at a time, and a loading bar if it has one. The loading cover's
+// prologue (src/prologue.ts) and the black between dying and waking up (src/deathDust.ts) are scripts for it.
+// Plain canvas 2D that knows nothing of the page: it runs in a worker (src/dustScreenWorker.ts, src/dustScreen.ts)
+// because the main thread may be busy building the world while this is up. Where WebGPU is, the dust is drawn on a
+// canvas underneath by src/dustScreenGpu.ts and this one only lays the text and the bar over it (`dust(false)`).
 
 type Ctx = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
-/** Neuropol (public/fonts), loaded by whoever runs this (src/prologueWorker.ts, index.html); `relayout` once it's in. */
-export const FONT_URL = './fonts/neuropol.woff2';
+/** One line of a card, its letters starting to come in `at` s after the screen went up. `prose` is wrapped and set
+ *  in the warm white, left-aligned in a block centred on the screen; `title` is big spaced gold capitals and
+ *  `caption` small spaced capitals, each centred. */
+export type DustLine = { text: string; style: 'prose' | 'title' | 'caption'; at: number };
+/** Lines on screen together, stacked about the middle of it (a blank line between prose paragraphs), from their
+ *  first `at` until they fade out at `out` (s; never if left out). */
+export type DustCard = { lines: DustLine[]; out?: number };
+/** What a dust screen shows (plain data: it goes to the worker). `bar`: a loading bar near the bottom (`progress`);
+ *  `dustIn`: how long (s) the dust takes to come up from the dark. */
+export type DustScript = { cards: DustCard[]; bar?: boolean; dustIn?: number };
+
 const FONT = 'Neuropol, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 const INK = '236, 228, 210'; // the prologue's warm white (rgb, for alpha)
 const GOLD = '217, 178, 106';
@@ -24,18 +32,11 @@ const MAX_PIXELS = 4.2e6; // the visible canvas's backing store, at most (about 
 const TRAIL_PIXELS = 2.2e6; // the dust's own canvas: soft anyway, so cheaper
 const FADE = 0.1; // how much of the dust's trails fades per frame (at 60 fps)
 
-// The prologue's timeline (s): each paragraph starts, then they all go and the card comes up and stays.
-const PARA_AT = [2.5, 6.9, 11.5];
-const OUT_AT = 16;
-const CARD_AT = 17.6;
-/** When the full prologue has been told: the cover stays up at least this long on a tab's first load. */
-export const PROLOGUE_S = CARD_AT + 4;
-const TITLE_AT = 0.4; // the title alone, on a reload
 const CHAR_S = 0.022; // the letters' stagger
 const LETTER_S = 0.9; // one letter's fade in
+const OUT_S = 1.6; // a card's fade out
 
-/** `full`: the whole prologue; otherwise only the title. */
-export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => OffscreenCanvas | HTMLCanvasElement, full = true) {
+export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => OffscreenCanvas | HTMLCanvasElement, script: DustScript) {
   let w = 1;
   let h = 1;
   let dpr = 1;
@@ -64,17 +65,13 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   let pace = new Float32Array(0); // each grain's own speed, so they don't move as one sheet
   let buckets: Int32Array[] = [];
 
-  // Text laid out for the current size: each line's letters with their x from the line's start.
+  // Text laid out for the current size: each row's letters with their x from the row's start, and where it goes.
   type Line = { s: string; xs: number[] };
+  type Row = Line & { x: number; y: number; px: number; rgb: string; scale: number; at: number; k0: number };
   let size = 20;
   let big = 40;
   let lineH = 32;
-  let paras: { lines: Line[]; y: number }[] = [];
-  let title: Line & { x: number } = { s: '', xs: [], x: 0 };
-  let time: Line & { x: number } = { s: '', xs: [], x: 0 };
-  let blockX = 0;
-  let blockTop = 0;
-  let blockBottom = 0;
+  let cards: { rows: Row[]; at: number; out: number; bed: { x: number; top: number; bottom: number } | null }[] = [];
 
   function spawn(i: number, anywhere: boolean) {
     px[i] = rnd() * w;
@@ -93,43 +90,52 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   function layout() {
     size = Math.round(Math.max(12, Math.min(16, w / 64)));
     big = Math.round(size * 1.8);
-    g.font = `${size}px ${FONT}`;
-    const spacing = size * 0.05;
-    const width = (t: string) => g.measureText(t).width + (t.length - 1) * spacing;
     lineH = Math.round(size * 1.95);
+    const spacing = size * 0.05;
     const max = Math.min(w * 0.86, size * 36);
-    const wrapped = TEXT.prologue.lines.map((p) => {
-      const lines: Line[] = [];
-      let text = '';
-      for (const word of p.split(' ')) {
-        if (text && width(`${text} ${word}`) > max) {
-          lines.push(line(text, spacing));
-          text = word;
-        } else text = text ? `${text} ${word}` : word;
-      }
-      lines.push(line(text, spacing));
-      return lines;
+    cards = script.cards.map((card) => {
+      // each line's rows (a paragraph wrapped; a title or caption in capitals, spaced wide) and the height it takes
+      const items = card.lines.map((l) => {
+        const px = l.style === 'title' ? big : size;
+        g.font = `${px}px ${FONT}`;
+        if (l.style !== 'prose') {
+          const spread = g.measureText('M').width * (l.style === 'title' ? 0.6 : 0.25);
+          return { l, px, rows: [line(l.text.toUpperCase(), spread)], h: l.style === 'title' ? big * 1.4 : lineH };
+        }
+        const width = (t: string) => g.measureText(t).width + (t.length - 1) * spacing;
+        const rows: (Line & { width: number })[] = [];
+        let text = '';
+        for (const word of l.text.split(' ')) {
+          if (text && width(`${text} ${word}`) > max) {
+            rows.push(line(text, spacing));
+            text = word;
+          } else text = text ? `${text} ${word}` : word;
+        }
+        rows.push(line(text, spacing));
+        return { l, px, rows, h: rows.length * lineH };
+      });
+      const gap = (i: number) => (i > 0 && items[i].l.style === 'prose' && items[i - 1].l.style === 'prose' ? lineH : 0);
+      const height = items.reduce((s, it, i) => s + gap(i) + it.h, 0);
+      const longest = Math.max(0, ...items.filter((it) => it.l.style === 'prose').flatMap((it) => it.rows.map((r) => r.width)));
+      const blockX = Math.round((w - longest) / 2);
+      const rows: Row[] = [];
+      let bed: { x: number; top: number; bottom: number } | null = null;
+      let y = Math.round(h * 0.47 - height / 2);
+      items.forEach((it, i) => {
+        y += gap(i);
+        const prose = it.l.style === 'prose';
+        if (prose) bed = { x: blockX, top: bed?.top ?? y, bottom: y + it.h };
+        let k0 = 0;
+        it.rows.forEach((r, j) => {
+          const x = prose ? blockX : Math.round((w - r.width) / 2);
+          const ry = prose ? y + j * lineH + lineH / 2 : y + it.h / 2;
+          rows.push({ ...r, x, y: ry, px: it.px, rgb: it.l.style === 'title' ? GOLD : INK, scale: it.l.style === 'caption' ? 0.7 : 1, at: it.l.at, k0 });
+          k0 += r.s.length + 1;
+        });
+        y += it.h;
+      });
+      return { rows, bed, at: Math.min(...card.lines.map((l) => l.at)), out: card.out ?? Infinity };
     });
-    const longest = Math.max(...wrapped.flat().map((l) => width(l.s)));
-    const rows = wrapped.reduce((s, l) => s + l.length, 0) + wrapped.length - 1;
-    blockX = Math.round((w - longest) / 2);
-    blockTop = Math.round(h * 0.47 - (rows * lineH) / 2);
-    blockBottom = blockTop + rows * lineH;
-    let y = blockTop;
-    paras = wrapped.map((lines) => {
-      const p = { lines, y };
-      y += (lines.length + 1) * lineH;
-      return p;
-    });
-
-    // the title card: spaced wide, in capitals
-    const card = (s: string, px: number, spread: number) => {
-      g.font = `${px}px ${FONT}`;
-      const l = line(s.toUpperCase(), g.measureText('M').width * spread);
-      return { ...l, x: Math.round((w - l.width) / 2) };
-    };
-    title = card(TEXT.game.title, big, 0.6);
-    time = card(TEXT.prologue.time, size, 0.25);
   }
 
   function resize(cw: number, ch: number, deviceRatio: number) {
@@ -257,40 +263,29 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   }
 
   function text() {
-    const out = 1 - ramp((clock - OUT_AT) / 1.6);
-    if (full && out > 0 && clock > PARA_AT[0]) {
-      // a soft dark bed so the dust doesn't eat the letters
-      const cy = (blockTop + blockBottom) / 2;
-      const rx = Math.min(w * 0.6, (w - 2 * blockX) * 0.75 + 80);
-      const ry = (blockBottom - blockTop) * 0.75 + 60;
-      g.save();
-      g.translate(w / 2, cy);
-      g.scale(rx, ry);
-      const bed = g.createRadialGradient(0, 0, 0, 0, 0, 1);
-      bed.addColorStop(0, `rgba(6,5,4,${0.6 * out * ramp(clock - PARA_AT[0])})`);
-      bed.addColorStop(1, 'rgba(6,5,4,0)');
-      g.fillStyle = bed;
-      g.fillRect(-1, -1, 2, 2);
-      g.restore();
-
-      g.font = `${size}px ${FONT}`;
-      g.textBaseline = 'middle';
-      paras.forEach((p, i) => {
-        let k0 = 0;
-        p.lines.forEach((line, r) => {
-          letters(line, blockX, p.y + r * lineH + lineH / 2, PARA_AT[i], k0, INK, out);
-          k0 += line.s.length + 1;
-        });
-      });
-    }
-    const at = full ? CARD_AT : TITLE_AT;
-    if (clock > at) {
-      g.textBaseline = 'middle';
-      g.font = `${big}px ${FONT}`;
-      letters(title, title.x, full ? h * 0.47 - big * 0.6 : h * 0.47, at, 0, GOLD, 1);
-      if (!full) return;
-      g.font = `${size}px ${FONT}`;
-      letters(time, time.x, h * 0.47 + big * 0.8, at + 1.4, 0, INK, 0.7);
+    g.textBaseline = 'middle';
+    for (const c of cards) {
+      const out = 1 - ramp((clock - c.out) / OUT_S);
+      if (out <= 0 || clock <= c.at) continue;
+      if (c.bed) {
+        // a soft dark bed so the dust doesn't eat the paragraphs
+        const { x, top, bottom } = c.bed;
+        const rx = Math.min(w * 0.6, (w - 2 * x) * 0.75 + 80);
+        const ry = (bottom - top) * 0.75 + 60;
+        g.save();
+        g.translate(w / 2, (top + bottom) / 2);
+        g.scale(rx, ry);
+        const bed = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+        bed.addColorStop(0, `rgba(6,5,4,${0.6 * out * ramp(clock - c.at)})`);
+        bed.addColorStop(1, 'rgba(6,5,4,0)');
+        g.fillStyle = bed;
+        g.fillRect(-1, -1, 2, 2);
+        g.restore();
+      }
+      for (const r of c.rows) {
+        g.font = `${r.px}px ${FONT}`;
+        letters(r, r.x, r.y, r.at, r.k0, r.rgb, r.scale * out);
+      }
     }
   }
 
@@ -299,13 +294,14 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
     if (ownDust) {
       g.fillStyle = bg!;
       g.fillRect(0, 0, w, h);
-      g.globalAlpha = ramp(clock / 1.5);
+      g.globalAlpha = ramp(clock / Math.min(1.5, script.dustIn ?? 1.5));
       g.drawImage(trail, 0, 0, w, h);
       g.globalAlpha = 1;
       g.fillStyle = vignette!;
       g.fillRect(0, 0, w, h);
     } else g.clearRect(0, 0, w, h);
     text();
+    if (!script.bar) return;
     // the loading bar near the bottom: a dim track, filled in gold from the left
     const tw = Math.round(Math.min(360, w * 0.5));
     const tx = Math.round(w / 2 - tw / 2);
@@ -320,7 +316,7 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
   return {
     resize,
     relayout: layout,
-    /** Whether to draw the dust here (the default), or leave it to a canvas underneath (src/prologueDust.ts). */
+    /** Whether to draw the dust here (the default), or leave it to a canvas underneath (src/dustScreenGpu.ts). */
     dust(on: boolean) {
       ownDust = on;
       resize(last.w, last.h, last.dpr);

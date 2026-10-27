@@ -110,6 +110,13 @@ when you find it stale.
   it fills: `shared/wells.ts` `waterAt` (a pump, or a running electric well)
 - `shared/health.ts` — health (`HEALTH_MAX`), apart from heat: blows go through `hurt` in server/world.ts (a shield
   takes each one whole), heatstroke, choking and vortices take it all (`die`); server-side only for now
+- Dying on the client: `src/water.ts` times it (grey `deathGrade` in `src/post.ts`, muffle `audio.setMuffled`, the
+  fade to black and back in after the server's `respawn`); under the black `src/deathDust.ts` shows a hint
+  (`TEXT.deathHints`) on a dust screen
+- `src/dustScreen.ts` — dust screen: blown sand on the dark with a script of text cards (`DustScript`: prose, title,
+  caption lines with timings; optional loading bar), drawn in a worker (`src/dustScreenWorker.ts`), sand on the GPU
+  (`src/dustScreenGpu.ts`) or in 2D, text by `src/dustScreenRunner.ts`; the loading cover's prologue
+  (`src/prologue.ts`) and the death hint are scripts for it
 - `shared/temperature.ts` — air/felt °C by time of day (drives thirst); `shared/shade.ts` — sun ray march (shade;
   counts huts, wrecks, players and bikes, built tarps)
   tuning, drained and validated in `server/water.ts`, HUD + `playerHands` in `src/water.ts`

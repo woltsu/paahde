@@ -518,7 +518,7 @@ const en = {
     wrongPassword: 'Wrong password',
     full: 'Game is full',
   },
-  /** The loading cover's prologue (src/prologueRunner.ts): paragraphs, then the game's title over the time. */
+  /** The loading cover's prologue (src/prologue.ts): paragraphs, then the game's title over the time. */
   prologue: {
     lines: [
       'One day the rain stopped, and the cities sent their machines out into the sand to look for water.',
@@ -642,6 +642,27 @@ const en = {
     machine: () => 'Take it apart at a dismantling bench.',
     inventory: (k: HintKeys) => `Press ${k.inventory} for the inventory.`,
   } as Record<string, (k: HintKeys) => string>,
+
+  // ---- Under the black between dying and waking up (src/deathDust.ts): one picked at random, about what killed you
+  // when there is one for it (by shared/protocol.ts DeathCause), else from `any`; some `hints` above join in ----------
+
+  deathHints: {
+    any: [
+      'The bag past the hotbar stays where you fell. Go back for it.',
+      'Every death costs the world one of its shared lives.',
+      'The shelters stay cool through the day.',
+      'Broken gear can be repaired at a workbench.',
+    ],
+    heat: ['Shade cools you down. So does a sip of water.', 'The mud flats are hotter than the dunes. Cross them by night.'],
+    storm: ['A storm front can’t reach you behind rock or under a roof.'],
+    gas: ['The gas creeps along the ground at night. Get up high.', 'The gas fills the shelters too. Get out and up.'],
+    guardian: ['Keep moving, and keep clear of a walker’s feet.'],
+    stomp: ['Keep clear of the colossus’s feet.'],
+    crawler: ['The spiders are faster than you. Don’t let them get close.'],
+    harvester: ['When a harvester charges, get out of its way sideways.'],
+    laser: ['Get out of a drone’s light, and it loses you.'],
+    vortex: ['Keep well clear of a sand vortex.'],
+  } as { any: string[] } & Record<string, string[]>,
 
   // ---- The character talking to themselves (src/speechLines.ts, docs/speech.md); a list: one picked at random -------
 

@@ -1,4 +1,4 @@
-// The prologue's blown sand on the GPU (src/prologueRunner.ts draws the text over it, src/prologueWorker.ts runs both).
+// A dust screen's blown sand on the GPU (src/dustScreenRunner.ts draws the text over it, src/dustScreenWorker.ts runs both).
 // A few hundred thousand grains ride a curl-noise wind (divergence-free, so they gather into streamers and eddies that
 // drift up the screen and let go), each with its own depth: far grains are dim, slow and follow the air closely, near ones
 // bright, fast and heavy enough to cut across the eddies. A grain's colour comes from where it is set down: a slow noise
@@ -246,8 +246,9 @@ export type GpuDust = { resize(w: number, h: number, dpr: number): void; frame(d
 
 const ramp = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-/** The dust on `canvas` (its own: a WebGPU canvas can't take 2D drawing), or null where WebGPU isn't to be had. */
-export async function createGpuDust(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<GpuDust | null> {
+/** The dust on `canvas` (its own: a WebGPU canvas can't take 2D drawing), coming up from the dark over `dustIn` s,
+ *  or null where WebGPU isn't to be had. */
+export async function createGpuDust(canvas: OffscreenCanvas | HTMLCanvasElement, dustIn = 5): Promise<GpuDust | null> {
   const gpu = (globalThis.navigator as Navigator | undefined)?.gpu;
   if (!gpu) return null;
   const adapter = await gpu.requestAdapter({ powerPreference: 'low-power' }).catch(() => null);
@@ -331,7 +332,7 @@ export async function createGpuDust(canvas: OffscreenCanvas | HTMLCanvasElement)
     uf[7] = clock;
     uf[8] = dt;
     uf[9] = Math.pow(1 - FADE, dt * 60);
-    uf[10] = ramp(clock / 5.0);
+    uf[10] = ramp(clock / dustIn);
     uu[11] = count;
     uu[12] = ++frames;
     device.queue.writeBuffer(ubuf, 0, uf);

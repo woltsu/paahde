@@ -1,13 +1,33 @@
-// The loading cover (#cover in index.html): the prologue (src/prologueRunner.ts), started from src/entry.ts before
-// the big game bundle has downloaded and stopped by src/main.ts when the cover leaves. The main thread is blocked for
-// long stretches while the world builds, so it is drawn by a worker into an OffscreenCanvas, with the dust on a second
-// canvas underneath on the GPU where WebGPU is (src/prologueDust.ts). Without OffscreenCanvas it runs on the page
-// instead, all in 2D.
+// The loading cover (#cover in index.html): the prologue, a dust screen (src/dustScreen.ts) started from src/entry.ts
+// before the big game bundle has downloaded and stopped by src/main.ts when the cover leaves: its paragraphs fading
+// in one after another, then the title card, over a loading bar.
 // A tab's first load tells the whole prologue and keeps the cover up until it is told (or a key or click skips it);
 // a reload in the same tab (a deploy, src/update.ts), or any load once this browser has joined a game, shows only
 // the title. `&prologue` in the address (e.g. `?w=lab&prologue`) tells the whole prologue every time and keeps the cover
 // up for good, to look at it.
-import { createPrologue, FONT_URL, PROLOGUE_S } from './prologueRunner';
+import { TEXT } from '../shared/text.ts';
+import { showDustScreen, type DustScript } from './dustScreen';
+
+// The prologue's timeline (s): each paragraph starts, then they all go and the card comes up and stays.
+const PARA_AT = [2.5, 6.9, 11.5, 14.6];
+const OUT_AT = 18;
+const CARD_AT = 19.6;
+/** When the full prologue has been told: the cover stays up at least this long on a tab's first load. */
+const PROLOGUE_S = CARD_AT + 4;
+const TITLE_AT = 0.4; // the title alone, on a reload
+
+/** `full`: the whole prologue; otherwise only the title. */
+function script(full: boolean): DustScript {
+  const title = { text: TEXT.game.title, style: 'title' as const };
+  if (!full) return { cards: [{ lines: [{ ...title, at: TITLE_AT }] }], bar: true };
+  return {
+    cards: [
+      { lines: TEXT.prologue.lines.map((text, i) => ({ text, style: 'prose' as const, at: PARA_AT[i] ?? PARA_AT[PARA_AT.length - 1] + 3 * (i - PARA_AT.length + 1) })), out: OUT_AT },
+      { lines: [{ ...title, at: CARD_AT }, { text: TEXT.prologue.time, style: 'caption', at: CARD_AT + 1.4 }] },
+    ],
+    bar: true,
+  };
+}
 
 let off: (() => void) | null = null;
 let progress: (p: number) => void = () => {};
@@ -27,64 +47,14 @@ function start() {
   if (KEEP) full = true;
   until = KEEP ? Infinity : full ? performance.now() + PROLOGUE_S * 1000 : 0;
   const skip = () => (until = KEEP ? Infinity : 0);
-  const c = document.createElement('canvas');
-  cover.prepend(c);
-  const size = () => ({ w: innerWidth, h: innerHeight, dpr: window.devicePixelRatio || 1 });
-
-  let resize = () => {};
-  let stop = () => {};
-  let worker: Worker | null = null;
-  let under: HTMLCanvasElement | null = null;
-  if (typeof c.transferControlToOffscreen === 'function' && typeof Worker !== 'undefined') {
-    try {
-      worker = new Worker(new URL('./prologueWorker.ts', import.meta.url), { type: 'module' });
-      const offscreen = c.transferControlToOffscreen();
-      let dust: OffscreenCanvas | undefined;
-      if ('gpu' in navigator) {
-        under = document.createElement('canvas');
-        cover.prepend(under);
-        dust = under.transferControlToOffscreen();
-      }
-      const font = new URL(FONT_URL, document.baseURI).href;
-      worker.postMessage({ t: 'init', canvas: offscreen, dust, ...size(), full, font }, dust ? [offscreen, dust] : [offscreen]);
-      const w = worker;
-      resize = () => w.postMessage({ t: 'size', ...size() });
-      progress = (p) => w.postMessage({ t: 'progress', p });
-      stop = () => w.postMessage({ t: 'stop' });
-    } catch {
-      worker = null;
-      under?.remove();
-    }
-  }
-  if (!worker) {
-    const run = createPrologue(c.getContext('2d')!, (w, h) => Object.assign(document.createElement('canvas'), { width: w, height: h }), full);
-    resize = () => {
-      const s = size();
-      run.resize(s.w, s.h, s.dpr);
-    };
-    resize();
-    document.fonts?.load('16px Neuropol').then(() => run.relayout(), () => {});
-    let raf = 0;
-    let last = performance.now();
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
-      run.frame((now - last) / 1000);
-      last = now;
-    };
-    raf = requestAnimationFrame(frame);
-    progress = run.progress;
-    stop = () => cancelAnimationFrame(raf);
-  }
-  addEventListener('resize', resize);
+  const screen = showDustScreen(cover, script(full));
+  progress = screen.progress;
   addEventListener('keydown', skip);
   addEventListener('pointerdown', skip);
   off = () => {
-    stop();
-    removeEventListener('resize', resize);
+    screen.stop();
     removeEventListener('keydown', skip);
     removeEventListener('pointerdown', skip);
-    c.remove();
-    under?.remove();
   };
 }
 

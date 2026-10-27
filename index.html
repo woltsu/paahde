@@ -27,7 +27,7 @@
     <link rel="preload" href="./fonts/neuropol.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       /* Every bit of text in the game is monospace, but for titles, the prologue and the death screen: Neuropol
-         (public/fonts, CC0). The prologue's worker loads it on its own (src/prologueWorker.ts). */
+         (public/fonts, CC0). A dust screen's worker loads it on its own (src/dustScreenWorker.ts). */
       @font-face { font-family: Neuropol; src: url(./fonts/neuropol.woff2) format('woff2'); font-display: swap; }
       :root { --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --title: Neuropol, var(--mono); }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: var(--mono); }

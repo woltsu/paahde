@@ -1,16 +1,16 @@
-// Draws the loading cover's prologue off the main thread (src/prologue.ts has the page side): the dust on the GPU
-// (src/prologueDust.ts) where it can, under the text and bar on the 2D canvas, or all of it in 2D where it can't.
-import { createGpuDust, type GpuDust } from './prologueDust';
-import { createPrologue } from './prologueRunner';
+// Draws a dust screen off the main thread (src/dustScreen.ts has the page side): the dust on the GPU
+// (src/dustScreenGpu.ts) where it can, under the text and bar on the 2D canvas, or all of it in 2D where it can't.
+import { createGpuDust, type GpuDust } from './dustScreenGpu';
+import { createDustScreen, type DustScript } from './dustScreenRunner';
 
 type In =
-  | { t: 'init'; canvas: OffscreenCanvas; dust?: OffscreenCanvas; w: number; h: number; dpr: number; full: boolean; font: string }
+  | { t: 'init'; canvas: OffscreenCanvas; dust?: OffscreenCanvas; w: number; h: number; dpr: number; script: DustScript; font: string }
   | { t: 'size'; w: number; h: number; dpr: number }
   | { t: 'progress'; p: number }
   | { t: 'stop' };
 const ctx = self as unknown as { onmessage: ((e: MessageEvent<In>) => void) | null; close(): void; fonts?: FontFaceSet };
 
-let run: ReturnType<typeof createPrologue> | null = null;
+let run: ReturnType<typeof createDustScreen> | null = null;
 let gpu: GpuDust | null = null;
 let size = { w: 1, h: 1, dpr: 1 };
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -18,12 +18,12 @@ ctx.onmessage = (e) => {
   const m = e.data;
   if (m.t === 'init') {
     size = m;
-    const r = (run = createPrologue(m.canvas.getContext('2d')!, (w, h) => new OffscreenCanvas(w, h), m.full));
+    const r = (run = createDustScreen(m.canvas.getContext('2d')!, (w, h) => new OffscreenCanvas(w, h), m.script));
     // text only until the GPU dust is up (or isn't to be had, or is lost: then the 2D dust, as before)
     if (m.dust) r.dust(false);
     r.resize(m.w, m.h, m.dpr);
     if (m.dust)
-      createGpuDust(m.dust).then(
+      createGpuDust(m.dust, m.script.dustIn).then(
         (d) => {
           if (!d) return r.dust(true);
           if (timer === undefined) return d.destroy(); // stopped meanwhile

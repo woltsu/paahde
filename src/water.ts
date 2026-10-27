@@ -3,7 +3,9 @@
 // all found broken and repaired, shared/gear.ts), drinking and refilling, and the HUD: the body heat meter
 // (bottom left, glowing while heat builds), the clock and felt temperature with a sun/shade icon (top right,
 // shared/temperature.ts; only with the wrist computer equipped), a heatstroke vignette and swimming view (post.ts) past 60%, the
-// view fading out at a full meter (STROKE_S till death), and the death screen.
+// view fading out at a full meter (STROKE_S till death), and dying: lying there in grey (post.ts deathGrade; the
+// sound muffled in src/main.ts), the fade to black, a hint on the blown sand under it (src/deathDust.ts) and the fade
+// back in at home.
 //
 // The server owns the numbers; this only plays the actions and asks. Keys 1–5 take out what's in that
 // hotbar slot or put it away; items can be rearranged in the Tab inventory (src/inventory.ts). With it out, holding left mouse / E for DRINK_MS drinks one sip
@@ -22,6 +24,8 @@ import { rumble } from './gamepad';
 import { chargeBar, itemIcon, itemLabel } from './inventory';
 import type { Net } from './net';
 import { DOWN_MS } from '../shared/ragdoll.ts';
+import type { DeathCause } from '../shared/protocol.ts';
+import { DeathDust } from './deathDust';
 import { DARK_LIFT_S, deathGrade, fainting, heatstroke } from './world/env.ts';
 import { drinkSound } from './drinkSound';
 import { indoors } from '../shared/shelters.ts';
@@ -65,8 +69,15 @@ const TEMP_BLUE = [120, 196, 255];
 const TEMP_AMBER = [255, 184, 77];
 const TEMP_RED = [255, 92, 60];
 const TEMP_COOL = 18, TEMP_WARM = 34, TEMP_HOT = 50;
-/** Fade to black before the respawn, and back in after it (ms). */
-const FADE_OUT_MS = 1500;
+/** Dead, the view fades to black over FADE_OUT_MS until DUST_MS before the respawn; under the black the dust screen
+ *  with a hint (src/deathDust.ts) comes up over DUST_IN_MS and goes back into the black over the last DUST_OUT_MS;
+ *  once we're up at the bedroll or the pod (the server's 'respawn', or UP_WAIT_MS past due without it) the view fades
+ *  back in over FADE_IN_MS (ms). */
+const FADE_OUT_MS = 1200;
+const DUST_MS = 5000;
+const DUST_IN_MS = 900;
+const DUST_OUT_MS = 600;
+const UP_WAIT_MS = 4000;
 const FADE_IN_MS = 1800;
 /** The colour drains over this long (s) when you die. */
 const DEATH_GRADE_S = 0.25;
@@ -187,6 +198,9 @@ export class Survival {
   fillingWell: number | null = null;
   private needRelease = false; // one sip per press: let go before the next
   private deadUntil = 0;
+  private cause: DeathCause | null = null; // what killed us last
+  private upAt = 0; // performance.now() we were up again after the last death (0: not yet)
+  private dust = new DeathDust();
   private wasRiding = false;
   private toastUntil = 0;
   private promptHtml = '';
@@ -257,9 +271,11 @@ export class Survival {
       this.wheelStepAt = now;
       this.select(stepSlot(this.selected, Math.sign(dy), HOTBAR_ACTIONS.length, this.net.boxes.bag));
     }, { passive: true });
-    net.onDied = () => {
+    net.onDied = (cause) => {
       rumble(1, 1, 500);
       this.deadUntil = performance.now() + DOWN_MS;
+      this.cause = cause;
+      this.upAt = 0;
       this.cancel();
       this.shown = 0;
     };
@@ -473,10 +489,18 @@ export class Survival {
     deathGrade.value = dead ? Math.min(1, deathGrade.value + dt / DEATH_GRADE_S) : 0;
     this.pips.forEach((p, i) => p.classList.toggle('on', i < w.sips));
     this.death.style.display = dead ? 'flex' : 'none';
-    // Black out over the last stretch of lying dead, then fade back in at the bedroll or the pod after the respawn.
+    // Black out after lying dead a while, the dust screen with a hint under the black, then fade back in at the
+    // bedroll or the pod once the server has us up there.
     const toEnd = this.deadUntil - now;
-    const black = toEnd > 0 ? 1 - Math.min(1, toEnd / FADE_OUT_MS) : Math.max(0, 1 + toEnd / FADE_IN_MS);
+    if (toEnd <= 0 && !this.upAt && (this.net.down === null || toEnd < -UP_WAIT_MS)) this.upAt = now;
+    const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+    const black = toEnd > 0 ? 1 - clamp01((toEnd - DUST_MS) / FADE_OUT_MS) : this.upAt ? clamp01(1 - (now - this.upAt) / FADE_IN_MS) : 1;
     this.fade.style.display = black > 0 && this.deadUntil > 0 ? 'block' : 'none';
     this.fade.style.opacity = String(black);
+    // (started as the fade to black begins, so it's going by the time it shows)
+    const dusty = this.deadUntil > 0 && toEnd > 0 && toEnd < DUST_MS + FADE_OUT_MS;
+    if (dusty && !this.dust.up) this.dust.start(this.cause);
+    else if (!dusty && this.dust.up) this.dust.stop();
+    if (dusty) this.dust.opacity = clamp01((DUST_MS - toEnd) / DUST_IN_MS) * clamp01(toEnd / DUST_OUT_MS);
   }
 }
