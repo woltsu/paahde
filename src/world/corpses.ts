@@ -38,7 +38,7 @@ export class CorpseView {
   private shown = new Map<number, Shown>();
   private time = 0;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.group);
   }
 

@@ -41,11 +41,11 @@ const _p = new THREE.Vector3(), _d = new THREE.Vector3();
 export class Bolts {
   private bolts = new Map<number, Bolt>();
   private bursts: Burst[] = [];
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   /** A guardian's bolt burst on screen (its 'boom', once the drawn bolt got there). */
   onBurst?: (id: number, x: number, y: number, z: number, ground: boolean) => void;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
   }
 

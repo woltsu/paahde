@@ -100,7 +100,7 @@ function buildIndex(): THREE.BufferAttribute {
 }
 
 export class Terrain {
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private material = createTerrainMaterial();
   private index = buildIndex();
   private cache = new Map<string, Chunk>();
@@ -131,7 +131,7 @@ export class Terrain {
   /** Stats for debugging/perf overlays. */
   readonly stats = { chunks: 0, triangles: 0, builtThisFrame: 0, buildMs: 0, totalBuilt: 0, cacheBytes: 0 };
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     // Haze must reach total just before the terrain edge, which is at least VIEW_DISTANCE away.
     hazeFar.value = VIEW_DISTANCE * 0.95;

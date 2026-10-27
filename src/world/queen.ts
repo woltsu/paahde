@@ -190,7 +190,7 @@ function capsule(o: THREE.Vector3, d: THREE.Vector3, a: THREE.Vector3, b: THREE.
 export class QueenView implements BossView {
   readonly points: THREE.Object3D[] = [];
   readonly snapS = true;
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   readonly root = new THREE.Group();
   private body = new THREE.Group();
   private sacPivot = new THREE.Group();
@@ -222,7 +222,7 @@ export class QueenView implements BossView {
   private brood: Brood;
   private born = 0;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     const g = () => new THREE.MeshBasicNodeMaterial({ vertexColors: true });
     this.glow = { eyes: g(), sac: g(), legs: g() };

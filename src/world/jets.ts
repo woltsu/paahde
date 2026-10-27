@@ -178,10 +178,10 @@ class Debris {
   /** The next event (a splash of sand) to play. */
   ev = 0;
 
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private kind: JetKind;
 
-  constructor(scene: THREE.Scene, kind: JetKind) {
+  constructor(scene: THREE.Object3D, kind: JetKind) {
     this.scene = scene;
     this.kind = kind;
     const model = LOOKS[kind].model!;
@@ -322,7 +322,7 @@ export class Jets {
   private views = new Map<number, View>();
   private wreckViews = new Map<number, Debris>();
   private pose: JetPose = jetPose();
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   /** A shot hit a jet at (x, y, z) (each one counts: the JET_HP-th brings it down). */
   onHit: (x: number, y: number, z: number) => void = () => {};
   /** A downed jet's nose went into the sand at (x, y, z), diving along (dx, dy, dz). */
@@ -337,7 +337,7 @@ export class Jets {
     for (const [id, v] of this.views) if (v.state === 0) yield { id, x: v.obj.position.x, y: v.obj.position.y, z: v.obj.position.z };
   }
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
   }
 

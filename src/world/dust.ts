@@ -40,7 +40,7 @@ export class Dust {
   private pSize = new Float32Array(PUFFS);
   private pThreshold = new Float32Array(PUFFS);
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     for (let i = 0; i < PUFFS; i++) this.respawnPuff(i, 0, 0, true);
     const pm = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false });
     pm.positionNode = instancedBufferAttribute(this.puffPosAttr);

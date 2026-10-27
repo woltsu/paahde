@@ -209,7 +209,7 @@ function aim(o: THREE.Object3D, from: THREE.Vector3, to: THREE.Vector3, pole: TH
 export class ColossusView implements BossView {
   readonly points: THREE.Object3D[] = [];
   readonly snapS = true;
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   /** Everything; `fall` tips it all over when it dies. */
   readonly root = new THREE.Group();
   private fall = new THREE.Group();
@@ -250,7 +250,7 @@ export class ColossusView implements BossView {
   private podsOpen = false;
   private missiles: Missile[] = [];
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     this.root.add(this.fall);
     const g = (): THREE.Group => new THREE.Group();

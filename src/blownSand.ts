@@ -77,7 +77,7 @@ export class BlownSand {
   private groundSlots = new Map<number, number>();
   private groundCache = new Float32Array(GROUND_CELLS * 4);
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.grainMesh());
     this.sheet = new DriftSheet(scene);
     // Digging changes the ground: forget the cached cells (edits are rare next to grain hops).

@@ -107,7 +107,7 @@ export class BeaconBeams {
   private baseAttr = new THREE.InstancedBufferAttribute(this.base, 3);
   private colorAttr = new THREE.InstancedBufferAttribute(this.color, 3);
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.translate(0, 0.5, 0);
     const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });

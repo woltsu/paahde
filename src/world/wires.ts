@@ -18,7 +18,7 @@ export class WireView {
   private ghost: THREE.Mesh | null = null;
   private ghostKey = '';
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.group);
   }
 

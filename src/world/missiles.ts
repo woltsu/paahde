@@ -111,9 +111,9 @@ function markerMesh(p: MissilePath): { mesh: THREE.Mesh; fill: { value: number }
 export class Missiles {
   private flying = new Map<number, Flying>();
   private smoke = new Smoke();
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     scene.add(this.smoke.mesh);
   }

@@ -83,7 +83,7 @@ export class PoleLamps {
   private at = new THREE.Vector3();
 
   /** Puts the pool in the scene: call at startup, before the first render. */
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     const f = FLOOD;
     for (let i = 0; i < POOL; i++) {
       const light = new PooledSpotLight(f.color, 0, f.distance, f.angle, f.penumbra, f.decay);

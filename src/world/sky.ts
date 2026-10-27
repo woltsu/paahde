@@ -50,6 +50,8 @@ export class Sky {
   private lod = new ShadowLod();
   private lodMin: number[] = [];
   private scene: THREE.Scene;
+  /** The desert's aerial perspective, set on the scene while the desert is the stage (enter). */
+  private fogNode: THREE.Node;
   private lodSet = false;
   readonly day: DayNight;
   /** The dunes' shadows (src/world/heightShadow.ts). */
@@ -58,7 +60,9 @@ export class Sky {
   renderer: THREE.WebGPURenderer | null = null;
   readonly night = new NightSky();
 
-  constructor(scene: THREE.Scene) {
+  /** Built into `root` (the desert stage's, src/levels/desert.ts); `scene` is the one scene, whose fog, environment and
+   *  background enter() sets while the desert is the stage. */
+  constructor(root: THREE.Object3D, scene: THREE.Scene) {
     // Golden-hour sun (10°) through dusty air: warm, a little reddened. dayNight.ts keys the rest of the day off it.
     sunColor.value.setRGB(1.0, 0.7, 0.42).multiplyScalar(3.4);
 
@@ -72,18 +76,16 @@ export class Sky {
     this.dome.frustumCulled = false;
     this.dome.renderOrder = -1000;
     this.dome.onBeforeRender = (_r, _s, camera) => this.dome.position.copy(camera.position);
-    scene.add(this.dome);
-    scene.background = null;
+    root.add(this.dome);
 
     // Aerial perspective for every node material with fog enabled: orange haze that glows towards the sun.
     const view = normalize(positionWorld.sub(cameraPosition));
     const flat = normalize(vec3(view.x, min(view.y, 0), view.z));
-    scene.fogNode = fog(hazeColorFor(flat), hazeFactor(positionWorld));
+    this.fogNode = fog(hazeColorFor(flat), hazeFactor(positionWorld));
 
     // Warm rust fill: shadows stay deep maroon-brown, never grey or blue.
     this.ambient = new THREE.HemisphereLight(0xd27a40, 0x5a2810, 0.55);
-    scene.environmentNode = desertEnvironment;
-    scene.add(this.ambient);
+    root.add(this.ambient);
     this.day = new DayNight(this.ambient);
 
     const sun = this.sun;
@@ -104,7 +106,8 @@ export class Sky {
     this.csm.extraLit = this.heights.litNode();
     this.csm.fade = true; // widens each cascade's map to cover the cross-fade into it
     sun.shadow.shadowNode = this.csm;
-    scene.add(sun, sun.target);
+    root.add(sun, sun.target);
+    this.enter(scene);
     onGraphics((g, changed) => {
       if (changed === 'shadows') {
         this.csm.setEnabled(g.shadows);
@@ -112,6 +115,14 @@ export class Sky {
       }
       if (changed === 'shadowDistance') this.setShadowDistance(g.shadowDistance);
     });
+  }
+
+  /** The desert took over the scene (src/levels/desert.ts): its haze, its sky/ground environment, no background (the dome
+   *  is drawn instead). The sun, ambient and dome are under the stage's root, so they come and go with it. */
+  enter(scene: THREE.Scene) {
+    scene.background = null;
+    scene.fogNode = this.fogNode;
+    scene.environmentNode = desertEnvironment;
   }
 
   /** Cut the cascades again out to this distance (m); they are refitted on the next frame. */

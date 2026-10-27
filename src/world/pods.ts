@@ -16,7 +16,7 @@ export class PodsView {
   private group = new THREE.Group();
   private glow: THREE.MeshStandardMaterial[] = [];
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     const pods = podPlaces();
     if (!pods.length) return;
     scene.add(this.group);

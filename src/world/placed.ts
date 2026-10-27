@@ -80,7 +80,7 @@ export class PlacedView {
   private lamps: PoleLamps;
 
   /** `material` makes a model's material lit for where it stands. */
-  constructor(scene: THREE.Scene, material: (mt: THREE.Material, where: Where) => THREE.Material) {
+  constructor(scene: THREE.Object3D, material: (mt: THREE.Material, where: Where) => THREE.Material) {
     scene.add(this.group);
     this.material = material;
     this.beams = new BeaconBeams(scene);

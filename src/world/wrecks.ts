@@ -42,12 +42,12 @@ interface View {
 }
 
 export class Wrecks {
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private views = new Map<string, View>();
   private nextId = -100; // locator ids: players are positive, home is -1
   private dirty = true;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     crashListeners.push(() => (this.dirty = true));
   }

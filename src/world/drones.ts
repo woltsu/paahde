@@ -110,9 +110,9 @@ export class Drones {
   private views = new Map<number, View>();
   /** Our own hits' knockback, shown before the server's frames do (src/world/shoves.ts). */
   private shoves = new Shoves();
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     load();
   }

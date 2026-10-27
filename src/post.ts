@@ -76,6 +76,32 @@ export const grade = {
 /** Bloom: strength, radius and threshold of the half-res bloom chain, in Post's constructor. */
 export const BLOOM = { strength: 0.4, radius: 0.45, threshold: 2.0 };
 
+/**
+ * What a stage (src/levels/stage.ts) wants of the post passes while it is active, all through uniforms (Post.setProfile):
+ * switching costs no shader compile. The weather's dust (storms, the front, vortices, gas, grit) is not here: it follows
+ * the weather systems, which a level without `weather` feeds nothing, and its marches skip at strength 0.
+ */
+export type PostProfile = {
+  /** Heat haze near the horizon, 0..1. */
+  heatHaze: number;
+  /** The sun: glare, flares and the eye adapting to staring at it (and the CPU sun ray against the dunes), on or off. */
+  sunGlare: boolean;
+  bloom: { strength: number; radius: number };
+  /** What the eye adapts to (×): the grade's own exposure stays the art bench's. */
+  exposure: number;
+  /** The grade (linear colours): white balance, shadow lift, saturation, contrast. */
+  grade: { balance: THREE.Color; lift: THREE.Color; saturation: number; contrast: number };
+  /** Ambient occlusion, × the player's setting. */
+  ao: number;
+};
+
+/** The desert's profile: what Post started with before there were levels. */
+export const DESERT_POST: PostProfile = {
+  heatHaze: 1, sunGlare: true, bloom: { strength: BLOOM.strength, radius: BLOOM.radius }, exposure: 1,
+  grade: { balance: grade.balance.value.clone(), lift: grade.lift.value.clone(), saturation: grade.saturation.value, contrast: grade.contrast.value },
+  ao: 1,
+};
+
 /** Sun tint used for veiling glare and flares (linear). */
 const GLARE_TINT = new THREE.Color(1.0, 0.5, 0.2);
 /** Sandstorm dust: extinction per metre at full strength (~20 m to see 95% lost), how fast it thins
@@ -208,6 +234,10 @@ export class Post {
   private comfortMotion = uniform(1).onRenderUpdate(() => comfort.motion);
   /** Ambient occlusion strength, 0 (off) .. 1; set from the Esc menu. */
   private aoIntensity = uniform(0.7);
+  /** The player's occlusion setting (setAoIntensity) and the stage profile's (setProfile). */
+  private aoUser = 0.7;
+  private profile: PostProfile = DESERT_POST;
+  private hazeK = uniform(1);
   private aoDenoise = uniform(1).onRenderUpdate(() => graphics.sandDetail >= 2 ? 1 : 0);
   private camNear = uniform(0.1);
   private camFar = uniform(6000);
@@ -274,7 +304,7 @@ export class Post {
       const dy = p.y.sub(horizonY); // > 0 below the horizon
       // (eased across the horizon: a hard step there drew a line straight across the ground wherever it rises above the horizon)
       const band = smoothstep(0.22, 0.0, abs(dy)).mul(mix(float(0.35), float(1), smoothstep(-0.04, 0.04, dy)));
-      const mask = far.mul(band).mul(heatHaze).mul(this.comfortMotion);
+      const mask = far.mul(band).mul(heatHaze).mul(this.hazeK).mul(this.comfortMotion);
       const warped = p.toVar();
       If(mask.greaterThan(0), () => {
         const q = vec3(p.x.mul(aspect).mul(28), p.y.mul(110).add(time.mul(2.2)), time.mul(0.6));
@@ -751,7 +781,21 @@ export class Post {
   }
 
   setAoIntensity(v: number) {
-    this.aoIntensity.value = v;
+    this.aoUser = v;
+    this.aoIntensity.value = v * this.profile.ao;
+  }
+
+  /** A stage took over (src/levels/stage.ts): its haze, sun, bloom, exposure, grade and occlusion. Uniforms only. */
+  setProfile(p: PostProfile) {
+    this.profile = p;
+    this.hazeK.value = p.heatHaze;
+    this.bloom.strength.value = p.bloom.strength;
+    this.bloom.radius.value = p.bloom.radius;
+    grade.balance.value.copy(p.grade.balance);
+    grade.lift.value.copy(p.grade.lift);
+    grade.saturation.value = p.grade.saturation;
+    grade.contrast.value = p.grade.contrast;
+    this.setAoIntensity(this.aoUser);
   }
 
   /** Project the sun and horizon to screen, run eye adaptation, render. */
@@ -776,9 +820,10 @@ export class Post {
     const facing = this.fwd.dot(sd);
     this.sunUV.value.set(this.ndc.x * 0.5 + 0.5, 0.5 - this.ndc.y * 0.5);
     const off = Math.max(Math.abs(this.ndc.x), Math.abs(this.ndc.y));
-    const sunUp = THREE.MathUtils.smoothstep(sd.y, -0.03, 0.02); // no glare once it has set
+    // No glare once it has set, nor where the stage has no sun (a level indoors).
+    const sunUp = this.profile.sunGlare ? THREE.MathUtils.smoothstep(sd.y, -0.03, 0.02) : 0;
     // A sandstorm between us and the sun swallows its glare and flares like the disc itself.
-    const clear = sunThroughDust(cam.position, sd);
+    const clear = sunUp > 0 ? sunThroughDust(cam.position, sd) : 0;
     this.sunOnScreen.value = facing > 0 ? (1 - THREE.MathUtils.smoothstep(off, 0.95, 1.35)) * sunUp * clear : 0;
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
     this.sunRadiusUV.value = (Math.tan(sunDiscRadius.value) / tanHalf) * 0.5;
@@ -791,8 +836,8 @@ export class Post {
 
     // Eye adaptation: CPU ray-march along the sun direction against the shared heightfield to tell
     // whether a dune hides the sun; staring into a visible sun blows exposure up, then settles.
-    let visible = 1;
-    for (let t = 4; t < 600; t *= 1.18) {
+    let visible = sunUp > 0 ? 1 : 0;
+    for (let t = 4; visible && t < 600; t *= 1.18) {
       const x = cam.position.x + sd.x * t;
       const z = cam.position.z + sd.z * t;
       if (heightAt(x, z) > cam.position.y + sd.y * t) {
@@ -803,7 +848,7 @@ export class Post {
     const look = THREE.MathUtils.smoothstep(facing, 0.55, 0.995) * visible * sunUp * clear;
     const k = 1 - Math.exp(-dt * 1.5);
     this.stareValue += (look - this.stareValue) * k;
-    this.exposureValue += (1 + 0.18 * look - this.exposureValue) * k;
+    this.exposureValue += ((1 + 0.18 * look) * this.profile.exposure - this.exposureValue) * k;
     this.stare.value = this.stareValue;
     this.exposure.value = this.exposureValue;
 

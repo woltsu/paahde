@@ -87,7 +87,7 @@ export class GuardianFx {
   /** When we last told the server a foot came down on us (ms). */
   private stompedAt = 0;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.guardians = new Guardians(scene);
     this.drones = new Drones(scene);
     this.bolts = new Bolts(scene);

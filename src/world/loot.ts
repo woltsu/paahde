@@ -184,7 +184,7 @@ export class LootView {
 
   private scrap: Scrap;
 
-  constructor(scene: THREE.Scene, scrap: Scrap) {
+  constructor(scene: THREE.Object3D, scrap: Scrap) {
     this.scrap = scrap;
     scene.add(this.group);
   }

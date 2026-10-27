@@ -161,11 +161,11 @@ export class TeardownView {
   /** The use button held on a step. sx / sy: smoothed mouse velocity (bolts), a stroke so far (wires) or the pull so far (pry). */
   private act: { step: Step; angle: number; end: number; sx: number; sy: number; lastMove: number } | null = null;
 
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private camera: THREE.PerspectiveCamera;
   private canvas: HTMLElement;
 
-  constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, canvas: HTMLElement) {
+  constructor(scene: THREE.Object3D, camera: THREE.PerspectiveCamera, canvas: HTMLElement) {
     this.scene = scene;
     this.camera = camera;
     this.canvas = canvas;

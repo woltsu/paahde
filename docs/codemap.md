@@ -29,6 +29,14 @@ when you find it stale.
   `src/desktop.ts` — the game server's address when the page isn't served by it (`PAGE_URL`). Built by
   `.github/workflows/desktop.yml`
 
+## Levels (docs/levels.md)
+
+- `src/levels/stage.ts` — `Stage`: what the client draws for one level, one root per stage in the one scene; the
+  active stage owns fog, environment, background and the post profile (`Post.setProfile`, `src/post.ts` `PostProfile`),
+  and its root's lights are the scene's only lights
+- `src/levels/desert.ts` — the desert stage: sky, terrain, pods, shelters, crash sites, walkers, bosses, loot ...
+  built into its root (moved out of `src/main.ts`), and their per-frame updates
+
 ## Worlds, server and players
 
 - `shared/world.ts` — worlds: each game is its own world at its own URL (`?w=<id>`, made on the landing page,

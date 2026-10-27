@@ -148,7 +148,7 @@ const _o = new THREE.Vector3(), _r = new THREE.Vector3();
 
 export class CarrierView implements BossView {
   readonly points: THREE.Object3D[] = [];
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   readonly root = new THREE.Group();
   /** Per fan: the tilting group (duct, rotor, hub lens) and its rotor; spin speed now. */
   private fans: THREE.Group[] = [];
@@ -174,7 +174,7 @@ export class CarrierView implements BossView {
   private pending: BossFxMsg[] = [];
   private shots: Shot[] = [];
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     load();
     for (let i = 0; i < FANS.length; i++) {

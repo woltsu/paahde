@@ -119,7 +119,7 @@ export class CrashSites {
     return t;
   };
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.group);
     this.smoke = new CrashSmoke(scene);
     crashListeners.push(() => (this.dirty = true));

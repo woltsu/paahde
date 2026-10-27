@@ -69,7 +69,7 @@ export class Scrap {
   /** Resolves once the props' model has loaded (mesh() gives them from then on). */
   readonly ready = new Promise<void>((res) => (this.loaded = res));
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.group);
     scrapListeners.push(() => (this.dirty = true)); // picked up or respawned
     new GLTFLoader().load(MODEL_URL, (gltf) => this.init(gltf.scene), undefined, (err) => console.warn('scrap: failed to load', err));

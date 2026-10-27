@@ -47,7 +47,7 @@ const headlights: { light: THREE.SpotLight; used: boolean }[] = [];
 
 /** Put the headlight pool in the scene at startup, behind the loading cover: done on the first ride instead,
  *  the recompile froze the game for a moment. Also starts loading the model. */
-export function addHeadlights(scene: THREE.Scene) {
+export function addHeadlights(scene: THREE.Object3D) {
   load();
   if (headlights.length) return;
   for (let i = 0; i < POOL; i++) {
@@ -116,7 +116,7 @@ export class Bike {
     lean: 0, twist: 0, tuck: 0,
   };
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.tilt.rotation.order = 'YXZ';
     this.root.add(this.tilt);
     scene.add(this.root);

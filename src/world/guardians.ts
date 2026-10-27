@@ -326,7 +326,7 @@ class Walker {
   private wreckSmoke = 0;
   onEvent: (e: WalkerEvent) => void = () => {};
 
-  constructor(f: GuardianFrame, scene: THREE.Scene, p: Record<Part, THREE.Object3D>, onFootfall: (f: Footfall) => void) {
+  constructor(f: GuardianFrame, scene: THREE.Object3D, p: Record<Part, THREE.Object3D>, onFootfall: (f: Footfall) => void) {
     this.id = f.id;
     this.onFootfall = onFootfall;
     this.kind = f.kind;
@@ -842,9 +842,9 @@ export class Guardians {
   /** Weak points shattering, legs giving out, wrecks hitting the sand (src/guardians.ts: sound, dust). */
   onEvent: (e: WalkerEvent) => void = () => {};
 
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     void load();
   }

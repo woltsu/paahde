@@ -72,7 +72,7 @@ export class VehicleView {
   private group = new THREE.Group();
   private shown = new Map<number, Shown>();
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.group);
   }
 

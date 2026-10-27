@@ -9,7 +9,7 @@ export type BossFxMsg = Extract<ServerMsg, { t: 'bossFx' }>;
 
 /** What a view gets every frame besides its snapshot. */
 export type BossCtx = {
-  scene: THREE.Scene;
+  scene: THREE.Object3D;
   /** The camera (the listener). */
   ear: THREE.Vector3;
   /** Us (feet), or null before we've spawned. */

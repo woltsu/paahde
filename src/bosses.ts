@@ -19,7 +19,7 @@ import type { Net } from './net';
 
 type BossesMsg = Extract<ServerMsg, { t: 'bosses' }>;
 
-const VIEWS: Record<BossKind, (scene: THREE.Scene) => BossView> = {
+const VIEWS: Record<BossKind, (scene: THREE.Object3D) => BossView> = {
   worm: (s) => new WormView(s),
   carrier: (s) => new CarrierView(s),
   colossus: (s) => new ColossusView(s),
@@ -47,7 +47,7 @@ const _w = new THREE.Vector3(), _n = new THREE.Vector3(), _s = new THREE.Vector3
 
 export class BossFx {
   private shown = new Map<number, Shown>();
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private ctx: BossCtx;
   /** Something is after us: a boss within FIGHT_R. */
   combat = false;
@@ -56,7 +56,7 @@ export class BossFx {
   /** A boss we hit lately (src/kills.ts) just died. */
   onKill: (kind: BossKind) => void = () => {};
 
-  constructor(scene: THREE.Scene, thump: BossCtx['thump'], shake: BossCtx['shake']) {
+  constructor(scene: THREE.Object3D, thump: BossCtx['thump'], shake: BossCtx['shake']) {
     this.scene = scene;
     this.ctx = { scene, ear: new THREE.Vector3(), me: null, time: 0, dt: 0, thump, shake };
     bossFx = this;

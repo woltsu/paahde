@@ -250,7 +250,7 @@ function enter(b: { h: THREE.Vector3; c: THREE.Vector3 }, o: THREE.Vector3, d: T
 export class Harvesters {
   private views = new Map<number, View>();
   private pose: HarvesterPose = harvesterPose();
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   /** A shot hit a live core at (x, y, z). */
   onHit: (x: number, y: number, z: number) => void = () => {};
   /** A core was shot out at (x, y, z), its maw facing (dx, dz). */
@@ -258,7 +258,7 @@ export class Harvesters {
   /** It seized and caught fire at (x, y, z). */
   onDeath: (x: number, y: number, z: number) => void = () => {};
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
   }
 

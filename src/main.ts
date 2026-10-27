@@ -11,11 +11,8 @@ import { BEDROLL, bedLit, placed } from '../shared/placed.ts';
 import { stationTarget } from '../shared/stations.ts';
 import { isTableId, tableId } from '../shared/crash.ts';
 import { FirstPersonCamera } from './camera';
-import { BlownSand } from './blownSand';
-import { Shelters } from './world/shelters';
 import { addCrosshair } from './crosshair';
 import { ShieldFx } from './shieldFx';
-import { footprints, streaks, tyreprints } from './footprints';
 import { InventoryHud, itemLabel } from './inventory';
 import { stormAt } from '../shared/storm.ts';
 import { addItem, debrisItem, SCRAP } from '../shared/items.ts';
@@ -33,31 +30,21 @@ import { myLook as storedLook } from './profile';
 import { bodyScale, unpackLook } from '../shared/look.ts';
 import { loadScavenger, ScavengerModel } from './models/scavenger';
 import { Avatar } from './players';
-import { addHeadlights, Bike } from './bike';
-import { tyreDust } from './tyreDust';
+import { Bike } from './bike';
 import { Post } from './post';
 import * as env from './world/env';
-import { glbMaterial } from './world/glbMaterial';
-import { PlacedView } from './world/placed';
-import { WireView } from './world/wires';
 import { Wiring } from './wiring';
 import { wires } from '../shared/wires.ts';
 import { Placer } from './placing';
-import { Scrap } from './world/scrap';
-import { CrashSites } from './world/crashsites';
 import { CrashSound } from './crashSound';
 import { listen } from './echo';
 import { tickEchoBus } from './acoustics';
 import { coreCrashSites, crashSitesNear, debrisTarget } from '../shared/crashsites.ts';
 import { CRASH_KINDS } from '../shared/crashKinds.ts';
-import { Dust } from './world/dust';
 import { clockText } from './world/dayNight';
 import { DebugMenu } from './debugMenu.ts';
 import { FlyCam } from './flyCam';
 import { ArtBench } from './artBench';
-import { BossFx } from './bosses';
-import { Sky } from './world/sky';
-import { Terrain } from './world/terrain';
 import { wind } from './world/wind';
 import { WindSound } from './windSound';
 import { EngineSound } from './engineSound';
@@ -72,7 +59,7 @@ import { slideSound } from './slideSound';
 import { audio } from './audio';
 import { heightAt } from '../shared/terrain.ts';
 import { biome } from '../shared/biomes.ts';
-import { indoors, inShelter, overShelter, sheltersNear } from '../shared/shelters.ts';
+import { indoors, inShelter } from '../shared/shelters.ts';
 import { waterAt, WELL, wellAt, wellSpec } from '../shared/wells.ts';
 import { wellSound } from './wellSound';
 import { pickupSound } from './pickupSound';
@@ -98,38 +85,33 @@ import { BossBar } from './bossBar';
 import { Thrower } from './throw';
 import { Mace } from './mace';
 import { zaps } from './world/zaps';
-import { TeardownView } from './teardown/teardown';
-import { MachineSites } from './world/crash';
 import { BenchMenu } from './benchMenu';
 import { BuildMenu } from './buildMenu';
 import { machinesAt } from '../shared/crash.ts';
 import { LAB_LOOK } from '../shared/lab.ts';
-import { addLabPlates } from './world/labPlates';
-import { labFloor } from './world/sandMaterial';
 import { junkSpec, SALVAGE } from '../shared/salvage.ts';
 import { bagShape, equipped, isBuilding, locatorRange, quality, repaired, spyglassZoom, stormWarnS } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
-import { LootView, lootPrompt } from './world/loot';
-import { ownVehicleTargets, VehicleView } from './world/vehicles';
+import { lootPrompt } from './world/loot';
+import { ownVehicleTargets } from './world/vehicles';
 import { vehicles, vehicleTarget } from '../shared/vehicles.ts';
-import { CorpseView, corpseTargets } from './world/corpses';
+import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
 import { openBoxes } from '../shared/storage.ts';
 import { Chat } from './chat';
 import { nameGate } from './name';
 import { prologue } from './prologue';
 import { tools } from './input';
-import { Wrecks } from './world/wrecks';
 import { Trophies } from './world/trophies';
-import { PodsView } from './world/pods';
 import { nearPod } from '../shared/podSpot.ts';
 import { isTrophy, trophyFree } from '../shared/trophies.ts';
-import { GuardianFx } from './guardians';
 import { update } from './update';
 import { registerPooledLights } from './world/pooledLight.ts';
 import { initializeRenderer, showReload } from './recovery.ts';
 import { LOADING_FRAME_MS, slice } from './yield';
 import { Warmup } from './warmup';
+import { DesertStage } from './levels/desert';
+import type { Stage } from './levels/stage';
 import { TEXT } from '../shared/text.ts';
 
 // WebGPURenderer uses WebGPU when available and falls back to WebGL2 otherwise.
@@ -160,36 +142,18 @@ const scene = new THREE.Scene();
 const orbit = new FirstPersonCamera(renderer.domElement);
 await slice();
 const fly = new FlyCam(renderer.domElement); // F3 → Fly camera, for shooting video
-const sky = new Sky(scene);
+// The desert (src/levels/desert.ts): the terrain, sky, sun, pods, shelters, crash sites, walkers, bosses ..., all under
+// its root. Other levels are stages too, built on the first visit; the active one owns the scene's look and lights.
+const desert = await DesertStage.build(scene, orbit.camera, renderer.domElement);
+const { sky, terrain, placedView, wireView, scrap, crashSites, dust, blownSand, machines, wrecks, guardianFx, bossFx, teardown, lootView, vehicleView, corpseView } = desert;
 sky.renderer = renderer;
-await slice();
-const terrain = new Terrain(scene);
-if (LAB) {
-  labFloor(); // the dev test lab (shared/lab.ts): a plain floor with name plates
-  addLabPlates(scene);
-}
-await slice();
-await slice();
-const pods = new PodsView(scene); // the crashed pods players arrive in
-await slice();
-const shelters = new Shelters(scene); // small empty bunkers out in the desert
-await slice();
-// Plant beds, UV lamps, the buildings, the work stations and the chests: in the shelters and out on the sand.
-const placedView = new PlacedView(scene, (mt, where) => glbMaterial(mt, where === 'out' ? null : shelters.lit));
-const wireView = new WireView(scene); // the power lines between them (shared/wires.ts)
-await slice();
-const scrap = new Scrap(scene);
-await slice();
-const crashSites = new CrashSites(scene);
-await slice();
 const crashSound = new CrashSound();
-await slice();
-const dust = new Dust(scene);
 await slice();
 const post = new Post(renderer, scene, orbit.camera);
 await slice();
-const blownSand = new BlownSand(scene);
-await slice();
+/** The stage being drawn (src/levels/stage.ts): the desert's until a level change. */
+let stage: Stage = desert;
+stage.enter(scene, post);
 const viewmodel = new ViewModel(orbit, scene); // first-person hands, parented to the camera
 await slice();
 
@@ -202,16 +166,6 @@ const vortexFx = new VortexFx();
 const vortexSound = new VortexSound();
 const nearVortices: Vortex[] = [];
 const gas = new GasFx();
-await slice();
-const machines = new MachineSites(scene); // wrecked machinery to take apart (not the crashed spacecraft above), and the disassembly table job
-await slice();
-const wrecks = new Wrecks(scene); // salvage wrecks out in the desert, carried home to the disassembly table
-await slice();
-const guardianFx = new GuardianFx(scene); // the giant walkers around the crash sites, and the night drones
-await slice();
-const bossFx = new BossFx(scene, (...a) => guardianFx.thump(...a), (s) => guardianFx.jolt(s)); // the worm, carrier, colossus and queen (shared/bosses.ts)
-await slice();
-const teardown = new TeardownView(scene, orbit.camera, renderer.domElement); // F at a machine site: the character walks up and the disassembly controls take over
 await slice();
 machines.busy = () => teardown.current?.id;
 viewCull.camera = orbit.camera;
@@ -285,11 +239,8 @@ new Chat(net);
 const names = nameGate(net, renderer.domElement);
 // New builds wait for a quiet moment to reload (src/update.ts).
 update.busy = () => fly.active || guardianFx.combat || bossFx.combat || net.me.riding || teardown.active || !!net.down;
-const lootView = new LootView(scene, scrap);
-const vehicleView = new VehicleView(scene); // motorcycles standing or lying in the world, nobody on them
 const shieldFx = new ShieldFx(scene, () => orbit.camera.position, () => net.id, (m) => guardianFx.jolt(m));
 net.onShieldBreak = (m) => shieldFx.play(m);
-const corpseView = new CorpseView(scene);
 addCrosshair();
 loadScavenger().catch((e) => console.warn('scavenger model failed to load; keeping placeholders', e));
 // Dark until the player model has loaded, so the first frames show no placeholder bodies; after 30 s, whatever has loaded.
@@ -318,11 +269,10 @@ me.setShadowOnly(true); // first person: your body casts a shadow but is not dra
 let bodyHidden = true;
 const myModel = new ScavengerModel();
 myModel.ready.then(() => me.setModel(myModel, net.color), () => myModel.dispose());
-scene.add(me.root, footprints.mesh, tyreprints.mesh, streaks.mesh, tyreDust.mesh);
+scene.add(me.root);
 const remotes = new Map<number, Avatar>();
 // Sand bikes (9, dev helper), one per riding player: drawn here, simulated in shared/sim.ts.
 const bikes = new Map<number, Bike>();
-addHeadlights(scene);
 let lastHeading = NaN;
 /** Draw player `id`'s bike while they ride, with `avatar` seated on it, and drop it when they get off.
  *  False when not riding: then the caller updates the avatar on foot. */
@@ -471,7 +421,6 @@ const statsGraph = new StatsGraph();
 
 /** When the next frame is due, with the FPS target (Options → Graphics): frames before it are skipped. */
 let nextFrameAt = 0;
-let undergroundFrame = 0;
 renderer.setAnimationLoop((time) => {
   if (!graphicsReady()) { void renderer.setAnimationLoop(null); return; }
   if (graphics.fpsLimit) {
@@ -649,27 +598,7 @@ renderer.setAnimationLoop((time) => {
   telescope.bedroll = net.spawn;
   survival.toolsDown = storm.toolsDown;
   locator.update(orbit.camera, orbit.viewYaw, orbit.pitch + orbit.freePitch, focus, [...others.filter((o) => Math.hypot(o.x - focus.x, o.z - focus.z) < range), ...wrecks.targets(focus.x, focus.z), ...corpseTargets(), ...ownVehicleTargets(net.myVehicles, net.color)]);
-  terrain.update(focus);
-  scrap.update(focus);
-  crashSites.update(focus);
-  pods.update(time / 1000);
-  machines.update(focus);
-  wrecks.update(focus);
-  // The terrain casts into the shadow maps only near the underground places it roofs (src/world/heightShadow.ts does the dunes).
-  terrain.setCasting(overShelter(focus.x, focus.z, 60));
-  if (++undergroundFrame % 60 === 1) {
-    // the rooms the dune shadows must not reach (src/world/heightShadow.ts): the nearest shelters, below their huts' floors
-    const near = sheltersNear(focus.x, focus.z, 800).sort((a, b) => Math.hypot(a.x - focus.x, a.z - focus.z) - Math.hypot(b.x - focus.x, b.z - focus.z));
-    sky.heights.setUnderground(near.slice(0, 4).map((s) => ({ x: s.x, z: s.z, r: 32, top: s.y - 0.3 })));
-  }
-  sky.update(frameDt, focus, orbit.camera, net.worldTime());
-  wind.update(net.serverTime() / 1000);
-  if (!LAB) {
-    blownSand.update(frameDt, focus);
-    dust.update(frameDt, orbit.camera.position);
-  }
-  tyreDust.update(frameDt);
-  shelters.update(orbit.camera.position);
+  stage.update({ dt: frameDt, time: time / 1000, focus, camera: orbit.camera, worldTime: net.worldTime(), serverTime: net.serverTime() });
   windSound.update(frameDt, orbit.camera.position, orbit.viewYaw, s);
   // Sand hissing under you: a speed slide, or (softer) slipping down a slip face on your feet.
   const ownSpeed = Math.hypot(s.vx, s.vz);
@@ -721,10 +650,10 @@ renderer.setAnimationLoop((time) => {
     : vehicle.rear ? TEXT.prompt.open(TEXT.boxes.cargo) : TEXT.prompt.getOn;
   const bed = net.connected && !station ? bedTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), placed) : null;
   const bedState = bed ? net.garden.get(bed.id) : undefined;
-  const stage = bed ? (bedState?.stage ?? EMPTY) : -1;
-  const tend = stage === EMPTY ? TEXT.prompt.plantSeeds : stage === GROWN ? TEXT.prompt.harvest : null;
+  const bedStage = bed ? (bedState?.stage ?? EMPTY) : -1;
+  const tend = bedStage === EMPTY ? TEXT.prompt.plantSeeds : bedStage === GROWN ? TEXT.prompt.harvest : null;
   // Sprouts grow only under a UV lamp (shared/garden.ts).
-  const growing = stage === SPROUTS && bed ? (bedLit(bed) ? `<span>${Math.round((bedState?.grow ?? 0) * 100)}%</span>` : `<span class="bad">${TEXT.prompt.needsUvLamp}</span>`) : null;
+  const growing = bedStage === SPROUTS && bed ? (bedLit(bed) ? `<span>${Math.round((bedState?.grow ?? 0) * 100)}%</span>` : `<span class="bad">${TEXT.prompt.needsUvLamp}</span>`) : null;
   const target = net.connected && !station && !bed ? scrapTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
   // Debris at the crash sites (hull plates, pipes, ...) is picked up as what it gives: scrap or cloth (shared/items.ts debrisItem).
   const debris = net.connected && !station && !bed && !target ? debrisTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;

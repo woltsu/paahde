@@ -12,6 +12,13 @@ let tod = 0.4;
 let daylight = true;
 let shadeClock = 0;
 let shadeTarget = 1;
+/** A level's fixed hand shade (docs/levels.md: lit, but no sun), or null in the desert: the sun and the shelters. */
+let levelShade: number | null = null;
+
+/** The stage sets it on enter (src/levels/): null for the desert's sun and shelters, else that level's shade. */
+export function setLevelShade(v: number | null) {
+  levelShade = v;
+}
 
 /** Three supplies the roughness-adjusted reflection direction (and the surface normal for diffuse IBL). */
 export const desertEnvironment = Fn((builder: THREE.NodeBuilder) => {
@@ -35,8 +42,8 @@ export function updateHandShade(position: THREE.Vector3, dt: number) {
   shadeClock -= dt;
   if (shadeClock <= 0) {
     shadeClock = 1 / 6;
-    const sheltered = indoors(position.x, position.y, position.z);
-    shadeTarget = sheltered ? 0.38 : daylight && !inSun(position.x, position.y, position.z, tod) ? 0.55 : 1;
+    const sheltered = levelShade === null && indoors(position.x, position.y, position.z);
+    shadeTarget = levelShade !== null ? levelShade : sheltered ? 0.38 : daylight && !inSun(position.x, position.y, position.z, tod) ? 0.55 : 1;
   }
   handShade.value += (shadeTarget - handShade.value) * (1 - Math.exp(-dt * 9));
 }

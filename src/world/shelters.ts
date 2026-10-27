@@ -124,7 +124,7 @@ export class Shelters {
   private lastScan = new THREE.Vector3(Infinity, 0, 0);
   private pump: THREE.Object3D | null = null;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     scene.add(this.group);
     new GLTFLoader().loadAsync('./models/pump.glb').then((gltf) => {
       const pump = gltf.scene.getObjectByName('pump');

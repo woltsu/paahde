@@ -108,7 +108,7 @@ function orient(f: THREE.Vector3, q: THREE.Quaternion) {
 export class WormView implements BossView {
   readonly points: THREE.Object3D[] = [];
   readonly snapS = false;
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   readonly root = new THREE.Group();
   private built: 'model' | 'stand-in' | null = null;
   private segMeshes: THREE.InstancedMesh[] = [];
@@ -128,7 +128,7 @@ export class WormView implements BossView {
   private landed = new Uint8Array(SEGS + 1);
   private bounds = new THREE.Box3();
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     for (let i = 0; i < POINT_SEGS.length; i++) {
       const p = weakPoint(POINT_R);

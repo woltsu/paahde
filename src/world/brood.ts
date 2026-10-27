@@ -63,7 +63,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
 export class Brood {
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private bodies: THREE.InstancedMesh;
   private glows: THREE.InstancedMesh;
   private legs: THREE.InstancedMesh;
@@ -71,7 +71,7 @@ export class Brood {
   private frame = 0;
   private tick = 0;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     this.bodies = new THREE.InstancedMesh(bodyGeo(), bodyMat, BROOD_CAP);
     this.glows = new THREE.InstancedMesh(glowGeo(), glowMat, BROOD_CAP);

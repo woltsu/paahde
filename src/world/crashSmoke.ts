@@ -48,7 +48,7 @@ export class CrashSmoke {
   private stop = new Float32Array(CAPACITY);
   private stopAttr = new THREE.InstancedBufferAttribute(this.stop, 1);
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, fog: false });
     const base = instancedBufferAttribute(this.baseAttr, 'vec3') as unknown as Node<'vec3'>;
     const d = instancedBufferAttribute(this.dataAttr, 'vec4') as unknown as Node<'vec4'>;

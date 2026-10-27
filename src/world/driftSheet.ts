@@ -61,7 +61,7 @@ export class DriftSheet {
   private sand = new Float32Array(SIDE * SIDE);
   private sample: WindSample = { dx: 0, dz: 0, ustar: 0, q: 0, emit: 0 };
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     const verts = SIDE * SIDE;
     this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));
     this.geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(verts * 3), 3));

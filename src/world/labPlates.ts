@@ -29,7 +29,7 @@ function plate(text: string, w: number): THREE.Mesh {
 }
 
 /** Puts every plate of the lab in the scene (none outside it). */
-export function addLabPlates(scene: THREE.Scene) {
+export function addLabPlates(scene: THREE.Object3D) {
   for (const p of labPlates()) {
     const m = plate(p.text, p.w);
     m.position.set(p.x, heightAt(p.x, p.z) + 0.06, p.z);

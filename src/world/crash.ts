@@ -59,7 +59,7 @@ export class MachineSites {
   private views = new Map<string, SiteView>();
   /** Where each pushed machine is, from the server: its roll (rad) and how far it has been shoved from where it lay (m). */
   private rollTo = new Map<string, { a: number; x: number; z: number }>();
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   /** The tables that have (or had) a job, by session id. */
   private benches = new Map<string, Bench>();
   /** Every large site's progress, from the server. */
@@ -67,7 +67,7 @@ export class MachineSites {
   /** Id of the site the disassembly mode is working on (src/teardown): its machine is never swapped under it. */
   busy: () => string | undefined = () => undefined;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Object3D) {
     this.scene = scene;
     // the players bump into what is still on a machine (shared/machineBoxes.ts): it reads which steps are done from here
     setMachineProgress((id) => this.progress.get(id)?.done);
@@ -334,14 +334,14 @@ export type TableMenu = { job: string | null; scrap: number; kinds: { kind: Junk
  *  up again until it is known. */
 export class Bench {
   readonly id: string;
-  private scene: THREE.Scene;
+  private scene: THREE.Object3D;
   private job: Job | null = null;
   /** The server's job, waiting for the table to be known (the placed list) to be built. */
   private pending: BenchJob | null = null;
   /** The table's job ended while the mode was open on it: tidy the machine away when it closes. */
   private stale: Junk | null = null;
 
-  constructor(scene: THREE.Scene, id: string) {
+  constructor(scene: THREE.Object3D, id: string) {
     this.scene = scene;
     this.id = id;
   }
