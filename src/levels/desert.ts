@@ -20,6 +20,7 @@ import { addLabPlates } from '../world/labPlates.ts';
 import { labFloor } from '../world/sandMaterial.ts';
 import { PodsView } from '../world/pods.ts';
 import { Shelters } from '../world/shelters.ts';
+import { SolarFarms } from '../world/solarfarms.ts';
 import { PlacedView } from '../world/placed.ts';
 import { glbMaterial } from '../world/glbMaterial.ts';
 import { WireView } from '../world/wires.ts';
@@ -44,6 +45,8 @@ export class DesertStage implements Stage {
   terrain!: Terrain;
   pods!: PodsView;
   shelters!: Shelters;
+  /** Old solar power towers and their heliostat fields, far out. */
+  solarFarms!: SolarFarms;
   /** Plant beds, UV lamps, the buildings, the work stations and the chests: in the shelters and out on the sand. */
   placedView!: PlacedView;
   /** The power lines between them (shared/wires.ts). */
@@ -91,6 +94,7 @@ export class DesertStage implements Stage {
     d.pods = new PodsView(root); // the crashed pods players arrive in
     await slice();
     d.shelters = new Shelters(root); // small empty bunkers out in the desert
+    d.solarFarms = new SolarFarms(root); // old solar power towers, far out
     await slice();
     d.placedView = new PlacedView(root, (mt, where) => glbMaterial(mt, where === 'out' ? null : d.shelters.lit));
     d.wireView = new WireView(root);
@@ -159,5 +163,6 @@ export class DesertStage implements Stage {
     tyreDust.update(f.dt);
     this.shelters.update(camera.position);
     this.entrance.update(camera.position, true);
+    this.solarFarms.update(camera.position);
   }
 }

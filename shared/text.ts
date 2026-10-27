@@ -123,7 +123,7 @@ const en = {
     well: () => 'Pumps up water while it has power, for the water bottle.',
   },
   /** Where placing is blocked: "Too close to the pump". */
-  spots: { pump: 'the pump', doorway: 'the doorway', shelter: 'the shelter', pod: 'the pod' },
+  spots: { pump: 'the pump', doorway: 'the doorway', shelter: 'the shelter', pod: 'the pod', solar: 'the mirrors' },
 
   // ---- Prompts under the crosshair (after the key) ---------------------------------------------------------------
 

@@ -23,6 +23,7 @@
 import { ORIGIN, ORIGIN_FRONT, originClear } from './origin.ts';
 import { CRASH_KINDS, type CrashKind } from './crashKinds.ts';
 import { shelterWithin } from './shelters.ts';
+import { solarWithin } from './solarfarms.ts';
 import { EYE_HEIGHT, pitchFromQ } from './dig.ts';
 import { rocksNear } from './rocks.ts';
 import { SCRAP_CELL, scrapPieces } from './scrap.ts';
@@ -294,7 +295,7 @@ function generate(ix: number, iz: number): CrashSite | null {
     cz = iz * CRASH_CELL + CELL_MARGIN + span * r();
     const bx = cx - ORIGIN.x, bz = cz - ORIGIN.z, sx = cx - ORIGIN_FRONT.x, sz = cz - ORIGIN_FRONT.z;
     ok = bx * bx + bz * bz > ORIGIN_CLEAR * ORIGIN_CLEAR && sx * sx + sz * sz > ORIGIN_CLEAR * ORIGIN_CLEAR &&
-      originClear(cx, cz) >= 1 && flatEnough(cx, cz, K.radius) && !nearScrap(cx, cz, K.radius) && !shelterWithin(cx, cz, K.radius);
+      originClear(cx, cz) >= 1 && flatEnough(cx, cz, K.radius) && !nearScrap(cx, cz, K.radius) && !shelterWithin(cx, cz, K.radius) && !solarWithin(cx, cz, K.radius);
   }
   if (!ok) return null;
   const id = crashSiteId(ix, iz);

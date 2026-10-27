@@ -5,6 +5,7 @@
 import { LAB_SPAWN } from './lab.ts';
 import { ORIGIN } from './origin.ts';
 import { overShelter, shelterLootSpot, type Shelter } from './shelters.ts';
+import { solarLootSpot, type SolarFarm } from './solarfarms.ts';
 import { GEAR, GEAR_KINDS } from './gear.ts';
 import { JAMMER } from './jammer.ts';
 import { RECEIVERS, RELICS, receiverBoss, type BossKind } from './bosses.ts';
@@ -19,7 +20,7 @@ import { nearPod, onPodGround, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
 import type { JetKind } from './jetbreak.ts';
 import {
   BOSS_SPOILS, BROKEN_GEAR, CACHES, DRONE_JET_SPOILS, FINDS, HARVESTER_SCRAP, HARVESTER_SPOILS, JET_RELIC_ODDS, JET_SCRAP,
-  KILL_SPOILS, RARE_FINDS, RECEIVER_DROPS, RELIC_DROPS, SHELTER_STASHES, POD_LOOT, WIRING_DROPS, type TierWeights,
+  KILL_SPOILS, RARE_FINDS, RECEIVER_DROPS, RELIC_DROPS, SHELTER_STASHES, SOLAR_STASHES, POD_LOOT, WIRING_DROPS, type TierWeights,
 } from './tables.ts';
 
 export type Rand = () => number;
@@ -77,7 +78,7 @@ export function foundData(kind: string, parts: readonly (string | null)[] | unde
 /** A random boss receiver kind (shared/bosses.ts RECEIVERS). */
 export const randomReceiver = (rand: Rand) => pick(Object.values(RECEIVERS), rand);
 
-/** What a cache or stash holds, picked by its table's odds (CACHES, SHELTER_STASHES). */
+/** What a cache or stash holds, picked by its table's odds (CACHES, SHELTER_STASHES, SOLAR_STASHES). */
 export function stashContents(t: { contents: Record<'part' | 'scrap' | 'cloth' | 'pistol' | 'rifle' | 'gear' | 'receiver', number>; tierWeights: TierWeights }, rand: Rand): Drop {
   const what = pickOdds(t.contents, rand);
   if (what === 'part') return { kind: partKind(pick(CACHE_PARTS, rand), pickTier(t.tierWeights, rand)) };
@@ -88,6 +89,7 @@ export function stashContents(t: { contents: Record<'part' | 'scrap' | 'cloth' |
 }
 export const cacheContents = (rand: Rand) => stashContents(CACHES, rand);
 export const shelterStash = (rand: Rand) => stashContents(SHELTER_STASHES, rand);
+export const solarStash = (rand: Rand) => stashContents(SOLAR_STASHES, rand);
 
 /** A loose rare part, as found on guardian ground (RARE_FINDS). */
 export const rarePart = (rand: Rand): Drop => ({ kind: partKind(pick(RARE_PARTS, rand), pickTier(RARE_FINDS.tierWeights, rand)) });
@@ -200,6 +202,15 @@ export function stashSpot(shelters: Shelter[], lying: Map<number, number>, rand:
   const most = Math.max(...shelters.map(short));
   const s = pick(shelters.filter((s) => short(s) === most), rand);
   return { shelter: s, ...shelterLootSpot(s, rand) };
+}
+
+/** The solar farm a new stash goes to: the one furthest short of SOLAR_STASHES.perFarm (`lying`: stashes at each farm by
+ *  id), and the spot there. */
+export function solarStashSpot(farms: SolarFarm[], lying: Map<number, number>, rand: Rand) {
+  const short = (f: SolarFarm) => SOLAR_STASHES.perFarm - (lying.get(f.id) ?? 0);
+  const most = Math.max(...farms.map(short));
+  const f = pick(farms.filter((f) => short(f) === most), rand);
+  return { farm: f, ...solarLootSpot(f, rand) };
 }
 
 /** Something lying about the crashed pods (POD_LOOT): what its kit is shortest of, given how many of each kit entry lie

@@ -24,6 +24,7 @@ import { crashTaken, isTableId, tableId } from '../shared/crash.ts';
 import { BEDROLL, CHEST, placed, TABLE } from '../shared/placed.ts';
 import { canyonFloorNear } from '../shared/canyons.ts';
 import { indoors, overShelter, shelterAt, sheltersNear } from '../shared/shelters.ts';
+import { FIELD, solarFarmsNear } from '../shared/solarfarms.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
@@ -301,6 +302,16 @@ wss.on('connection', (ws) => {
       const ux = bd > 1 ? (p.state.x - best.x) / bd : 1, uz = bd > 1 ? (p.state.z - best.z) / bd : 0;
       const x = best.x + ux * 600, z = best.z + uz * 600;
       p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false };
+      return;
+    }
+    if (msg.t === 'debugSolarVisit' && p && !p.down && !p.state.riding) {
+      // At the edge of the nearest solar farm's field, on the side you're on, facing its tower.
+      const f = solarFarmsNear(p.state.x, p.state.z, 20000).sort((a, b) => Math.hypot(a.x - p.state.x, a.z - p.state.z) - Math.hypot(b.x - p.state.x, b.z - p.state.z))[0];
+      if (!f) return;
+      const bd = Math.hypot(p.state.x - f.x, p.state.z - f.z);
+      const ux = bd > 1 ? (p.state.x - f.x) / bd : 1, uz = bd > 1 ? (p.state.z - f.z) / bd : 0;
+      const x = f.x + ux * (FIELD.r1 + 25), z = f.z + uz * (FIELD.r1 + 25);
+      p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false, facing: Math.atan2(ux, uz) };
       return;
     }
     if (msg.t === 'debugWeather' && p) {

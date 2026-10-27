@@ -21,6 +21,7 @@ import { canyonAt, canyonOut } from './canyons.ts';
 import { canyonRockHeight, rockHeight } from './rocks.ts';
 import { LAB } from './world.ts';
 import { nearShelter, overShelter, shelterSolid, withShelterPad } from './shelters.ts';
+import { nearSolarBuildings, solarSolid, withSolarPad } from './solarfarms.ts';
 import { nearPod, withPodFurrows } from './podSpot.ts';
 export { WIND, WORLD_SEED } from './dunes.ts';
 
@@ -90,11 +91,12 @@ export function groundAt(x: number, z: number): Readonly<typeof layers> {
 }
 
 /** Procedural dunes, rocks and canyons before player edits, flattened into a pad round the shelters
- *  (shared/shelters.ts), with the crashed pods' furrows (shared/podSpot.ts). */
+ *  (shared/shelters.ts) and graded flat round the solar farms (shared/solarfarms.ts), with the crashed pods' furrows
+ *  (shared/podSpot.ts). */
 export function baseHeight(x: number, z: number): number {
   if (LAB) return LAB_FLOOR_Y; // the dev test lab (shared/lab.ts): one flat floor, same on client and server
   ground(x, z);
-  return withPodFurrows(x, z, withShelterPad(x, z, Math.max(layers.sand, layers.rock)));
+  return withPodFurrows(x, z, withShelterPad(x, z, withSolarPad(x, z, Math.max(layers.sand, layers.rock))));
 }
 
 /** Height of the rock at (x, z) (the rocks, a canyon's tableland and walls), or -Infinity where there is none. */
@@ -236,10 +238,10 @@ export function normalAt(x: number, z: number, out: { x: number; y: number; z: n
   return out;
 }
 
-/** A shot at world (x, y, z) is stopped here: in the sand, or a shelter's walls (down in one the sand above is its roof,
- *  not in the way). */
+/** A shot at world (x, y, z) is stopped here: in the sand, a shelter's walls (down in one the sand above is its roof,
+ *  not in the way), or a solar farm's tower or shed. */
 export function shotSolid(x: number, y: number, z: number): boolean {
-  return shelterSolid(x, y, z) ?? y <= heightAt(x, z);
+  return shelterSolid(x, y, z) ?? solarSolid(x, y, z) ?? y <= heightAt(x, z);
 }
 
 /**
@@ -261,7 +263,7 @@ export function shotGround(ox: number, oy: number, oz: number, dx: number, dy: n
     }
     prev = t;
     const px = ox + dx * t, pz = oz + dz * t;
-    t += nearShelter(px, pz, 2) ? 0.15 : 0.75;
+    t += nearShelter(px, pz, 2) || nearSolarBuildings(px, pz) ? 0.15 : 0.75;
   }
   return range;
 }

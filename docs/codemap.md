@@ -132,6 +132,11 @@ when you find it stale.
 - `shared/shelters.ts` — small empty bunkers (small/deep/long) scattered mostly in rocky country: placement, pad,
   collision, pumps (`atWater`), stash spots, `indoors()`/`sandHidden()`; none within 350 m of the origin; drawn by
   `src/world/shelters.ts`
+- `shared/solarfarms.ts` — solar farms: old power towers with rings of heliostats far out (none within 2.3 km of the
+  origin), on a graded pad (`withSolarPad`) the rocks, shelters, crash sites, scrap and wrecks keep off (`solarWithin`);
+  collision of posts, tower and shed (`collideSolar`), the mirrors as a ceiling (`solarCeiling`) and as shade
+  (shared/shade.ts), stash spots (`solarLootSpot`, `SOLAR_STASHES`); crawler packs in server/guardians.ts `farmPacks`;
+  drawn by `src/world/solarfarms.ts` (instanced field tiles, the receiver glowing at the hour the farm froze)
 
 ## Weather and survival
 

@@ -320,6 +320,15 @@ export const SHELTER_STASHES = {
   tierWeights: { scrap: 1, basic: 3, quality: 2.5, space: 0.6 } satisfies TierWeights,
 };
 
+/** Stashes left at the solar farms (shared/solarfarms.ts): how many lie at each farm (in its control shed, at the tower's
+ *  foot, under its broken heliostats; a taken one comes back at whichever farm is shortest), and what they are: the
+ *  richest out there, far from the start and kept by crawlers. The farms' own stuff runs to the electrics. */
+export const SOLAR_STASHES = {
+  perFarm: 6,
+  contents: { part: 0.48, scrap: 0.06, cloth: 0.04, pistol: 0.07, rifle: 0.07, gear: 0.24, receiver: 0.04 },
+  tierWeights: { scrap: 0.5, basic: 2, quality: 3, space: 1 } satisfies TierWeights,
+};
+
 // ---------------------------------------------------------------------------------------------------------------
 // What a killed enemy leaves on the sand (server/world.ts dropSpoils): with `odds`, min..max parts, each a random
 // one of `parts` at a tier from tierWeights.

@@ -2491,3 +2491,28 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   rust, burnt orange, amber, gold, bone, ash and sienna (a lightness map and a per-grain jitter on top), so the sand
   comes in drifts. The trail buffer keeps brightness and brightness × r, g, b, and draws their mean colour. The 2D
   fallback keeps its fixed colours.
+
+## Solar farms
+
+- **What:** old solar power towers far out in the desert (shared/solarfarms.ts, drawn by src/world/solarfarms.ts): a
+  132 m concrete tower with a receiver drum up top in the middle of a graded plain, ~1,350 heliostats round it in 17
+  rings (42–232 m out) crossed by four access roads, and a roofless control shed by the tower's foot. One per 2.8 km
+  cell (60%), none within 2.3 km of the origin: about 7 within 8 km in the worlds tried, the nearest 2.4–2.8 km out.
+- **Heliostats:** 6.6 × 5 m mirrors on 5.4 m posts. They froze where they were when the power went: 70% still aimed
+  half way between the receiver and the sun of the hour they froze at (a time of day on the sun's real path, so at that
+  hour the receiver glows again), the rest stowed flat, hanging broken, snapped off at the post or gone. Only the posts
+  collide; the mirrors are tilted no steeper than keeps their low edge over 3 m, so you walk and ride under them, can't
+  jump up through one (`solarCeiling`), and their shade counts for the heat (shared/shade.ts: two triangles each, and the
+  tower as a prism).
+- **Ground:** the farm grades the dunes flat over 252 m and blends back over 80 m (`withSolarPad` in baseHeight); the
+  ground was cleared for it, so rocks (shared/rocks.ts `makeRock`), shelters, crash sites, scrap and wrecks keep out of
+  its reach (`solarWithin`). Placement itself asks only the dunes, canyons and mud flats, so nothing calls back into it.
+  Deterministic: the rings' angles and the frozen sun go through `sinPoly`, a polynomial.
+- **Loot and enemies:** 6 stashes per farm within 6 km of the origin (`SOLAR_STASHES`: richer than the shelters'; in the
+  shed, at the tower's foot, under broken heliostats). 3–4 crawler packs of 2–3 keep each farm, one in front of the shed,
+  the rest out in the field (server/guardians.ts `farmPacks`), there like a site's when someone comes within 480 m. Not in
+  the economy simulator (it stays nearer home).
+- **View:** the tower from 5.8 km, the field and shed from 2.4 km, cut into 4 × 4 tiles of three instanced meshes (posts,
+  frames, mirror panels) so cameras and cascades cull them; only posts and frames cast shadows. The panels reflect the
+  sky's radiance along the reflected view ray (the desert's environment is too dim for a mirror) and are dusted towards
+  the sand's colour. F3 → "Go to solar farm" puts you at the nearest field's edge.

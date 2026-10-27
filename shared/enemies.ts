@@ -74,7 +74,8 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   // Player-sized walkers at every crash site of crawler and guardian ground (an outpost's pack is smaller: server/guardians.ts
   // CRAWLERS_MIN..MAX, OUTPOST_CRAWLERS_MAX); the ones killed are back PACK_BACK_S after everyone has left. By night small
   // packs (1–3) roam the open desert too, one turning up near whoever is out every few minutes (server/guardians.ts
-  // NIGHT_PACK_*); about half of them pass by unnoticed.
+  // NIGHT_PACK_*); about half of them pass by unnoticed. Each solar farm (shared/solarfarms.ts) far out is kept by 3–4
+  // packs of 2–3 (server/guardians.ts FARM_PACKS), not played by the economy simulator (it stays nearer home).
   crawler: {
     n: [1, 4],
     meet: [{ at: 'site', levels: [0.5, 1, 2], odds: 1, backS: PACK_BACK_S }, { at: 'roam', where: 'open', perMin: 0.2, night: true }],

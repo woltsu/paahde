@@ -8,6 +8,7 @@
 // Node type stripping rules (no enums); no three.js. This module must not import shared/sim.ts (sim imports it).
 import { collideOutdoor } from './capsules.ts';
 import { collideShelter, sandHidden, shelterCeiling } from './shelters.ts';
+import { collideSolar, solarCeiling } from './solarfarms.ts';
 import { collideCrash } from './crashsites.ts';
 import { collideMachines } from './machineBoxes.ts';
 import { collideJetWrecks } from './jetcrash.ts';
@@ -67,8 +68,8 @@ function sandAt(x: number, z: number, prevY: number): number {
   return sandHidden(x, z, prevY) ? -Infinity : heightAt(x, z);
 }
 
-/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, what is built outside and the
- *  datacenter's door (shared/levels/entrance.ts: its way in is F at that door, not one of `exits`). */
+/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, what is built
+ *  outside and the datacenter's door (shared/levels/entrance.ts: its way in is F at that door, not one of `exits`). */
 export const desertLevel: Level = {
   id: DESERT,
   key: 'desert',
@@ -78,10 +79,12 @@ export const desertLevel: Level = {
     const scrapTop = Math.max(collideScrap(c, y, prevY, radius, stepUp), collideCrash(c, y, prevY, radius, stepUp),
       collideMachines(c, y, prevY, radius, stepUp), collideJetWrecks(c, y, prevY, radius, stepUp), collidePods(c, y, prevY, radius, stepUp));
     const builtTop = Math.max(collideShelter(c, y, prevY, radius, height, stepUp, prevX, prevZ),
-      collideOutdoor(c, y, prevY, radius, height, stepUp), collideEntrance(c, y, prevY, radius, height, stepUp));
+      collideOutdoor(c, y, prevY, radius, height, stepUp), collideEntrance(c, y, prevY, radius, height, stepUp),
+      collideSolar(c, y, prevY, radius, height, stepUp));
     return Math.max(scrapTop, builtTop);
   },
-  ceiling: shelterCeiling,
+  // Under a shelter's roof or a solar farm's mirror.
+  ceiling: (x, z, prevY, height, radius) => Math.min(shelterCeiling(x, z, prevY, height, radius), solarCeiling(x, z, prevY, height)),
   flat: false,
   bounds: null,
   spawns: [],

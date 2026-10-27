@@ -5,6 +5,7 @@
 // and scrap rather than over them (skirt).
 import { collideCrash } from '../shared/crashsites.ts';
 import { collideScrap } from '../shared/scrap.ts';
+import { collideSolar } from '../shared/solarfarms.ts';
 import { heightAt } from '../shared/terrain.ts';
 
 /** Sides (rad, off the hunter's own bearing to the prey) by place in the pack: the first comes straight on. */
@@ -24,7 +25,8 @@ export function flank(x: number, z: number, px: number, pz: number, vx: number, 
   return [lx + Math.sin(a) * r, lz + Math.cos(a) * r];
 }
 
-/** Hunters on foot keep to the sand: wrecks and scrap taller than STEP (m) are in their way, not walked over. */
+/** Hunters on foot keep to the sand: wrecks, scrap and a solar farm's posts taller than STEP (m) are in their way, not
+ *  walked over. */
 const STEP = 0.5, LOOK = 2.5;
 
 /** Pushes (x, z) out of any wreck or scrap a body of radius r can't step over; how far it moved it, which way. */
@@ -32,6 +34,7 @@ function shove(p: { x: number; z: number; vx: number; vz: number }, r: number): 
   const x = p.x, z = p.z, y = heightAt(x, z);
   collideScrap(p, y, y, r, STEP);
   collideCrash(p, y, y, r, STEP);
+  collideSolar(p, y, y, r, 1.2, STEP);
   const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz);
   return d > 1e-4 ? [d, dx / d, dz / d] : [0, 0, 0];
 }

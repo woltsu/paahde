@@ -13,7 +13,7 @@
 //
 // Placement: the world is cut into SHELTER_CELL squares; a cell holds at most one shelter, likelier where it is
 // rocky (rockiness, shared/rocks.ts). Its spot is kept off the rocks (the pad flattens dunes only) but, in rocky
-// country, close beside them. A shelter and its pad stay well inside its cell, so only the cell a point is in can
+// country, close beside them, and off the solar farms (shared/solarfarms.ts). A shelter and its pad stay well inside its cell, so only the cell a point is in can
 // hold a shelter that reaches it (margins up to ~20 m).
 //
 // Local frame: origin = the hut's floor at its doorway centre line; the door faces local +Z and the shelter runs
@@ -27,6 +27,7 @@ import { rockiness, rocksNear } from './rocks.ts';
 import { cellId } from './cells.ts';
 import { mulberry32 } from './noise.ts';
 import { LAB } from './world.ts';
+import { solarWithin } from './solarfarms.ts';
 
 export type ShelterKind = 'small' | 'deep' | 'long';
 
@@ -155,7 +156,7 @@ function cellShelter(ix: number, iz: number): Shelter | null {
     const [mx, mz] = toWorld(dx, dz, 0, (p.z0 + p.z1) / 2);
     const hx = (p.x1 - p.x0) / 2, hz = (p.z1 - p.z0) / 2;
     const reach = Math.sqrt(hx * hx + hz * hz) + PAD_BLEND;
-    if (rocksNear(x + mx, z + mz, reach)) continue;
+    if (rocksNear(x + mx, z + mz, reach) || solarWithin(x + mx, z + mz, reach)) continue;
     if (k > 0.3 && !rocksNear(x + mx, z + mz, reach + 45)) continue;
     // Flat enough: the pad sits at the mean dune height under it.
     let lo = Infinity, hi = -Infinity, sum = 0, n = 0;

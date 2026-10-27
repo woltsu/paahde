@@ -21,6 +21,7 @@ import { cellCache } from './cellCache.ts';
 import { duneHeight, ss, vnoise, WORLD_SEED } from './dunes.ts';
 import { mulberry32, ridged } from './noise.ts';
 import { LAB } from './world.ts';
+import { solarWithin } from './solarfarms.ts';
 
 /** Grid cell size (m). A cell owns the formations whose centres lie in it. */
 export const ROCK_CELL = 160;
@@ -87,7 +88,7 @@ function styleWeights(x: number, z: number): [number, number, number, number] {
   return [0.3 + 2 * (1 - a) * (1 - b), 0.15 + 2 * a * (1 - b), 0.15 + 2 * (1 - a) * b, 0.1 + 1.5 * a * b];
 }
 
-/** A rock of `kind`, radius R and height H at (x, z), or null too near the origin. `foot`: something under it
+/** A rock of `kind`, radius R and height H at (x, z), or null too near the origin or a solar farm. `foot`: something under it
  *  other than the sand (a rock it stands on). */
 function makeRock(x: number, z: number, R: number, H: number, kind: number, r: () => number, aspect = 1 + 0.8 * r(),
   foot = -Infinity): Rock | null {
@@ -96,6 +97,7 @@ function makeRock(x: number, z: number, R: number, H: number, kind: number, r: (
   const bound = R * (cut / (1 - WARP)) + 1;
   const clear = ORIGIN_CLEAR + bound;
   if (dx * dx + dz * dz < clear * clear) return null;
+  if (solarWithin(x, z, bound)) return null; // the ground cleared for a solar farm (shared/solarfarms.ts)
   let ax = 1, az = 0;
   for (let i = 0; i < 16; i++) {
     const u = 2 * r() - 1, v = 2 * r() - 1, q = u * u + v * v;

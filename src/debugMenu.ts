@@ -31,7 +31,7 @@ export class DebugMenu {
   private panel = document.createElement('div');
 
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
-  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
+  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {},
     goLevel: (key: string) => void = () => {}) {
@@ -67,7 +67,8 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <button id="dbgFront" title="A mega-storm front rolling in over everyone, 30 s to the first player">Storm front</button>
 <button id="dbgGas" title="Poison gas creeping in over everyone, 30 s to the first player (by day too)">Poison gas</button>
 <button id="dbgVortex" title="One more sand vortex, short-lived, spun up 600 m upwind of you or the first clear spot round the pods (for everyone)">Sand vortex</button>
-<button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">Go to vortex</button></div>
+<button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">Go to vortex</button>
+<button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">Go to solar farm</button></div>
 <div class="row"><button id="dbgGuardian" title="The nearest guardian, brought 90 m from you (for everyone)">Guardian here</button>
 <button id="dbgDrone" title="A searchlight drone over you for a minute, even by day (for everyone)">Drone here</button>
 <button id="dbgJet" title="A jet flying over you in about 15 s (for everyone; the drone and the flying wing take turns)">Jet here</button>
@@ -106,6 +107,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     p.querySelector('#dbgGas')!.addEventListener('click', () => summonStorm('gas'));
     p.querySelector('#dbgVortex')!.addEventListener('click', () => summonStorm('vortex'));
     p.querySelector('#dbgVortexVisit')!.addEventListener('click', () => summonStorm('vortexVisit'));
+    p.querySelector('#dbgSolarVisit')!.addEventListener('click', () => summonStorm('solarVisit'));
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);

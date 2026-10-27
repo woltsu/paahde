@@ -145,6 +145,7 @@ export type ClientMsg =
   // Debug menu: a motorcycle on the ground 3 m in front of you, broken (found parts) or `working` (stood up, Scrap parts).
   | { t: 'debugBike'; working?: boolean }
   | { t: 'debugVortexVisit' }
+  | { t: 'debugSolarVisit' }
   | { t: 'debugHeat'; off: boolean }
   // Debug menu: no random sandstorms in this world (shared by everyone) while on.
   | { t: 'debugWeather'; off: boolean }

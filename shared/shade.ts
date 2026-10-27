@@ -8,6 +8,8 @@
 // - crash-site wrecks and debris (their collision capsules, shared/crashsites.ts) within CRASH_DIST, and the crashed
 //   pods' (shared/pods.ts);
 // - tarps (shared/tarp.ts) within TARP_DIST: their canvas, as a fan of triangles from the peak to the rim;
+// - the solar farms' mirrors (shared/solarfarms.ts) within MIRROR_DIST, two triangles each, and their towers within
+//   MAX_DIST, as prisms;
 // - `casters`: things that move, passed in by the caller: other players, their bikes, motorcycles lying on the sand;
 // - near the start, the scrap piles' hitboxes (shared/scrap.ts);
 // - the terrain (heightAt: dunes, rocks, the pads and every dig), marched with steps that grow with distance,
@@ -28,6 +30,7 @@ import { ROCK_H_MAX } from './rocks.ts';
 import { placed, TARP, type Placed } from './placed.ts';
 import { tarpRig, tarpRim, type TarpRig, type Vec } from './tarp.ts';
 import { heightAt } from './terrain.ts';
+import { mirrorCorners, mirrorsNear, solarFarmsNear, TOWER, type Heliostat, type SolarFarm } from './solarfarms.ts';
 
 /** How far towards the sun the ray looks for something in the way (m). */
 const MAX_DIST = 180;
@@ -49,6 +52,8 @@ const CRASH_DIST = 80;
 const HUT_DIST = 60;
 /** Tarps (peak up to ~6 m) are tested this close (m, centre to point on each axis): long shade at a low sun. */
 const TARP_DIST = 60;
+/** A solar farm's mirrors (up to ~8 m up) are tested this close (m): long shade at a low sun. */
+const MIRROR_DIST = 35;
 /** Casters (players, bikes) further than this from the point (m, on each axis) are skipped. */
 const CASTER_DIST = 30;
 /** Sun this close to the horizon (sin of its elevation) counts as set. */
@@ -213,10 +218,34 @@ function tarpsNear(x: number, z: number): Vec[] {
   return out;
 }
 
+/** A mirror as two triangles (flattened corners), cached per heliostat. */
+const mirrorTris = new WeakMap<Heliostat, Vec[]>();
+function mirrorTrisOf(f: SolarFarm, h: Heliostat): Vec[] {
+  let t = mirrorTris.get(h);
+  if (!t) {
+    const [a, b, c, e] = mirrorCorners(f, h);
+    mirrorTris.set(h, (t = [a, b, c, a, c, e]));
+  }
+  return t;
+}
+
+/** The tarps and solar farm mirrors close enough to (x, z) to shade it, as triangles (three corners each, flattened). */
+function trisNear(x: number, z: number): Vec[] {
+  const out = tarpsNear(x, z);
+  for (const { f, h } of mirrorsNear(x, z, MIRROR_DIST)) out.push(...mirrorTrisOf(f, h));
+  return out;
+}
+
+/** The solar farms' towers close enough to (x, z) to shade it. */
+function towersNear(x: number, z: number): Caster[] {
+  return solarFarmsNear(x, z, MAX_DIST + TOWER.r).map((f) => ({ x: f.x, z: f.z, ax: 1, az: 0, half: 0, r: TOWER.r, y0: f.y - 1, y1: f.y + TOWER.top }));
+}
+
 /** One ray from (x, y, z) along d (towards the sun, d.y ≥ MIN_SUN_Y): true if nothing is in the way. */
-function rayClear(x: number, y: number, z: number, d: Vec3, sites: CrashSite[], huts: number[][], tarps: Vec[], casters: readonly Caster[], self: number): boolean {
-  for (let i = 0; i < tarps.length; i += 3) if (hitsTri(x, y, z, d, tarps[i], tarps[i + 1], tarps[i + 2])) return false;
+function rayClear(x: number, y: number, z: number, d: Vec3, sites: CrashSite[], huts: number[][], tris: Vec[], towers: Caster[], casters: readonly Caster[], self: number): boolean {
+  for (let i = 0; i < tris.length; i += 3) if (hitsTri(x, y, z, d, tris[i], tris[i + 1], tris[i + 2])) return false;
   for (const b of huts) if (hitsBox(x, y, z, d, b, MAX_DIST)) return false;
+  for (const c of towers) if (hitsPrism(x, y, z, d, c.x, c.z, c.ax, c.az, c.half, c.r, c.y0, c.y1)) return false;
   for (const c of casters) {
     if (c.id === self || Math.abs(c.x - x) > CASTER_DIST || Math.abs(c.z - z) > CASTER_DIST) continue;
     if (hitsPrism(x, y, z, d, c.x, c.z, c.ax, c.az, c.half, c.r, c.y0, c.y1)) return false;
@@ -260,7 +289,7 @@ function rayClear(x: number, y: number, z: number, d: Vec3, sites: CrashSite[], 
 export function inSun(x: number, y: number, z: number, tod: number, casters: readonly Caster[] = [], self = -1): boolean {
   const d = sunDirection(tod);
   if (d.y < MIN_SUN_Y) return false;
-  return rayClear(x, y, z, d, sitesNear(x, z), hutsNear(x, z), tarpsNear(x, z), casters, self);
+  return rayClear(x, y, z, d, sitesNear(x, z), hutsNear(x, z), trisNear(x, z), towersNear(x, z), casters, self);
 }
 
 /**
@@ -273,11 +302,11 @@ export function sunOnBody(x: number, y: number, z: number, crouching: boolean, t
   const hl = Math.hypot(d.x, d.z);
   // Across the sun's direction, on the ground (any way when it is straight overhead).
   const sx = hl > 1e-6 ? -d.z / hl : 1, sz = hl > 1e-6 ? d.x / hl : 0;
-  const sites = sitesNear(x, z), huts = hutsNear(x, z), tarps = tarpsNear(x, z);
+  const sites = sitesNear(x, z), huts = hutsNear(x, z), tris = trisNear(x, z), towers = towersNear(x, z);
   const k = crouching ? CROUCH_SCALE : 1;
   let lit = 0;
   for (const [h, side, w] of BODY) {
-    if (rayClear(x + sx * side, y + h * k, z + sz * side, d, sites, huts, tarps, casters, self)) lit += w;
+    if (rayClear(x + sx * side, y + h * k, z + sz * side, d, sites, huts, tris, towers, casters, self)) lit += w;
   }
   return Math.min(1, lit);
 }

@@ -1,19 +1,23 @@
 // Loot lying in the world (shared/loot.ts): broken gear to find and repair (shared/gear.ts) at the crash sites (the
 // starter gear at the scrap fields near the start, the advanced gear on crawler ground, rare loose parts on guardian
 // ground: shared/crashsites.ts SiteLevel; the motorcycles among FINDS lie there as vehicles: server/vehicles.ts), stashes
-// on the shelters' floors (SHELTER_STASHES), scrap, cloth and the pod's console and power box about the crashed
+// on the shelters' floors (SHELTER_STASHES), stashes at the solar farms (SOLAR_STASHES), scrap, cloth and the pod's console and power box about the crashed
 // pods players arrive in (POD_LOOT, shared/pods.ts), and caches lying out in the open desert. All shared: the first player to press F
 // takes it. Taken finds and caches come back somewhere else after a while, so there are always some out there (but not the
 // pods' scrap: POD_LOOT.once).
 // Kept in the DB (`world_loot`, `loot_pending`, written on change), so a restart keeps what was taken. Items
 // players drop are kept in `dropped` and never respawn.
 import { shelterAt, sheltersNear } from '../shared/shelters.ts';
+import { solarAt, stockedFarms } from '../shared/solarfarms.ts';
 import { isGear, isVehicle, refit, scrapParts } from '../shared/gear.ts';
 import { ownOf, RETIRED, withData, type ItemData } from '../shared/items.ts';
 import { DROP_AHEAD, lootReach, type Loot } from '../shared/loot.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
-import { brokenParts, cacheContents, cacheSpot, findContents, findSpot, foundData, nearPiles, shelterStash, podFind, podFindSpot, inPodKit, podKitKey, stashSpot } from '../shared/lootRoll.ts';
-import { CACHES, FINDS, RARE_FINDS, SHELTER_STASHES, POD_LOOT } from '../shared/tables.ts';
+import {
+  brokenParts, cacheContents, cacheSpot, findContents, findSpot, foundData, nearPiles, shelterStash, podFind, podFindSpot, inPodKit, podKitKey, solarStash,
+  solarStashSpot, stashSpot,
+} from '../shared/lootRoll.ts';
+import { CACHES, FINDS, RARE_FINDS, SHELTER_STASHES, SOLAR_STASHES, POD_LOOT } from '../shared/tables.ts';
 import { PODS } from '../shared/pods.ts';
 import { CORE_HALF } from '../shared/terrain.ts';
 import type { PlayerState } from '../shared/sim.ts';
@@ -30,6 +34,8 @@ type Db = ReturnType<typeof openDb>;
 const RARE_KIND = 'rare';
 /** The pending-spawn key for a stash on a shelter's floor (SHELTER_STASHES). */
 const STASH_KIND = 'shelter';
+/** The pending-spawn key for a stash at a solar farm (SOLAR_STASHES). */
+const SOLAR_KIND = 'solar';
 /** The pending-spawn key for what lies about the crashed pods (POD_LOOT). (What lay about the crashed ship that was
  *  there before them, key 'ship', is trimmed away: nothing wants it now.) */
 const POD_KIND = 'pod';
@@ -56,7 +62,9 @@ export class LootServer {
   private sites = coreCrashSites();
   private piles = nearPiles();
   private shelters = sheltersNear(0, 0, CORE_HALF * 1.5);
-  /** What each lying find stands in for (FINDS key, RARE_KIND, STASH_KIND); caches aren't in it. */
+  /** The solar farms out far enough to be stocked (shared/solarfarms.ts SOLAR_LOOT_R). */
+  private farms = stockedFarms();
+  /** What each lying find stands in for (FINDS key, RARE_KIND, STASH_KIND, SOLAR_KIND); caches aren't in it. */
   private spawnKey = new Map<number, string>();
   /** The dev test lab's pickups (shared/lab.ts): taken, they are laid out again where they were. */
   private labSpots = new Map<number, LabItem>();
@@ -116,6 +124,7 @@ export class LootServer {
       const want = new Map<string, number>(Object.entries(FINDS).filter(([k]) => !isVehicle(k)).map(([k, f]) => [k, f.n]));
       want.set(RARE_KIND, RARE_FINDS.n);
       want.set(STASH_KIND, this.shelters.reduce((n, s) => n + SHELTER_STASHES.perShelter[s.kind], 0));
+      want.set(SOLAR_KIND, this.farms.length * SOLAR_STASHES.perFarm);
       want.set(POD_KIND, PODS.length ? POD_LOOT.n : 0);
       const lying = new Map<string, number[]>();
       for (const [id, k] of this.spawnKey) lying.set(k, [...(lying.get(k) ?? []), id]);
@@ -293,6 +302,7 @@ export class LootServer {
   /** Gear kind `kind` (FINDS) lying at a crash site of its level, among the debris around the wreck; RARE_KIND: a rare part. */
   private spawnFind(kind: string) {
     if (kind === STASH_KIND) return this.spawnStash();
+    if (kind === SOLAR_KIND) return this.spawnSolarStash();
     if (kind === POD_KIND) {
       // The kit's shortest entry, counting what lies there now.
       const lying: Record<string, number> = {};
@@ -320,6 +330,19 @@ export class LootServer {
     }
     const { x, z } = stashSpot(this.shelters, lying, Math.random);
     this.place({ id: this.nextId++, ...shelterStash(Math.random), x, z, src: 'find' }, STASH_KIND);
+  }
+
+  /** A stash at the solar farm furthest short of its SOLAR_STASHES.perFarm. */
+  private spawnSolarStash() {
+    if (!this.farms.length) return;
+    const lying = new Map<number, number>();
+    for (const [id, k] of this.spawnKey) {
+      const l = this.loot.get(id);
+      const f = l && k === SOLAR_KIND ? solarAt(l.x, l.z) : null;
+      if (f) lying.set(f.id, (lying.get(f.id) ?? 0) + 1);
+    }
+    const { x, z } = solarStashSpot(this.farms, lying, Math.random);
+    this.place({ id: this.nextId++, ...solarStash(Math.random), x, z, src: 'find' }, SOLAR_KIND);
   }
 
   private spawnCache() {
