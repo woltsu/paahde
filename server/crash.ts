@@ -21,6 +21,7 @@
 import { machineChanged, machineShove, maxShove, pushedMachine, setMachineProgress, setMachineShove } from '../shared/machineBoxes.ts';
 import { CROUCH, BACK, DT, FORWARD, LEFT, PLAYER_RADIUS, RIGHT, STEP_UP } from '../shared/sim.ts';
 import { CARRY_KINDS, crashSiteById, isTableId, tableById, crashSpent, crashTaken, crashVisited, CRASH_REACH, SITE_RANGE, TEARDOWN_LAYOUT } from '../shared/crash.ts';
+import { podSiteById } from '../shared/pods.ts';
 import { CRASH_KINDS } from '../shared/crashKinds.ts';
 import { crashSite, crashSitesNear, CRASH_CELL, debrisById, debrisReach, DEBRIS_REACH } from '../shared/crashsites.ts';
 import { debrisItem } from '../shared/items.ts';
@@ -73,9 +74,9 @@ function carrySite(id: unknown): { id: string; kind: string; dist: (feet: Feet) 
 /** How far (m) past a crash site's pieces a find may lie and still count as taken from it. */
 const VISIT_SLACK = 6;
 /** A scrap field's small machines (site level 0, the starter machines every new player needs) are back after this long;
- *  other small machines stay gone. */
+ *  other small machines stay gone, and so do the pods' (nothing at spawn comes back). */
 const STARTER_RESPAWN_MS = 20 * 60 * 1000;
-const respawnMs = (id: string) => id.startsWith('w:') ? WRECK_RESPAWN_MS : id.startsWith('d:') ? DEBRIS_RESPAWN_MS
+const respawnMs = (id: string) => podSiteById(id) ? Infinity : id.startsWith('w:') ? WRECK_RESPAWN_MS : id.startsWith('d:') ? DEBRIS_RESPAWN_MS
   : crashSiteById(id)?.level === 0 ? STARTER_RESPAWN_MS : Infinity;
 
 export class CrashServer {

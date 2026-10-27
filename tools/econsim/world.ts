@@ -121,7 +121,7 @@ export class World {
     if (ARRIVE.at) {
       const p = (this.pods = this.poi('wreck', ARRIVE.at.x, ARRIVE.at.z));
       p.known = true; // (where you start)
-      for (const m of ARRIVE.sites()) p.machines.push({ kind: m.kind, seed: m.seed, level: 0, carry: true, backAt: 0, respawn: STARTER_BACK });
+      for (const m of ARRIVE.sites()) p.machines.push({ kind: m.kind, seed: m.seed, level: 0, carry: true, backAt: 0, respawn: podsMod ? Infinity : STARTER_BACK });
       for (let i = 0; i < ARRIVE_LOOT.n; i++) this.spawnPod();
     }
     for (const [kind, f] of Object.entries(FINDS)) for (let i = 0; i < f.n; i++) this.spawnFind(kind);
@@ -211,7 +211,7 @@ export class World {
     if (t.src === 'find' || t.src === 'rare find') this.pending.push({ at: now + FIND_BACK, what: 'find', kind: t.src === 'rare find' ? 'rare' : t.kind });
     else if (t.src === 'cache') this.pending.push({ at: now + CACHE_BACK, what: 'cache', kind: '' });
     else if (t.src === 'stash') this.pending.push({ at: now + FIND_BACK, what: 'stash', kind: '' });
-    // What lies about the pods once per world (POD_LOOT.once: their scrap) isn't laid out again.
+    // What lies about the pods once per world (POD_LOOT.once: all of it) isn't laid out again.
     else if (t.src === 'pod' && !ARRIVE_LOOT.once?.includes(t.kind)) this.pending.push({ at: now + FIND_BACK, what: 'pod', kind: t.kind });
   }
 
