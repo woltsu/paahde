@@ -81,7 +81,7 @@ export class BuildMenu {
       const needs = r.needs.map((ing) => {
         const have = countMatching(bag, ing);
         ready &&= have >= ing.n;
-        return `<span class="${have >= ing.n ? 'ok' : 'short'}">${ing.label} ${Math.min(have, ing.n)}/${ing.n}</span>`;
+        return `<span class="${have >= ing.n ? 'ok' : 'short'}">${ing.label} ${have}/${ing.n}</span>`;
       }).join('<br>');
       const b = document.createElement('button');
       b.className = kind === chosen ? 'sel' : '';

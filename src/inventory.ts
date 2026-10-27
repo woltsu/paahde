@@ -607,7 +607,7 @@ export class InventoryHud {
       const needs = r.needs.map((ing) => {
         const have = countMatching(bag, ing);
         ready &&= have >= ing.n;
-        return `<span class="${have >= ing.n ? 'ok' : 'short'}">${ing.label} ${Math.min(have, ing.n)}/${ing.n}</span>`;
+        return `<span class="${have >= ing.n ? 'ok' : 'short'}">${ing.label} ${have}/${ing.n}</span>`;
       }).join('<br>');
       html += `<div class="recipe"><div class="ico">${itemIcon(r.makes)}</div><div class="what"><div class="name">${itemLabel(r.makes)}</div>`
         + `<div class="need">${needs}</div></div><button data-craft="${id}"${ready ? '' : ' disabled'}>${TEXT.inventory.craft}</button></div>`;
