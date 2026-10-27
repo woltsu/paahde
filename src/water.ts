@@ -73,7 +73,7 @@ const TEMP_COOL = 18, TEMP_WARM = 34, TEMP_HOT = 50;
  *  with a hint (src/deathDust.ts) comes up over DUST_IN_MS and goes back into the black over the last DUST_OUT_MS;
  *  once we're up at the bedroll or the pod (the server's 'respawn', or UP_WAIT_MS past due without it) the view fades
  *  back in over FADE_IN_MS (ms). */
-const FADE_OUT_MS = 1200;
+const FADE_OUT_MS = 3000;
 const DUST_MS = 5000;
 const DUST_IN_MS = 900;
 const DUST_OUT_MS = 600;

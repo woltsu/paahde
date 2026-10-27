@@ -7,13 +7,13 @@
 
 type Ctx = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
-/** One line of a card, its letters starting to come in `at` s after the screen went up. `prose` is wrapped and set
- *  in the warm white, left-aligned in a block centred on the screen; `title` is big spaced gold capitals and
- *  `caption` small spaced capitals, each centred. */
-export type DustLine = { text: string; style: 'prose' | 'title' | 'caption'; at: number };
-/** Lines on screen together, stacked about the middle of it (a blank line between prose paragraphs), from their
- *  first `at` until they fade out at `out` (s; never if left out). */
-export type DustCard = { lines: DustLine[]; out?: number };
+/** One line of a card, its letters starting to come in `at` s after the screen went up (`still`: all there at once
+ *  then, not a letter at a time). `prose` is wrapped and set in the warm white, left-aligned in a block centred on the
+ *  screen; `title` is big spaced gold capitals and `caption` small spaced capitals, each centred. */
+export type DustLine = { text: string; style: 'prose' | 'title' | 'caption'; at: number; still?: boolean };
+/** Lines on screen together, stacked about a height `y` down the screen (a share of it, 0.47 if left out; a blank
+ *  line between prose paragraphs), from their first `at` until they fade out at `out` (s; never if left out). */
+export type DustCard = { lines: DustLine[]; out?: number; y?: number };
 /** What a dust screen shows (plain data: it goes to the worker). `bar`: a loading bar near the bottom (`progress`);
  *  `dustIn`: how long (s) the dust takes to come up from the dark. */
 export type DustScript = { cards: DustCard[]; bar?: boolean; dustIn?: number };
@@ -67,7 +67,7 @@ export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => O
 
   // Text laid out for the current size: each row's letters with their x from the row's start, and where it goes.
   type Line = { s: string; xs: number[] };
-  type Row = Line & { x: number; y: number; px: number; rgb: string; scale: number; at: number; k0: number };
+  type Row = Line & { x: number; y: number; px: number; rgb: string; scale: number; at: number; k0: number; still: boolean };
   let size = 20;
   let big = 40;
   let lineH = 32;
@@ -120,7 +120,7 @@ export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => O
       const blockX = Math.round((w - longest) / 2);
       const rows: Row[] = [];
       let bed: { x: number; top: number; bottom: number } | null = null;
-      let y = Math.round(h * 0.47 - height / 2);
+      let y = Math.round(h * (card.y ?? 0.47) - height / 2);
       items.forEach((it, i) => {
         y += gap(i);
         const prose = it.l.style === 'prose';
@@ -129,7 +129,7 @@ export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => O
         it.rows.forEach((r, j) => {
           const x = prose ? blockX : Math.round((w - r.width) / 2);
           const ry = prose ? y + j * lineH + lineH / 2 : y + it.h / 2;
-          rows.push({ ...r, x, y: ry, px: it.px, rgb: it.l.style === 'title' ? GOLD : INK, scale: it.l.style === 'caption' ? 0.7 : 1, at: it.l.at, k0 });
+          rows.push({ ...r, x, y: ry, px: it.px, rgb: it.l.style === 'title' ? GOLD : INK, scale: it.l.style === 'caption' ? 0.7 : 1, at: it.l.at, k0, still: !!it.l.still });
           k0 += r.s.length + 1;
         });
         y += it.h;
@@ -251,11 +251,12 @@ export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => O
 
   const ramp = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
-  /** One laid-out line from `x`, each letter fading in (and rising a touch) `CHAR_S` after the one before it from `t0`. */
-  function letters({ s, xs }: Line, x: number, y: number, t0: number, k0: number, rgb: string, scale: number) {
+  /** One laid-out line from `x`, each letter fading in (and rising a touch) `CHAR_S` after the one before it from `t0`;
+   *  `still`, all of it there from `t0`. */
+  function letters({ s, xs }: Line, x: number, y: number, t0: number, k0: number, rgb: string, scale: number, still = false) {
     for (let k = 0; k < s.length; k++) {
       if (s[k] === ' ') continue;
-      const a = ramp((clock - t0 - (k0 + k) * CHAR_S) / LETTER_S) * scale;
+      const a = (still ? 1 : ramp((clock - t0 - (k0 + k) * CHAR_S) / LETTER_S)) * scale;
       if (a <= 0.003) continue;
       g.fillStyle = `rgba(${rgb},${a})`;
       g.fillText(s[k], x + xs[k], y + (1 - a / scale) * 5);
@@ -276,7 +277,7 @@ export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => O
         g.translate(w / 2, (top + bottom) / 2);
         g.scale(rx, ry);
         const bed = g.createRadialGradient(0, 0, 0, 0, 0, 1);
-        bed.addColorStop(0, `rgba(6,5,4,${0.6 * out * ramp(clock - c.at)})`);
+        bed.addColorStop(0, `rgba(6,5,4,${0.6 * out * (c.rows.every((r) => r.still) ? 1 : ramp(clock - c.at))})`);
         bed.addColorStop(1, 'rgba(6,5,4,0)');
         g.fillStyle = bed;
         g.fillRect(-1, -1, 2, 2);
@@ -284,7 +285,7 @@ export function createDustScreen(g: Ctx, makeCanvas: (w: number, h: number) => O
       }
       for (const r of c.rows) {
         g.font = `${r.px}px ${FONT}`;
-        letters(r, r.x, r.y, r.at, r.k0, r.rgb, r.scale * out);
+        letters(r, r.x, r.y, r.at, r.k0, r.rgb, r.scale * out, r.still);
       }
     }
   }

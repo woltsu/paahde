@@ -5,8 +5,8 @@ import { TEXT, type HintKeys } from '../shared/text.ts';
 import { hintKeys } from './bindings';
 import { showDustScreen, type DustScreen } from './dustScreen';
 
-/** When the hint's letters start coming in (s after the screen is started, under the black it then fades up out of). */
-const HINT_AT = 1.8;
+/** Where the hint sits: its middle this far down the screen (a share of it), a little under the middle. */
+const HINT_Y = 0.6;
 /** How long (s) the sand takes to come up from the dark. */
 const DUST_IN = 3;
 /** The share of hints about what killed you, where there are some. */
@@ -56,7 +56,9 @@ export class DeathDust {
     this.stop();
     this.el.style.opacity = '0';
     this.el.style.display = 'block';
-    this.screen = showDustScreen(this.el, { cards: [{ lines: [{ text: hint(cause), style: 'prose', at: HINT_AT }] }], dustIn: DUST_IN });
+    // the hint is there whole from the start: it comes up with the screen (`opacity`), not a letter at a time
+    const line = { text: hint(cause), style: 'prose' as const, at: 0, still: true };
+    this.screen = showDustScreen(this.el, { cards: [{ lines: [line], y: HINT_Y }], dustIn: DUST_IN });
   }
 
   set opacity(a: number) {
