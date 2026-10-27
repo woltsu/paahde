@@ -25,7 +25,7 @@ const TRAIL_PIXELS = 2.2e6; // the dust's own canvas: soft anyway, so cheaper
 const FADE = 0.1; // how much of the dust's trails fades per frame (at 60 fps)
 
 // The prologue's timeline (s): each paragraph starts, then they all go and the card comes up and stays.
-const PARA_AT = [1, 5.4, 10];
+const PARA_AT = [2.5, 6.9, 11.5];
 const OUT_AT = 16;
 const CARD_AT = 17.6;
 /** When the full prologue has been told: the cover stays up at least this long on a tab's first load. */
@@ -66,9 +66,9 @@ export function createPrologue(g: Ctx, makeCanvas: (w: number, h: number) => Off
 
   // Text laid out for the current size: each line's letters with their x from the line's start.
   type Line = { s: string; xs: number[] };
-  let size = 15;
-  let big = 27;
-  let lineH = 28;
+  let size = 20;
+  let big = 40;
+  let lineH = 32;
   let paras: { lines: Line[]; y: number }[] = [];
   let title: Line & { x: number } = { s: '', xs: [], x: 0 };
   let time: Line & { x: number } = { s: '', xs: [], x: 0 };
