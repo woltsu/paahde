@@ -64,7 +64,9 @@ export function vehicleTarget(feet: { x: number; y: number; z: number }, yaw: nu
   const ex = feet.x, ey = feet.y + EYE_HEIGHT, ez = feet.z;
   let best: { v: Vehicle; rear: boolean } | null = null, bestT = AIM_REACH;
   for (const v of list) {
-    if (!parked(v) || Math.hypot(v.x - ex, v.z - ez) > AIM_REACH + 2) continue;
+    // Only one F can use: in reach as its boxes are (openBoxes, vehiclesNear). The crosshair alone reaches a little
+    // further, and F there opened the bag without the bike.
+    if (!parked(v) || !inReach(feet, v)) continue;
     // Into its frame: x to its right, z backwards (its forward is -z), y up from the ground under it.
     const rx = Math.cos(v.heading), rz = -Math.sin(v.heading), bx = Math.sin(v.heading), bz = Math.cos(v.heading);
     const ox = ex - v.x, oz = ez - v.z;
