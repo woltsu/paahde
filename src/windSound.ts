@@ -227,15 +227,23 @@ export class WindSound {
     const hiss = gain();
     source(pink, 3.2).connect(hissHp).connect(hiss).connect(master);
 
-    master.gain.setTargetAtTime(MIX, ctx.currentTime, 1.5); // fade in rather than pop on the first click
+    master.gain.setTargetAtTime(this.silent ? 0 : MIX, ctx.currentTime, 1.5); // fade in rather than pop on the first click
     return { ctx, master, muffle, bandHp, bandLp, peak, rumble, rumbleLp, rushL, rushR, rushBp, rushLp, howl, moan, windEcho, moanEcho, hiss, hissHp };
+  }
+
+  /** In a level indoors (shared/levels.ts) there is no wind: faded out (and back in on leaving), not updated. */
+  private silent = false;
+  setSilent(on: boolean) {
+    if (on === this.silent) return;
+    this.silent = on;
+    if (this.g) this.g.master.gain.setTargetAtTime(on ? 0 : MIX, this.g.ctx.currentTime, 0.4);
   }
 
   /** Follow the wind at the listener. `yaw` is the camera yaw (three.js: forward = (−sin, −cos)); `vel` is
    *  the listener's own velocity (m/s), on foot or on the bike. */
   update(dt: number, listener: { x: number; y: number; z: number }, yaw: number, vel: { vx: number; vy: number; vz: number }) {
     const g = this.g;
-    if (!g || g.ctx.state !== 'running') return;
+    if (!g || g.ctx.state !== 'running' || this.silent) return;
     this.time += dt;
     const t = this.time;
 

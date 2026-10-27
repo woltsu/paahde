@@ -77,6 +77,12 @@ export function feltTemp(tod: number, sun: number, inside: boolean): number {
   return shaded + (lit - shaded) * sun;
 }
 
+/** Felt temperature (°C) in a level (shared/levels.ts): its fixed climate if it has one (no sun reaches in), else the
+ *  desert's feltTemp. */
+export function felt(climate: { tempC: number } | null, tod: number, sun: number, inside: boolean): number {
+  return climate ? climate.tempC : feltTemp(tod, sun, inside);
+}
+
 /** Extra felt °C from the ground under a player outdoors at (x, z): the biome's heat (0 in the dune sea), with
  *  `sun` (0..1) of the body in direct sun. */
 export function groundHeat(x: number, z: number, tod: number, sun: number): number {

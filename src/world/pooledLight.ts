@@ -16,7 +16,21 @@ class PooledSpotLightNode extends THREE.SpotLightNode {
   }
 }
 
+/** A level's light pool (src/levels/lightPool.ts): a point light at zero intensity still runs its lighting for every lit
+ *  pixel, so an idle slot skips it the same way. */
+export class PooledPointLight extends THREE.PointLight {}
+
+class PooledPointLightNode extends THREE.PointLightNode {
+  private active = uniform(0).onRenderUpdate(() => (this.light?.intensity ?? 0) > 0 ? 1 : 0);
+
+  override setup(builder: THREE.NodeBuilder) {
+    If(this.active.greaterThan(0), () => { super.setup(builder); });
+    return null;
+  }
+}
+
 /** Register before the first scene render, on both WebGPU and the WebGL2 fallback. */
 export function registerPooledLights(renderer: THREE.WebGPURenderer) {
   renderer.library.addLight(PooledSpotLightNode, PooledSpotLight);
+  renderer.library.addLight(PooledPointLightNode, PooledPointLight);
 }

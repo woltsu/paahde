@@ -62,5 +62,14 @@ export async function run(): Promise<Sample> {
   m['ride a minute'] = [ride.ms, 'ms'];
   ends.push(ride.s.x, ride.s.y, ride.s.z, ride.s.heading, ride.s.nose);
 
+  // A level of boxes (shared/levels/boxes.ts: the datacenter's grid), the same walk from its first spawn. Only where the
+  // tree has levels (a base from before them has no levelSpawn), and outside the checksum, which compares the desert.
+  const sim = (await import('../../../shared/sim.ts')) as { levelSpawn?: (level: number, n?: number) => State };
+  if (sim.levelSpawn) {
+    const indoors = sim.levelSpawn(1, 0);
+    go(indoors, walkInput, walkYaw, 5);
+    m['walk a minute: datacenter'] = [go(indoors, walkInput, walkYaw).ms, 'ms'];
+  }
+
   return { m, info: { 'where the physics took them': checksum(ends) } };
 }

@@ -23,7 +23,8 @@
 //   with it the selected hotbar slot.
 import { setWellsOn } from '../shared/wells.ts';
 import { buildingId, cargoId, grows, vehicleId } from '../shared/boxes.ts';
-import { spawnState, step, type PlayerState } from '../shared/sim.ts';
+import { NO_PULL, spawnState, step, type PlayerState } from '../shared/sim.ts';
+import { level } from '../shared/levels.ts';
 import type { BenchJob, ClientMsg, DeathCause, Hands, Obituary, ServerMsg } from '../shared/protocol.ts';
 import { PROTOCOL_VERSION } from '../shared/protocol.ts';
 import { decodeChunk, MAX_PENDING_INPUTS, unpackPlayerPose, type PlayerAppearance, type RemotePlayerSnap } from '../shared/network.ts';
@@ -293,9 +294,11 @@ export class Net {
     }
     this.seq++;
     this.prev = this.me;
-    const drag = stormDrag(this.storms, this.me.x, this.me.y, this.me.z, this.serverTime());
-    const near = vorticesNear(this.me.x, this.me.z, 500, this.vortexZero, this.vortices, this.nearMe);
-    const pull = vortexPull(near, this.me.x, this.me.y, this.me.z, this.serverTime(), { x: 0, z: 0 });
+    // No weather reaches into a level without it (shared/levels.ts; step() ignores it there too).
+    const weather = level(this.me.level).weather;
+    const drag = weather ? stormDrag(this.storms, this.me.x, this.me.y, this.me.z, this.serverTime()) : 0;
+    const near = weather ? vorticesNear(this.me.x, this.me.z, 500, this.vortexZero, this.vortices, this.nearMe) : [];
+    const pull = weather ? vortexPull(near, this.me.x, this.me.y, this.me.z, this.serverTime(), { x: 0, z: 0 }) : NO_PULL;
     this.me = step(this.me, input, yaw, drag, this.legPosts, pull);
     this.pending.push({ seq: this.seq, input, yaw, drag, pull });
     this.send({ t: 'input', seq: this.seq, input, yaw, pitch });
@@ -709,7 +712,7 @@ export class Net {
       // shelter or canyon floor (only on the first join; a reconnect keeps where you are).
       const spawn = this.joinedOnce ? null : new URLSearchParams(location.search).get('spawn');
       const me = { t: 'hello', protocol: PROTOCOL_VERSION, browserId: this.browserId, name: myName(), color: myColor(), look: myLook() } as const;
-      this.send(spawn === 'pod' || spawn === 'crash' || spawn === 'field' || spawn === 'shelter' || spawn === 'canyon' ? { ...me, spawn } : me);
+      this.send(spawn === 'pod' || spawn === 'crash' || spawn === 'field' || spawn === 'shelter' || spawn === 'canyon' || spawn === 'datacenter' ? { ...me, spawn } : me);
     };
     ws.onmessage = (e) => this.onMessage(JSON.parse(e.data) as ServerMsg);
     ws.onclose = (e) => {
@@ -806,6 +809,7 @@ export class Net {
       }
       return this.fall(msg);
     }
+    if (msg.t === 'level') return this.teleport(msg.state);
     if (msg.t === 'respawn') {
       if (this.dying) this.fall(this.dying);
       this.down = null;
@@ -939,6 +943,31 @@ export class Net {
     }
   }
 
+  /** We are somewhere else now (another level, shared/levels.ts): what we predicted from here on is void, and the others
+   *  we were drawing are in the old place. main.ts sees net.me.level change and switches the stage. */
+  private teleport(state: PlayerState) {
+    this.pending = [];
+    this.resyncAfter = 0;
+    this.me = this.prev = state;
+    this.errorX = this.errorY = this.errorZ = 0;
+    this.snapNext = true;
+    this.snapshots = [];
+    this.appearances.clear();
+    this.onTeleport?.(state);
+  }
+  /** Put somewhere else by the server (a door): main.ts turns the camera the way we now face. */
+  onTeleport?: (state: PlayerState) => void;
+
+  /** F at a level's way in or out (the server checks we are at one, and moves us: 'level'). */
+  enter() {
+    this.send({ t: 'enter' });
+  }
+
+  /** Debug menu: into level `key` (shared/levels.ts), or back out to the desert. */
+  debugLevel(key: string) {
+    this.send({ t: 'debugLevel', key });
+  }
+
   /** The bolt `id` reached us on screen (src/world/bolts.ts): a death it caused, held till now, happens. */
   boltArrived(id: number) {
     if (this.dying?.bolt === id) this.fall(this.dying);
@@ -955,6 +984,12 @@ export class Net {
 
   private reconcile(server: PlayerState, ack: number) {
     if (this.resyncAfter && ack >= this.resyncAfter) { this.resyncAfter = 0; this.snapNext = true; }
+    // In another level than we predicted (a respawn out of one): nothing pending replays there.
+    if ((server.level ?? 0) !== this.me.level) {
+      this.pending = [];
+      this.snapNext = true;
+      this.snapshots = this.snapshots.slice(-1);
+    }
     this.pending = this.pending.filter((p) => p.seq > ack);
     let s: PlayerState = {
       x: server.x, y: server.y, z: server.z, vx: server.vx, vy: server.vy, vz: server.vz, facing: server.facing,

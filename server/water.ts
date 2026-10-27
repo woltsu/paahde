@@ -9,7 +9,8 @@ import type { ServerMsg } from '../shared/protocol.ts';
 import { sunOnBody, type Caster } from '../shared/shade.ts';
 import { type PlayerState } from '../shared/sim.ts';
 import { STORM_SHADE } from '../shared/storm.ts';
-import { feltTemp, groundHeat } from '../shared/temperature.ts';
+import { felt, groundHeat } from '../shared/temperature.ts';
+import { level } from '../shared/levels.ts';
 import {
   DRINK_COOLDOWN_MS, FILL_COOLDOWN_MS, FILL_MS, FILL_SLACK, HEAT_MAX, heatPerSecond, SIP_COOL, STROKE_RECOVER, STROKE_S,
 } from '../shared/water.ts';
@@ -71,13 +72,15 @@ export type Surroundings = { casters: readonly Caster[]; self: number };
  */
 export function tickHeat(t: Heat, dt: number, s: PlayerState, input: number, tod: number, storm: number, now: number,
   around: Surroundings): 'died' | 'send' | null {
-  const inside = indoors(s.x, s.y, s.z);
+  // A level with its own climate (shared/levels.ts) is out of the sun: its fixed temperature, no shade ray, no ground heat.
+  const climate = level(s.level).climate;
+  const inside = climate !== null || indoors(s.x, s.y, s.z);
   if (now - t.shadeAt >= SHADE_MS) {
     t.shadeAt = now;
     t.sun = inside ? 0 : sunOnBody(s.x, s.y, s.z, s.crouching, tod, around.casters, around.self);
     t.shade = t.sun < 0.5;
   }
-  t.temp = feltTemp(tod, t.sun, inside) + (inside ? 0 : groundHeat(s.x, s.z, tod, t.sun));
+  t.temp = felt(climate, tod, t.sun, inside) + (inside ? 0 : groundHeat(s.x, s.z, tod, t.sun));
   if (now - t.diedAt < RESPAWN_GRACE_MS) return null;
   const sprinting = s.sliding; // speed slides are the exertion now (there is no sprint)
   // In a sandstorm the dust hides the sun: the heat stops rising (it still cools).

@@ -14,6 +14,7 @@ import { collideJetWrecks } from './jetcrash.ts';
 import { collideScrap } from './scrap.ts';
 import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
+import { datacenterLevel } from './levels/datacenter.ts';
 
 export const DESERT = 0;
 /** 0 the desert, 1.. the registry below: small, one byte on the wire. */
@@ -25,8 +26,6 @@ export type Box = readonly [x0: number, x1: number, y0: number, y1: number, z0: 
 export type Mover = { x: number; z: number; vx: number; vz: number };
 /** A place in a level and the way you face there (radians, as PlayerState.facing). */
 export type LevelPoint = { x: number; y: number; z: number; facing: number };
-/** A way between levels: F in its box takes you to `to`. */
-export type LevelExit = { box: Box; to: LevelPoint & { level: LevelId } };
 
 export type Level = {
   id: LevelId;
@@ -44,7 +43,9 @@ export type Level = {
   /** Nothing in the level leaves this: a mover outside it is put back at the first spawn. Null: no bounds (the desert). */
   bounds: Box | null;
   spawns: readonly LevelPoint[];
-  exits: readonly LevelExit[];
+  /** Ways out: F in one of these boxes takes you back out to the desert, at the entrance you came in by (server/world.ts;
+   *  docs/levels.md had each exit name its destination, but the entrance is placed per world, so the server pairs them). */
+  exits: readonly Box[];
   /** A roof overhead everywhere: music, speech, hand shade, reverb, no wind. */
   indoors: boolean;
   /** null: the desert's sun and clock heat you; else a fixed felt temperature (°C). */
@@ -91,7 +92,7 @@ export const desertLevel: Level = {
   things: true,
 };
 
-export const LEVELS: readonly Level[] = [desertLevel];
+export const LEVELS: readonly Level[] = [desertLevel, datacenterLevel];
 /** The level with this id; an unknown id is the desert. */
 export const level = (id: LevelId): Level => LEVELS[id] ?? desertLevel;
 /** A level by its key ('datacenter'), or undefined. */

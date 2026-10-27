@@ -5,7 +5,7 @@ import { buildingBox, cargoBox, isShared, storeBox, vehicleBox } from '../shared
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { DT, INPUT_MASK, spawnPoint, spawnState, step, TICK_RATE, YAW_STEPS, yawFromQ, type PlayerState } from '../shared/sim.ts';
+import { DT, INPUT_MASK, levelSpawn, NO_LEGS, NO_PULL, spawnPoint, spawnState, step, TICK_RATE, YAW_STEPS, yawFromQ, type PlayerState } from '../shared/sim.ts';
 import { clientMessage } from './messages.ts';
 import { InputQueue } from './inputQueue.ts';
 import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
@@ -82,7 +82,7 @@ import { isTrophy, trophyFree } from '../shared/trophies.ts';
 import { CALM, LIVES, WORLD_ID } from '../shared/world.ts';
 import { TEXT } from '../shared/text.ts';
 import { pickupLimit, type PickupLimit } from './pickupLimit.ts';
-import { DESERT, level } from '../shared/levels.ts';
+import { DESERT, inBox, level, levelByKey, type Level } from '../shared/levels.ts';
 
 /** Nobody on for this long: the world saves and exits until someone comes back. */
 const EMPTY_EXIT_MS = 10 * 60_000;
@@ -168,7 +168,23 @@ type Player = {
   savedAt: number;
   /** The jammer's lock (shared/jammer.ts): on which target, built up how far (ms), last told when (performance.now). */
   jam: { kind: 'jet' | 'drone'; id: number; acc: number; at: number } | null;
+  /** ?spawn=<level> (dev): moved into that level once loaded, through moveTo like a door. */
+  levelWanted: number | null;
 };
+
+// --- Levels (shared/levels.ts, docs/levels.md): the gate that keeps the desert's systems to the levels they belong in,
+// by property. A player's position is in their level's frame, so anything that asks "near (x, z)?" must ask the level too.
+const levelOf = (p: Player): Level => level(p.state.level);
+/** Players weather reaches (storms, gas fronts, vortices). */
+const outside = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p).weather);
+/** Players the walkers, drones, jets, harvesters and bosses can hunt. */
+const hunted = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p).enemies);
+/** `o` is in the same level as `s` and within r (m) of it on the ground plane. */
+const sameNear = (o: Player, s: PlayerState, r: number) => o.state.level === s.level && Math.hypot(o.state.x - s.x, o.state.z - s.z) < r;
+/** What a player in a level without the world's things (Level.things) may still send: the rest asks about the
+ *  desert's layout or the things lying about by position, and must not reach them through the shared coordinates. */
+const IN_LEVEL = new Set<ClientMsg['t']>(['input', 'ready', 'hands', 'telemetry', 'chat', 'siteLeave', 'drink', 'move', 'sort', 'fire', 'swing',
+  'setEpoch', 'enter', 'debugGear', 'debugGive', 'debugHeat', 'debugWeather', 'debugHit', 'debugLevel']);
 
 const players = new Map<WebSocket, Player>();
 let nextId = 1;
@@ -223,6 +239,9 @@ wss.on('connection', (ws) => {
     // Loading is a server state, not an invulnerability mode for gameplay actions.
     if (p && !p.ready && !['ready', 'hands', 'telemetry', 'chat'].includes(msg.t)) return;
     if (p?.down && !['input', 'ready', 'hands', 'telemetry', 'chat', 'siteLeave'].includes(msg.t)) return;
+    if (p && !levelOf(p).things && !IN_LEVEL.has(msg.t)) return refuseInLevel(p, msg);
+    if (msg.t === 'enter' && p) return onEnter(p);
+    if (msg.t === 'debugLevel' && p) return onDebugLevel(p, msg.key);
     if (msg.t === 'input' && p) return onInput(p, msg.seq, msg.input, msg.yaw, msg.pitch);
     if (msg.t === 'pickup' && p) return onPickup(p, msg.ix, msg.iz, msg.i);
     if (msg.t === 'tend' && p) return onTend(p, msg.bed);
@@ -374,6 +393,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,
     heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, heardAt: performance.now(), hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: 0, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
+    levelWanted: typeof spawn === 'string' ? (levelByKey(spawn)?.id ?? null) : null,
   };
   players.set(ws, p);
   everJoined = true;
@@ -419,6 +439,56 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   p.syncing = false;
   if (p.readyWanted) onReady(p);
 
+}
+
+// --- Moving between levels (docs/levels.md "Getting in and out"). Only the server changes PlayerState.level.
+
+/** Where a player in a level comes out into the desert: their pod's hatch until there are entrances. */
+function levelDoor(p: Player): PlayerState {
+  const pod = spawnPoint(podOf(p.browserId));
+  return spawnState(pod.x, pod.z);
+}
+
+/** Put `p` at `to` (another level, or back out): a teleport. Off the bike (it stays parked where they were), out of
+ *  any machine they were taking apart, their queued inputs dropped; the client is told with 'level' and switches stage. */
+function moveTo(p: Player, to: PlayerState) {
+  if (p.down || !p.ready) return;
+  vehicleSrv.release(p.id, p.state.riding ? p.state : undefined);
+  crash.leaveAll(p.id);
+  p.inputs.clear();
+  p.input = 0;
+  p.jam = null;
+  p.state = to;
+  save(p);
+  send(p.ws, { t: 'level', level: to.level, state: round(to) });
+}
+
+/** How far outside a level's exit box (m) F still counts: the client asks from where it predicts it is. */
+const EXIT_SLACK = 0.6;
+
+/** F at a level's way out (Level.exits): back out at its door. */
+function onEnter(p: Player) {
+  const L = levelOf(p), s = p.state, e = EXIT_SLACK;
+  if (L.exits.some((b) => inBox([b[0] - e, b[1] + e, b[2] - e, b[3] + e, b[4] - e, b[5] + e], s.x, s.y, s.z))) moveTo(p, levelDoor(p));
+}
+
+/** Debug menu (F3 → Go to level): into level `key` at a spawn, or out to the desert, the way a door does it. */
+function onDebugLevel(p: Player, key: unknown) {
+  const L = typeof key === 'string' ? levelByKey(key) : undefined;
+  if (!L || L.id === p.state.level) return;
+  moveTo(p, L.id === DESERT ? levelDoor(p) : levelSpawn(L.id, p.id));
+}
+
+/** A message a level without the world's things doesn't take (IN_LEVEL): refused, with what the client needs to undo its
+ *  guess (a dropped item back in its box, a placed one back in the bag). */
+function refuseInLevel(p: Player, msg: ClientMsg) {
+  if (msg.t === 'drop') {
+    send(p.ws, { t: 'notice', text: TEXT.notice.cantDropHere });
+    if (typeof msg.box === 'string' && boxSize(msg.box)) send(p.ws, boxMsg(p.browserId, msg.box));
+  } else if (msg.t === 'place' || msg.t === 'build' || msg.t === 'unplace' || msg.t === 'wire') {
+    send(p.ws, { t: 'notice', text: TEXT.notice.cantPlace });
+    sendBox(p, 'bag');
+  } else if (msg.t === 'throw' || msg.t === 'fit' || msg.t === 'unfit') sendBox(p, 'bag');
 }
 
 // Sips and refills: the client plays the animation, then asks. Refused ones still get the real state.
@@ -490,7 +560,9 @@ function shadeCasters(now: number): Caster[] {
 // The next snapshot carries the new position, which the client snaps to (src/net.ts reconcile).
 function heat(p: Player, dt: number, tod: number, serverNow: number) {
   const now = Date.now();
-  const storm = stormAt(storms.storms, p.state.x, p.state.z, serverNow);
+  // No weather in here (shared/levels.ts): no storm's shade, front or gas, and no vortex; the heat follows the level's climate.
+  const weather = levelOf(p).weather;
+  const storm = weather ? stormAt(storms.storms, p.state.x, p.state.z, serverNow) : 0;
   const r = tickHeat(p.heat, dt, p.state, p.input, tod, storm, now, { casters: shadeCasters(now), self: p.id });
   if (r === 'died') {
     die(p, 'heat');
@@ -498,16 +570,16 @@ function heat(p: Player, dt: number, tod: number, serverNow: number) {
     send(p.ws, waterMsg(p.heat));
   }
   // Out in the open in a mega-storm front you choke; under cover it wears off.
-  const choking = frontExposure(storms.storms, p.state.x, p.state.y, p.state.z, serverNow);
+  const choking = weather ? frontExposure(storms.storms, p.state.x, p.state.y, p.state.z, serverNow) : 0;
   p.choke = Math.max(0, p.choke + (choking > 0 ? choking : -CHOKE_RECOVER) * dt);
   if (p.choke >= CHOKE_S && !p.down) die(p, 'storm', [WIND.x * 4, 1, WIND.z * 4]); // bowled over downwind
   // With your head in poison gas (in a shelter too) you choke; out of it, it wears off. Not just after respawning.
   const grace = Date.now() - p.heat.diedAt < DOWN_MS + GAS_GRACE_S * 1000;
-  const gassed = grace ? 0 : gasExposure(storms.gas, p.state.x, p.state.y, p.state.z, serverNow);
+  const gassed = grace || !weather ? 0 : gasExposure(storms.gas, p.state.x, p.state.y, p.state.z, serverNow);
   p.gassed = Math.max(0, p.gassed + (gassed > 0 ? gassed : -GAS_RECOVER) * dt);
   if (p.gassed >= GAS_S && !p.down) die(p, 'gas'); // slumps where they stand
   // In a sand vortex's core: torn off your feet and thrown high, spinning out of it.
-  const v = p.down ? null : inVortexCore(storms.vorticesNear(p.state.x, p.state.z, 100, nearScratch), p.state.x, p.state.y, p.state.z, serverNow);
+  const v = p.down || !weather ? null : inVortexCore(storms.vorticesNear(p.state.x, p.state.z, 100, nearScratch), p.state.x, p.state.y, p.state.z, serverNow);
   if (v) {
     const c = vortexCentre(v, serverNow, { x: 0, z: 0 });
     const dx = p.state.x - c.x, dz = p.state.z - c.z, d = Math.hypot(dx, dz) || 1;
@@ -548,8 +620,10 @@ function die(p: Player, cause: DeathCause, push: [number, number, number] = [0, 
   const obit: Obituary = { t: 'obituary', id: p.id, color: p.color, name: p.name, cause, at: Date.now() };
   db.putObituary(obit);
   for (const o of players.values()) send(o.ws, obit);
-  // The bag past the hotbar stays where they fell (shared/corpse.ts).
-  const pack = corpses.leave(p.browserId, p.color, p.state.x, p.state.z);
+  // The bag past the hotbar stays where they fell (shared/corpse.ts); in a level without the world's things, at its
+  // door out in the desert (the packs' table has no level yet: docs/levels.md phase 5).
+  const fell = levelOf(p).things ? p.state : levelDoor(p);
+  const pack = corpses.leave(p.browserId, p.color, fell.x, fell.z);
   if (pack) {
     sendBox(p, pack);
     sendBox(p, 'bag');
@@ -576,7 +650,7 @@ function shielded(p: Player, push: [number, number, number]): boolean {
   sendBox(p, 'equip');
   const s = p.state;
   const msg: ServerMsg = { t: 'shieldBreak', id: p.id, x: round4(s.x), y: round4(s.y), z: round4(s.z), push, tier, ms, ...(broke ? {} : { held: true as const }) };
-  for (const o of players.values()) if (Math.hypot(o.state.x - s.x, o.state.z - s.z) < BOT_SEND_R) send(o.ws, msg);
+  for (const o of players.values()) if (sameNear(o, s, BOT_SEND_R)) send(o.ws, msg);
   return true;
 }
 
@@ -640,7 +714,9 @@ function tickBots(elapsed: number, now: number, tod: number) {
   const dt = Math.min(botAccum, 0.5);
   botAccum = 0;
   const wall = Date.now();
-  const list = [...players.values()].map((p) => ({ id: p.id, x: p.state.x, y: p.state.y, z: p.state.z, safe: !p.ready || !!p.down || wall - p.heat.diedAt < BOT_GRACE_MS }));
+  // Only the players in a level they hunt in (shared/levels.ts `enemies`): one indoors is lost at the door.
+  const prey = hunted(players.values());
+  const list = prey.map((p) => ({ id: p.id, x: p.state.x, y: p.state.y, z: p.state.z, safe: !p.ready || !!p.down || wall - p.heat.diedAt < BOT_GRACE_MS }));
   guardians.storms = storms.storms;
   // The vortices near anyone: the drones only fly near players (they drag them in from 700 m).
   const near = new Map<number, Vortex>();
@@ -652,11 +728,11 @@ function tickBots(elapsed: number, now: number, tod: number) {
   const r = guardians.tick(dt, now, tod, list);
   for (const k of guardians.crashes()) dropSpoils(k);
   // The bolts go out before the deaths they cause, so the client has the bolt to hold the death for (src/net.ts).
-  for (const p of players.values()) {
+  for (const p of prey) {
     for (const e of r.events) if (Math.hypot(e.x - p.state.x, e.z - p.state.z) < BOT_SEND_R) send(p.ws, e.msg);
     send(p.ws, guardians.msg(now, p.id, p.state.x, p.state.z));
   }
-  for (const p of players.values()) {
+  for (const p of prey) {
     const c = crushed.find((o) => o.id === p.id);
     if (c) hurt(p, 'harvester', KILL, c.push);
     else if (r.shot.includes(p.id)) {
@@ -667,7 +743,7 @@ function tickBots(elapsed: number, now: number, tod: number) {
   }
   for (const e of r.events) if ((e.msg.t === 'boom' && e.msg.ground) || e.msg.t === 'blast') terrain.crater(e.msg.x, e.msg.z, CRATER_R, CRATER_MM);
   const b = bosses.tick(dt, now, list);
-  for (const p of players.values()) {
+  for (const p of prey) {
     const k = b.kills.find((o) => o.id === p.id);
     if (k) hurt(p, k.cause, KILL, k.push);
     // msgs tracks visibility transitions: do not advance that state when this snapshot would be skipped.
@@ -734,7 +810,7 @@ function bossOut(b: BossOut) {
   for (const c of b.craters) terrain.crater(c.x, c.z, c.r, c.mm, false);
   for (const e of b.events) {
     const json = JSON.stringify(e.msg);
-    for (const p of players.values()) if (Math.hypot(e.x - p.state.x, e.z - p.state.z) < BOSS_SEND_R && p.ws.readyState === p.ws.OPEN) sendJson(p.ws, json);
+    for (const p of hunted(players.values())) if (Math.hypot(e.x - p.state.x, e.z - p.state.z) < BOSS_SEND_R && p.ws.readyState === p.ws.OPEN) sendJson(p.ws, json);
   }
 }
 
@@ -753,6 +829,8 @@ const SHOT_FROM = 6;
  *  Shown to everyone near. */
 function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   const now = performance.now();
+  // Where nothing hunts (shared/levels.ts), a shot hits no walker, drone, jet, harvester or boss: they are the desert's.
+  if (!levelOf(p).enemies) m = { t: 'fire', x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez };
   const nums = [m.x, m.y, m.z, m.ex, m.ey, m.ez];
   if (!nums.every((v) => typeof v === 'number' && Number.isFinite(v))) return;
   const held = p.slot < 0 ? undefined : items.slots(p.browserId, 'bag')[p.slot];
@@ -771,7 +849,7 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
     const out: BossOut = { kills: [], craters: [], events: [] };
     const r = bosses.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.b, m.bi, now, out);
     const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
-    for (const o of players.values()) if (o !== p && Math.hypot(o.state.x - s.x, o.state.z - s.z) < BOT_SEND_R) send(o.ws, zap);
+    for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
     bossOut(out);
     if (r.boss?.called) db.setSetting(calledKey(r.boss.kind), r.kill ? 0 : BOSSES[r.boss.kind].hp - r.boss.hp + 1);
     if (r.kill) dropBossSpoils(r.kill);
@@ -780,7 +858,7 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   if (m.h !== undefined) {
     const r = harvesters.shoot(m.x, m.z, m.ex, m.ey, m.ez, m.h, m.hi, now);
     const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
-    for (const o of players.values()) if (o !== p && Math.hypot(o.state.x - s.x, o.state.z - s.z) < BOT_SEND_R) send(o.ws, zap);
+    for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
     if (r.kill) dropHarvesterSpoils(r.kill);
     return;
   }
@@ -788,7 +866,7 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
     : m.d !== undefined ? { hit: guardians.shootDrone(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.d, now, p.id, kind === PISTOL ? 'pistol' : 'rifle'), kill: null }
     : m.g === undefined ? { hit: false, kill: null } : guardians.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.g, m.i, now, kind === PISTOL ? 'pistol' : 'rifle');
   const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
-  for (const o of players.values()) if (o !== p && Math.hypot(o.state.x - s.x, o.state.z - s.z) < BOT_SEND_R) send(o.ws, zap);
+  for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
   if (r.kill) dropSpoils(r.kill);
 }
 
@@ -837,6 +915,7 @@ function onThrow(p: Player, m: Extract<ClientMsg, { t: 'throw' }>) {
  *  the eye; on a walker within reach of the swinger it breaks the point (as a shot). Shown to everyone near. */
 function onSwing(p: Player, m: Extract<ClientMsg, { t: 'swing' }>) {
   const now = performance.now();
+  if (!levelOf(p).enemies) m = { t: 'swing', x: m.x, y: m.y, z: m.z };
   if (![m.x, m.y, m.z].every((v) => typeof v === 'number' && Number.isFinite(v))) return;
   const held = p.slot < 0 ? undefined : items.slots(p.browserId, 'bag')[p.slot];
   const s = p.state;
@@ -847,7 +926,7 @@ function onSwing(p: Player, m: Extract<ClientMsg, { t: 'swing' }>) {
   const r = m.g === undefined ? { hit: false, kill: null } : guardians.smash(by, m.g, m.i, MACE_REACH + MACE_SLACK, now);
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const swing: ServerMsg = { t: 'swing', by: p.id, x: r2(m.x), y: r2(m.y), z: r2(m.z), ...(m.g !== undefined ? { hit: true as const } : {}) };
-  for (const o of players.values()) if (o !== p && Math.hypot(o.state.x - s.x, o.state.z - s.z) < BOT_SEND_R) send(o.ws, swing);
+  for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, swing);
   if (r.kill) dropSpoils(r.kill);
 }
 
@@ -855,7 +934,7 @@ function onSwing(p: Player, m: Extract<ClientMsg, { t: 'swing' }>) {
 function tossEvents(events: TossEvent[]) {
   for (const e of events) {
     const json = JSON.stringify(e.msg);
-    for (const o of players.values()) if (Math.hypot(o.state.x - e.x, o.state.z - e.z) < BOT_SEND_R && o.ws.readyState === o.ws.OPEN) sendJson(o.ws, json);
+    for (const o of players.values()) if (levelOf(o).things && Math.hypot(o.state.x - e.x, o.state.z - e.z) < BOT_SEND_R && o.ws.readyState === o.ws.OPEN) sendJson(o.ws, json);
   }
 }
 
@@ -894,6 +973,8 @@ function onReady(p: Player) {
   p.ready = true;
   p.savedAt = Date.now();
   sendName(p);
+  if (p.levelWanted !== null && p.levelWanted !== p.state.level) moveTo(p, levelSpawn(p.levelWanted, p.id));
+  p.levelWanted = null;
   // In chat for everyone, unless they've only dropped and come straight back (or are in already, in another tab).
   const back = performance.now() - (leftAt.get(p.browserId) ?? -Infinity) < REJOIN_QUIET_MS;
   if (!back && ![...players.values()].some((o) => o !== p && o.ready && o.browserId === p.browserId)) {
@@ -1248,12 +1329,13 @@ function simulate(p: Player, now: number) {
   const command = p.inputs.take(now);
   p.input = command?.input ?? 0;
   if (command) { p.yaw = command.yaw; p.pitch = command.pitch; }
-  const drag = stormDrag(storms.storms, p.state.x, p.state.y, p.state.z, now);
-  const pull = vortexPull(storms.vorticesNear(p.state.x, p.state.z, 500, nearScratch), p.state.x, p.state.y, p.state.z, now, { x: 0, z: 0 });
+  const L = levelOf(p);
+  const drag = L.weather ? stormDrag(storms.storms, p.state.x, p.state.y, p.state.z, now) : 0;
+  const pull = L.weather ? vortexPull(storms.vorticesNear(p.state.x, p.state.z, 500, nearScratch), p.state.x, p.state.y, p.state.z, now, { x: 0, z: 0 }) : NO_PULL;
   const before = p.state;
-  p.state = step(p.state, p.input, p.yaw, drag, guardians.posts, pull);
+  p.state = step(p.state, p.input, p.yaw, drag, L.enemies ? guardians.posts : NO_LEGS, pull);
   offBike(p, before);
-  crash.push(p.state, p.input, yawFromQ(p.yaw)); // push expects radians, not the wire's quantized angle
+  if (L.things) crash.push(p.state, p.input, yawFromQ(p.yaw)); // push expects radians, not the wire's quantized angle
 }
 
 // Fixed server time owns physics. Packets only queue intent; silence, bursts and hidden tabs cannot change gravity or speed.
@@ -1333,10 +1415,12 @@ let stirred = !CALM;
 function broadcast(time: number) {
   // Terrain and scrap changes go out before the snapshot, so a client seeing ack N has every edit up to N.
   // (The lab and the art bench have no storms and no jets until stirred.)
+  // (Weather and the hunters only see the players their level lets them reach: the level gate, shared/levels.ts.)
   const active = [...players.values()].filter((p) => p.ready && !p.down);
-  const weather = !stirred ? null : storms.tick(time, active.map((p) => p.state), timeOfDayAt(time + epoch),
-    bosses.engaged(time, active.map((p) => ({ id: p.id, ...p.state, safe: Date.now() - p.heat.diedAt < BOT_GRACE_MS }))));
-  const flights = !stirred ? null : jets.tick(time, active.map((p) => p.state));
+  const prey = hunted(active);
+  const weather = !stirred ? null : storms.tick(time, outside(active).map((p) => p.state), timeOfDayAt(time + epoch),
+    bosses.engaged(time, prey.map((p) => ({ id: p.id, ...p.state, safe: Date.now() - p.heat.diedAt < BOT_GRACE_MS }))));
+  const flights = !stirred ? null : jets.tick(time, prey.map((p) => p.state));
   const crashed: ServerMsg[] = [];
   if (stirred) {
     for (const j of jets.landed(time)) jetLanded(j);
@@ -1371,7 +1455,8 @@ function broadcast(time: number) {
   });
   for (const p of players.values()) {
     // Full chunks when entering an area, followed by absolute changes, always precede owner reconciliation.
-    if (!p.syncing && !p.terrainStreaming && terrain.needsView(p.terrainView, p.state.x, p.state.z)) {
+    // (The desert's terrain only round players in it: a level's frame is not the desert's.)
+    if (!p.syncing && !p.terrainStreaming && levelOf(p).things && terrain.needsView(p.terrainView, p.state.x, p.state.z)) {
       p.terrainStreaming = true;
       void sendStream(p.ws, terrain.viewMessages(p.terrainView, p.state.x, p.state.z))
         .catch(() => p.ws.close(1011, 'terrain sync failed')).finally(() => { p.terrainStreaming = false; });
@@ -1379,7 +1464,8 @@ function broadcast(time: number) {
     if (terrainDelta) for (const delta of terrain.forView(terrainDelta, p.terrainView)) send(p.ws, delta);
     // Keep reliable changes; omit obsolete poses when this connection cannot keep up.
     if (!p.syncing && !p.terrainStreaming && p.ws.bufferedAmount <= SOFT_BACKLOG_BYTES) {
-      const seen = all.filter((o) => o.player === p || (o.player.ready
+      // Interest by level: only the players in your own level (who leaves it vanishes from your snapshots).
+      const seen = all.filter((o) => o.player === p || (o.player.ready && o.player.state.level === p.state.level
         && Math.hypot(o.player.state.x - p.state.x, o.player.state.z - p.state.z) <= PLAYER_VIEW_RADIUS));
       const appearance = seen.filter((o) => p.appearances.get(o.player.id) !== o.key).map((o) => o.appearance);
       if (send(p.ws, { t: 'snap', time, ack: p.inputs.ack, state: round(p.state), players: seen.map((o) => o.pose), ...(appearance.length ? { appearance } : {}) })) {

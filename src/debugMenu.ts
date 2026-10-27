@@ -11,9 +11,11 @@
 // screen while flying, and FOV / smooth / bank shape the shot.
 // "Give gear" puts one of every piece of gear (shared/gear.ts), repaired with Scrap parts, and a laser rifle, pistol and jammer in your bag and equipment.
 // "Give materials" puts a full stack each of scrap, cloth and wiring in your bag, to build with.
+// "Go to level" moves you into a level (shared/levels.ts), or back out to the desert, through the server's door move.
 // "Give item" puts any one item (shared/items.ts ITEMS; type to search by name or id) in your bag: a count of it, or gear
 // repaired with parts of the chosen tier, or broken.
 import { isBound } from './bindings';
+import { LEVELS } from '../shared/levels.ts';
 import { ui } from './input';
 import { BOSS_KINDS, BOSSES, type BossKind } from '../shared/bosses.ts';
 import { isBuilding, isGear } from '../shared/gear.ts';
@@ -31,7 +33,8 @@ export class DebugMenu {
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
-    fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {}) {
+    fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {},
+    goLevel: (key: string) => void = () => {}) {
     const style = document.createElement('style');
     style.textContent = `
 #debugMenu { position: fixed; top: 48px; right: 12px; width: 230px; padding: 10px 12px; display: none;
@@ -80,6 +83,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <div class="row"><input id="dbgItemN" type="number" min="1" value="1" style="width:4em" title="How many (stackable items)">
 <select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${['Scrap', 'Basic', 'Quality', 'Space'].map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
 <button id="dbgGive">Give</button></div>
+<div class="row">Go to level ${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
 <div class="row">Motorcycle <button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken</button><button id="dbgBikeWorking" title="A working motorcycle 3 m in front of you, Scrap parts, yours once you ride it (for everyone)">Working</button></div>
 <div class="row">Test lab <button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div>
 <label title="No heat build-up for you (the meter drops to zero)"><input id="dbgNoHeat" type="checkbox"> Disable heat</label>
@@ -106,6 +110,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);
     p.querySelector('#dbgBikeBroken')!.addEventListener('click', () => spawnBike(false));
+    for (const b of p.querySelectorAll<HTMLElement>('[data-level]')) b.addEventListener('click', () => goLevel(b.dataset.level!));
     p.querySelector('#dbgBikeWorking')!.addEventListener('click', () => spawnBike(true));
     const item = p.querySelector<HTMLInputElement>('#dbgItem')!;
     const itemN = p.querySelector<HTMLInputElement>('#dbgItemN')!;

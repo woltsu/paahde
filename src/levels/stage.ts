@@ -22,7 +22,7 @@ export type StageFrame = {
 };
 
 export interface Stage {
-  /** The level it draws (0 the desert). */
+  /** The level it draws (shared/levels.ts; 0 the desert). */
   readonly level: number;
   /** Everything that belongs only to this level, lights included. */
   readonly root: THREE.Group;
@@ -34,4 +34,111 @@ export interface Stage {
   update(frame: StageFrame): void;
   /** Built (and, for a level, its materials compiled) before the first enter. */
   readonly ready: Promise<void>;
+}
+
+/** The fade to black and back (ms each way). */
+const FADE_MS = 250;
+
+/**
+ * Switching stages (docs/levels.md "Switching stages"): main.ts calls follow(level) every frame with the level the
+ * local player is in. On a change the view fades to black over the last frame drawn (nothing is drawn meanwhile), the
+ * stage is built on its first visit and kept, swapped in (the old one leaves, the new one enters), its materials are
+ * compiled behind the black on the first visit (`warm`, src/warmup.ts: the light count is fixed, so that is the only
+ * compile), and the view fades back in.
+ */
+export class StageSwitch {
+  /** False while a switch runs: main.ts draws nothing then. */
+  drawing = true;
+  private stages = new Map<number, Stage>();
+  private building = new Map<number, Promise<Stage | null>>();
+  private warmed = new Set<number>();
+  private current: Stage;
+  private busy = false;
+  private fade = document.createElement('div');
+  private scene: THREE.Scene;
+  private post: Post;
+  private make: (id: number) => Promise<Stage | null>;
+  private warm: () => Promise<void>;
+  private onStage: (s: Stage) => void;
+
+  /**
+   * `make` builds level `id`'s stage (null: there is none to draw, the desert stands in); `warm` compiles what is now
+   * visible (the entered stage's root and everything common: avatars, hands); `onStage` is told the stage now active.
+   */
+  constructor(scene: THREE.Scene, post: Post, desert: Stage, make: (id: number) => Promise<Stage | null>, warm: () => Promise<void>,
+    onStage: (s: Stage) => void) {
+    this.scene = scene;
+    this.post = post;
+    this.make = make;
+    this.warm = warm;
+    this.onStage = onStage;
+    this.current = desert;
+    this.stages.set(desert.level, desert);
+    this.warmed.add(desert.level);
+    const f = this.fade;
+    f.id = 'levelFade';
+    f.style.cssText = `position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:9;transition:opacity ${FADE_MS}ms linear`;
+    document.body.append(f);
+  }
+
+  /** The level being drawn. */
+  get level() {
+    return this.current.level;
+  }
+
+  /** Called every frame with the level the player is in: switches to it if it isn't the one drawn. */
+  follow(id: number) {
+    if (!this.busy && id !== this.current.level) void this.switchTo(id);
+  }
+
+  /** Build level `id`'s stage ahead (near its door), so the switch only has to compile it. */
+  prefetch(id: number) {
+    void this.stage(id);
+  }
+
+  private stage(id: number): Promise<Stage | null> {
+    const have = this.stages.get(id);
+    if (have) return Promise.resolve(have);
+    let p = this.building.get(id);
+    if (!p) {
+      p = this.make(id).then(async (s) => {
+        if (s) {
+          await s.ready;
+          s.root.visible = false;
+          this.scene.add(s.root);
+          this.stages.set(id, s);
+        }
+        return s;
+      });
+      this.building.set(id, p);
+    }
+    return p;
+  }
+
+  private async switchTo(id: number) {
+    this.busy = true;
+    this.drawing = false;
+    this.fade.style.opacity = '1';
+    try {
+      const [next] = await Promise.all([this.stage(id), new Promise((r) => setTimeout(r, FADE_MS))]);
+      const to = next ?? this.stages.get(0)!;
+      if (to !== this.current) {
+        this.current.leave(this.scene);
+        to.enter(this.scene, this.post);
+        this.current = to;
+        this.onStage(to);
+      }
+      if (!this.warmed.has(to.level)) {
+        this.warmed.add(to.level);
+        await this.warm();
+      }
+    } catch (e) {
+      console.error('stage switch failed', e);
+    } finally {
+      // Back in over drawn frames: two more frames under the black, then the fade.
+      this.drawing = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => (this.fade.style.opacity = '0')));
+      this.busy = false;
+    }
+  }
 }

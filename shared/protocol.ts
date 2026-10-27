@@ -30,7 +30,15 @@ export type ClientMsg =
   // canyon). name and color: yours, chosen in character creation on your first join (src/lobby.ts); a name that fails
   // shared/names.ts checkName is refused (closed with 4422), a color that isn't 24-bit RGB keeps the one you had.
   // look: what you wear (shared/look.ts packLook), chosen on the main menu; not a look keeps the plain one.
-  | { t: 'hello'; protocol: number; browserId: string; name: string; color?: number; look?: number; spawn?: 'pod' | 'crash' | 'field' | 'shelter' | 'canyon' }
+  // spawn 'datacenter' (dev, ?spawn=datacenter): once loaded, the server moves you into that level (shared/levels.ts) the
+  // way a door does, so the transition is what gets tested.
+  | { t: 'hello'; protocol: number; browserId: string; name: string; color?: number; look?: number; spawn?: 'pod' | 'crash' | 'field' | 'shelter' | 'canyon' | 'datacenter' }
+  // F at a level's way in (shared/levels.ts entrances) or out (Level.exits): the server checks you are at one and moves
+  // you ('level'), else nothing.
+  | { t: 'enter' }
+  // Debug menu (F3 → Go to level): into level `key` (shared/levels.ts LEVELS) at a spawn, or back out to the desert,
+  // through the same move as a door.
+  | { t: 'debugLevel'; key: string }
   // One per fixed tick: input bitmask + quantized camera yaw and pitch (shared/dig.ts quantizePitch),
   // with an increasing sequence number.
   | { t: 'input'; seq: number; input: number; yaw: number; pitch: number }
@@ -321,6 +329,9 @@ export type ServerMsg =
   /** `bolt`: the guardian's bolt ('shot' id) that killed, which the client draws reaching you before you fall. */
   | { t: 'died'; cause: DeathCause; push?: [number, number, number]; bolt?: number }
   | { t: 'respawn' }
+  // You are somewhere else now: in level `level` (shared/levels.ts), standing as `state`. A teleport (src/net.ts drops
+  // its prediction); the client switches the stage (src/levels/stage.ts) behind a fade.
+  | { t: 'level'; level: number; state: PlayerState }
   // Every sandstorm announced and not yet over (shared/storm.ts; times on the server clock, like snap.time), and every
   // poison gas cloud out (shared/gas.ts). Sent before 'welcome' on join and to everyone whenever a list changes.
   | { t: 'storms'; storms: Storm[]; gas: Gas[]; vortices?: Vortex[]; vortexZero?: number }

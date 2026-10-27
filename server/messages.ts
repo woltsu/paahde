@@ -20,7 +20,7 @@ export function clientMessage(v: unknown): v is ClientMsg {
   const pos = (...keys: string[]) => keys.every((k) => num(m[k]));
   switch (m.t) {
     case 'hello': return optional(m.protocol, int) && str(m.browserId) && typeof m.name === 'string' && m.name.length <= 256 && optional(m.color, int) && optional(m.look, int)
-      && optional(m.spawn, (x) => ['pod', 'crash', 'field', 'shelter', 'canyon'].includes(x as string));
+      && optional(m.spawn, (x) => ['pod', 'crash', 'field', 'shelter', 'canyon', 'datacenter'].includes(x as string));
     case 'input': return int(m.seq, 1) && int(m.input, 0, INPUT_MASK) && int(m.yaw, 0, YAW_STEPS - 1) && int(m.pitch, 0, PITCH_STEPS - 1);
     case 'pickup': return int(m.ix, -1e7, 1e7) && int(m.iz, -1e7, 1e7) && int(m.i, 0, 255);
     case 'tend': return int(m.bed);
@@ -31,7 +31,8 @@ export function clientMessage(v: unknown): v is ClientMsg {
     case 'beaconColor': return int(m.id) && int(m.color, 0, 255);
     case 'craft': return str(m.recipe) && (Object.hasOwn(RECIPES, m.recipe) || Object.hasOwn(HAND_RECIPES, m.recipe));
     case 'setEpoch': return m.epoch === null || num(m.epoch, -8.64e15, 8.64e15);
-    case 'drink': case 'fill': case 'call': case 'debugHit': case 'debugVortexVisit': case 'ready': return true;
+    case 'drink': case 'fill': case 'call': case 'debugHit': case 'debugVortexVisit': case 'ready': case 'enter': return true;
+    case 'debugLevel': return str(m.key) && m.key.length <= 32;
     case 'hands': return int(m.hands, 0, 5) && optional(m.slot, (x) => int(x, -1, 4095)) && optional(m.aim, bool);
     case 'telemetry': return Array.isArray(m.ev) && m.ev.length <= 16 && optional(m.sum, (x) => !!x && typeof x === 'object' && !Array.isArray(x));
     case 'storm': return optional(m.front, bool) && optional(m.gas, bool) && optional(m.vortex, bool);

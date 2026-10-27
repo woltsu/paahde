@@ -99,6 +99,9 @@ const STREAK_STEP = 0.3; // metres per slide-streak segment
 const STREAK_WIDTH = 0.42;
 
 export class Avatar {
+  /** Standing in a level with hard floors (shared/levels.ts `flat`), not on the sand: no prints or spray, concrete steps.
+   *  Set by main.ts from the local player's level (remotes are only ever in the same one). */
+  levelFloor = false;
   readonly root = new THREE.Group();
   /** Remote actors retain movement/sound updates; only their pose work is reduced with distance. */
   remote = false;
@@ -298,7 +301,7 @@ export class Avatar {
     this.root.position.set(pose.x, pose.y, pose.z);
     const power = !!pose.powerSlide && pose.grounded;
     const vx = pose.vx ?? 0, vz = pose.vz ?? 0;
-    const onSand = pose.grounded && Math.abs(pose.y - heightAt(pose.x, pose.z)) < 0.05;
+    const onSand = !this.levelFloor && pose.grounded && Math.abs(pose.y - heightAt(pose.x, pose.z)) < 0.05;
     // Uphill grade along the way you're going (tan; + = climbing), and how fast you're gaining ground up the slope (m/s).
     let climb = 0, upSpeed = 0;
     if (onSand && pose.speed > 0.5 && pose.vx !== undefined) {
@@ -362,7 +365,7 @@ export class Avatar {
     const fx = pose.x + Math.cos(this.facing) * side, fz = pose.z - Math.sin(this.facing) * side;
     // Toes turned out a little; the boot print mirrors per foot.
     if (prints) footprints.add(fx, heightAt(fx, fz), fz, this.facing - this.foot * 0.08, this.size.stride, this.size.stride, this.foot);
-    footsteps.step(fx, fz, pose.speed, indoors(fx, pose.y, fz) ? 'concrete' : 'sand');
+    footsteps.step(fx, fz, pose.speed, this.levelFloor || indoors(fx, pose.y, fz) ? 'concrete' : 'sand');
   }
 
   private animate(pose: ModelPose, dt: number) {

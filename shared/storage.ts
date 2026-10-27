@@ -6,6 +6,7 @@
 // shared/boxes.ts buildingBox), shared too, open within reach of it, to swap its parts. Every player also has their equipment ('equip', shared/gear.ts),
 // always open, and a slot on the workbench ('bench') for the item they are repairing, open beside any workbench. The client lists whatever is open next to the bag in the Tab
 // inventory (src/inventory.ts); the server checks the same thing, with slack, before every move.
+import { level } from './levels.ts';
 import { corpseId, corpsesNear } from './corpse.ts';
 import { boxKind, buildingId, cargoId, storeId, vehicleId, type BoxKind } from './boxes.ts';
 import { EQUIP_SLOTS, isBuilding } from './gear.ts';
@@ -86,6 +87,7 @@ const LABELS: Record<BoxKind, (box: string) => string> = {
 /** Boxes open to a player standing at `s` besides the bag, nearest chest first. */
 export function openBoxes(s: PlayerState, slack = 0): BoxId[] {
   const out: BoxId[] = [];
+  if (!level(s.level).things) return out; // the chests, packs, buildings and bikes are the desert's (shared/levels.ts)
   if (nearStation(s, 'workbench', slack)) out.push('bench');
   // Chests in reach, nearest first.
   const stores = placed.filter((p) => p.kind === CHEST).map((p) => ({ p, d: placedReach(s, p) }))

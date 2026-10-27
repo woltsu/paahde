@@ -111,7 +111,11 @@ import { initializeRenderer, showReload } from './recovery.ts';
 import { LOADING_FRAME_MS, slice } from './yield';
 import { Warmup } from './warmup';
 import { DesertStage } from './levels/desert';
-import type { Stage } from './levels/stage';
+import { StageSwitch, type Stage } from './levels/stage';
+import { level } from '../shared/levels.ts';
+import { datacenterLevel } from '../shared/levels/datacenter.ts';
+import type { Storm } from '../shared/storm.ts';
+import type { Gas } from '../shared/gas.ts';
 import { TEXT } from '../shared/text.ts';
 
 // WebGPURenderer uses WebGPU when available and falls back to WebGL2 otherwise.
@@ -165,6 +169,10 @@ const storm = new StormFx();
 const vortexFx = new VortexFx();
 const vortexSound = new VortexSound();
 const nearVortices: Vortex[] = [];
+/** What a level without weather is fed instead (shared/levels.ts): the volumes then fade to nothing. */
+const NO_STORMS: Storm[] = [];
+const NO_GAS: Gas[] = [];
+const NO_VORTICES: Vortex[] = [];
 const gas = new GasFx();
 await slice();
 machines.busy = () => teardown.current?.id;
@@ -232,7 +240,8 @@ new DebugMenu(() => sky.day.tod, (tod) => net.shareTimeOfDay(tod), () => net.res
   (off) => net.debugWeather(off),
   fly, () => fly.start(orbit.camera, orbit.yaw, orbit.pitch),
   (kind, n, tier) => net.debugGive(kind, n, tier),
-  (working) => net.debugBike(working));
+  (working) => net.debugBike(working),
+  (key) => net.debugLevel(key));
 // The art-style bench (?w=bench, dev only): fixed shots and the look panel (src/artBench.ts).
 const artBench = BENCH ? new ArtBench({ fly, camera: orbit.camera, day: sky.day, post, blownSand, startFly: () => fly.start(orbit.camera, orbit.yaw, orbit.pitch) }) : null;
 new Chat(net);
@@ -412,6 +421,22 @@ const gpuIdle = (): Promise<void> => {
   return queue ? queue.onSubmittedWorkDone() : new Promise((r) => setTimeout(r, 40));
 };
 const warm = new Warmup([scene, orbit.camera], () => post.render(), renderer.backend);
+// Levels (src/levels/stage.ts): when the server puts us in another level (net.me.level changes: a door, a respawn, the
+// debug menu), the view fades to black, the stage is built on the first visit (its materials compiled behind the black,
+// src/warmup.ts) and swapped in, and the view fades back. While it runs nothing is drawn: the last frame stays under the fade.
+const levels = new StageSwitch(scene, post, desert, async (id) => {
+  const { DatacenterStage } = await import('./levels/datacenter/index.ts');
+  return id === datacenterLevel.id ? new DatacenterStage() : null;
+}, async () => {
+  const w = new Warmup([scene, orbit.camera], () => post.render(), renderer.backend);
+  await w.run(gpuIdle);
+}, (s) => (stage = s));
+// Through a door you face the way it leads (the state the server put us in), before the next tick turns us back.
+net.onTeleport = (state) => {
+  orbit.yaw = state.facing;
+  orbit.pitch = 0;
+};
+if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels });
 terrain.loading = true;
 let joined = false; // until the first welcome, net.me is the default spawn, not our saved position
 // ?spawn=crash / field: once joined, turn to face the machine or the scrap field we were put next to.
@@ -477,6 +502,11 @@ renderer.setAnimationLoop((time) => {
   }
 
   const others = net.frame(frameDt);
+  // The level we're in (shared/levels.ts): what of the desert's goes on here is read off its properties.
+  const L = level(net.me.level);
+  if (joined && loaded) levels.follow(net.me.level);
+  me.levelFloor = L.flat;
+  for (const a of remotes.values()) a.levelFloor = L.flat;
   // The gun raised (or just fired), or the spyglass: others see it shouldered, or at the eye (src/models/scavenger.ts).
   const aiming = playerHands.aim > 0.5 || playerHands.looking;
   net.setHands(playerHands.held, playerHands.drinking, playerHands.filling, aiming, playerHands.grinding);
@@ -553,10 +583,12 @@ renderer.setAnimationLoop((time) => {
   const hands = !s.riding && !net.down && !fly.active; // the tools work
   const fire = rifle.update(frameDt, { speed: Math.hypot(s.vx, s.vz), grounded: s.grounded, crouching: !!(s.crouching || s.sliding) }, hands);
   viewCull.begin();
-  lootView.update(frameDt, net.loot, focus);
-  vehicleView.update(vehicles, net.myVehicles, focus, (id) => (id === net.id ? net.me.riding : others.find((o) => o.id === id)?.riding ?? false));
+  if (L.things) {
+    lootView.update(frameDt, net.loot, focus);
+    vehicleView.update(vehicles, net.myVehicles, focus, (id) => (id === net.id ? net.me.riding : others.find((o) => o.id === id)?.riding ?? false));
+  }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
-  corpseView.update(frameDt, focus);
+  if (L.things) corpseView.update(frameDt, focus);
   orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding, heading: v.heading, lean: bikes.get(0)?.leanAngle }, frameDt);
   bossFx.update(net, frameDt, orbit.camera);
   bossBar.update(frameDt, bossFx.bar);
@@ -568,7 +600,7 @@ renderer.setAnimationLoop((time) => {
     fly.update(frameDt, orbit.camera);
     focus.copy(fly.pos);
   }
-  thrower.update(frameDt, hands);
+  thrower.update(frameDt, hands && L.things); // (thrown scrap lands as loot: the desert's, docs/levels.md phase 5)
   mace.update(hands);
   grinder.update(frameDt, hands);
   jammer.update(frameDt, hands && !storm.toolsDown); // dead in a storm's static (storm.update is later: last frame's)
@@ -584,12 +616,12 @@ renderer.setAnimationLoop((time) => {
   zaps.update(frameDt); // after the gun is drawn: your beam starts at its muzzle
   // Before the wind: the storm sets how hard it blows here.
   const belt = equipped(net.boxes.equip, 'belt');
-  storm.update(frameDt, net.storms, net.serverTime(), orbit.camera.position, net.me, belt ? stormWarnS(quality(belt)) : 0, survival.dead || net.down !== null);
+  storm.update(frameDt, L.weather ? net.storms : NO_STORMS, net.serverTime(), orbit.camera.position, net.me, belt ? stormWarnS(quality(belt)) : 0, survival.dead || net.down !== null);
   // The sand vortices near enough to see (shared/vortex.ts: they roam the whole desert).
-  const vortices = vorticesNear(orbit.camera.position.x, orbit.camera.position.z, 5000, net.vortexZero, net.vortices, nearVortices);
+  const vortices = L.weather ? vorticesNear(orbit.camera.position.x, orbit.camera.position.z, 5000, net.vortexZero, net.vortices, nearVortices) : NO_VORTICES;
   vortexFx.update(frameDt, vortices, net.serverTime(), orbit.camera.position);
   vortexSound.update(frameDt, vortices, net.serverTime(), orbit.camera.position, orbit.viewYaw);
-  gas.update(frameDt, net.gas, net.serverTime(), orbit.camera.position, net.me, survival.dead || net.down !== null);
+  gas.update(frameDt, L.weather ? net.gas : NO_GAS, net.serverTime(), orbit.camera.position, net.me, survival.dead || net.down !== null);
   // The locator comes with the wrist computer; a better one shows players further away.
   const wrist = equipped(net.boxes.equip, 'wrist');
   const range = wrist ? locatorRange(quality(wrist)) : 0;
@@ -597,12 +629,13 @@ renderer.setAnimationLoop((time) => {
   locator.bedroll = net.spawn;
   telescope.bedroll = net.spawn;
   survival.toolsDown = storm.toolsDown;
-  locator.update(orbit.camera, orbit.viewYaw, orbit.pitch + orbit.freePitch, focus, [...others.filter((o) => Math.hypot(o.x - focus.x, o.z - focus.z) < range), ...wrecks.targets(focus.x, focus.z), ...corpseTargets(), ...ownVehicleTargets(net.myVehicles, net.color)]);
+  locator.update(orbit.camera, orbit.viewYaw, orbit.pitch + orbit.freePitch, focus, [...others.filter((o) => Math.hypot(o.x - focus.x, o.z - focus.z) < range), ...(L.things ? [...wrecks.targets(focus.x, focus.z), ...corpseTargets(), ...ownVehicleTargets(net.myVehicles, net.color)] : [])]);
   stage.update({ dt: frameDt, time: time / 1000, focus, camera: orbit.camera, worldTime: net.worldTime(), serverTime: net.serverTime() });
+  windSound.setSilent(L.indoors);
   windSound.update(frameDt, orbit.camera.position, orbit.viewYaw, s);
   // Sand hissing under you: a speed slide, or (softer) slipping down a slip face on your feet.
   const ownSpeed = Math.hypot(s.vx, s.vz);
-  slideSound.update(frameDt, !s.grounded || s.riding || net.down ? 0 : s.sliding ? 1 : ownSpeed > 2 && isSlipFace(s.x, s.z) ? 0.5 : 0, ownSpeed);
+  slideSound.update(frameDt, !s.grounded || s.riding || net.down ? 0 : s.sliding ? 1 : ownSpeed > 2 && !L.flat && isSlipFace(s.x, s.z) ? 0.5 : 0, ownSpeed);
   engineSound.update(frameDt, s.riding, s.grounded, Math.hypot(s.vx, s.vz), s.riding && (input & (FORWARD | BACK)) !== 0, s.bike);
   engineSound.updateRemotes(frameDt, others, orbit.camera.position, s);
   drinkSound.remotes(others, orbit.camera.position);
@@ -613,26 +646,30 @@ renderer.setAnimationLoop((time) => {
   audio.setMuffled(survival.dead); // the world goes dull while you lie dead; the music doesn't
   const cam = orbit.camera.position;
   music.update(frameDt, {
-    indoors: indoors(cam.x, cam.y, cam.z),
+    indoors: L.indoors || indoors(cam.x, cam.y, cam.z),
     sandstorm: storm.level > 0.3,
-    epic: guardianFx.epic || bossFx.combat,
-    combat: guardianFx.combat,
+    epic: L.enemies && (guardianFx.epic || bossFx.combat),
+    combat: L.enemies && guardianFx.combat,
     dead: survival.dead,
     // The sun coming up: from 2° under the horizon to 8° over it (about a minute).
     sunrise: sky.day.tod < 0.5 && sky.day.elevation > -0.035 && sky.day.elevation < 0.14,
   });
-  crashSound.update(orbit.camera.position, orbit.viewYaw, orbit.camera.quaternion);
+  if (L.things) crashSound.update(orbit.camera.position, orbit.viewYaw, orbit.camera.quaternion);
   listen(orbit.camera.position);
   tickEchoBus();
-  placedView.update(frameDt, net.worldTime(), (x, z) => stormAt(net.storms, x, z, net.serverTime()), survival.fillingWell);
-  placedView.updateLamps(orbit.camera.position);
+  if (L.things) {
+    placedView.update(frameDt, net.worldTime(), (x, z) => stormAt(net.storms, x, z, net.serverTime()), survival.fillingWell);
+    placedView.updateLamps(orbit.camera.position);
+  }
   const ear = orbit.camera.position;
-  wellSound.update(placedView.nearestWell(ear, 30), ear, survival.fillingWell !== null);
+  wellSound.update(L.things ? placedView.nearestWell(ear, 30) : null, ear, survival.fillingWell !== null);
+  // What F can reach: the desert's stations, beds, scrap, machines, loot, chests, bikes, only where its things are.
+  const here = net.connected && L.things;
   // F: use the work station in view, else tend the plant bed in view (planted beds can't be touched
   // while they grow), else pick up scrap, else (canteen out, at the pump) fill the canteen.
-  const station = net.connected ? stationTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
+  const station = here ? stationTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
   // Placing from the hotbar, building with the wrench and G to pick placed things up (src/placing.ts); its prompt goes after F's.
-  const placing = placer.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), true, (t) => hud.toast(t));
+  const placing = placer.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), L.building, (t) => hud.toast(t));
   // A building in view (the windmill, the battery station): F opens it next to the bag, to swap its parts. At a running
   // well's tap with the water bottle out, F fills the bottle instead (src/water.ts).
   const atTap = playerHands.held === 'canteen' && placing.target?.kind === WELL && !!waterAt(net.me.x, net.me.y, net.me.z);
@@ -644,31 +681,31 @@ renderer.setAnimationLoop((time) => {
   // A motorcycle in view (shared/vehicles.ts): F repairs a broken one (its part slots next to the bag), gets on a
   // working one, or opens its cargo from the back. On the bike, F gets off.
   const onBike = s.riding;
-  const vehicle = net.connected && !net.down && !onBike && !station && !building
+  const vehicle = here && !net.down && !onBike && !station && !building
     ? vehicleTarget(net.me, orbit.yaw, orbit.pitch) : null;
   const ridePrompt = !vehicle ? null : !vehicle.v.up ? TEXT.prompt.repair(itemLabel(vehicle.v.kind))
     : vehicle.rear ? TEXT.prompt.open(TEXT.boxes.cargo) : TEXT.prompt.getOn;
-  const bed = net.connected && !station ? bedTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), placed) : null;
+  const bed = here && !station ? bedTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), placed) : null;
   const bedState = bed ? net.garden.get(bed.id) : undefined;
   const bedStage = bed ? (bedState?.stage ?? EMPTY) : -1;
   const tend = bedStage === EMPTY ? TEXT.prompt.plantSeeds : bedStage === GROWN ? TEXT.prompt.harvest : null;
   // Sprouts grow only under a UV lamp (shared/garden.ts).
   const growing = bedStage === SPROUTS && bed ? (bedLit(bed) ? `<span>${Math.round((bedState?.grow ?? 0) * 100)}%</span>` : `<span class="bad">${TEXT.prompt.needsUvLamp}</span>`) : null;
-  const target = net.connected && !station && !bed ? scrapTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
+  const target = here && !station && !bed ? scrapTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
   // Debris at the crash sites (hull plates, pipes, ...) is picked up as what it gives: scrap or cloth (shared/items.ts debrisItem).
-  const debris = net.connected && !station && !bed && !target ? debrisTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
+  const debris = here && !station && !bed && !target ? debrisTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch)) : null;
   const debrisPrompt = debris ? TEXT.prompt.pickUp(itemLabel(debrisItem(CRASH_KINDS[debris.kind].node))) : null;
-  const find = net.connected && !station && !bed && !target && !debris ? lootView.target(net.me, orbit.yaw) : null;
+  const find = here && !station && !bed && !target && !debris ? lootView.target(net.me, orbit.yaw) : null;
   const findPrompt = find ? lootPrompt(find, itemLabel) : null;
   // Machines at the crash sites: a small one is picked up (it goes in the bag); a large one is taken apart where
   // it lies. A carried one is taken apart on a dismantling bench.
-  const nearSite = net.connected && !station && !bed && !target && !debris && !find ? machines.nearest(net.me.x, net.me.z) : null;
+  const nearSite = here && !station && !bed && !target && !debris && !find ? machines.nearest(net.me.x, net.me.z) : null;
   const small = nearSite ? junkSpec(nearSite.site.kind).carry && !nearSite.site.lab : false;
   // A small one is picked up with F; a big one starts its disassembly by itself when you come close (src/teardown).
   const site = small ? nearSite : null;
   if (nearSite && !small && !teardown.active) teardown.begin(machines.workSite(nearSite, net.siteLink(nearSite.site.id)));
   // A machine on the disassembly table is worked like a big one: it starts by itself when you stand at the table.
-  if (!teardown.active && !benchMenu.isOpen && net.connected) {
+  if (!teardown.active && !benchMenu.isOpen && here) {
     const b = machines.benchNear(net.me.x, net.me.z, 3.5);
     const job = b?.site(net.siteLink(b.id), () => scrapBench(b.id));
     if (job) teardown.begin(job);
@@ -678,17 +715,17 @@ renderer.setAnimationLoop((time) => {
   // Close to a machine that is not being worked (a small one to carry home): its steps and parts, as when working it.
   teardown.setNear(site?.junk ? { label: junkSpec(site.site.kind).label, steps: site.junk.steps.filter((s) => !s.done).length, parts: site.junk.slots.filter((s) => !s.taken).length, scrap: false } : null);
   // Salvage wrecks (src/world/wrecks.ts) are always carried home.
-  const wreck = net.connected && !station && !bed && !target && !debris && !site ? wrecks.nearest(net.me.x, net.me.z) : null;
+  const wreck = here && !station && !bed && !target && !debris && !site ? wrecks.nearest(net.me.x, net.me.z) : null;
   const sitePrompt = site ? (small ? TEXT.prompt.pickUp(junkSpec(site.site.kind).label) : TEXT.prompt.disassemble(junkSpec(site.site.kind).label))
     : wreck ? TEXT.prompt.pickUp(SALVAGE[wreck.kind].label) : null;
   const tableAt = station?.kind === 'disassembly' ? tableId(station.placed) : null;
   const table = tableAt ? machines.tableMenu(tableAt, net.boxes.bag) : null;
   const use = !station ? null : station.kind === 'workbench' ? TEXT.prompt.useWorkbench : TEXT.prompt.useTable;
   // A dead player's pack (shared/corpse.ts) lying here: F opens it next to the bag, like a chest.
-  const pack = net.connected && !net.down && !station && !bed && !target && !debris && !find && !site && !wreck
+  const pack = here && !net.down && !station && !bed && !target && !debris && !find && !site && !wreck
     && corpsesNear(net.me).some((b) => net.boxes[b]);
   // A chest in reach (shared/storage.ts): F opens it next to the bag.
-  const chest = net.connected && !net.down && !station && !bed && !target && !debris && !find && !site && !wreck && !pack
+  const chest = here && !net.down && !station && !bed && !target && !debris && !find && !site && !wreck && !pack
     && openBoxes(net.me).some((b) => b.startsWith('store') && net.boxes[b]);
   const packPrompt = pack ? TEXT.prompt.openPack : chest ? TEXT.prompt.openChest : null;
   // A piece that came off a machine and lies by you can be picked up to be turned and taken apart in the hands; F again sets it down.
@@ -741,10 +778,10 @@ renderer.setAnimationLoop((time) => {
   survival.update(frameDt, net.me, targeted, interact && !targeted, clockText(sky.day.tod));
   const w = net.water;
   const m = net.me;
-  speech.update(frameDt, { day: sky.day.elevation > 0, indoors: indoors(m.x, m.y, m.z), shelter: inShelter(m.x, m.y, m.z),
-    atPump: !!waterAt(m.x, m.y, m.z), dryWell: dryWell(m), mudflat: biome('mudflat', m.x, m.z) > 0.7, heat: survival.heatLevel, rising: w.rising, shade: w.shade, sips: w.sips, maxSips: w.maxSips,
+  speech.update(frameDt, { day: sky.day.elevation > 0, indoors: L.indoors || indoors(m.x, m.y, m.z), shelter: L.things && inShelter(m.x, m.y, m.z),
+    atPump: L.things && !!waterAt(m.x, m.y, m.z), dryWell: L.things ? dryWell(m) : null, mudflat: L.things && biome('mudflat', m.x, m.z) > 0.7, heat: survival.heatLevel, rising: w.rising, shade: w.shade, sips: w.sips, maxSips: w.maxSips,
     storm: storm.level, stormWarning: storm.warning, frontComing: storm.frontComing, choking: storm.choking, lee: storm.lee, gasComing: gas.coming, gassed: gas.gassing, riding: s.riding, boss: bossFx.combat,
-    bag: net.boxes.bag ?? [], dead: survival.dead || net.down !== null, atPod: nearPod(m.x, m.z, 4) });
+    bag: net.boxes.bag ?? [], dead: survival.dead || net.down !== null, atPod: L.things && nearPod(m.x, m.z, 4) });
   const vehicleKey = vehicle ? `${vehicle.v.id}:${vehicle.v.up}` : null;
   if (vehicleKey !== seenVehicle) {
     seenVehicle = vehicleKey;
@@ -777,7 +814,7 @@ renderer.setAnimationLoop((time) => {
     ]);
   }
   teardown.update(frameDt);
-  if (loaded) {
+  if (loaded && levels.drawing) {
     warm.finish();
     terrain.loading = false;
     renderer.info.reset();

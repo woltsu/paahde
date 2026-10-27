@@ -35,11 +35,25 @@ when you find it stale.
   `climate`, `weather`, `enemies`, `building`, `things`), the `LEVELS` registry, `level(id)`; `desertLevel` wraps the
   desert's ground and collisions. `PlayerState.level` (`shared/sim.ts`) says which one a player is in; only the server
   changes it. `players.level`/`y` in the DB
+- `shared/levels/datacenter.ts` — the datacenter's layout (boxes with `use` both/collide/draw, racks, fixtures, zones,
+  spawns, exits; seeded, docs/levels/datacenter.md) and its `Level`; `shared/levels/boxes.ts` — box collision for
+  box-built levels (support, push-out, ceiling, ground) over a 2 m grid. `tools/levels.test.mjs`: spawns clear, exits
+  reachable, walls closed; `tools/server-levels.test.mjs`: the move in and out, interest by level, refused drops
+- Server level gate (`server/world.ts`): `outside`/`hunted` feed weather and the hunters only the players their level
+  lets in; `IN_LEVEL` is what a player in a level without the world's `things` may send; `moveTo` is the one move between
+  levels (a door, `?spawn=datacenter`, F3 → Go to level), told to the client as `'level'`; snapshots by level.
+  `shared/temperature.ts` `felt` for a level's climate
 - `src/levels/stage.ts` — `Stage`: what the client draws for one level, one root per stage in the one scene; the
   active stage owns fog, environment, background and the post profile (`Post.setProfile`, `src/post.ts` `PostProfile`),
-  and its root's lights are the scene's only lights
+  and its root's lights are the scene's only lights. `StageSwitch`: the fade, building on the first visit, the
+  compile behind the black (src/warmup.ts)
 - `src/levels/desert.ts` — the desert stage: sky, terrain, pods, shelters, crash sites, walkers, bosses, loot ...
   built into its root (moved out of `src/main.ts`), and their per-frame updates
+- `src/levels/datacenter/` — the datacenter stage: `index.ts` (boxes merged per material, instanced racks, the pool, its
+  enter/leave), `materials.ts` (procedural TSL concrete, racks with LEDs, strips), `bake.ts` (contact AO and far-light
+  maps), `environment.ts` (environment node, post profile), `ambience.ts` (synthesised fans, hum, units, chatter)
+- `src/levels/lightPool.ts` — a level's fixed light pool (6 `PooledPointLight` + 1 shadowing `PooledSpotLight`,
+  `src/world/pooledLight.ts`) handed to the fixtures nearest the camera, never moved while lit
 
 ## Worlds, server and players
 
