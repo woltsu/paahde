@@ -65,7 +65,8 @@ From the game's code, so changes there show:
 
 - the layout: `coreCrashSites`/`machinesAt` (levels, outposts, machine kinds), `scrapPieces` (scrap and cloth), `wrecksNear`, `sheltersNear`,
   the crashed pods players arrive in (`podSites`, `POD_LOOT`: known from the start, one place; older commits: the crashed
-  ship), home by them; carried machines lying there (the pod's console and power box) are worth what they hold
+  ship), home by them; carried machines lying there (the pod's console and power box) are worth what they hold; what's in
+  `POD_LOOT.once` (the pods' scrap) isn't laid out again once taken
 - what lies where: `shared/lootRoll.ts` (finds, caches, stashes and where they go, kill, jet, harvester and boss drops; the server
   rolls the same functions) on the server's respawn timers
 - what's inside a machine: `machineParts` (site level; carried ones roll again at level 1 on the table, as `server/crash.ts` does),

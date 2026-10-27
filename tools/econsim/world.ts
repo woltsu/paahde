@@ -28,7 +28,7 @@ const ARRIVE: Arrival = podsMod ? { at: podsMod.ARRIVAL, sites: podsMod.podSites
 const rolls = lootRoll as unknown as Record<string, (rand: Rand) => unknown>;
 const arriveFind = (rolls.podFind ?? rolls.shipFind) as (rand: Rand) => Drop;
 const arriveFindSpot = (rolls.podFindSpot ?? rolls.shipFindSpot) as (rand: Rand) => unknown;
-const ARRIVE_LOOT = ((tables as Record<string, unknown>).POD_LOOT ?? (tables as Record<string, unknown>).SHIP_LOOT ?? { n: 0 }) as { n: number };
+const ARRIVE_LOOT = ((tables as Record<string, unknown>).POD_LOOT ?? (tables as Record<string, unknown>).SHIP_LOOT ?? { n: 0 }) as { n: number; once?: string[] };
 
 /** Server timers (server/loot.ts, server/scrap.ts, server/crash.ts, shared/corpse.ts), s. */
 const FIND_BACK = 3 * 60, CACHE_BACK = 60, SCRAP_BACK = 30 * 60, DEBRIS_BACK = 30 * 60, WRECK_BACK = 45 * 60, STARTER_BACK = 20 * 60;
@@ -184,8 +184,9 @@ export class World {
   }
 
   /** Something of the starter kit about the pods (POD_LOOT: server/loot.ts rolls the thing, then its spot). */
-  private spawnPod() {
-    const d = arriveFind(this.rand);
+  private spawnPod(kind?: string) {
+    // Taken, the kit is short of that very thing, and that is what the server lays out again.
+    const d = kind ? { kind } : arriveFind(this.rand);
     arriveFindSpot(this.rand);
     this.pods!.things.push(this.thing(d, 'pod'));
   }
@@ -210,7 +211,8 @@ export class World {
     if (t.src === 'find' || t.src === 'rare find') this.pending.push({ at: now + FIND_BACK, what: 'find', kind: t.src === 'rare find' ? 'rare' : t.kind });
     else if (t.src === 'cache') this.pending.push({ at: now + CACHE_BACK, what: 'cache', kind: '' });
     else if (t.src === 'stash') this.pending.push({ at: now + FIND_BACK, what: 'stash', kind: '' });
-    else if (t.src === 'pod') this.pending.push({ at: now + FIND_BACK, what: 'pod', kind: '' });
+    // What lies about the pods once per world (POD_LOOT.once: their scrap) isn't laid out again.
+    else if (t.src === 'pod' && !ARRIVE_LOOT.once?.includes(t.kind)) this.pending.push({ at: now + FIND_BACK, what: 'pod', kind: t.kind });
   }
 
   /** Bring back what's due, drop what's expired. */
@@ -220,7 +222,7 @@ export class World {
     for (const q of due) {
       if (q.what === 'find') this.spawnFind(q.kind);
       else if (q.what === 'cache') this.spawnCache();
-      else if (q.what === 'pod') this.spawnPod();
+      else if (q.what === 'pod') this.spawnPod(q.kind);
       else {
         // The shelter furthest short of its stashes (shared/lootRoll.ts stashSpot, by counts).
         const s = this.shelters.reduce((a, b) => (b.things.length < a.things.length ? b : a));

@@ -3,7 +3,8 @@
 // ground: shared/crashsites.ts SiteLevel; the motorcycles among FINDS lie there as vehicles: server/vehicles.ts), stashes
 // on the shelters' floors (SHELTER_STASHES), scrap, cloth and the pod's console and power box about the crashed
 // pods players arrive in (POD_LOOT, shared/pods.ts), and caches lying out in the open desert. All shared: the first player to press F
-// takes it. Taken finds and caches come back somewhere else after a while, so there are always some out there.
+// takes it. Taken finds and caches come back somewhere else after a while, so there are always some out there (but not the
+// pods' scrap: POD_LOOT.once).
 // Kept in the DB (`world_loot`, `loot_pending`, written on change), so a restart keeps what was taken. Items
 // players drop are kept in `dropped` and never respawn.
 import { shelterAt, sheltersNear } from '../shared/shelters.ts';
@@ -35,6 +36,10 @@ const POD_KIND = 'pod';
 /** A taken find / cache is replaced this long after (ms). */
 const FIND_RESPAWN_MS = 3 * 60_000;
 const CACHE_RESPAWN_MS = 60_000;
+/** A taken pod kit entry of POD_LOOT.once leaves a pending row (kind `pod:<kit key>`) that is never due: it holds its place
+ *  in the kit's count, so neither the top-up at start nor another pod respawn lays it out again. */
+const NEVER = Number.MAX_SAFE_INTEGER;
+const SPENT = 'pod:';
 
 /** A taken find or cache waiting to come back; id is its loot_pending row. */
 type Spawn = { id: number; at: number; what: 'find' | 'cache'; kind?: string };
@@ -129,7 +134,7 @@ export class LootServer {
       }
       lying.set('', [...this.loot.values()].filter((l) => l.src === 'cache').map((l) => l.id));
       want.set('', CACHES.n);
-      const keyOf = (p: Spawn) => (p.what === 'cache' ? '' : p.kind ?? '');
+      const keyOf = (p: Spawn) => (p.what === 'cache' ? '' : p.kind?.startsWith(SPENT) ? POD_KIND : p.kind ?? '');
       for (const k of new Set([...want.keys(), ...lying.keys(), ...this.pending.map(keyOf)])) {
         let extra = (lying.get(k)?.length ?? 0) + this.pending.filter((p) => keyOf(p) === k).length - (want.get(k) ?? 0);
         for (const p of this.pending.filter((p) => keyOf(p) === k)) {
@@ -193,7 +198,9 @@ export class LootServer {
       return l.kind;
     }
     const key = this.spawnKey.get(l.id) ?? (l.kind in FINDS ? l.kind : RARE_KIND);
-    if (!this.db.tx(() => give(l) && (this.remove(l), this.queue(l.src === 'find' ? 'find' : 'cache', key), true))) return 'full';
+    const kit = podKitKey(l.kind);
+    const spent = key === POD_KIND && (POD_LOOT.once as string[]).includes(kit);
+    if (!this.db.tx(() => give(l) && (this.remove(l), spent ? this.queue('find', SPENT + kit, NEVER) : this.queue(l.src === 'find' ? 'find' : 'cache', key), true))) return 'full';
     return l.kind;
   }
 
@@ -269,8 +276,7 @@ export class LootServer {
   }
 
   /** A taken find (spawn key `kind`) or cache comes back somewhere else after a while. */
-  private queue(what: 'find' | 'cache', kind: string) {
-    const at = Date.now() + (what === 'find' ? FIND_RESPAWN_MS : CACHE_RESPAWN_MS);
+  private queue(what: 'find' | 'cache', kind: string, at = Date.now() + (what === 'find' ? FIND_RESPAWN_MS : CACHE_RESPAWN_MS)) {
     const k = what === 'find' ? kind : null;
     this.pending.push({ id: this.db.insertLootPending(at, what, k), at, what, ...(k ? { kind: k } : {}) });
   }
@@ -294,6 +300,8 @@ export class LootServer {
         const l = k === POD_KIND && this.loot.get(id);
         if (l) lying[podKitKey(l.kind)] = (lying[podKitKey(l.kind)] ?? 0) + 1;
       }
+      // Taken for good (POD_LOOT.once) counts as lying there.
+      for (const p of this.pending) if (p.kind?.startsWith(SPENT)) lying[p.kind.slice(SPENT.length)] = (lying[p.kind.slice(SPENT.length)] ?? 0) + 1;
       return this.place({ id: this.nextId++, ...podFind(Math.random, lying), ...podFindSpot(Math.random), src: 'find' }, POD_KIND);
     }
     // At a crash site of its level, among the debris round the wreck (level 0 now and then at a scrap pile near the start);

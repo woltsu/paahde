@@ -274,13 +274,15 @@ export const HOME_BIKE = { fitted: ['motor'] as PartId[] };
  *  and a bedroll (HAND_TABLE, BUILD_TABLE), and the pod's console and power box
  *  (COMPONENT_LOOT), carried machines whose coils are the first wiring (the workbench's) and whose battery is the first
  *  bike's. The order: wrench, dismantling bench, those two taken apart on it, workbench, bike. Taken, another lies there a
- *  few minutes later: whatever the kit is shortest of. `n` and `contents` (the kit's shares, as odds) are for whoever
+ *  few minutes later: whatever the kit is shortest of, but never one of `once`: the pods' scrap lies there once per world
+ *  (taken, the scrap piles further out are where more is). `n` and `contents` (the kit's shares, as odds) are for whoever
  *  doesn't count what's lying (the economy simulator). */
 const POD_KIT = { scrap: 20, cloth: 7, pod_console: 1, pod_powerbox: 1 };
 export const POD_LOOT = {
   kit: POD_KIT,
   n: Object.values(POD_KIT).reduce((a, b) => a + b, 0),
   contents: POD_KIT as Record<keyof typeof POD_KIT, number>,
+  once: ['scrap'] as (keyof typeof POD_KIT)[],
 };
 
 /** The starter machine thrown out by each pod (shared/pods.ts podSites), relative odds: the scrap fields' starter
