@@ -53,7 +53,9 @@ const lines = (c: F, pitch: number, width: number): F => {
   return mix(line, float((2 * width) / pitch), smoothstep(pitch * 0.2, pitch * 0.5, fwidth(c)));
 };
 
-export function makeMaterials(maps: BakeMaps): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
+/** `stripsOff`: the light strips over z from `z0` up to the uniform `cut` are dark (the beginning's hall going out row by
+ *  row, src/levels/beginning: a uniform, so no shader rebuild). */
+export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
   const bakeUV = (p: V2) => p.sub(vec2(maps.min.x, maps.min.y)).div(vec2(maps.size.x, maps.size.y));
   const bakeAt = (p: V2) => texture(maps.bake, bakeUV(p));
   // The far field: lit by the bake beyond the pool's reach, cross-faded by the surface's own distance from the camera.
@@ -168,7 +170,8 @@ export function makeMaterials(maps: BakeMaps): Record<LevelMat, THREE.MeshStanda
     const flicker = mix(float(1), float(0.2), step(0.97, hash(floor(time.mul(7)).add(seed.mul(100)))));
     const bright = mix(float(1), float(0.6).mul(flicker), tired);
     const under = step(normalLocal.y, -0.5);
-    stripM.emissiveNode = color(0xeef3ff).mul(under).mul(bright).mul(dcLook.strip);
+    const lit = stripsOff ? float(1).sub(step(stripsOff.z0, positionLocal.z).mul(step(positionLocal.z, stripsOff.cut))) : float(1);
+    stripM.emissiveNode = color(0xeef3ff).mul(under).mul(bright).mul(lit).mul(dcLook.strip);
   }
   const downM = std(0x3a3d41, 0.6, 0.3);
   downM.emissiveNode = color(0xeef3ff).mul(step(normalLocal.y, -0.5)).mul(4);

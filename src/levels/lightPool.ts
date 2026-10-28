@@ -39,6 +39,9 @@ export class LightPool {
   readonly lights: THREE.Light[] = [];
   /** × every fixture's intensity (a power cut, later; the bench). */
   scale = 1;
+  /** × each fixture's own intensity, by its index in the layout (the beginning's hall going dark row by row; a flicker):
+   *  a fixture at 0 is never given a slot. Only numbers change, so no shader rebuilds. */
+  readonly weight: Float32Array;
   private pointFixtures: number[] = [];
   private spotFixtures: number[] = [];
   private slots: Slot[] = [];
@@ -52,6 +55,7 @@ export class LightPool {
     fixtures.forEach((f, i) => (f.kind === 'point' ? this.pointFixtures : this.spotFixtures).push(i));
     this.score = new Float32Array(fixtures.length);
     this.target = new Float32Array(fixtures.length);
+    this.weight = new Float32Array(fixtures.length).fill(1);
     for (let i = 0; i < POINT_SLOTS; i++) {
       const l = new PooledPointLight(0xffffff, 0, 9, 1.5);
       l.castShadow = false;
@@ -81,7 +85,7 @@ export class LightPool {
       const p = f[i].pos;
       const d = Math.hypot(cam.x - p[0], cam.y - p[1], cam.z - p[2]) + (zone !== null && f[i].zone !== zone ? ZONE_PENALTY : 0);
       this.score[i] = d;
-      this.target[i] = 1 - THREE.MathUtils.smoothstep(d, FADE_IN, FADE_OUT);
+      this.target[i] = this.weight[i] > 0 ? 1 - THREE.MathUtils.smoothstep(d, FADE_IN, FADE_OUT) : 0;
     }
     this.assign(this.slots, this.pointFixtures, dt);
     this.assign([this.spotSlot], this.spotFixtures, dt);
@@ -116,7 +120,7 @@ export class LightPool {
       if (worst && this.score[i] + HYSTERESIS < this.score[worst.fixture]) worst.drain = true;
       break;
     }
-    for (const s of slots) s.light.intensity = s.fixture < 0 ? 0 : this.fixtures[s.fixture].intensity * s.w * this.scale;
+    for (const s of slots) s.light.intensity = s.fixture < 0 ? 0 : this.fixtures[s.fixture].intensity * s.w * this.weight[s.fixture] * this.scale;
   }
 
   /** Move a drained slot's light to its new fixture (it is at zero: nothing pops). */

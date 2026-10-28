@@ -28,6 +28,9 @@ export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 
 export const PLAYER_HEIGHT = 1.8; // y is the player's feet
+/** Crouched or sliding in a level built for it (Level.crouchUnder): short enough to pass under a fallen tray or a blast
+ *  door's edge. Elsewhere you stay PLAYER_HEIGHT tall whatever you do (the desert's solids are made for it). */
+export const CROUCH_HEIGHT = 1.0;
 /** Horizontal collision radius against scrap (shared/scrap.ts). */
 export const PLAYER_RADIUS = 0.35;
 /** Scrap whose top is at most this far above the feet is stepped onto instead of blocking. */
@@ -120,6 +123,9 @@ export type PlayerState = {
   nose: number; // the bike's pitch (rad, + = nose up): along the sand on the ground, steered by throttle/brake in the air
   noseSpin: number; // how fast it is pitching (rad/s), in the air
   level: LevelId; // the level they are in (shared/levels.ts): 0 the desert. Only the server changes it, never step()
+  /** A bit per door or obstacle the server has opened in this level (its gated solids, shared/levels/boxes.ts): read by its
+   *  collision, so step() stays a function of state and input. Only the server sets bits; 0 again on any level change. */
+  gates: number;
 };
 
 // Input is a bitmask so it is tiny on the wire and trivially comparable.
@@ -150,7 +156,7 @@ export function spawnState(x = spawnPoint().x, z = spawnPoint().z, y = heightAt(
     x, y, z, vx: 0, vy: 0, vz: 0, facing,
     grounded: true, airJumps: AIR_JUMPS, jumpHeld: false, landTicks: 0,
     sliding: false, crouching: false, slideCool: 0, slideSpent: false, riding: false, bikeHeld: false, heading: 0, bike: 0,
-    nose: 0, noseSpin: 0, level: lvl,
+    nose: 0, noseSpin: 0, level: lvl, gates: 0,
   };
 }
 
@@ -294,7 +300,11 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     vx = ux * boosted;
     vz = uz * boosted;
   }
-  const crouching = (input & CROUCH) !== 0 && s.grounded && !sliding;
+  const gates = s.gates ?? 0;
+  // Where a crouch makes you short (Level.crouchUnder): no room to stand over you keeps you crouched.
+  const cramped = L.crouchUnder && L.ceiling(s.x, s.z, s.y, CROUCH_HEIGHT, PLAYER_RADIUS, gates) + CROUCH_HEIGHT < s.y + PLAYER_HEIGHT;
+  const crouching = ((input & CROUCH) !== 0 || cramped) && s.grounded && !sliding;
+  const height = L.crouchUnder && ((input & CROUCH) !== 0 || sliding || cramped) ? CROUCH_HEIGHT : PLAYER_HEIGHT;
   if (crouching) speed = Math.min(speed, CROUCH_SPEED);
   if (sliding) {
     vx += airX * DT;
@@ -386,16 +396,16 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   c.z = s.z + vz * DT;
   c.vx = vx;
   c.vz = vz;
-  const top = L.collide(c, y, s.y, PLAYER_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z);
+  const top = L.collide(c, y, s.y, PLAYER_RADIUS, height, STEP_UP, s.x, s.z, gates);
   if (legs.length) collideLegs(c, y, PLAYER_RADIUS, legs);
   if (!L.flat) blockRock(c, s.x, s.z, Math.max(y, s.y));
   vx = c.vx;
   vz = c.vz;
   const x = c.x;
   const z = c.z;
-  const ground = Math.max(L.ground(x, z, s.y), top);
+  const ground = Math.max(L.ground(x, z, s.y, gates), top);
   // Under the roof: bump your head.
-  const ceiling = L.ceiling(x, z, s.y, PLAYER_HEIGHT, PLAYER_RADIUS);
+  const ceiling = L.ceiling(x, z, s.y, height, PLAYER_RADIUS, gates);
   if (y > ceiling) {
     y = ceiling;
     if (vy > 0) vy = 0;
@@ -419,10 +429,10 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
 
   if (grounded) airJumps = AIR_JUMPS;
   // Out of a level's bounds (through a gap, or put there): back at its first spawn.
-  if (L.bounds && !inBox(L.bounds, x, y, z)) return levelSpawn(L.id);
+  if (L.bounds && !inBox(L.bounds, x, y, z)) return { ...levelSpawn(L.id), gates };
   return {
     x, y, z, vx, vy, vz, facing, grounded, airJumps, jumpHeld: jumpDown, landTicks, sliding, crouching, slideCool,
-    slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0, level: s.level,
+    slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0, level: s.level, gates,
   };
 }
 
@@ -541,14 +551,14 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
   c.vx = vx;
   c.vz = vz;
   const airborneY = s.y + (vy + GRAVITY * DT) * DT;
-  const solidTop = L.collide(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z);
+  const solidTop = L.collide(c, airborneY, s.y, BIKE_RADIUS, PLAYER_HEIGHT, STEP_UP, s.x, s.z, s.gates ?? 0);
   if (legs.length) collideLegs(c, airborneY, BIKE_RADIUS, legs);
   if (!L.flat) blockRock(c, s.x, s.z, Math.max(airborneY, s.y), BIKE_WALL_TAN);
   vx = c.vx;
   vz = c.vz;
   const x = c.x;
   const z = c.z;
-  const ground = Math.max(L.ground(x, z, s.y), solidTop);
+  const ground = Math.max(L.ground(x, z, s.y, s.gates ?? 0), solidTop);
   const hs = Math.hypot(vx, vz);
 
   let y: number;
@@ -601,7 +611,7 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
     nose = Math.atan(g.gx * nfx + g.gz * nfz);
     noseSpin = 0;
   }
-  const ceiling = L.ceiling(x, z, s.y, PLAYER_HEIGHT, BIKE_RADIUS);
+  const ceiling = L.ceiling(x, z, s.y, PLAYER_HEIGHT, BIKE_RADIUS, s.gates ?? 0);
   if (y > ceiling) {
     y = ceiling;
     if (vy > 0) vy = 0;
@@ -610,7 +620,7 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
   return {
     x, y, z, vx, vy, vz, facing: h, grounded, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks,
     sliding: false, crouching: false, slideCool: s.slideCool, slideSpent: s.slideSpent, riding: true, bikeHeld: bikeDown, heading: h, bike: s.bike,
-    nose, noseSpin, level: s.level,
+    nose, noseSpin, level: s.level, gates: s.gates ?? 0,
   };
 }
 

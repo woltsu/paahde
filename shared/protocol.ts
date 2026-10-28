@@ -20,7 +20,7 @@ import type { BossKind, BossSnap } from './bosses.ts';
 import type { ChunkData, PlayerAppearance, PlayerPose } from './network.ts';
 
 /** Wire/schema compatibility, independent of the build SHA. Bump when old clients cannot safely play. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export type ClientMsg =
   // First message after connecting. browserId is a random UUID kept in localStorage.
@@ -32,7 +32,7 @@ export type ClientMsg =
   // look: what you wear (shared/look.ts packLook), chosen on the main menu; not a look keeps the plain one.
   // spawn 'datacenter' (dev, ?spawn=datacenter): once loaded, the server moves you into that level (shared/levels.ts) the
   // way a door does, so the transition is what gets tested.
-  | { t: 'hello'; protocol: number; browserId: string; name: string; color?: number; look?: number; spawn?: 'pod' | 'crash' | 'field' | 'shelter' | 'canyon' | 'datacenter' }
+  | { t: 'hello'; protocol: number; browserId: string; name: string; color?: number; look?: number; spawn?: 'pod' | 'crash' | 'field' | 'shelter' | 'canyon' | 'datacenter' | 'beginning' }
   // F at a level's way in (shared/levels.ts entrances) or out (Level.exits): the server checks you are at one and moves
   // you ('level'), else nothing.
   | { t: 'enter' }

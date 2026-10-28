@@ -5,7 +5,7 @@
 //   every point fixture inside its range, blocked by what stands between: what the light pool doesn't light any more)
 // - tiles (one byte per 0.6 m floor tile, nearest): 255 (1 to the shader) where a tile is perforated (the cold aisles).
 import * as THREE from 'three/webgpu';
-import type { LevelLayout } from '../../../shared/levels/datacenter.ts';
+import type { LevelLayout as Layout } from '../../../shared/levels/datacenter.ts';
 
 export const TEXEL = 0.1;
 export const TILE = 0.6;
@@ -13,7 +13,7 @@ export const TILE = 0.6;
 export type BakeData = { nx: number; nz: number; x0: number; z0: number; ao: Float32Array; ceil: Float32Array; far: Float32Array; tiles: Uint8Array; tnx: number; tnz: number };
 
 /** The maps as numbers (pure: tools can check them in Node). */
-export function bakeData(L: LevelLayout): BakeData {
+export function bakeData(L: Layout<string>): BakeData {
   const steps = bakeSteps(L);
   for (;;) {
     const r = steps.next();
@@ -22,7 +22,7 @@ export function bakeData(L: LevelLayout): BakeData {
 }
 
 /** The same, giving the page a turn every few ms (built ahead while walking up to the door: no 60 ms frame). */
-export async function bakeDataSliced(L: LevelLayout, budgetMs = 4): Promise<BakeData> {
+export async function bakeDataSliced(L: Layout<string>, budgetMs = 4): Promise<BakeData> {
   const steps = bakeSteps(L);
   let since = performance.now();
   for (;;) {
@@ -36,7 +36,7 @@ export async function bakeDataSliced(L: LevelLayout, budgetMs = 4): Promise<Bake
 }
 
 /** The work, in steps (each yield is a place to pause). */
-function* bakeSteps(L: LevelLayout): Generator<void, BakeData> {
+function* bakeSteps(L: Layout<string>): Generator<void, BakeData> {
   const [x0, x1, , , z0, z1] = L.bounds;
   const nx = Math.ceil((x1 - x0) / TEXEL), nz = Math.ceil((z1 - z0) / TEXEL);
   const solid = L.boxes.filter((b) => b.use !== 'draw');
@@ -150,7 +150,7 @@ function blur(m: Float32Array, nx: number, nz: number, r: number) {
 export type BakeMaps = { bake: THREE.DataTexture; tiles: THREE.DataTexture; min: THREE.Vector2; size: THREE.Vector2; tileSize: THREE.Vector2 };
 
 /** The maps as textures, sampled at (xz - min) / size. */
-export function bakeMaps(L: LevelLayout, d: BakeData = bakeData(L)): BakeMaps {
+export function bakeMaps(L: Layout<string>, d: BakeData = bakeData(L)): BakeMaps {
   const rgba = new Uint16Array(d.nx * d.nz * 4);
   for (let k = 0; k < d.nx * d.nz; k++) {
     rgba[k * 4] = THREE.DataUtils.toHalfFloat(d.ao[k]);

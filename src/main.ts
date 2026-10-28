@@ -116,6 +116,7 @@ import { doorAt, level } from '../shared/levels.ts';
 import { setGround } from './ground.ts';
 import { BED, buildBed } from './levels/datacenter/ambience';
 import { datacenterLevel } from '../shared/levels/datacenter.ts';
+import { beginningLevel } from '../shared/levels/beginning.ts';
 import type { Storm } from '../shared/storm.ts';
 import type { Gas } from '../shared/gas.ts';
 import { TEXT } from '../shared/text.ts';
@@ -427,6 +428,10 @@ const warm = new Warmup([scene, orbit.camera], () => post.render(), renderer.bac
 // debug menu), the view fades to black, the stage is built on the first visit (its materials compiled behind the black,
 // src/warmup.ts) and swapped in, and the view fades back. While it runs nothing is drawn: the last frame stays under the fade.
 const levels = new StageSwitch(scene, post, desert, async (id) => {
+  if (id === beginningLevel.id) {
+    const { BeginningStage } = await import('./levels/beginning/index.ts');
+    return BeginningStage.build();
+  }
   if (id !== datacenterLevel.id) return null;
   const { DatacenterStage } = await import('./levels/datacenter/index.ts');
   return DatacenterStage.build(); // (a slice at a time: it may be built ahead while walking up to its door)
@@ -640,7 +645,7 @@ renderer.setAnimationLoop((time) => {
   // drawn one isn't: the desert mustn't stream terrain round the datacenter's x, z, nor the other way round).
   sky.tickClock(frameDt, net.worldTime());
   wind.update(net.serverTime() / 1000);
-  if (stage.level === net.me.level) stage.update({ dt: frameDt, time: time / 1000, focus, camera: orbit.camera, worldTime: net.worldTime(), serverTime: net.serverTime() });
+  if (stage.level === net.me.level) stage.update({ dt: frameDt, time: time / 1000, focus, camera: orbit.camera, worldTime: net.worldTime(), serverTime: net.serverTime(), me: net.me });
   windSound.setSilent(L.indoors);
   windSound.update(frameDt, orbit.camera.position, orbit.viewYaw, s);
   // Sand hissing under you: a speed slide, or (softer) slipping down a slip face on your feet.

@@ -7,9 +7,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DESERT, LEVELS, doorAt, inBox } from '../shared/levels.ts';
 import { DATACENTER } from '../shared/levels/datacenter.ts';
+import { BEGINNING } from '../shared/levels/beginning.ts';
 import { DT, FORWARD, JUMP, PLAYER_HEIGHT, PLAYER_RADIUS, STEP_UP, quantizeYaw, spawnState, step } from '../shared/sim.ts';
 
-const LAYOUTS = { datacenter: DATACENTER };
+const LAYOUTS = { datacenter: DATACENTER, beginning: BEGINNING };
 const GRID = 0.25;
 /** The server's slack round a door's trigger (server/world.ts EXIT_SLACK). */
 const DOOR_SLACK = 0.6;
@@ -48,7 +49,9 @@ for (const L of LEVELS.filter((l) => l.id !== DESERT)) {
     }
   });
 
-  test(`${L.key}: every door is reachable from a spawn, and the walls are closed`, () => {
+  // (The beginning's way asks for crouches, jumps and an air jump a floor grid can't walk, past doors the server opens:
+  // tools/beginning.test.mjs walks it with step().)
+  if (!L.crouchUnder) test(`${L.key}: every door is reachable from a spawn, and the walls are closed`, () => {
     const b = L.bounds, pad = 2;
     const x0 = b[0] - pad, z0 = b[4] - pad;
     const nx = Math.ceil((b[1] - b[0] + 2 * pad) / GRID), nz = Math.ceil((b[5] - b[4] + 2 * pad) / GRID);

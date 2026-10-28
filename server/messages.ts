@@ -20,7 +20,7 @@ export function clientMessage(v: unknown): v is ClientMsg {
   const pos = (...keys: string[]) => keys.every((k) => num(m[k]));
   switch (m.t) {
     case 'hello': return optional(m.protocol, int) && str(m.browserId) && typeof m.name === 'string' && m.name.length <= 256 && optional(m.color, int) && optional(m.look, int)
-      && optional(m.spawn, (x) => ['pod', 'crash', 'field', 'shelter', 'canyon', 'datacenter'].includes(x as string));
+      && optional(m.spawn, (x) => ['pod', 'crash', 'field', 'shelter', 'canyon', 'datacenter', 'beginning'].includes(x as string));
     case 'input': return int(m.seq, 1) && int(m.input, 0, INPUT_MASK) && int(m.yaw, 0, YAW_STEPS - 1) && int(m.pitch, 0, PITCH_STEPS - 1);
     case 'pickup': return int(m.ix, -1e7, 1e7) && int(m.iz, -1e7, 1e7) && int(m.i, 0, 255);
     case 'tend': return int(m.bed);

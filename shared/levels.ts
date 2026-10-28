@@ -16,6 +16,7 @@ import { collideScrap } from './scrap.ts';
 import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
 import { datacenterLevel } from './levels/datacenter.ts';
+import { beginningLevel } from './levels/beginning.ts';
 import { collideEntrance, entrance } from './levels/entrance.ts';
 
 export const DESERT = 0;
@@ -40,20 +41,19 @@ export type Level = {
   id: LevelId;
   /** 'desert', 'datacenter': for URLs (?spawn=), the debug menu and logs. */
   key: string;
-  /** Ground under feet that were at prevY, at (x, z); -Infinity for none. */
-  ground(x: number, z: number, prevY: number): number;
+  /** Ground under feet that were at prevY, at (x, z); -Infinity for none. `gates`: the mover's PlayerState.gates (a level's
+   *  gated solids, below; 0 where it is not a player's: every door shut). */
+  ground(x: number, z: number, prevY: number, gates?: number): number;
   /** Push a mover out of the level's solids (it may stand on the low ones): the highest support top, or -Infinity.
    *  (prevX, prevZ): where it was a tick ago. */
-  collide(c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number, prevX: number, prevZ: number): number;
+  collide(c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number, prevX: number, prevZ: number, gates?: number): number;
   /** Lowest ceiling over (x, z) for a mover of this height (jumping into a roof). */
-  ceiling(x: number, z: number, prevY: number, height: number, radius: number): number;
+  ceiling(x: number, z: number, prevY: number, height: number, radius: number, gates?: number): number;
   /** Hard flat floors: no sand slopes, slip faces or rock walls in the sim (shared/sim.ts reads the terrain only when not). */
   flat: boolean;
   /** Nothing in the level leaves this: a mover outside it is put back at the first spawn. Null: no bounds (the desert). */
   bounds: Box | null;
   spawns: readonly LevelPoint[];
-  /** Ways out: F in one of these boxes takes you back out to the desert, at the entrance you came in by (server/world.ts;
-   *  docs/levels.md had each exit name its destination, but the entrance is placed per world, so the server pairs them). */
   /** Its doors (computed on first use: the desert's is placed from the world seed). */
   doors(): readonly LevelDoor[];
   /** A roof overhead everywhere: music, speech, hand shade, no wind (its own reverb: not yet, docs/levels.md). */
@@ -69,6 +69,13 @@ export type Level = {
   /** The world's things lie here: scrap, crash sites, loot, packs, chests, buildings, vehicles (the desert's layout and the
    *  tables of things lying about, which have no level yet: docs/levels.md phase 5). */
   things: boolean;
+  /** One for each player: nobody else is ever seen in it, and nobody outside sees who is in it (server/world.ts interest). */
+  private: boolean;
+  /** Things can hurt and kill you here (server/world.ts hurt and die refuse in a level without). */
+  mortal: boolean;
+  /** Crouched or sliding you are CROUCH_HEIGHT tall (shared/sim.ts), short enough to pass under its low things, and stay
+   *  crouched while there is no room to stand. The desert's solids are built for a standing height: there you never are. */
+  crouchUnder: boolean;
 };
 
 /** The sand's height as ground for feet that were at `prevY`: none inside a shelter's entrance and rooms. */
@@ -103,6 +110,9 @@ export const desertLevel: Level = {
   enemies: true,
   building: true,
   things: true,
+  private: false,
+  mortal: true,
+  crouchUnder: false,
 };
 
 let desertDoors: LevelDoor[] | null = null;
@@ -113,7 +123,7 @@ function entranceDoors(): readonly LevelDoor[] {
   return (desertDoors = [{ trigger: e.trigger, to: datacenterLevel.id, arrive: e.out }]);
 }
 
-export const LEVELS: readonly Level[] = [desertLevel, datacenterLevel];
+export const LEVELS: readonly Level[] = [desertLevel, datacenterLevel, beginningLevel];
 
 /** The door of `from` that `s` stands at (within `slack` m of its trigger), or undefined. */
 export function doorAt(from: Level, x: number, y: number, z: number, slack = 0): LevelDoor | undefined {

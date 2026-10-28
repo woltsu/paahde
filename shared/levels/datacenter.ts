@@ -13,10 +13,11 @@ export type LevelMat = 'floor' | 'wall' | 'pillar' | 'ceiling' | 'steel' | 'tray
   | 'door' | 'strip' | 'downlight' | 'emergency' | 'paint' | 'hazard' | 'rack';
 /** 'both': collides and is drawn; 'collide': collision only (the rack runs: the instanced racks draw them); 'draw': visual only. */
 export type BoxUse = 'both' | 'collide' | 'draw';
-export type LevelBox = { b: Box; mat: LevelMat; zone: ZoneId; use: BoxUse };
+/** `gate`: a gated solid (shared/levels/boxes.ts BoxGrid.gate): its mask of PlayerState.gates bits, < 0 for one that shuts. */
+export type LevelBox<Z extends string = ZoneId> = { b: Box; mat: LevelMat; zone: Z; use: BoxUse; gate?: number };
 /** One rack: bottom-centre position; face +1 = front towards +z. Variant 0 perforated, 1 glass, 2 network. */
 export type Rack = { x: number; z: number; face: 1 | -1; variant: 0 | 1 | 2 };
-export type Fixture = {
+export type Fixture<Z extends string = ZoneId> = {
   kind: 'point' | 'spot';
   role: 'main' | 'emergency';
   pos: Vec3;
@@ -28,18 +29,19 @@ export type Fixture = {
   range: number;
   decay: number;
   castsShadow: boolean;
-  zone: ZoneId;
+  zone: Z;
 };
-export type LevelLayout = {
-  id: 'datacenter';
+/** A level built of boxes (the datacenter, the beginning: shared/levels/beginning.ts), its zones `Z`. */
+export type LevelLayout<Z extends string = ZoneId> = {
+  id: string;
   bounds: Box;
   /** Interiors, for "which zone am I in" (fixture scoring, audio). */
-  zones: Record<ZoneId, Box>;
+  zones: Record<Z, Box>;
   /** Each zone's ceiling height (the walls' contact shade). */
-  ceilings: Record<ZoneId, number>;
-  boxes: LevelBox[];
+  ceilings: Record<Z, number>;
+  boxes: LevelBox<Z>[];
   racks: Rack[];
-  fixtures: Fixture[];
+  fixtures: Fixture<Z>[];
   spawns: LevelPoint[];
   /** Trigger volumes in front of the exit door: F in one leaves (server/world.ts). */
   exits: Box[];
@@ -201,8 +203,8 @@ export function datacenterLayout(seed = 1): LevelLayout {
 export const DATACENTER = datacenterLayout(1);
 
 /** Which zone (x, z) is in, or null in a doorway or outside. */
-export function zoneAt(L: LevelLayout, x: number, z: number): ZoneId | null {
-  for (const id of ['hall', 'vestibule', 'ups'] as const) {
+export function zoneAt<Z extends string>(L: LevelLayout<Z>, x: number, z: number): Z | null {
+  for (const id of Object.keys(L.zones) as Z[]) {
     const b = L.zones[id];
     if (x >= b[0] && x <= b[1] && z >= b[4] && z <= b[5]) return id;
   }
@@ -233,4 +235,7 @@ export const datacenterLevel: Level = {
   enemies: false,
   building: false,
   things: false,
+  private: false,
+  mortal: true,
+  crouchUnder: false,
 };

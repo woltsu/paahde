@@ -22,7 +22,7 @@ const PART_SIZES: Partial<Record<PartId, Size>> = { battery: [1, 2], motor: [2, 
  * `size`: [w, h] grid cells it takes, 1 × 1 if not given. Keep the smaller side at most MAX_SIDE.
  * Gear (shared/gear.ts: the water bottle, telescope, motorcycle, ...) is found broken and repaired with parts.
  */
-export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; size?: Size }> = {
+export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; size?: Size; levelOnly?: string }> = {
   canteen: { label: TEXT.items.canteen, stack: 1, size: [1, 2] },
   spyglass: { label: TEXT.items.spyglass, stack: 1, size: [2, 1] },
   motorcycle: { label: TEXT.items.motorcycle, stack: 1, size: [4, 2] },
@@ -81,6 +81,9 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   trophy_queen: { label: TEXT.items.trophy_queen, stack: 1 },
   // The build tool (crafted by hand): with it in hand, the right mouse opens the build menu (src/buildMenu.ts).
   wrench: { label: TEXT.items.wrench, stack: 1 },
+  // The beginning's relay (shared/levels/beginning.ts, server/tutorial.ts): out of its dead cabinet, into the pod's panel.
+  // Of that level only (`levelOnly`: its key): never in a loot table, taken back on leaving it.
+  tut_relay: { label: TEXT.parts.relay, stack: 1, levelOnly: 'beginning' },
   // A two-handed club of scrap (crafted by hand): swung at crawlers (shared/mace.ts).
   scrap_mace: { label: TEXT.items.scrap_mace, stack: 1, size: [1, 3] },
   // The guns (shared/rifle.ts) and the jammer are gear: found broken, repaired at the workbench.
@@ -515,3 +518,6 @@ export function settle(slots: Slots, shape: Shape, grow = false): boolean {
   for (let i = 0; i < s.length; i++) slots[i] = s[i];
   return homeless.length > 0;
 }
+
+/** The item kinds that belong to level `key` (ITEMS levelOnly): they never leave it. */
+export const levelOnlyItems = (key: string) => Object.keys(ITEMS).filter((k) => ITEMS[k].levelOnly === key);

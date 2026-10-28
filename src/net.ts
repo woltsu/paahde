@@ -713,7 +713,7 @@ export class Net {
       // shelter or canyon floor (only on the first join; a reconnect keeps where you are).
       const spawn = this.joinedOnce ? null : new URLSearchParams(location.search).get('spawn');
       const me = { t: 'hello', protocol: PROTOCOL_VERSION, browserId: this.browserId, name: myName(), color: myColor(), look: myLook() } as const;
-      this.send(spawn === 'pod' || spawn === 'crash' || spawn === 'field' || spawn === 'shelter' || spawn === 'canyon' || spawn === 'datacenter' ? { ...me, spawn } : me);
+      this.send(spawn === 'pod' || spawn === 'crash' || spawn === 'field' || spawn === 'shelter' || spawn === 'canyon' || spawn === 'datacenter' || spawn === 'beginning' ? { ...me, spawn } : me);
     };
     ws.onmessage = (e) => this.onMessage(JSON.parse(e.data) as ServerMsg);
     ws.onclose = (e) => {
@@ -997,7 +997,7 @@ export class Net {
       grounded: server.grounded, airJumps: server.airJumps, jumpHeld: server.jumpHeld, landTicks: server.landTicks,
       sliding: server.sliding, crouching: server.crouching, slideCool: server.slideCool, slideSpent: server.slideSpent,
       riding: server.riding, bikeHeld: server.bikeHeld, heading: server.heading, bike: server.bike,
-      nose: server.nose ?? 0, noseSpin: server.noseSpin ?? 0, level: server.level ?? 0,
+      nose: server.nose ?? 0, noseSpin: server.noseSpin ?? 0, level: server.level ?? 0, gates: server.gates ?? 0,
     };
     for (const p of this.pending) s = step(s, p.input, p.yaw, p.drag, this.legPosts, p.pull);
     this.errorX += this.me.x - s.x;

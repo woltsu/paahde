@@ -49,6 +49,7 @@ import { PowerServer } from './power.ts';
 import { WireServer } from './wires.ts';
 import { ItemServer } from './items.ts';
 import { grantKits } from './grants.ts';
+import { tickTriggers } from './tutorial.ts';
 import { LootServer } from './loot.ts';
 import { CorpseServer } from './corpses.ts';
 import { canDropAt } from '../shared/loot.ts';
@@ -1367,7 +1368,7 @@ function simulate(p: Player, now: number) {
   const drag = L.weather ? stormDrag(storms.storms, p.state.x, p.state.y, p.state.z, now) : 0;
   const pull = L.weather ? vortexPull(storms.vorticesNear(p.state.x, p.state.z, 500, nearScratch), p.state.x, p.state.y, p.state.z, now, { x: 0, z: 0 }) : NO_PULL;
   const before = p.state;
-  p.state = step(p.state, p.input, p.yaw, drag, L.enemies ? guardians.posts : NO_LEGS, pull);
+  p.state = tickTriggers(step(p.state, p.input, p.yaw, drag, L.enemies ? guardians.posts : NO_LEGS, pull));
   offBike(p, before);
   if (L.things) crash.push(p.state, p.input, yawFromQ(p.yaw)); // push expects radians, not the wire's quantized angle
 }

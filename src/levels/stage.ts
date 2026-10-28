@@ -4,6 +4,7 @@
 // avatars, hands and held items (in the scene itself, common to every stage) are lit by whatever level they are in.
 import type * as THREE from 'three/webgpu';
 import type { Post } from '../post.ts';
+import type { PlayerState } from '../../shared/sim.ts';
 
 export type { PostProfile } from '../post.ts';
 
@@ -19,6 +20,8 @@ export type StageFrame = {
   worldTime: number;
   /** The server's clock (Net.serverTime, ms). */
   serverTime: number;
+  /** The local player as predicted (src/net.ts me): a level's gates and where they stand. */
+  me: PlayerState;
 };
 
 export interface Stage {

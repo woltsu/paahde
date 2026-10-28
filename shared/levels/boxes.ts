@@ -17,10 +17,20 @@ export type BoxGrid = {
   /** Per box, the last query that met it (dedupes boxes spanning several cells without a Set). */
   stamp: Int32Array;
   query: number;
+  /** Gated solids (docs/levels/tutorial.md): per box a mask of PlayerState.gates bits, or null when none is gated. 0: always
+   *  solid; m > 0: solid while those bits are clear (a door, open once the server sets its bit); m < 0: solid only once the
+   *  bits of -m are set (a door that shuts behind you). */
+  gate: Int32Array | null;
 };
 
-/** Bucket `boxes` by the `cell`-sized squares their footprints overlap. */
-export function boxGrid(boxes: readonly Box[], cell = 2): BoxGrid {
+/** Is box i of `g` out of the way for a mover with these gates? */
+export const gatedOff = (g: BoxGrid, i: number, gates: number) => {
+  const m = g.gate === null ? 0 : g.gate[i];
+  return m !== 0 && (m > 0 ? (gates & m) !== 0 : (gates & -m) === 0);
+};
+
+/** Bucket `boxes` by the `cell`-sized squares their footprints overlap; `gate`: each box's gate mask (BoxGrid.gate). */
+export function boxGrid(boxes: readonly Box[], cell = 2, gate: readonly number[] | null = null): BoxGrid {
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const b of boxes) {
     x0 = Math.min(x0, b[0]); x1 = Math.max(x1, b[1]);
@@ -34,7 +44,8 @@ export function boxGrid(boxes: readonly Box[], cell = 2): BoxGrid {
     const ja = clampI(Math.floor((b[4] - z0) / cell), nz), jb = clampI(Math.floor((b[5] - z0) / cell), nz);
     for (let j = ja; j <= jb; j++) for (let k = ia; k <= ib; k++) lists[j * nx + k].push(i);
   });
-  return { x0, z0, cell, nx, nz, cells: lists.map((l) => Int32Array.from(l)), boxes, stamp: new Int32Array(boxes.length), query: 0 };
+  return { x0, z0, cell, nx, nz, cells: lists.map((l) => Int32Array.from(l)), boxes, stamp: new Int32Array(boxes.length), query: 0,
+    gate: gate && gate.some((m) => m !== 0) ? Int32Array.from(gate) : null };
 }
 
 const clampI = (i: number, n: number) => (i < 0 ? 0 : i >= n ? n - 1 : i);
@@ -69,7 +80,7 @@ const SKIN = 1e-4;
  * velocity into them; a box whose top is at most `stepUp` above the feet (now or a tick ago) is stood on instead.
  * Returns the highest such support top under the circle, or -Infinity.
  */
-export function collideBoxes(g: BoxGrid, c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number): number {
+export function collideBoxes(g: BoxGrid, c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number, gates = 0): number {
   let support = -Infinity;
   const feet = Math.max(y, prevY);
   // Twice: pushed out of one box into a corner's other one, the second pass settles it.
@@ -78,6 +89,7 @@ export function collideBoxes(g: BoxGrid, c: Mover, y: number, prevY: number, rad
     for (let n = 0; n < near.length; n++) {
       const b = g.boxes[near[n]];
       if (b[3] <= y - 0.05 && pass === 1) continue; // under the feet: only the support pass needs it
+      if (gatedOff(g, near[n], gates)) continue;
       // Over the head (now, or a tick ago: a slab, beam or lintel the head comes up under is the ceiling's, not a wall to
       // be pushed out of sideways; ceilingBoxes stops the jump), or far under the feet.
       if (b[2] >= Math.min(y, prevY) + height - 0.05 || b[3] <= y - stepUp - 0.05) continue;
@@ -118,12 +130,12 @@ export function collideBoxes(g: BoxGrid, c: Mover, y: number, prevY: number, rad
 
 /** Lowest feet height under the boxes over a mover at (x, z) whose head was under them a tick ago (prevY): a box's
  *  underside minus the height. Infinity: nothing overhead. */
-export function ceilingBoxes(g: BoxGrid, x: number, z: number, prevY: number, height: number, radius: number): number {
+export function ceilingBoxes(g: BoxGrid, x: number, z: number, prevY: number, height: number, radius: number, gates = 0): number {
   let ceil = Infinity;
   boxesNear(g, x, z, radius, near);
   for (let n = 0; n < near.length; n++) {
     const b = g.boxes[near[n]];
-    if (b[2] < prevY + height - 0.05) continue; // not over the head (a wall beside it, the floor)
+    if (b[2] < prevY + height - 0.05 || gatedOff(g, near[n], gates)) continue; // not over the head (a wall beside it, the floor), or open
     const px = x < b[0] ? b[0] : x > b[1] ? b[1] : x;
     const pz = z < b[4] ? b[4] : z > b[5] ? b[5] : z;
     if ((x - px) ** 2 + (z - pz) ** 2 >= radius * radius) continue;
@@ -133,12 +145,12 @@ export function ceilingBoxes(g: BoxGrid, x: number, z: number, prevY: number, he
 }
 
 /** The highest box top at or under feet that were at prevY (+ a step), right under the point (x, z); -Infinity if none. */
-export function groundBoxes(g: BoxGrid, x: number, z: number, prevY: number, stepUp: number): number {
+export function groundBoxes(g: BoxGrid, x: number, z: number, prevY: number, stepUp: number, gates = 0): number {
   let top = -Infinity;
   boxesNear(g, x, z, 0, near);
   for (let n = 0; n < near.length; n++) {
     const b = g.boxes[near[n]];
-    if (x < b[0] || x > b[1] || z < b[4] || z > b[5] || b[3] > prevY + stepUp) continue;
+    if (x < b[0] || x > b[1] || z < b[4] || z > b[5] || b[3] > prevY + stepUp || gatedOff(g, near[n], gates)) continue;
     if (b[3] > top) top = b[3];
   }
   return top;
