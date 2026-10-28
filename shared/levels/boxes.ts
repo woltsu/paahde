@@ -78,7 +78,9 @@ export function collideBoxes(g: BoxGrid, c: Mover, y: number, prevY: number, rad
     for (let n = 0; n < near.length; n++) {
       const b = g.boxes[near[n]];
       if (b[3] <= y - 0.05 && pass === 1) continue; // under the feet: only the support pass needs it
-      if (b[2] >= y + height || b[3] <= y - stepUp - 0.05) continue; // over the head, or far under the feet
+      // Over the head (now, or a tick ago: a slab, beam or lintel the head comes up under is the ceiling's, not a wall to
+      // be pushed out of sideways; ceilingBoxes stops the jump), or far under the feet.
+      if (b[2] >= Math.min(y, prevY) + height - 0.05 || b[3] <= y - stepUp - 0.05) continue;
       // Nearest point of the footprint to the centre.
       const px = c.x < b[0] ? b[0] : c.x > b[1] ? b[1] : c.x;
       const pz = c.z < b[4] ? b[4] : c.z > b[5] ? b[5] : c.z;

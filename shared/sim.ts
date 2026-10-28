@@ -20,7 +20,7 @@ import { LAB_SPAWN } from './lab.ts';
 import { bikeEngine, bikeTopSpeed } from './gear.ts';
 import { GUARDIAN, KINDS, LEG_POST_H, LEG_POST_R } from './guardians.ts';
 import { podSpawn } from './pods.ts';
-import { DESERT, inBox, level, type Level, type LevelId } from './levels.ts';
+import { DESERT, inBox, level, STEP_UP, type Level, type LevelId } from './levels.ts';
 import { WIND } from './dunes.ts';
 import { heightAt, onRock } from './terrain.ts';
 
@@ -31,7 +31,7 @@ export const PLAYER_HEIGHT = 1.8; // y is the player's feet
 /** Horizontal collision radius against scrap (shared/scrap.ts). */
 export const PLAYER_RADIUS = 0.35;
 /** Scrap whose top is at most this far above the feet is stepped onto instead of blocking. */
-export const STEP_UP = 0.35;
+export { STEP_UP };
 const GRAVITY = -25;
 export const WALK_SPEED = 7.5;
 /** No sprint any more: the speed where "fast" effects (FOV kick, being winded) are in full swing, reached by sliding. */

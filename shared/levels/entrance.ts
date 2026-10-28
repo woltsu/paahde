@@ -75,14 +75,23 @@ function place(): Entrance {
   for (let u = -BLOCK.half; u <= BLOCK.half; u += BLOCK.half) for (let v = -BLOCK.half; v <= BLOCK.half; v += BLOCK.half) y = Math.min(y, baseHeight(x + u, z + v));
   const H = BLOCK.half;
   const box: Box = [x - H, x + H, y - BLOCK.sunk, y + BLOCK.height, z - H, z + H];
-  // The trigger: 1.6 m out from the face, as wide as the door and a little more.
+  // The trigger: 1.6 m out from the face, as wide as the door and a little more; tall, so sand heaped or blown out in
+  // front of the door (craters, edits: not in the base height this is placed by) still finds it.
   const fx = x + dx * H, fz = z + dz * H, w = DOOR.half + 0.4, out = 1.6;
   const trigger: Box = [
-    Math.min(fx, fx + dx * out) - (dx ? 0 : w), Math.max(fx, fx + dx * out) + (dx ? 0 : w), y - 2, y + 3,
+    Math.min(fx, fx + dx * out) - (dx ? 0 : w), Math.max(fx, fx + dx * out) + (dx ? 0 : w), y - 5, y + 5,
     Math.min(fz, fz + dz * out) - (dz ? 0 : w), Math.max(fz, fz + dz * out) + (dz ? 0 : w),
   ];
   // Facing away from the door: yaw 0 looks down -z, so facing (dx, dz) is atan2(-dx, -dz).
   return { x, y, z, dx, dz, box, trigger, out: { x: fx + dx * 2.4, z: fz + dz * 2.4, facing: Math.atan2(-dx, -dz) } };
+}
+
+/** Is (x, z) within `margin` m of the block, the ground in front of its door (its trigger) or where you come out? Nothing
+ *  is placed there (shared/placed.ts placeError): it would wall the door in. */
+export function nearEntrance(x: number, z: number, margin: number): boolean {
+  const e = entrance();
+  const near = (b: Box) => x > b[0] - margin && x < b[1] + margin && z > b[4] - margin && z < b[5] + margin;
+  return near(e.box) || near(e.trigger) || Math.hypot(x - e.out.x, z - e.out.z) < margin + 1;
 }
 
 /** The block as a solid in the desert (shared/levels.ts desertLevel): out of the way unless you are next to it. */

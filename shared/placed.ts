@@ -28,6 +28,7 @@ import { EYE_HEIGHT } from './dig.ts';
 import { ITEMS } from './items.ts';
 import { insideShelter, inShelter, shelterAt, shelterRoomClear, shelterUnder } from './shelters.ts';
 import { solarBlocked } from './solarfarms.ts';
+import { nearEntrance } from './levels/entrance.ts';
 import { nearPod } from './podSpot.ts';
 import { heightAt } from './terrain.ts';
 import { canvasYAt, TARP_DOOR_HALF, TARP_HALF, TARP_INNER, TARP_PEAK, tarpRig } from './tarp.ts';
@@ -333,6 +334,7 @@ export function placeError(kind: string, x: number, z: number, rot: number, floo
     if (outline.some(([cx, cz]) => insideShelter(cx, cz, STRUCTURE_GAP))) return TEXT.notice.tooClose(TEXT.spots.shelter);
     if (outline.some(([cx, cz]) => nearPod(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.pod);
     if (outline.some(([cx, cz]) => solarBlocked(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.solar);
+    if (outline.some(([cx, cz]) => nearEntrance(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.doorway);
     const hs = corners.map(([cx, cz]) => heightAt(cx, cz));
     if (Math.max(...hs) - Math.min(...hs) > (PLACEABLES[kind].tilt ?? MAX_TILT)) return TEXT.notice.tooSteep;
   } else if (shelter && Math.abs(shelter.y + shelter.L.floor - floor) < 1e-3) {

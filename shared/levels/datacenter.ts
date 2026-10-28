@@ -4,7 +4,7 @@
 // Pure data, seeded (mulberry32), no three.js, Node type stripping rules. The rack list's order is part of the look
 // (the shader hashes the instance index): keep the generator's loop order stable.
 import { mulberry32 } from '../noise.ts';
-import type { Box, Level, LevelPoint } from '../levels.ts';
+import { DESERT, STEP_UP, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
 import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes } from './boxes.ts';
 
 export type Vec3 = [number, number, number];
@@ -182,9 +182,10 @@ export function datacenterLayout(seed = 1): LevelLayout {
   spot('ups', 15.3, U.h - 0.1, 3.7);
   for (const f of fixtures) if (f.role === 'emergency') add('emergency', f.zone, 'draw', f.pos[0] - 0.15, f.pos[0] + 0.15, f.pos[1] + 0.02, f.pos[1] + 0.1, f.pos[2] - 0.05, f.pos[2] + 0.05);
 
-  // Four spawns in the vestibule, facing the hall door (+z: yaw π).
+  // Four spawns in the vestibule, facing the hall door (+z: yaw π), clear of the exit's trigger and the server's slack
+  // round it (an F pressed twice must not take you straight back out).
   const spawns: LevelPoint[] = [];
-  for (const zz of [-3.6, -2.4]) for (const x of [-0.8, 0.8]) spawns.push({ x, y: 0, z: zz, facing: Math.PI });
+  for (const zz of [-2.6, -1.5]) for (const x of [-0.8, 0.8]) spawns.push({ x, y: 0, z: zz, facing: Math.PI });
 
   return {
     id: 'datacenter',
@@ -208,6 +209,10 @@ export function zoneAt(L: LevelLayout, x: number, z: number): ZoneId | null {
   return null;
 }
 
+/** The exit door's trigger leads out to the desert (in front of its entrance: shared/levels.ts desertArrival). Made on
+ *  first use: shared/levels.ts imports this module, so its values aren't there yet while this one loads. */
+let doors: LevelDoor[] | null = null;
+
 const solids = boxGrid(DATACENTER.boxes.filter((b) => b.use !== 'draw').map((b) => b.b));
 
 /** The datacenter as a Level (shared/levels.ts): cool, still air, no sun, nothing from the desert reaches in. */
@@ -215,13 +220,13 @@ export const datacenterLevel: Level = {
   id: 1,
   key: 'datacenter',
   // The floors are boxes too: they are stood on through collide, so under a point there is only what's below it.
-  ground: (x, z, prevY) => groundBoxes(solids, x, z, prevY, 0.35),
+  ground: (x, z, prevY) => groundBoxes(solids, x, z, prevY, STEP_UP),
   collide: (c, y, prevY, radius, height, stepUp) => collideBoxes(solids, c, y, prevY, radius, height, stepUp),
   ceiling: (x, z, prevY, height, radius) => ceilingBoxes(solids, x, z, prevY, height, radius),
   flat: true,
   bounds: DATACENTER.bounds,
   spawns: DATACENTER.spawns,
-  exits: DATACENTER.exits,
+  doors: () => (doors ??= DATACENTER.exits.map((trigger) => ({ trigger, to: DESERT }))),
   indoors: true,
   climate: { tempC: 22 },
   weather: false,

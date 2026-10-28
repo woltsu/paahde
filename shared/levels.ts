@@ -16,9 +16,12 @@ import { collideScrap } from './scrap.ts';
 import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
 import { datacenterLevel } from './levels/datacenter.ts';
-import { collideEntrance } from './levels/entrance.ts';
+import { collideEntrance, entrance } from './levels/entrance.ts';
 
 export const DESERT = 0;
+/** Things whose top is at most this far above the feet are stepped onto instead of blocking (shared/sim.ts re-exports
+ *  it; here so a level's collision can use it without importing the sim). */
+export const STEP_UP = 0.35;
 /** 0 the desert, 1.. the registry below: small, one byte on the wire. */
 export type LevelId = number;
 
@@ -28,6 +31,10 @@ export type Box = readonly [x0: number, x1: number, y0: number, y1: number, z0: 
 export type Mover = { x: number; z: number; vx: number; vz: number };
 /** A place in a level and the way you face there (radians, as PlayerState.facing). */
 export type LevelPoint = { x: number; y: number; z: number; facing: number };
+/** A way between levels: F in `trigger` takes you to level `to` (at one of its spawns; out to the desert, in front of the
+ *  desert's door that leads back here). `arrive`: where you come out at this door, on its outside (the y is the ground's
+ *  there at the time). */
+export type LevelDoor = { trigger: Box; to: LevelId; arrive?: { x: number; z: number; facing: number } };
 
 export type Level = {
   id: LevelId;
@@ -47,8 +54,9 @@ export type Level = {
   spawns: readonly LevelPoint[];
   /** Ways out: F in one of these boxes takes you back out to the desert, at the entrance you came in by (server/world.ts;
    *  docs/levels.md had each exit name its destination, but the entrance is placed per world, so the server pairs them). */
-  exits: readonly Box[];
-  /** A roof overhead everywhere: music, speech, hand shade, reverb, no wind. */
+  /** Its doors (computed on first use: the desert's is placed from the world seed). */
+  doors(): readonly LevelDoor[];
+  /** A roof overhead everywhere: music, speech, hand shade, no wind (its own reverb: not yet, docs/levels.md). */
   indoors: boolean;
   /** null: the desert's sun and clock heat you; else a fixed felt temperature (°C). */
   climate: { tempC: number } | null;
@@ -69,7 +77,7 @@ function sandAt(x: number, z: number, prevY: number): number {
 }
 
 /** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, what is built
- *  outside and the datacenter's door (shared/levels/entrance.ts: its way in is F at that door, not one of `exits`). */
+ *  outside and the datacenter's door (shared/levels/entrance.ts). */
 export const desertLevel: Level = {
   id: DESERT,
   key: 'desert',
@@ -88,7 +96,7 @@ export const desertLevel: Level = {
   flat: false,
   bounds: null,
   spawns: [],
-  exits: [],
+  doors: () => entranceDoors(),
   indoors: false,
   climate: null,
   weather: true,
@@ -97,7 +105,29 @@ export const desertLevel: Level = {
   things: true,
 };
 
+let desertDoors: LevelDoor[] | null = null;
+/** The desert's doors: the datacenter's entrance. */
+function entranceDoors(): readonly LevelDoor[] {
+  if (desertDoors) return desertDoors;
+  const e = entrance();
+  return (desertDoors = [{ trigger: e.trigger, to: datacenterLevel.id, arrive: e.out }]);
+}
+
 export const LEVELS: readonly Level[] = [desertLevel, datacenterLevel];
+
+/** The door of `from` that `s` stands at (within `slack` m of its trigger), or undefined. */
+export function doorAt(from: Level, x: number, y: number, z: number, slack = 0): LevelDoor | undefined {
+  const e = slack;
+  return from.doors().find((d) => {
+    const b = d.trigger;
+    return inBox([b[0] - e, b[1] + e, b[2] - e, b[3] + e, b[4] - e, b[5] + e], x, y, z);
+  });
+}
+
+/** Where a player leaving level `from` comes out in the desert: in front of the desert's door that leads to it. */
+export function desertArrival(from: LevelId): { x: number; z: number; facing: number } | undefined {
+  return desertLevel.doors().find((d) => d.to === from)?.arrive;
+}
 /** The level with this id; an unknown id is the desert. */
 export const level = (id: LevelId): Level => LEVELS[id] ?? desertLevel;
 /** A level by its key ('datacenter'), or undefined. */
