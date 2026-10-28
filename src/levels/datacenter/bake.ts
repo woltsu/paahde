@@ -14,6 +14,29 @@ export type BakeData = { nx: number; nz: number; x0: number; z0: number; ao: Flo
 
 /** The maps as numbers (pure: tools can check them in Node). */
 export function bakeData(L: LevelLayout): BakeData {
+  const steps = bakeSteps(L);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+
+/** The same, giving the page a turn every few ms (built ahead while walking up to the door: no 60 ms frame). */
+export async function bakeDataSliced(L: LevelLayout, budgetMs = 4): Promise<BakeData> {
+  const steps = bakeSteps(L);
+  let since = performance.now();
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+    if (performance.now() - since > budgetMs) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      since = performance.now();
+    }
+  }
+}
+
+/** The work, in steps (each yield is a place to pause). */
+function* bakeSteps(L: LevelLayout): Generator<void, BakeData> {
   const [x0, x1, , , z0, z1] = L.bounds;
   const nx = Math.ceil((x1 - x0) / TEXEL), nz = Math.ceil((z1 - z0) / TEXEL);
   const solid = L.boxes.filter((b) => b.use !== 'draw');
@@ -30,13 +53,18 @@ export function bakeData(L: LevelLayout): BakeData {
   };
   // Floor AO: whatever stands on the floor (not the floor slabs themselves), blurred twice ~0.35 m.
   const standing = raster((s) => s.b[2] <= 0.05 && s.b[3] > 0.3 && s.mat !== 'floor');
+  yield;
   blur(standing, nx, nz, 3);
+  yield;
   blur(standing, nx, nz, 3);
+  yield;
   const ao = standing.map((v) => 1 - 0.5 * v);
   // Ceiling AO: the walls and beams meeting it.
   const hanging = raster((s) => (s.mat === 'wall' || (s.mat === 'ceiling' && s.b[3] - s.b[2] < 1 && s.b[2] > 3.5 && s.b[2] < 4.1)));
   blur(hanging, nx, nz, 3);
+  yield;
   blur(hanging, nx, nz, 3);
+  yield;
   const ceil = hanging.map((v) => 1 - 0.55 * v);
 
   // Heights of what stands, for the far light's shadow test: the tallest solid top per texel below 3 m (not the ceilings).
@@ -52,6 +80,7 @@ export function bakeData(L: LevelLayout): BakeData {
   const STEP = 0.35;
   for (const f of L.fixtures) {
     if (f.kind !== 'point' || f.role !== 'main') continue;
+    yield;
     const [fx, fy, fz] = f.pos, R = f.range;
     const ia = Math.max(0, Math.floor((fx - R - x0) / TEXEL)), ib = Math.min(nx - 1, Math.ceil((fx + R - x0) / TEXEL));
     const ja = Math.max(0, Math.floor((fz - R - z0) / TEXEL)), jb = Math.min(nz - 1, Math.ceil((fz + R - z0) / TEXEL));
@@ -121,8 +150,7 @@ function blur(m: Float32Array, nx: number, nz: number, r: number) {
 export type BakeMaps = { bake: THREE.DataTexture; tiles: THREE.DataTexture; min: THREE.Vector2; size: THREE.Vector2; tileSize: THREE.Vector2 };
 
 /** The maps as textures, sampled at (xz - min) / size. */
-export function bakeMaps(L: LevelLayout): BakeMaps {
-  const d = bakeData(L);
+export function bakeMaps(L: LevelLayout, d: BakeData = bakeData(L)): BakeMaps {
   const rgba = new Uint16Array(d.nx * d.nz * 4);
   for (let k = 0; k < d.nx * d.nz; k++) {
     rgba[k * 4] = THREE.DataUtils.toHalfFloat(d.ao[k]);

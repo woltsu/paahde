@@ -14,7 +14,7 @@ import { rumble } from './gamepad';
 import { tyreDust } from './tyreDust';
 import { zaps } from './world/zaps';
 import type { Guardians } from './world/guardians';
-import { heightAt } from '../shared/terrain.ts';
+import { groundAt } from './ground.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_STRIKE_MS } from '../shared/mace.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 
@@ -101,7 +101,7 @@ export class Mace {
     let sand = false;
     for (let t = SAND_STEP; t <= MACE_REACH; t += SAND_STEP) {
       _e.copy(_o).addScaledVector(_d, t);
-      if (_e.y <= heightAt(_e.x, _e.z)) {
+      if (_e.y <= groundAt(_e.x, _e.z, _e.y)) {
         sand = true;
         break;
       }
@@ -125,6 +125,6 @@ export class Mace {
     if (m.hit) {
       rifleSound.clank(_e, ear);
       zaps.burst(m.x, m.y, m.z, 0, 1, 0, 10);
-    } else if (m.y <= heightAt(m.x, m.z) + 0.15) this.thump(_e, ear);
+    } else if (m.y <= groundAt(m.x, m.z, m.y) + 0.15) this.thump(_e, ear);
   }
 }

@@ -65,6 +65,10 @@ export class LightPool {
     spot.shadow.bias = -0.0005;
     spot.shadow.normalBias = 0.02;
     spot.shadow.camera.near = 0.2;
+    // Its map is drawn only while it is lit (a shadow pass ignores the light's intensity), but once up front: sampled
+    // before its first render, the map would be recreated under the materials' bind groups (as src/bike.ts does).
+    spot.shadow.autoUpdate = false;
+    spot.shadow.needsUpdate = true;
     root.add(spot, spot.target);
     this.spotSlot = { light: spot, fixture: -1, w: 0, drain: false };
     this.lights.push(...this.points, spot);
@@ -81,6 +85,7 @@ export class LightPool {
     }
     this.assign(this.slots, this.pointFixtures, dt);
     this.assign([this.spotSlot], this.spotFixtures, dt);
+    this.spot.shadow.autoUpdate = this.spot.intensity > 0;
   }
 
   private assign(slots: Slot[], candidates: number[], dt: number) {

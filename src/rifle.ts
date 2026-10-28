@@ -37,6 +37,13 @@ import { tyreDust } from './tyreDust';
 import { GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
 import { gunCooldown, quality } from '../shared/gear.ts';
 import { heightAt, shotGround } from '../shared/terrain.ts';
+import { groundAt, onFlat } from './ground.ts';
+
+/** In a level with flat floors (src/ground.ts): how far along the shot the floor is, or `range`. */
+function floorShot(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, range: number): number {
+  for (let t = 0.25; t < range; t += 0.25) if (o.y + d.y * t <= groundAt(o.x + d.x * t, o.z + d.z * t, o.y + d.y * t)) return t;
+  return range;
+}
 import { shelterSolid } from '../shared/shelters.ts';
 import { SPRINT_SPEED, WALK_SPEED } from '../shared/sim.ts';
 
@@ -192,7 +199,7 @@ export class Rifle {
       zaps.beam(_o.x, _o.y, _o.z, m.ex, m.ey, m.ez, _o.distanceTo(ear) < 60);
       rifleSound.shot(_o, ear, !!m.pistol);
       zaps.burst(m.ex, m.ey, m.ez, -_d.x, -_d.y, -_d.z, 10);
-      rifleSound.impact(m.hit ? 'glass' : heightAt(m.ex, m.ez) > m.ey - 0.3 ? 'sand' : 'metal', _e.set(m.ex, m.ey, m.ez), ear);
+      rifleSound.impact(m.hit ? 'glass' : !onFlat() && heightAt(m.ex, m.ez) > m.ey - 0.3 ? 'sand' : 'metal', _e.set(m.ex, m.ey, m.ez), ear);
     };
   }
 
@@ -331,7 +338,7 @@ export class Rifle {
       _d.addScaledVector(_r, Math.cos(a) * r).addScaledVector(_u, Math.sin(a) * r).normalize();
     }
     // The sand first, then anything of a walker before it.
-    let dist = shotGround(_o.x, _o.y, _o.z, _d.x, _d.y, _d.z, range);
+    let dist = onFlat() ? floorShot(_o, _d, range) : shotGround(_o.x, _o.y, _o.z, _d.x, _d.y, _d.z, range);
     const ground = dist < range;
     const hit = this.guardians.raycast(_o, _d, dist);
     if (hit) dist = hit.dist;
@@ -373,7 +380,7 @@ export class Rifle {
       if (hit.index >= 0) this.guardians.breakLocal(hit.walker, hit.index);
       this.guardians.knock(hit.walker, this.gun, _d.x, _d.z);
       rifleSound.impact(hit.index >= 0 ? 'glass' : 'metal', _e, _o);
-    } else if (ground && shelterSolid(_e.x, _e.y, _e.z) === true) {
+    } else if (ground && !onFlat() && shelterSolid(_e.x, _e.y, _e.z) === true) {
       // A shelter's concrete.
       zaps.burst(_e.x, _e.y, _e.z, -_d.x, -_d.y, -_d.z, 10);
       rifleSound.impact('metal', _e, _o);

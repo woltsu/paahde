@@ -9,6 +9,7 @@ import { isSlipFace, slopeAt } from '../shared/sim.ts';
 import { wornBit } from '../shared/gearBits.ts';
 import { bodyScale, unpackLook } from '../shared/look.ts';
 import { heightAt } from '../shared/terrain.ts';
+import { groundAt, onFlat } from './ground.ts';
 import { END_FADE, footprints, streaks } from './footprints.ts';
 import { footsteps } from './footsteps.ts';
 import { tyreDust } from './tyreDust.ts';
@@ -267,11 +268,11 @@ export class Avatar {
       if (!pose.ride) this.root.position.set(pose.x, pose.y, pose.z); // first frame we see them: already dead
       // In a shelter its floor is under the feet, not the sand overhead.
       const y = this.root.position.y;
-      const ground = (x: number, z: number) => (sandHidden(x, z, y) ? y : heightAt(x, z));
+      const ground = (x: number, z: number) => (onFlat() ? groundAt(x, z, y) : sandHidden(x, z, y) ? y : heightAt(x, z));
       this.tipped = !this.model.ragdoll?.(_push.fromArray(pose.down), ground);
     } else if (!pose.down && this.down) {
       this.down = false;
-      this.model.ragdoll?.(null, heightAt);
+      this.model.ragdoll?.(null, (x: number, z: number) => groundAt(x, z));
       this.root.rotation.x = 0;
       this.facing = pose.facing;
     }

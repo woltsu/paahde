@@ -1,4 +1,4 @@
-import { heightAt } from '../shared/terrain.ts';
+import { groundAt, onFlat } from './ground.ts';
 import { shelterSolid } from '../shared/shelters.ts';
 
 type P = { x: number; y: number; z: number };
@@ -19,8 +19,8 @@ export function obstruction(source: P, ear: P, now: number): number {
   for (let i = 1; i < steps; i++) {
     const t = i / steps;
     const x = source.x + (ear.x - source.x) * t, y = source.y + (ear.y - source.y) * t, z = source.z + (ear.z - source.z) * t;
-    const room = shelterSolid(x, y, z);
-    if (room === true || room === null && heightAt(x, z) > y + 0.25) blocked++;
+    const room = onFlat() ? null : shelterSolid(x, y, z);
+    if (room === true || room === null && groundAt(x, z, y) > y + 0.25) blocked++;
   }
   const value = Math.min(1, blocked / 2);
   if (cache.size >= 512) cache.delete(cache.keys().next().value!);

@@ -13,6 +13,7 @@ import { jetSites } from '../shared/jetcrash.ts';
 import { sheltersNear } from '../shared/shelters.ts';
 import { ARRIVAL } from '../shared/podSpot.ts';
 import { heightAt } from '../shared/terrain.ts';
+import { groundAt } from './ground.ts';
 import { wrecksNear } from '../shared/wrecks.ts';
 import type { FirstPersonCamera } from './camera';
 import { aimHeld } from './input';
@@ -77,7 +78,7 @@ function hidden(eye: THREE.Vector3, x: number, y: number, z: number): boolean {
   for (let i = 1; i < n; i++) {
     const t = i / n;
     if (t * d < 6) continue;
-    if (heightAt(eye.x + dx * t, eye.z + dz * t) > eye.y + dy * t) return true;
+    if (groundAt(eye.x + dx * t, eye.z + dz * t, eye.y + dy * t) > eye.y + dy * t) return true;
   }
   return false;
 }

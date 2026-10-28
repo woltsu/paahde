@@ -5,7 +5,7 @@
 // "Hide HUD" (body.clean) hides everything on screen but the picture, name tags included.
 import * as THREE from 'three/webgpu';
 import { actionHeld } from './input';
-import { heightAt } from '../shared/terrain.ts';
+import { groundAt, onFlat } from './ground.ts';
 import { sandHidden } from '../shared/shelters.ts';
 
 const SENSITIVITY = 0.0022;
@@ -107,8 +107,8 @@ export class FlyCam {
     const speed = this.speed * (actionHeld('sprint') ? 4 : 1) * (actionHeld('freeLook') ? 0.25 : 1);
     this.vel.lerp(this.wish.multiplyScalar(speed), 1 - Math.exp(-dt * moveRate));
     this.pos.addScaledVector(this.vel, dt);
-    if (!sandHidden(this.pos.x, this.pos.z, this.pos.y - 1.6)) {
-      const floor = heightAt(this.pos.x, this.pos.z) + 0.3;
+    if (onFlat() || !sandHidden(this.pos.x, this.pos.z, this.pos.y - 1.6)) {
+      const floor = groundAt(this.pos.x, this.pos.z, this.pos.y) + 0.3;
       if (this.pos.y < floor) {
         this.pos.y = floor;
         this.vel.y = Math.max(0, this.vel.y);

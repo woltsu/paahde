@@ -134,15 +134,20 @@ export class Sky {
     this.fittedAspect = NaN;
   }
 
+  /** The clock (the time of day, the moon, the shaders' time): main.ts runs it every frame in whatever level, so the
+   *  wrist clock, speech, music and smoke go on indoors too; update() does the sky's drawing work, the desert's only. */
+  tickClock(dt: number, unixMs: number) {
+    time.value += dt;
+    this.day.update(unixMs);
+    this.night.update(unixMs);
+  }
+
   /**
    * Called every render frame. `focus` is the local player's position, `camera` the view, `unixMs` the
    * shared wall clock (Net.worldTime) that sets the time of day.
    */
   update(dt: number, focus: THREE.Vector3, camera: THREE.PerspectiveCamera, unixMs: number) {
-    time.value += dt;
-    this.day.update(unixMs);
     updateMaterialLighting(this.ambient, this.day.tod, this.day.elevation > 0);
-    this.night.update(unixMs);
     const moonlit = this.day.elevation < MOON_TAKES_OVER;
     this.sun.color.copy(moonlit ? moonColor.value : sunColor.value);
     this.sun.intensity = 1 - 0.3 * sandStorm.value; // dust in the air dims the sun

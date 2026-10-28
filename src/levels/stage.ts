@@ -38,6 +38,8 @@ export interface Stage {
 
 /** The fade to black and back (ms each way). */
 const FADE_MS = 250;
+/** A level whose stage failed is asked for again after this long (ms). */
+const RETRY_MS = 10_000;
 
 /**
  * Switching stages (docs/levels.md "Switching stages"): main.ts calls follow(level) every frame with the level the
@@ -54,6 +56,11 @@ export class StageSwitch {
   private warmed = new Set<number>();
   private current: Stage;
   private busy = false;
+  /** A level whose stage couldn't be had (none to draw, or its code failed to load): not asked for again until then
+   *  (performance.now() ms), so follow() never loops fades. */
+  private failedUntil = new Map<number, number>();
+  /** Told when a stage's code can't be loaded at all (a deploy replaced it under a stale tab): offer a reload. */
+  onBroken?: () => void;
   private fade = document.createElement('div');
   private scene: THREE.Scene;
   private post: Post;
@@ -88,12 +95,13 @@ export class StageSwitch {
 
   /** Called every frame with the level the player is in: switches to it if it isn't the one drawn. */
   follow(id: number) {
-    if (!this.busy && id !== this.current.level) void this.switchTo(id);
+    if (this.busy || id === this.current.level || performance.now() < (this.failedUntil.get(id) ?? 0)) return;
+    void this.switchTo(id);
   }
 
   /** Build level `id`'s stage ahead (near its door), so the switch only has to compile it. */
   prefetch(id: number) {
-    void this.stage(id);
+    if (performance.now() >= (this.failedUntil.get(id) ?? 0)) void this.stage(id).catch(() => {});
   }
 
   private stage(id: number): Promise<Stage | null> {
@@ -110,6 +118,8 @@ export class StageSwitch {
         }
         return s;
       });
+      // Not kept when it fails: the next try loads it again (after the back-off).
+      p.then((s) => { if (!s) this.building.delete(id); }, () => this.building.delete(id));
       this.building.set(id, p);
     }
     return p;
@@ -120,8 +130,14 @@ export class StageSwitch {
     this.drawing = false;
     this.fade.style.opacity = '1';
     try {
-      const [next] = await Promise.all([this.stage(id), new Promise((r) => setTimeout(r, FADE_MS))]);
-      const to = next ?? this.stages.get(0)!;
+      const [next] = await Promise.all([this.stage(id).catch((e) => {
+        console.error('level stage failed to load', e);
+        this.onBroken?.();
+        return null;
+      }), new Promise((r) => setTimeout(r, FADE_MS))]);
+      // None to draw: the one we have stays (under the fade back in), and this level isn't asked for for a while.
+      if (!next) this.failedUntil.set(id, performance.now() + RETRY_MS);
+      const to = next ?? this.current;
       if (to !== this.current) {
         this.current.leave(this.scene);
         to.enter(this.scene, this.post);

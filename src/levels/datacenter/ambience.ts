@@ -150,9 +150,11 @@ export class DatacenterAmbience {
   private on = false;
   private t = 0;
   private chatterIn = 3;
+  private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
   start() {
     this.on = true;
+    clearTimeout(this.stopTimer);
     audio.onStart((ctx) => {
       if (!audio.ambience) return;
       this.bed ??= buildBed(ctx, audio.ambience);
@@ -164,6 +166,13 @@ export class DatacenterAmbience {
     this.on = false;
     const ctx = audio.ctx;
     if (this.bed && ctx) this.bed.out.gain.setTargetAtTime(0, ctx.currentTime, FADE);
+    // Faded out: its sources stop (not left running at gain 0); the next entry builds it again.
+    clearTimeout(this.stopTimer);
+    this.stopTimer = setTimeout(() => {
+      if (this.on || !this.bed) return;
+      this.bed.stop();
+      this.bed = null;
+    }, FADE * 6000);
   }
 
   /** `cam`: the listener; the cooling units stand along the north wall (z 27–28), the UPS room is its own zone. */

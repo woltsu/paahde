@@ -98,6 +98,15 @@ export class StormFx {
   /** Per render frame: storms from the server, server time `now` (ms), the camera and the player's feet. */
   /** `warnS`: how early the storm detector on your belt warns (s, shared/gear.ts stormWarnS); 0 without one. */
   /** `dead`: lying dead (the choking stops). */
+  /** In a level without weather (shared/levels.ts): no dust at the eye or wind from a storm at once, not over the
+   *  seconds the fade out would take (main.ts, after update). */
+  calm() {
+    this.level = this.outside = this.choke = 0;
+    this.choking = false;
+    stormHere.value = 0;
+    wind.local = 0;
+  }
+
   update(dt: number, serverStorms: readonly Storm[], now: number, cam: { x: number; y: number; z: number }, me: { x: number; y: number; z: number }, warnS: number, dead = false) {
     if (summonLocal === 'front') {
       summonLocal = false;

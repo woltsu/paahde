@@ -86,7 +86,7 @@ z [3.0, 4.4], 2.3 m high. Two UPS cabinets 1.6 × 1.0 × 2.0 m on the north wall
 1.0 × 0.8 × 1.8 m along the east wall, a wall switch panel. It's the one room lit amber-heavy: the "you shouldn't be in
 here" corner, and a natural place for loot or a power switch later.
 
-**Spawns.** Four in the vestibule, 2 × 2 at x = ±0.8, z ∈ {-3.6, -2.4}, all facing +z (towards the hall door).
+**Spawns.** Four in the vestibule, 2 × 2 at x = ±0.8, z ∈ {-2.6, -1.5}, all facing +z (towards the hall door), clear of the exit door's trigger.
 
 **Bounds.** x [-12.3, 18.6], y [-0.3, 4.5], z [-5.6, 28.3].
 
@@ -522,7 +522,8 @@ exposure, strip and LED intensities.
 - Layout as above, from `datacenterLayout(1)`: 209 racks in 31 run boxes, 74 solid boxes in all (fewer than the ~90
   estimated: the hall's shell is fewer segments), 331 boxes with the visual ones, 28 fixtures. Cable trays carry a
   fibre duct on about half the blocks; strips hang over every aisle and the south perimeter aisle, not the cross aisle
-  (the downlights light it). Exit trigger: x ±1.2, z −5.3..−4.2 in front of the exit door.
+  (the downlights light it). Exit trigger: x ±1.2, z −5.3..−4.2 in front of the exit door. The four spawns are at z −2.6 and −1.5 (not −3.6 and −2.4:
+  those lay within the exit's trigger and the server's slack, so a second F took you straight back out).
 - Collision (`shared/levels/boxes.ts`): one routine for all boxes, by height: a box whose top is within a step of the
   feet is stood on (the floors too: `ground` only answers what is right under the point), a taller one pushes the
   circle out (twice, for corners); undersides of slabs, beams and lintels are the ceiling. A minute's walk costs ~4 ms

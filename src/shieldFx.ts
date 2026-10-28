@@ -6,7 +6,7 @@
 import * as THREE from 'three/webgpu';
 import { abs, dot, float, normalView, positionLocal, positionViewDirection, pow, sin, uniform, vec3 } from 'three/tsl';
 import type { ServerMsg } from '../shared/protocol.ts';
-import { heightAt } from '../shared/terrain.ts';
+import { groundAt } from './ground.ts';
 import { audio } from './audio';
 
 type Msg = Extract<ServerMsg, { t: 'shieldBreak' }>;
@@ -127,7 +127,7 @@ export class ShieldFx {
         s.mesh.rotation.x += s.spin.x * dt;
         s.mesh.rotation.y += s.spin.y * dt;
         s.mesh.rotation.z += s.spin.z * dt;
-        const g = heightAt(s.mesh.position.x, s.mesh.position.z);
+        const g = groundAt(s.mesh.position.x, s.mesh.position.z, s.mesh.position.y);
         if (s.mesh.position.y < g + 0.01 && s.v.y < 0) {
           s.mesh.position.y = g + 0.01;
           s.resting = true;

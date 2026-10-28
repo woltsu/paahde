@@ -785,6 +785,16 @@ export class Post {
     this.aoIntensity.value = v * this.profile.ao;
   }
 
+  /** The profile as it stands now (the art bench may have tuned the grade and bloom since it was set): a stage keeps it
+   *  when it leaves, to set it again on its return. */
+  liveProfile(): PostProfile {
+    return {
+      ...this.profile,
+      bloom: { strength: this.bloom.strength.value, radius: this.bloom.radius.value },
+      grade: { balance: grade.balance.value.clone(), lift: grade.lift.value.clone(), saturation: grade.saturation.value, contrast: grade.contrast.value },
+    };
+  }
+
   /** A stage took over (src/levels/stage.ts): its haze, sun, bloom, exposure, grade and occlusion. Uniforms only. */
   setProfile(p: PostProfile) {
     this.profile = p;

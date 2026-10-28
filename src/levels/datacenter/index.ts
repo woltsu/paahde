@@ -7,7 +7,7 @@ import type { Post } from '../../post.ts';
 import { setLevelShade } from '../../world/materialLighting.ts';
 import { LightPool } from '../lightPool.ts';
 import type { Stage, StageFrame } from '../stage.ts';
-import { bakeMaps, type BakeMaps } from './bake.ts';
+import { bakeDataSliced, bakeMaps, type BakeData, type BakeMaps } from './bake.ts';
 import { makeMaterials } from './materials.ts';
 import { DATACENTER_ENV, DATACENTER_POST, datacenterEnvironment } from './environment.ts';
 import { DatacenterAmbience } from './ambience.ts';
@@ -24,11 +24,16 @@ export class DatacenterStage implements Stage {
   private maps: BakeMaps;
   private background = new THREE.Color(DATACENTER_ENV.background);
 
-  constructor() {
+  /** Built a little at a time (the bake is the slow part: src/levels/datacenter/bake.ts bakeDataSliced). */
+  static async build(): Promise<DatacenterStage> {
+    return new DatacenterStage(await bakeDataSliced(DATACENTER));
+  }
+
+  private constructor(bake: BakeData) {
     const L = DATACENTER;
     this.root.name = 'datacenter';
     this.root.visible = false;
-    this.maps = bakeMaps(L);
+    this.maps = bakeMaps(L, bake);
     const mats = makeMaterials(this.maps);
     const byMat = new Map<LevelMat, LevelBox[]>();
     for (const b of L.boxes) {

@@ -12,7 +12,7 @@ import * as THREE from 'three/webgpu';
 import { isBound } from './bindings';
 import { tools } from './input';
 import { comfort, COMFORT_RANGES } from './comfort';
-import { heightAt } from '../shared/terrain.ts';
+import { groundAt, onFlat } from './ground.ts';
 import { placed, TARP, type Placed } from '../shared/placed.ts';
 import { canvasYAt, TARP_HALF, tarpRig, type TarpRig } from '../shared/tarp.ts';
 import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, slopeAt } from '../shared/sim.ts';
@@ -215,7 +215,7 @@ export class FirstPersonCamera {
     const crouched = !!p.crouching && !p.sliding;
     const walking = moving && !p.sliding && !p.riding;
     let grade = 0;
-    if (walking && !crouched && !sandHidden(p.x, p.z, p.y)) {
+    if (walking && !crouched && !onFlat() && !sandHidden(p.x, p.z, p.y)) {
       slopeAt(p.x, p.z, slope);
       grade = (p.vx * slope.gx + p.vz * slope.gz) / speed;
     }
@@ -252,7 +252,7 @@ export class FirstPersonCamera {
     } else this.slideClock = 0;
     let y = this.eyeY + EYE_HEIGHT - 0.65 * this.crouch + bobY + (this.dip + shakeY) * comfort.motion;
     // Never look out from under a dune (in a shelter's entrance and rooms the sand isn't in the way).
-    if (!sandHidden(x, z, p.y)) y = Math.max(y, heightAt(x, z) + 0.3);
+    if (onFlat() || !sandHidden(x, z, p.y)) y = Math.max(y, groundAt(x, z, p.y) + 0.3);
 
     // Third person: back off along the view ray (and over the shoulder), shortening both together where the camera
     // would go into the sand or through a shelter's wall.
@@ -308,8 +308,8 @@ function blocked(x: number, y: number, z: number): boolean {
   const c = WALL_CLEARANCE;
   for (const [dx, dy, dz] of PROBE) {
     const px = x + dx * c, py = y + dy * c, pz = z + dz * c;
-    const solid = shelterSolid(px, py, pz);
-    if (solid ?? y < heightAt(px, pz) + BOOM_CLEARANCE) return true;
+    const solid = onFlat() ? null : shelterSolid(px, py, pz);
+    if (solid ?? y < groundAt(px, pz, y) + BOOM_CLEARANCE) return true;
   }
   return false;
 }

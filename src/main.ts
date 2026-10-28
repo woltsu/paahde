@@ -112,8 +112,8 @@ import { LOADING_FRAME_MS, slice } from './yield';
 import { Warmup } from './warmup';
 import { DesertStage } from './levels/desert';
 import { StageSwitch, type Stage } from './levels/stage';
-import { inBox, level } from '../shared/levels.ts';
-import { entrance } from '../shared/levels/entrance.ts';
+import { doorAt, level } from '../shared/levels.ts';
+import { setGround } from './ground.ts';
 import { BED, buildBed } from './levels/datacenter/ambience';
 import { datacenterLevel } from '../shared/levels/datacenter.ts';
 import type { Storm } from '../shared/storm.ts';
@@ -427,8 +427,9 @@ const warm = new Warmup([scene, orbit.camera], () => post.render(), renderer.bac
 // debug menu), the view fades to black, the stage is built on the first visit (its materials compiled behind the black,
 // src/warmup.ts) and swapped in, and the view fades back. While it runs nothing is drawn: the last frame stays under the fade.
 const levels = new StageSwitch(scene, post, desert, async (id) => {
+  if (id !== datacenterLevel.id) return null;
   const { DatacenterStage } = await import('./levels/datacenter/index.ts');
-  return id === datacenterLevel.id ? new DatacenterStage() : null;
+  return DatacenterStage.build(); // (a slice at a time: it may be built ahead while walking up to its door)
 }, async () => {
   const w = new Warmup([scene, orbit.camera], () => post.render(), renderer.backend);
   await w.run(gpuIdle);
@@ -438,6 +439,7 @@ net.onTeleport = (state) => {
   orbit.yaw = state.facing;
   orbit.pitch = 0;
 };
+levels.onBroken = () => { audio.suspendForRecovery(); showReload(TEXT.recovery.update); };
 if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed, BED } });
 terrain.loading = true;
 let joined = false; // until the first welcome, net.me is the default spawn, not our saved position
@@ -508,6 +510,7 @@ renderer.setAnimationLoop((time) => {
   const L = level(net.me.level);
   if (joined && loaded) levels.follow(net.me.level);
   me.levelFloor = L.flat;
+  setGround(net.me.level, net.me.y);
   for (const a of remotes.values()) a.levelFloor = L.flat;
   // The gun raised (or just fired), or the spyglass: others see it shouldered, or at the eye (src/models/scavenger.ts).
   const aiming = playerHands.aim > 0.5 || playerHands.looking;
@@ -619,6 +622,7 @@ renderer.setAnimationLoop((time) => {
   // Before the wind: the storm sets how hard it blows here.
   const belt = equipped(net.boxes.equip, 'belt');
   storm.update(frameDt, L.weather ? net.storms : NO_STORMS, net.serverTime(), orbit.camera.position, net.me, belt ? stormWarnS(quality(belt)) : 0, survival.dead || net.down !== null);
+  if (!L.weather) storm.calm();
   // The sand vortices near enough to see (shared/vortex.ts: they roam the whole desert).
   const vortices = L.weather ? vorticesNear(orbit.camera.position.x, orbit.camera.position.z, 5000, net.vortexZero, net.vortices, nearVortices) : NO_VORTICES;
   vortexFx.update(frameDt, vortices, net.serverTime(), orbit.camera.position);
@@ -632,7 +636,11 @@ renderer.setAnimationLoop((time) => {
   telescope.bedroll = net.spawn;
   survival.toolsDown = storm.toolsDown;
   locator.update(orbit.camera, orbit.viewYaw, orbit.pitch + orbit.freePitch, focus, [...others.filter((o) => Math.hypot(o.x - focus.x, o.z - focus.z) < range), ...(L.things ? [...wrecks.targets(focus.x, focus.z), ...corpseTargets(), ...ownVehicleTargets(net.myVehicles, net.color)] : [])]);
-  stage.update({ dt: frameDt, time: time / 1000, focus, camera: orbit.camera, worldTime: net.worldTime(), serverTime: net.serverTime() });
+  // The clock and the wind go on in any level; a stage updates only while it is the one we are in (during the fade the
+  // drawn one isn't: the desert mustn't stream terrain round the datacenter's x, z, nor the other way round).
+  sky.tickClock(frameDt, net.worldTime());
+  wind.update(net.serverTime() / 1000);
+  if (stage.level === net.me.level) stage.update({ dt: frameDt, time: time / 1000, focus, camera: orbit.camera, worldTime: net.worldTime(), serverTime: net.serverTime() });
   windSound.setSilent(L.indoors);
   windSound.update(frameDt, orbit.camera.position, orbit.viewYaw, s);
   // Sand hissing under you: a speed slide, or (softer) slipping down a slip face on your feet.
@@ -656,7 +664,7 @@ renderer.setAnimationLoop((time) => {
     // The sun coming up: from 2° under the horizon to 8° over it (about a minute).
     sunrise: sky.day.tod < 0.5 && sky.day.elevation > -0.035 && sky.day.elevation < 0.14,
   });
-  if (L.things) crashSound.update(orbit.camera.position, orbit.viewYaw, orbit.camera.quaternion);
+  crashSound.update(orbit.camera.position, orbit.viewYaw, orbit.camera.quaternion, L.things); // (the audio listener too)
   listen(orbit.camera.position);
   tickEchoBus();
   if (L.things) {
@@ -733,12 +741,13 @@ renderer.setAnimationLoop((time) => {
   // A piece that came off a machine and lies by you can be picked up to be turned and taken apart in the hands; F again sets it down.
   const pieceHere = teardown.active && !teardown.holding ? teardown.pieceNear(net.me) : null;
   const piecePrompt = teardown.holding ? TEXT.prompt.putDown : pieceHere ? TEXT.prompt.pickUp(pieceHere.label) : null;
-  // A level's door (shared/levels/entrance.ts out in the desert, Level.exits inside): F goes through, even on the bike
-  // (it stays parked at the door). No text says where it leads.
-  const atDoor = net.connected && !net.down && (L.things ? inBox(entrance().trigger, s.x, s.y, s.z) : L.exits.some((b) => inBox(b, s.x, s.y, s.z)));
+  // A level's door (Level.doors: the datacenter's entrance out in the desert, its exit inside): F goes through, even on
+  // the bike (it stays parked at the door). No text says where it leads.
+  const door = net.connected && !net.down ? doorAt(L, s.x, s.y, s.z) : undefined;
+  const atDoor = door !== undefined;
   const doorPrompt = atDoor ? TEXT.prompt.open(TEXT.places.steelDoor) : null;
   // Near the door the level's stage is built ahead, so going in only has to compile it (behind the fade).
-  if (L.things && desert.entrance.distance(s) < 60) levels.prefetch(datacenterLevel.id);
+  for (const d of L.doors()) if (Math.hypot(s.x - (d.trigger[0] + d.trigger[1]) / 2, s.z - (d.trigger[4] + d.trigger[5]) / 2) < 60) levels.prefetch(d.to);
   const fPrompt = doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));

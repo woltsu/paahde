@@ -31,14 +31,19 @@ when you find it stale.
 
 ## Levels (docs/levels.md)
 
-- `shared/levels.ts` — `Level` (ground, solids, ceiling, bounds, spawns, exits and its properties: `indoors`,
+- `shared/levels.ts` — `Level` (ground, solids, ceiling, bounds, spawns, `doors()` and its properties: `indoors`,
   `climate`, `weather`, `enemies`, `building`, `things`), the `LEVELS` registry, `level(id)`; `desertLevel` wraps the
   desert's ground and collisions. `PlayerState.level` (`shared/sim.ts`) says which one a player is in; only the server
-  changes it. `players.level`/`y` in the DB
+  changes it. `players.level`/`y` in the DB. `doorAt`, `desertArrival`: the doors between levels
+- `src/ground.ts` — `groundAt`/`onFlat`: the client's ground for its own checks and effects, the sand in the desert or a
+  level's floor (never the desert's heightfield at a level's x, z)
 - `shared/levels/datacenter.ts` — the datacenter's layout (boxes with `use` both/collide/draw, racks, fixtures, zones,
-  spawns, exits; seeded, docs/levels/datacenter.md) and its `Level`; `shared/levels/boxes.ts` — box collision for
-  box-built levels (support, push-out, ceiling, ground) over a 2 m grid. `tools/levels.test.mjs`: spawns clear, exits
-  reachable, walls closed; `tools/server-levels.test.mjs`: the move in and out, interest by level, refused drops
+  spawns, its exit's trigger; seeded, docs/levels/datacenter.md) and its `Level`; `shared/levels/boxes.ts` — box collision for
+  box-built levels (support, push-out, ceiling, ground) over a 2 m grid. `tools/levels.test.mjs`: spawns clear and away from
+  doors, doors reachable, walls closed, walks never jump, walls stop, jumps under every ceiling go straight up;
+  `tools/server-levels.test.mjs` (real world server): `?spawn=datacenter`, interest by level, a refused drop's notice
+  and bag, out by the exit and in by the entrance walked to, F twice not bouncing, rejoining inside, looks re-sent to
+  two who move together
 - Server level gate (`server/world.ts`): `outside`/`hunted` feed weather and the hunters only the players their level
   lets in; `IN_LEVEL` is what a player in a level without the world's `things` may send; `moveTo` is the one move between
   levels (a door, `?spawn=datacenter`, F3 → Go to level), told to the client as `'level'`; snapshots by level.

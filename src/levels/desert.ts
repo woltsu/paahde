@@ -32,7 +32,6 @@ import { Wrecks } from '../world/wrecks.ts';
 import { LootView } from '../world/loot.ts';
 import { VehicleView } from '../world/vehicles.ts';
 import { CorpseView } from '../world/corpses.ts';
-import { wind } from '../world/wind.ts';
 import { EntranceView } from '../world/entrance.ts';
 import { setLevelShade } from '../world/materialLighting.ts';
 import type { Stage, StageFrame } from './stage.ts';
@@ -72,6 +71,9 @@ export class DesertStage implements Stage {
   /** The datacenter's door (shared/levels/entrance.ts), and its hum. */
   entrance!: EntranceView;
   private undergroundFrame = 0;
+  /** Its post profile: DESERT_POST, then as it was when it last left (the art bench's tuning survives a visit inside). */
+  private profile = DESERT_POST;
+  private post: Post | null = null;
 
   private constructor() {
     this.root.name = 'desert';
@@ -129,14 +131,16 @@ export class DesertStage implements Stage {
   enter(scene: THREE.Scene, post: Post) {
     this.root.visible = true;
     this.sky.enter(scene);
-    post.setProfile(DESERT_POST);
+    this.post = post;
+    post.setProfile(this.profile);
     setLevelShade(null); // the hands are shaded by the sun and the shelters (src/world/materialLighting.ts)
   }
 
   leave(_scene: THREE.Scene) {
     // The sun, its cascades and the dune shadows are under the root: hidden, they are neither updated nor drawn.
     this.root.visible = false;
-    this.entrance.update({ x: 0, z: 0 }, false);
+    if (this.post) this.profile = this.post.liveProfile();
+    this.entrance.silence();
   }
 
   update(f: StageFrame) {
@@ -155,7 +159,6 @@ export class DesertStage implements Stage {
       this.sky.heights.setUnderground(near.slice(0, 4).map((s) => ({ x: s.x, z: s.z, r: 32, top: s.y - 0.3 })));
     }
     this.sky.update(f.dt, focus, camera, f.worldTime);
-    wind.update(f.serverTime / 1000);
     if (!LAB) {
       this.blownSand.update(f.dt, focus);
       this.dust.update(f.dt, camera.position);

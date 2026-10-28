@@ -225,7 +225,7 @@ Each phase is a push to `main` that leaves the game working.
 5. **Things in levels.** `level` on the item and placed tables; loot inside (racks as salvage, `shared/enemies.ts` if
    they're destroyable; `npm run econ` after).
 
-## Rules to add to CLAUDE.md once phase 2 lands
+## Rules (in CLAUDE.md since phase 2)
 
 - Anything that moves a player reads ground and solids through `level(s.level)` in `shared/sim.ts`, never the desert's
   functions directly.
@@ -238,8 +238,18 @@ Each phase is a push to `main` that leaves the game working.
 - **`Level`** (`shared/levels.ts`) has `flat` (hard floors: the sim skips the terrain's slopes, slip faces and rock walls,
   and the sand's height for "on scrap") and `things` (the world's things lie here: the desert's layout, loot, packs,
   chests, buildings, vehicles; false in a level until phase 5). `collide` also gets the mover's previous x, z (the
-  shelters need them). `bounds` is null for the desert. `exits` are plain boxes: F in one goes back out to the desert at
-  the entrance, which the server pairs (the entrance is placed per world, so a level can't name it).
+  shelters need them). `bounds` is null for the desert. Instead of `exits`, every level (the desert too) has `doors()`:
+  `{ trigger, to, arrive? }`, F in a trigger takes you to level `to` (at a spawn; out to the desert, at `arrive` of the
+  desert's door that leads back: `desertArrival`). The desert's door is the datacenter's entrance, placed per world, so
+  doors are computed on first use. Doors are found by `doorAt(level, x, y, z, slack)`, never by asking which level it is.
+  `STEP_UP` lives in `shared/levels.ts` (the sim re-exports it) so a level's collision can use it.
+- **Collision** (`shared/levels/boxes.ts`): a box whose underside was over the head a tick ago is the ceiling's
+  (`ceilingBoxes`), never a wall to push out of: jumping into a slab, beam or lintel only stops the jump. (It used to
+  throw you sideways, often out of bounds and back to a spawn.)
+- **Doors and moves**: spawns lie clear of every door's trigger and the server's slack round it (an F pressed twice
+  doesn't bounce you back out), and `moveTo` takes no second move within a second of one (`MOVE_GAP_MS`; each saves).
+  A move forgets the appearances sent to the mover (the client forgets them too). A saved row in a level that no longer
+  exists comes out at the desert's door. Nothing can be placed at the entrance, its trigger or where you come out.
 - **The sim** ignores storm, vortex pull and walker feet where the level has no `weather`/`enemies`, drops `riding` on a
   flat level, and puts a mover outside a level's bounds back at its first spawn (deterministic, no server message).
 - **Server gate**: `outside` and `hunted` as planned; besides, a player in a level without `things` may only send what
@@ -253,8 +263,15 @@ Each phase is a push to `main` that leaves the game working.
 - **Client switch** (`StageSwitch` in `src/levels/stage.ts`): nothing is drawn from the teleport until the new stage
   is in (the canvas holds the last frame under the 250 ms fade), so there is no frame of the old stage seen from the
   new place. A fade of its own (`#levelFade`), not the death fade's. The camera turns to the state's facing on the
-  teleport (`net.onTeleport`).
-- **Prefetch** builds the stage (geometry, bake) within 60 m of the door; compiling still happens behind the fade on
+  teleport (`net.onTeleport`). A stage that can't be had (none for that level, or its code failed to load) is not
+  asked for again for 10 s, and a failed load offers a reload; it never loops fades. A stage is updated only while it
+  is the level we're in; the clock (`Sky.tickClock`) and the wind tick in every level. The client's own ground checks
+  (camera, ragdolls, shots, blows, thrown junk, sparks, the spyglass, sound occlusion, the fly camera) go through
+  `src/ground.ts` `groundAt`, the floor in a flat level, never the desert's heightfield there. The Web Audio listener
+  follows the camera everywhere (`CrashSound.update`, its beacons only where the desert's things are). A storm's dust
+  at the eye drops at once in a level without weather (`StormFx.calm`). The desert's post profile is kept as it was on
+  leaving (the art bench's tuning survives a visit). Faded-out ambience beds stop their sources.
+- **Prefetch** builds the stage (geometry, the bake a few ms at a time: `bakeDataSliced`) within 60 m of a door; compiling still happens behind the fade on
   the first visit (a hidden root's lights aren't in the scene, so the level's pipelines can't be compiled ahead
   without entering it). The first entry measured ~0.3 s from F to the new stage on an M2 Pro (WebGPU) once built.
 - **Shadows**: the desert's CSM and dune heightfield are not switched off on leave: their light is under the hidden

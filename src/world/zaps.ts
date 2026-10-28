@@ -7,7 +7,7 @@
 import * as THREE from 'three/webgpu';
 import { abs, dot, float, instancedBufferAttribute, length, min, mx_noise_float, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { heightAt } from '../../shared/terrain.ts';
+import { groundAt } from '../ground.ts';
 import { hazeColor, sunColor } from './env.ts';
 import { uAt, ustarFrom10, wind } from './wind.ts';
 
@@ -292,7 +292,7 @@ class Zaps {
       sp.pos[v] += sp.vel[v] * dt;
       sp.pos[v + 1] += sp.vel[v + 1] * dt;
       sp.pos[v + 2] += sp.vel[v + 2] * dt;
-      const g = heightAt(sp.pos[v], sp.pos[v + 2]);
+      const g = groundAt(sp.pos[v], sp.pos[v + 2], sp.pos[v + 1]);
       if (sp.pos[v + 1] < g) {
         sp.pos[v + 1] = g;
         sp.vel[v + 1] *= -0.3;
@@ -321,7 +321,7 @@ class Zaps {
       this.shardAge[i] += dt / 2.5;
       const v = i * 3;
       const p = this.shardPos, vel = this.shardVel, rot = this.shardRot;
-      const g = heightAt(p[v], p[v + 2]);
+      const g = groundAt(p[v], p[v + 2], p[v + 1]);
       if (p[v + 1] > g + 0.01) {
         vel[v + 1] -= GRAVITY * dt;
         for (let a = 0; a < 3; a++) rot[v + a] += this.shardSpin[v + a] * dt;

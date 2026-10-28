@@ -33,7 +33,9 @@ export class CrashSound {
   private pos = { x: 0, y: 0, z: 0 };
 
   /** The final camera rotation includes pitch, freelook and roll, so elevated sounds stay in the right direction. */
-  update(cam: { x: number; y: number; z: number }, yaw: number, rotation?: { x: number; y: number; z: number; w: number }) {
+  /** Also moves the Web Audio listener (every positional sound's ear), so it runs every frame; `voices` false (in a
+   *  level, where the desert's crash sites aren't) fades the beacons out and starts none. */
+  update(cam: { x: number; y: number; z: number }, yaw: number, rotation?: { x: number; y: number; z: number; w: number }, voices = true) {
     const ctx = audio.ctx, out = audio.ambience;
     if (!ctx || !out || !audio.running) return;
     const now = ctx.currentTime;
@@ -63,7 +65,7 @@ export class CrashSound {
 
     // The nearest beacons in earshot.
     const want: { s: CrashSite; d: number }[] = [];
-    for (const s of crashSitesNear(cam.x, cam.z, HEAR + 30)) {
+    for (const s of voices ? crashSitesNear(cam.x, cam.z, HEAR + 30) : []) {
       if (crashSpent.has(s.id)) continue; // stripped: its systems have gone quiet (fades out below)
       const b = beaconPos(s, this.pos);
       const d = Math.hypot(b.x - cam.x, b.y - cam.y, b.z - cam.z);

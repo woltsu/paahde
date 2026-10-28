@@ -24,6 +24,10 @@ export const dcLook = {
 };
 
 /** A face's 2D coordinates from its axis-aligned normal: no triplanar needed. */
+/** A coordinate's screen-space width, never 0: on a face where it is constant (a side of a box) a smoothstep between
+ *  a and a + 0 would divide 0 by 0. */
+const fw = (v: F): F => max(fwidth(v), float(1e-5));
+
 /** A colour as a vec3 node (the typings keep 'color' and 'vec3' apart). */
 const col = (hex: number) => color(hex) as unknown as V3;
 
@@ -35,7 +39,7 @@ const holePattern = (p: V2, pitch: number, r: number): F => {
   const q = p.div(pitch);
   const row = floor(q.y);
   const c = vec2(fract(q.x.add(row.mod(2).mul(0.5))), fract(q.y)).sub(0.5).mul(pitch);
-  const d = length(c), aa = fwidth(d);
+  const d = length(c), aa = fw(d);
   const hole = float(1).sub(smoothstep(float(r).sub(aa), float(r).add(aa), d));
   const open = (Math.PI * r * r) / (pitch * pitch);
   return mix(hole, float(open), smoothstep(pitch * 0.25, pitch * 0.6, fwidth(p.x)));
@@ -45,7 +49,7 @@ const holePattern = (p: V2, pitch: number, r: number): F => {
 const lines = (c: F, pitch: number, width: number): F => {
   const f = fract(c.div(pitch));
   const e = min(f, f.oneMinus()).mul(pitch);
-  const line = float(1).sub(smoothstep(width, float(width).add(fwidth(e)), e));
+  const line = float(1).sub(smoothstep(width, float(width).add(fw(e)), e));
   return mix(line, float((2 * width) / pitch), smoothstep(pitch * 0.2, pitch * 0.5, fwidth(c)));
 };
 
@@ -72,7 +76,7 @@ export function makeMaterials(maps: BakeMaps): Record<LevelMat, THREE.MeshStanda
     const grit = mx_noise_float(vec3(p.mul(9), 1)).mul(0.5).add(0.5);
     const f = fract(p.div(0.6));
     const edge = min(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus())).mul(0.6);
-    const seam = float(1).sub(smoothstep(0.003, float(0.003).add(fwidth(edge)), edge));
+    const seam = float(1).sub(smoothstep(0.003, float(0.003).add(fw(edge)), edge));
     const bake = bakeAt(p);
     const perf = texture(maps.tiles, p.sub(vec2(maps.min.x, maps.min.y)).div(vec2(maps.tileSize.x, maps.tileSize.y))).r;
     const holes = holePattern(p, 0.025, 0.007).mul(perf);
@@ -89,8 +93,8 @@ export function makeMaterials(maps: BakeMaps): Record<LevelMat, THREE.MeshStanda
     const course = floor(q.y);
     const bx = q.x.add(course.mod(2).mul(0.5));
     const b = vec2(fract(bx), fract(q.y));
-    const jx = smoothstep(0.02, float(0.02).add(fwidth(b.x)), min(b.x, b.x.oneMinus()));
-    const jy = smoothstep(0.04, float(0.04).add(fwidth(b.y)), min(b.y, b.y.oneMinus()));
+    const jx = smoothstep(0.02, float(0.02).add(fw(b.x)), min(b.x, b.x.oneMinus()));
+    const jy = smoothstep(0.04, float(0.04).add(fw(b.y)), min(b.y, b.y.oneMinus()));
     const joint = float(1).sub(jx.mul(jy)).mul(float(1).sub(smoothstep(0.02, 0.05, fwidth(q.y))));
     const tint = mx_noise_float(vec3(floor(bx), course, 3)).mul(0.04);
     const y = positionLocal.y;
@@ -204,7 +208,7 @@ export function makeMaterials(maps: BakeMaps): Record<LevelMat, THREE.MeshStanda
     const filled = step(s, fill).mul(step(u, 41)).mul(step(0, u));
     const ledAt = (x: number) => {
       const cell = vec2(pg.x.sub(x), fract(yy.div(U)).sub(0.5).mul(U));
-      const r = 0.0015, aa = max(fwidth(pg.x), fwidth(yy));
+      const r = 0.0015, aa = max(fw(pg.x), fw(yy));
       const dot = float(1).sub(smoothstep(float(r).sub(aa), float(r).add(aa), length(cell)));
       // far away (or at a grazing angle) the dot is sub-pixel: a dim average glow in its own column, so the rows
       // still flicker without smearing across the door

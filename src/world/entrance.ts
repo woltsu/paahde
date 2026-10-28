@@ -16,6 +16,7 @@ export class EntranceView {
   readonly group = new THREE.Group();
   private bed: DcBed | null = null;
   private lp: BiquadFilterNode | null = null;
+  private quietSince = 0;
 
   constructor(root: THREE.Object3D) {
     const e = entrance();
@@ -62,6 +63,15 @@ export class EntranceView {
     return Math.hypot(at.x - (e.x + e.dx * BLOCK.half), at.z - (e.z + e.dz * BLOCK.half));
   }
 
+  /** Gone from the desert (into a level): fade the hum out and stop it. */
+  silence() {
+    const ctx = audio.ctx, bed = this.bed, lp = this.lp;
+    if (!ctx || !bed) return;
+    bed.out.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+    this.bed = this.lp = null;
+    setTimeout(() => { bed.stop(); lp?.disconnect(); }, 1500);
+  }
+
   /** The hum through the concrete, by the listener's distance; off (ramped) when `on` is false. */
   update(listener: { x: number; z: number }, on: boolean) {
     const ctx = audio.ctx;
@@ -74,9 +84,18 @@ export class EntranceView {
       lp.frequency.value = 500;
       lp.connect(audio.ambience);
       this.bed = buildBed(ctx, lp);
+      this.quietSince = ctx.currentTime;
     }
     const k = on ? Math.max(0, 1 - d / HEAR_R) : 0;
     this.bed.out.gain.setTargetAtTime(BED * AT_DOOR * k * k, ctx.currentTime, 0.3);
     this.lp!.frequency.setTargetAtTime(300 + 900 * k * k, ctx.currentTime, 0.3);
+    // Out of earshot a while (faded out): its sources stop; coming near again builds it anew.
+    if (k > 0) this.quietSince = ctx.currentTime;
+    else if (ctx.currentTime - this.quietSince > 3) {
+      this.bed.stop();
+      this.lp!.disconnect();
+      this.bed = null;
+      this.lp = null;
+    }
   }
 }

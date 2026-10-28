@@ -14,7 +14,7 @@ import { zaps } from './world/zaps';
 import type { Scrap } from './world/scrap';
 import { SCRAP_KINDS } from '../shared/scrap.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
-import { heightAt } from '../shared/terrain.ts';
+import { groundAt } from './ground.ts';
 import { THROW_MS, THROWABLE, THROW_SPEED, tossAt, type TossPath } from '../shared/throw.ts';
 import { indoors } from '../shared/shelters.ts';
 
@@ -169,7 +169,7 @@ export class Thrower {
       tossAt(t.path, s, _p);
       const ease = Math.max(0, 1 - s / HAND_S);
       _o.set(_p.x, _p.y, _p.z).addScaledVector(t.off, ease * ease);
-      const ground = heightAt(_o.x, _o.z);
+      const ground = groundAt(_o.x, _o.z, _o.y);
       if (_o.y <= ground) {
         _o.y = ground + 0.1;
         if (!t.landedAt) t.landedAt = wall;
