@@ -134,6 +134,10 @@ const en = {
     oilpump: 'Oil pump', fadec: 'Engine computer', oilcooler: 'Oil cooler',
   } as Record<string, string>,
 
+  /** Places you go into (shared/levels.ts): the doors' names, under the crosshair as "Open steel door". */
+  places: {
+    steelDoor: 'Steel door',
+  },
   prompt: {
     putDown: 'Put it down',
     /** A bedroll in view (shared/placed.ts): make it where you wake up after dying, or stop that. */

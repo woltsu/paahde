@@ -82,7 +82,9 @@ import { isTrophy, trophyFree } from '../shared/trophies.ts';
 import { CALM, LIVES, WORLD_ID } from '../shared/world.ts';
 import { TEXT } from '../shared/text.ts';
 import { pickupLimit, type PickupLimit } from './pickupLimit.ts';
-import { DESERT, inBox, level, levelByKey, type Level } from '../shared/levels.ts';
+import { DESERT, inBox, level, levelByKey, type Box, type Level } from '../shared/levels.ts';
+import { datacenterLevel } from '../shared/levels/datacenter.ts';
+import { entrance } from '../shared/levels/entrance.ts';
 
 /** Nobody on for this long: the world saves and exits until someone comes back. */
 const EMPTY_EXIT_MS = 10 * 60_000;
@@ -443,10 +445,10 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
 
 // --- Moving between levels (docs/levels.md "Getting in and out"). Only the server changes PlayerState.level.
 
-/** Where a player in a level comes out into the desert: their pod's hatch until there are entrances. */
-function levelDoor(p: Player): PlayerState {
-  const pod = spawnPoint(podOf(p.browserId));
-  return spawnState(pod.x, pod.z);
+/** Where a player in a level comes out into the desert: on the sand in front of its door (shared/levels/entrance.ts). */
+function levelDoor(_p: Player): PlayerState {
+  const o = entrance().out;
+  return spawnState(o.x, o.z, heightAt(o.x, o.z), DESERT, o.facing);
 }
 
 /** Put `p` at `to` (another level, or back out): a teleport. Off the bike (it stays parked where they were), out of
@@ -466,10 +468,13 @@ function moveTo(p: Player, to: PlayerState) {
 /** How far outside a level's exit box (m) F still counts: the client asks from where it predicts it is. */
 const EXIT_SLACK = 0.6;
 
-/** F at a level's way out (Level.exits): back out at its door. */
+/** F at the datacenter's door out in the desert (shared/levels/entrance.ts): in, at a spawn in its vestibule; F at a
+ *  level's way out (Level.exits): back out at its door. On the bike: off it, the bike stays parked at the door. */
 function onEnter(p: Player) {
   const L = levelOf(p), s = p.state, e = EXIT_SLACK;
-  if (L.exits.some((b) => inBox([b[0] - e, b[1] + e, b[2] - e, b[3] + e, b[4] - e, b[5] + e], s.x, s.y, s.z))) moveTo(p, levelDoor(p));
+  const at = (b: Box) => inBox([b[0] - e, b[1] + e, b[2] - e, b[3] + e, b[4] - e, b[5] + e], s.x, s.y, s.z);
+  if (L.things && at(entrance().trigger)) moveTo(p, levelSpawn(datacenterLevel.id, p.id));
+  else if (L.exits.some(at)) moveTo(p, levelDoor(p));
 }
 
 /** Debug menu (F3 → Go to level): into level `key` at a spawn, or out to the desert, the way a door does it. */

@@ -112,7 +112,9 @@ import { LOADING_FRAME_MS, slice } from './yield';
 import { Warmup } from './warmup';
 import { DesertStage } from './levels/desert';
 import { StageSwitch, type Stage } from './levels/stage';
-import { level } from '../shared/levels.ts';
+import { inBox, level } from '../shared/levels.ts';
+import { entrance } from '../shared/levels/entrance.ts';
+import { BED, buildBed } from './levels/datacenter/ambience';
 import { datacenterLevel } from '../shared/levels/datacenter.ts';
 import type { Storm } from '../shared/storm.ts';
 import type { Gas } from '../shared/gas.ts';
@@ -436,7 +438,7 @@ net.onTeleport = (state) => {
   orbit.yaw = state.facing;
   orbit.pitch = 0;
 };
-if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels });
+if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed, BED } });
 terrain.loading = true;
 let joined = false; // until the first welcome, net.me is the default spawn, not our saved position
 // ?spawn=crash / field: once joined, turn to face the machine or the scrap field we were put next to.
@@ -731,13 +733,20 @@ renderer.setAnimationLoop((time) => {
   // A piece that came off a machine and lies by you can be picked up to be turned and taken apart in the hands; F again sets it down.
   const pieceHere = teardown.active && !teardown.holding ? teardown.pieceNear(net.me) : null;
   const piecePrompt = teardown.holding ? TEXT.prompt.putDown : pieceHere ? TEXT.prompt.pickUp(pieceHere.label) : null;
-  const fPrompt = piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
+  // A level's door (shared/levels/entrance.ts out in the desert, Level.exits inside): F goes through, even on the bike
+  // (it stays parked at the door). No text says where it leads.
+  const atDoor = net.connected && !net.down && (L.things ? inBox(entrance().trigger, s.x, s.y, s.z) : L.exits.some((b) => inBox(b, s.x, s.y, s.z)));
+  const doorPrompt = atDoor ? TEXT.prompt.open(TEXT.places.steelDoor) : null;
+  // Near the door the level's stage is built ahead, so going in only has to compile it (behind the fade).
+  if (L.things && desert.entrance.distance(s) < 60) levels.prefetch(datacenterLevel.id);
+  const fPrompt = doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));
   const extra = [growing, wirePrompt, placing.prompt].filter(Boolean).join(' ');
   hud.setTarget(fPrompt && extra && typeof fPrompt === 'string' ? `${kbd('interact')}${fPrompt} ${extra}` : (fPrompt ?? (extra || null)));
   const interact = takePickup() && !fly.active;
-  if (interact && onBike) tools.getOff = true; // (src/input.ts: the bike key's input, one tick)
+  if (interact && atDoor) net.enter();
+  else if (interact && onBike) tools.getOff = true; // (src/input.ts: the bike key's input, one tick)
   else if (interact && piecePrompt) {
     if (teardown.holding) teardown.putDown();
     else teardown.hold(pieceHere!.piece);
@@ -774,7 +783,7 @@ renderer.setAnimationLoop((time) => {
     } else if (wreck) net.crashTake(wreck.id);
     else if (pack || chest) hud.open();
   }
-  const targeted = piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
+  const targeted = doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
   survival.update(frameDt, net.me, targeted, interact && !targeted, clockText(sky.day.tod));
   const w = net.water;
   const m = net.me;

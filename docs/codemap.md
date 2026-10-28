@@ -52,6 +52,9 @@ when you find it stale.
 - `src/levels/datacenter/` — the datacenter stage: `index.ts` (boxes merged per material, instanced racks, the pool, its
   enter/leave), `materials.ts` (procedural TSL concrete, racks with LEDs, strips), `bake.ts` (contact AO and far-light
   maps), `environment.ts` (environment node, post profile), `ambience.ts` (synthesised fans, hum, units, chatter)
+- `shared/levels/entrance.ts` — the datacenter's door in the desert: a concrete block placed from the world seed a
+  walk from the pods, solid in `desertLevel`, its trigger (F, `TEXT.prompt.open(TEXT.places.steelDoor)`) and where
+  you come out; `src/world/entrance.ts` draws it and plays the muffled hum by distance
 - `src/levels/lightPool.ts` — a level's fixed light pool (6 `PooledPointLight` + 1 shadowing `PooledSpotLight`,
   `src/world/pooledLight.ts`) handed to the fixtures nearest the camera, never moved while lit
 

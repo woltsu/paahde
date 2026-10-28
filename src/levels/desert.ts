@@ -32,6 +32,7 @@ import { LootView } from '../world/loot.ts';
 import { VehicleView } from '../world/vehicles.ts';
 import { CorpseView } from '../world/corpses.ts';
 import { wind } from '../world/wind.ts';
+import { EntranceView } from '../world/entrance.ts';
 import { setLevelShade } from '../world/materialLighting.ts';
 import type { Stage, StageFrame } from './stage.ts';
 
@@ -65,6 +66,8 @@ export class DesertStage implements Stage {
   lootView!: LootView;
   vehicleView!: VehicleView;
   corpseView!: CorpseView;
+  /** The datacenter's door (shared/levels/entrance.ts), and its hum. */
+  entrance!: EntranceView;
   private undergroundFrame = 0;
 
   private constructor() {
@@ -114,6 +117,7 @@ export class DesertStage implements Stage {
     d.vehicleView = new VehicleView(root);
     d.corpseView = new CorpseView(root);
     root.add(footprints.mesh, tyreprints.mesh, streaks.mesh, tyreDust.mesh);
+    d.entrance = new EntranceView(root);
     addHeadlights(root);
     return d;
   }
@@ -128,6 +132,7 @@ export class DesertStage implements Stage {
   leave(_scene: THREE.Scene) {
     // The sun, its cascades and the dune shadows are under the root: hidden, they are neither updated nor drawn.
     this.root.visible = false;
+    this.entrance.update({ x: 0, z: 0 }, false);
   }
 
   update(f: StageFrame) {
@@ -153,5 +158,6 @@ export class DesertStage implements Stage {
     }
     tyreDust.update(f.dt);
     this.shelters.update(camera.position);
+    this.entrance.update(camera.position, true);
   }
 }

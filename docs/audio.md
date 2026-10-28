@@ -98,6 +98,16 @@ zero drops** (solo: 8). The fixture site produced no discrete rock echoes, so th
 Routing and source-lifetime regressions are checked in `tools/acoustics-routing.test.mjs` and
 `tools/rifle-audio.test.mjs`; priority/expiry and shelter obstruction have separate audio tests.
 
+## The datacenter's bed (28 October 2026)
+
+The datacenter (docs/levels/datacenter.md) is a synthesised bed, `src/levels/datacenter/ambience.ts` `buildBed`, built on
+any `BaseAudioContext`. It was levelled by rendering 20 s of it offline in Chrome (`OfflineAudioContext`, 48 kHz, mono
+into the BS.1770 K-weighting as two `IIRFilterNode`s, 400 ms blocks, absolute and relative gating, +3 dB for the two
+equal channels it plays on), at master volume 0.4, chatter every 4 s. With `?debug` the page exposes `dbg.dcBed`
+(`buildBed`, `BED`) to repeat it. Results with `BED` 0.34: −29.9 LUFS mid-hall, −28.4 by the cooling units, −29.2 in
+the UPS room; sample peak −9.3 dBFS at volume 1. This is the bed alone, not the captured post-limiter mix; footsteps and
+music add to it. Near the desert door the same bed plays low-passed, at most 0.45 of that level.
+
 ## Limits of these numbers
 
 These are scripted scenes using the game's actual sound entry points, not recordings of a complete multiplayer

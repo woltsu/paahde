@@ -15,6 +15,7 @@ import { collideScrap } from './scrap.ts';
 import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
 import { datacenterLevel } from './levels/datacenter.ts';
+import { collideEntrance } from './levels/entrance.ts';
 
 export const DESERT = 0;
 /** 0 the desert, 1.. the registry below: small, one byte on the wire. */
@@ -66,7 +67,8 @@ function sandAt(x: number, z: number, prevY: number): number {
   return sandHidden(x, z, prevY) ? -Infinity : heightAt(x, z);
 }
 
-/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters and what is built outside. */
+/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, what is built outside and the
+ *  datacenter's door (shared/levels/entrance.ts: its way in is F at that door, not one of `exits`). */
 export const desertLevel: Level = {
   id: DESERT,
   key: 'desert',
@@ -76,7 +78,7 @@ export const desertLevel: Level = {
     const scrapTop = Math.max(collideScrap(c, y, prevY, radius, stepUp), collideCrash(c, y, prevY, radius, stepUp),
       collideMachines(c, y, prevY, radius, stepUp), collideJetWrecks(c, y, prevY, radius, stepUp), collidePods(c, y, prevY, radius, stepUp));
     const builtTop = Math.max(collideShelter(c, y, prevY, radius, height, stepUp, prevX, prevZ),
-      collideOutdoor(c, y, prevY, radius, height, stepUp));
+      collideOutdoor(c, y, prevY, radius, height, stepUp), collideEntrance(c, y, prevY, radius, height, stepUp));
     return Math.max(scrapTop, builtTop);
   },
   ceiling: shelterCeiling,

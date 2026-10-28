@@ -1,14 +1,16 @@
 // The datacenter's sound (docs/levels/datacenter.md "Atmosphere"): synthesised, no samples. A broadband fan bed (pink
 // noise low-passed ~4 kHz, a slow ±1 dB drift) with the mains hum (100 Hz and its 200 Hz harmonic) under it, the whole
 // hall; the cooling units' low rumble with a slow fan beat, louder near the north wall; the UPS room's transformer
-// hum, only in there. Now and then a disk-seek chatter from somewhere in the racks. Aimed at about −30 LUFS integrated at
-// the default volume (docs/levels/datacenter.md), well under the −23 mix target: it is the level's whole soundscape.
-// Through the shared ambience bed (src/audio.ts: master gain and limiter); every gain ramps.
+// hum, only in there. Now and then a disk-seek chatter from somewhere in the racks. At the default volume (0.4) it
+// measures −29.9 LUFS integrated mid-hall, −28.4 by the cooling units, −29.2 in the UPS room, sample peak −9.3 dBFS at
+// volume 1 (rendered offline, BS.1770 K-weighting and gating: docs/audio.md "The datacenter's bed"): well under the −23
+// mix target, it is the level's whole soundscape. Through the shared ambience bed (src/audio.ts: master gain and
+// limiter); every gain ramps.
 import { audio } from '../../audio.ts';
 import type { ZoneId } from '../../../shared/levels/datacenter.ts';
 
 /** Bed level at volume 1 (the master slider scales it: 0.4 by default). */
-export const BED = 0.16;
+export const BED = 0.34;
 /** The cooling units' rumble at the north wall, and the UPS room's hum inside it (× BED's level). */
 const CRAC = 1.1;
 const UPS = 1.3;
