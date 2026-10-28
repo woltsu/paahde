@@ -517,6 +517,27 @@ adds `root` and so also the pool. Prewarm: compile with all 7 pool lights presen
 Bench: a `?w=` dev room or the art bench should load the level alone with the profile applied, to tune `bakeScale`,
 exposure, strip and LED intensities.
 
+## As built (October 2026)
+
+- Layout as above, from `datacenterLayout(1)`: 209 racks in 31 run boxes, 74 solid boxes in all (fewer than the ~90
+  estimated: the hall's shell is fewer segments), 331 boxes with the visual ones, 28 fixtures. Cable trays carry a
+  fibre duct on about half the blocks; strips hang over every aisle and the south perimeter aisle, not the cross aisle
+  (the downlights light it). Exit trigger: x ±1.2, z −5.3..−4.2 in front of the exit door.
+- Collision (`shared/levels/boxes.ts`): one routine for all boxes, by height: a box whose top is within a step of the
+  feet is stood on (the floors too: `ground` only answers what is right under the point), a taller one pushes the
+  circle out (twice, for corners); undersides of slabs, beams and lintels are the ceiling. A minute's walk costs ~4 ms
+  (the desert's ~9; `npm run bench` physics "walk a minute: datacenter").
+- Materials as described, with simplifications: the rack's variant comes from `hash(instanceIndex)` (not uploaded);
+  the far LED glow is confined to its own column (the whole-row average smeared across the doors at grazing angles);
+  the equipment has one blinking green LED per panel; the ceiling streak is one `mx_noise_float`.
+- The bake (`src/levels/datacenter/bake.ts`) runs on the main thread in ~65 ms; the far light marches each texel's
+  ray to every main point fixture in range against a height map of what stands. `bakeScale` 0.55, untuned in a bench.
+- Light pool exactly as "Pool assignment" (`src/levels/lightPool.ts`); the hemisphere fill is in the stage's root.
+- Ambience: the bed, the cooling units by distance to the north wall (not per unit, not panned), the UPS hum by zone,
+  disk chatter every 4–13 s in the hall; relay clicks and a room tail on steps are not done. Levelled to −30 LUFS
+  (docs/audio.md "The datacenter's bed").
+- No `?w=` bench room for the level yet: tune it in place (`?spawn=datacenter&debug`, the fly camera, `dcLook` uniforms).
+
 ## Open questions and later
 
 - **Doors:** the exit door is a trigger box for now. A sliding hall door, or cold-aisle containment doors at the row ends,

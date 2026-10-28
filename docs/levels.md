@@ -1,8 +1,8 @@
 # Levels: places other than the desert
 
 Design for rendering and running a level that is not the desert: no terrain, no sky, no sun, no haze, no weather.
-The first one is an indoor datacenter (its own design: `docs/levels/datacenter.md`). Nothing here is built yet; this
-is the plan, in the order to build it.
+The first one is an indoor datacenter (its own design: `docs/levels/datacenter.md`). Phases 1–4 are built (October
+2026); "As built" below lists where the code differs from this plan, which otherwise still describes it.
 
 ## What a level is
 
@@ -232,6 +232,42 @@ Each phase is a push to `main` that leaves the game working.
 - Desert systems (weather, enemies, heat) take players through the server's level gate, by property (`weather`,
   `enemies`, `climate`), never `level === DATACENTER`.
 - A level's lights come from its light pool; a stage never adds lights to the scene outside its root.
+
+## As built (phases 1–4) and where it differs
+
+- **`Level`** (`shared/levels.ts`) has `flat` (hard floors: the sim skips the terrain's slopes, slip faces and rock walls,
+  and the sand's height for "on scrap") and `things` (the world's things lie here: the desert's layout, loot, packs,
+  chests, buildings, vehicles; false in a level until phase 5). `collide` also gets the mover's previous x, z (the
+  shelters need them). `bounds` is null for the desert. `exits` are plain boxes: F in one goes back out to the desert at
+  the entrance, which the server pairs (the entrance is placed per world, so a level can't name it).
+- **The sim** ignores storm, vortex pull and walker feet where the level has no `weather`/`enemies`, drops `riding` on a
+  flat level, and puts a mover outside a level's bounds back at its first spawn (deterministic, no server message).
+- **Server gate**: `outside` and `hunted` as planned; besides, a player in a level without `things` may only send what
+  can't reach the desert's things through shared coordinates (`IN_LEVEL` in `server/world.ts`: input, chat, inventory
+  moves between the bag and equipment, shots and swings without targets, drinking, doors, debug); the rest is refused
+  (a drop with "Can't drop here"). `openBoxes` (`shared/storage.ts`) gives only the bag and equipment there. Dying in a
+  level leaves the pack at the desert door. Terrain chunks only stream to players in the desert. Zaps, swings and shield
+  breaks go to the same level only.
+- **One move** (`moveTo`): the door both ways, `?spawn=datacenter` (on ready) and F3 → Go to level. A respawn (always
+  in the desert) is seen by the client as a level change in the next snapshot and switches the stage too.
+- **Client switch** (`StageSwitch` in `src/levels/stage.ts`): nothing is drawn from the teleport until the new stage
+  is in (the canvas holds the last frame under the 250 ms fade), so there is no frame of the old stage seen from the
+  new place. A fade of its own (`#levelFade`), not the death fade's. The camera turns to the state's facing on the
+  teleport (`net.onTeleport`).
+- **Prefetch** builds the stage (geometry, bake) within 60 m of the door; compiling still happens behind the fade on
+  the first visit (a hidden root's lights aren't in the scene, so the level's pipelines can't be compiled ahead
+  without entering it). The first entry measured ~0.3 s from F to the new stage on an M2 Pro (WebGPU) once built.
+- **Shadows**: the desert's CSM and dune heightfield are not switched off on leave: their light is under the hidden
+  root, so they are neither updated nor drawn, and toggling them reallocates maps (a hitch on every return).
+- **Post profile** has no `dust`: the weather's dust follows the weather systems, which a level without `weather` feeds
+  nothing (`main.ts` passes them empty lists, and the marches skip at strength 0). `sunGlare` also skips the CPU sun
+  ray against the dunes. `exposure` is what the eye adapts to (it eases over ~1.5 s, as the sun adaptation does).
+- **Audio**: the desert wind fades out (`WindSound.setSilent`) where `indoors`; music and speech read `level.indoors`;
+  footsteps take the concrete set and no prints are left on a flat level (`Avatar.levelFloor`). Not done: the level's
+  own reverb in `src/acoustics.ts`/`src/echo.ts` (they still read the desert's walls round the listener's x, z).
+- **Entrance**: a squat concrete block with a steel door and an amber lamp (`shared/levels/entrance.ts`,
+  `src/world/entrance.ts`), axis-aligned, its door towards the pods, 90–140 m from them; its prompt reuses
+  `TEXT.prompt.open` with `TEXT.places.steelDoor`. The hum near it is the datacenter's own bed low-passed by distance.
 
 ## Open questions
 
