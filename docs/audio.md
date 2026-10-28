@@ -108,6 +108,16 @@ equal channels it plays on), at master volume 0.4, chatter every 4 s. With `?deb
 the UPS room; sample peak −9.3 dBFS at volume 1. This is the bed alone, not the captured post-limiter mix; footsteps and
 music add to it. Near the desert door the same bed plays low-passed, at most 0.45 of that level.
 
+## The beginning's fall (28 October 2026)
+
+The beginning (docs/levels/tutorial.md) plays the datacenter's bed and over it `src/levels/beginning/sound.ts`
+`buildFall`: a low roar and a groan set by how far you are (`rumble`, the beat; `ROAR × rumble²` and `ROAR × 0.6 ×
+rumble`), a boom at the hall's jolt, a two-note chime every 5 s in the bay corridor. Measured as the datacenter's bed was
+(offline, 48 kHz, K-weighted, gated, +3 dB for the two channels; `?debug` `dbg.fall()` loads it), at master volume 0.4,
+the fall alone: −48.6 LUFS at rumble 0.3 (the control room), −38.9 at 0.55 with the chime (the bay corridor), −29.5 at
+1 (the ride down); sample peak −8.2 dBFS at volume 1 with the boom and a chime. With the bed (−30) the ride sums to
+about −26.7: still under the −23 target, a bed and not a scene.
+
 ## Limits of these numbers
 
 These are scripted scenes using the game's actual sound entry points, not recordings of a complete multiplayer

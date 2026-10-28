@@ -7,7 +7,8 @@ no instructions, no objective markers, no rule text. The building is laid out so
 way forward, and the world tells the rest (light, sound, what moves, the character's own short lines).
 
 Built on the levels architecture (`docs/levels.md`) and the datacenter's parts (`docs/levels/datacenter.md`: materials,
-racks, light pool, environment profile, ambience). Read both, and the code as built, first. Nothing here is built yet.
+racks, light pool, environment profile, ambience). Read both, and the code as built, first. Built in October 2026:
+"As built" at the end lists where the code differs from this design.
 
 ## The story it tells
 
@@ -197,3 +198,48 @@ marks the grant, and you wake there as a new player does now. The same path serv
   per browser would be kinder to regulars; the profile (`src/profile.ts`) could remember it.
 - The datacenter in the desert (docs/levels.md phase 4): story-wise it is one of the fallen ones. Its dressing can
   echo this one (the same water-drop logo, the city names) so going in later feels like going back.
+
+## As built (October 2026)
+
+Three pushes, as the phases: the layout and its `Level` with gated solids; the server's progress and who goes through
+it; the look and the telling. Where it differs from the design above:
+
+- **Doors** (written before `Level.doors()`): the beginning has none. Its one way out is the pod's hatch
+  (`POD.hatch`), and F there is `{ t: 'tutorial', what: 'hatch' }` to server/tutorial.ts: the relay into the panel
+  (`TEXT.prompt.place(TEXT.parts.relay)`, shown only with it in the bag), then in (`TEXT.prompt.getIn`). An `'enter'`
+  there would have taken you straight out. The Esc menu's skip is `what: 'skip'` (`Level.skippable` shows the button).
+- **Crouching under things**: the sim had no crouched height. `Level.crouchUnder` (true here only) makes a crouch or a
+  slide `CROUCH_HEIGHT` 1 m tall in collision and ceiling, and keeps you crouched while there is no room to stand (no
+  input bit: the ceiling decides). The tray's underside is at 1.15 m; the blast door's edge stops at **1.1 m**, not
+  0.8 (a 0.8 m gap would need a lower crouch than the eye reads well under). The eye goes lower with it (src/camera.ts
+  `short`). The desert never has it, so nothing changes there (`npm run bench`: physics within noise).
+- **Gate bits** carry progress the client draws too, not only solids: `GATE.quarters` and `control` open doors,
+  `shut` closes the blast door behind you (a gate < 0: solid once set), and `blast`, `lights`, `cart`, `powered`,
+  `launch` move nothing (the door coming down, the jolt, the cart, the panel, the ride). Saved with the player
+  (`players.gates`); a reconnect puts you back where you stood with them, not at the start of the beat.
+- **The beat** is not kept by the server: `beatAt(x, y, z)` (shared) gives it from where you are, for the speech, the
+  rumble, the screens and the debug menu's "Beginning beat" (`debugLevel('beginning:<n>')`: at `BEAT_STARTS[n]` with the
+  gates before it).
+- **The cabinet**: a `control_cabinet` of a fixed seed (`shared/levels/beginningCabinet.ts`: the first with one relay),
+  each player's own session in server/tutorial.ts, never saved (a reconnect finds its steps undone, the relay out if
+  `GATE.control` says so). Its other parts start out taken (long gone), its steps pay no scrap; the relay comes out as
+  `tut_relay`. Its work site is the stage's (`Stage.workSite`, `Stage.site`), not the desert's machine sites.
+- **No ramp** in the bay corridor (the floors are boxes; the sim has no slopes in a flat level). **The sub-floor**: a
+  ladder of two fallen trays (a jump each) and a jump back up; no duct. The custodian's bag is a prop with its torch's
+  light, not an item.
+- **The ride**: the view stays at the hatch (no seat): the shaking and the roar grow for 2.8 s, then the dust screen
+  with its card (`TEXT.tutorial.card`), held over the move until the desert is drawn under it (`RIDE_MS` 7 s on the
+  server). The pod is pod.glb's `Pod` fitted into its cradle, as modelled; the hatch doesn't animate.
+- **Sound**: the datacenter's bed plus the fall (src/levels/beginning/sound.ts, docs/audio.md "The beginning's fall");
+  the station's recorded "please" is not done, only its chime.
+- **The window** is one transparent pane (the one exception to the datacenter's no-transparency rule), a starfield
+  plane and the planet disc (src/levels/beginning/planet.ts) far behind it.
+- **Who goes through it**: new players (no row in this world, no `beginning_done` grant), not in the lab or the bench,
+  and not with any dev spawn (`?spawn=pod`, `crash`, ...: the server tests and the bench's bots use `pod`).
+  `?spawn=beginning` goes in on ready like any level. Joining inside, loading no longer waits for the desert's terrain.
+- **Stuck hints** for four obstacles (crouch, jump, the air jump at the gap or in the sub-floor, the slide), once per
+  world on this browser (localStorage); the cabinet has the disassembly mode's own guides.
+- **Economy**: `npm run econ -- --base fd0ba38`: "No significant change".
+
+Known gaps: the planet is best seen from in front of the window; the relay has no held-item model (its icon is a
+relay's); the facing isn't saved on a reconnect; the level's own reverb (as the datacenter's) is not done.

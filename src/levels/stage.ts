@@ -46,8 +46,10 @@ export interface Stage {
   site?(m: SiteMsg): boolean;
   /** What F does here before anything else (the beginning's hatch), or null. */
   interact?(me: PlayerState, bag: Slots | undefined): { prompt: string; act: () => void } | null;
-  /** The beginning's beat `me` is at (shared/levels/beginning.ts BEATS: its speech, hints and rumble). */
-  beat?(me: PlayerState): number;
+  /** The beginning's beat `me` is at (shared/levels/beginning.ts BEATS) and what is in front of them (its speech). */
+  beat?(me: PlayerState): { n: number; near: 'tray' | 'gap' | 'cabinet' | 'window' | null };
+  /** How hard the ground shakes (0..1: src/camera.ts rumble), if it does. */
+  readonly rumble?: number;
   /** The player's keys do nothing now (in the pod going down). */
   frozen?(me: PlayerState): boolean;
 }

@@ -151,7 +151,6 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
     add('downlight', zone, 'draw', x - 0.2, x + 0.2, y + 0.02, y + 0.06, z - 0.2, z + 0.2);
   };
   const strip = (zone: BeginningZone, x0: number, x1: number, y: number, z: number) => add('strip', zone, 'draw', x0, x1, y, y + 0.06, z - 0.06, z + 0.06);
-  const stripZ = (zone: BeginningZone, x: number, y: number, z0: number, z1: number) => add('strip', zone, 'draw', x - 0.06, x + 0.06, y, y + 0.06, z0, z1);
   const top = 5.3; // the dividers rise to the tallest room's ceiling slab
 
   // --- 1. Crew quarters: twelve bunks in six frames (two high) along the side walls, one made; lockers on the back wall.
@@ -264,7 +263,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('door', 'bay', 'collide', -B.x, B.x, 0, BLAST.y0, BLAST.z0, BLAST.z1, -GATE.shut);
   add('hazard', 'bay', 'draw', -B.x, B.x, 0, 0.003, BLAST.z0 - 0.6, BLAST.z1 + 0.6);
   for (const z of [76, 83, 90.5]) point('emergency', 'bay', 0, B.h - 0.2, z, AMBER, 1.4, 7);
-  stripZ('bay', 0, B.h - 0.06, 73, 88);
+  for (const z of [74, 79, 84]) strip('bay', -0.5, 0.5, B.h - 0.06, z);
   divider('bay', B.z1, R.pod.x, top, 0.9, 2.4);
 
   // --- 8. The pod bay: eleven empty cradles, one pod, the window.

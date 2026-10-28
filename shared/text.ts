@@ -672,6 +672,20 @@ const en = {
     vortex: ['Keep well clear of a sand vortex.'],
   } as { any: string[] } & Record<string, string[]>,
 
+  // ---- The beginning (docs/levels/tutorial.md): the station's own words, the keys shown only to someone stuck, the card
+  // on the way down --------------------------------------------------------------------------------------------------
+
+  tutorial: {
+    /** The station's screens: its state, one word or two, in capitals, by how far you are. No numbers. */
+    screens: { nominal: 'NOMINAL', decay: 'ORBIT DECAY', attitude: 'ATTITUDE LOST', entry: 'ENTRY' },
+    /** Shown with the key (src/bindings.ts ctl) after standing stuck at an obstacle a while; never again in that world. */
+    stuck: { crouch: 'Crouch', jump: 'Jump', airJump: 'Jump, then again in the air', slide: 'Slide' },
+    /** The labels on the collapsed aisle's rack rows. */
+    cities: ['LAGOS', 'LIMA', 'DHAKA', 'CAIRO', 'TEHRAN', 'KARACHI', 'PERTH', 'PHOENIX'],
+    /** The one card in the dust on the way down. */
+    card: 'The last of them came down too.',
+  },
+
   // ---- The character talking to themselves (src/speechLines.ts, docs/speech.md); a list: one picked at random -------
 
   speech: {
@@ -683,6 +697,17 @@ const en = {
     machineBench: "I can't take this apart by hand. I'll have to build a dismantling bench.",
     /** The first thing said in a world, on arriving at the pod. */
     start: "I'd better find a way to build a shelter.",
+    /** The beginning (docs/levels/tutorial.md), once each, as you go. */
+    tutorial: {
+      wake: "That's not the usual alarm.",
+      tray: 'Under it, then.',
+      lights: 'Not good. Not good at all.',
+      gap: 'I can make that.',
+      cabinet: "The door's dead. Its relay must be the trouble.",
+      relay: 'This should wake the pod up.',
+      window: "So that's where we're going.",
+      pod: 'Come on, come on.',
+    },
     /** The first time each kind is in the bag: broken, then working. */
     got: {
       canteen: ["It's cracked, but I can patch it up.", "Water I can carry around. I'm never letting go of this."],

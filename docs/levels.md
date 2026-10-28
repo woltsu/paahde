@@ -286,6 +286,23 @@ Each phase is a push to `main` that leaves the game working.
   `src/world/entrance.ts`), axis-aligned, its door towards the pods, 90–140 m from them; its prompt reuses
   `TEXT.prompt.open` with `TEXT.places.steelDoor`. The hum near it is the datacenter's own bed low-passed by distance.
 
+## The contract grew with the beginning (docs/levels/tutorial.md, October 2026)
+
+- **`private`**: one copy per player. The server sends no one else in it (interest: `seenBy`), and nobody sees in;
+  zaps, swings and shield breaks stay with the player (`sameNear`).
+- **`mortal`**: false, `hurt` and `die` refuse (the beginning). **`skippable`**: the Esc menu offers to leave for the
+  desert. **`crouchUnder`**: crouched or sliding you are `CROUCH_HEIGHT` (1 m) tall in collision and ceiling (shared/sim.ts),
+  and with no room to stand over you, you stay crouched; false in the desert and the datacenter (nothing changes there).
+- **Gated solids**: `ground`, `collide` and `ceiling` take the mover's `PlayerState.gates`; a box-built level gives
+  boxes a gate mask (`LevelBox.gate`, `BoxGrid.gate`): > 0 solid while the bits are clear (a door), < 0 solid once they
+  are set (a door shut behind you). Only the server sets bits (no input asks), so `step()` stays a function of state and
+  input; `gates` comes in the next reconciliation like `level`, is saved with the player (`players.gates`) and is a
+  spawn's own on any move (0 from every spawn).
+- **Level items**: an item with `levelOnly: <level key>` (`shared/items.ts`) is taken out of the bag on any move out of
+  that level, and on joining anywhere else.
+- **Machines in a level**: a stage may offer its own work site (`Stage.workSite`, the beginning's cabinet), with its own
+  messages (`Stage.site`); the server routes them before the `IN_LEVEL` gate (server/tutorial.ts).
+
 ## Open questions
 
 - **The lab** (`?w=lab`) is a flat level in all but name: ~20 scattered `if (LAB)` in `shared/` (terrain, rocks,

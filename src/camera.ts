@@ -54,7 +54,10 @@ export type ViewPose = { x: number; y: number; z: number; vx: number; vy: number
   /** The bike's lean into a turn (rad, + = left): the view rolls with part of it. */
   lean?: number;
   /** The bike's heading while riding (rad), for the neck limits. */
-  heading?: number };
+  heading?: number;
+  /** Crouched or sliding where that makes you short (Level.crouchUnder, shared/sim.ts CROUCH_HEIGHT): the eye goes lower
+   *  with the body, under the tray and the blast door's edge. */
+  short?: boolean };
 
 export class FirstPersonCamera {
   readonly camera: THREE.PerspectiveCamera;
@@ -78,6 +81,10 @@ export class FirstPersonCamera {
   private fov = comfort.fov;
   /** Magnification (spyglass, src/telescope.ts); 1 = none. The view eases towards it. */
   zoom = 1;
+  /** The ground shaking (0..1, the beginning's fall: src/levels/beginning): the view shakes, by the comfort motion setting
+   *  (reduced: none; the sound still says it). */
+  rumble = 0;
+  private rumbleClock = 0;
   private zoomShown = 1;
   private wasGrounded = true;
   private lastVy = 0;
@@ -238,7 +245,8 @@ export class FirstPersonCamera {
 
     const x = p.x + rightX * bobX;
     const z = p.z + rightZ * bobX;
-    this.crouch += ((p.grounded ? (p.sliding ? 1 : p.crouching ? 0.7 : 0) : 0) - this.crouch) * (1 - Math.exp(-dt * 12));
+    const low = p.short ? 1.15 : 1; // (the eye under CROUCH_HEIGHT)
+    this.crouch += ((p.grounded ? (p.sliding ? low : p.crouching ? 0.7 * low * low : 0) : 0) - this.crouch) * (1 - Math.exp(-dt * 12));
     // Sliding: lean back and to the left, the hand in the sand; the sand shakes the view, more the faster.
     this.slide += ((sliding ? 1 : 0) - this.slide) * (1 - Math.exp(-dt * (sliding ? 9 : 5)));
     let shakeY = 0, shakeR = 0, shakeP = 0;
@@ -250,6 +258,12 @@ export class FirstPersonCamera {
       shakeR = a * 0.006 * Math.sin(t * 23.7 + 0.4) * Math.sin(t * 5.1);
       shakeP = a * 0.005 * Math.sin(t * 37.9 + 2.1);
     } else this.slideClock = 0;
+    if (this.rumble > 1e-3) {
+      const t = (this.rumbleClock += dt), a = this.rumble;
+      shakeY += a * 0.02 * (Math.sin(t * 17.3) * 0.5 + Math.sin(t * 29.1 + 0.7) * 0.3 + Math.sin(t * 3.1) * 0.2);
+      shakeR += a * 0.012 * Math.sin(t * 11.7 + 0.4) * Math.sin(t * 2.3);
+      shakeP += a * 0.008 * Math.sin(t * 19.9 + 2.1);
+    }
     let y = this.eyeY + EYE_HEIGHT - 0.65 * this.crouch + bobY + (this.dip + shakeY) * comfort.motion;
     // Never look out from under a dune (in a shelter's entrance and rooms the sand isn't in the way).
     if (onFlat() || !sandHidden(x, z, p.y)) y = Math.max(y, groundAt(x, z, p.y) + 0.3);

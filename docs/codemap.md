@@ -32,14 +32,16 @@ when you find it stale.
 ## Levels (docs/levels.md)
 
 - `shared/levels.ts` — `Level` (ground, solids, ceiling, bounds, spawns, `doors()` and its properties: `indoors`,
-  `climate`, `weather`, `enemies`, `building`, `things`), the `LEVELS` registry, `level(id)`; `desertLevel` wraps the
+  `climate`, `weather`, `enemies`, `building`, `things`, `private`, `mortal`, `crouchUnder`, `skippable`; ground,
+  collide and ceiling take the player's `gates`), the `LEVELS` registry, `level(id)`; `desertLevel` wraps the
   desert's ground and collisions. `PlayerState.level` (`shared/sim.ts`) says which one a player is in; only the server
   changes it. `players.level`/`y` in the DB. `doorAt`, `desertArrival`: the doors between levels
 - `src/ground.ts` — `groundAt`/`onFlat`: the client's ground for its own checks and effects, the sand in the desert or a
   level's floor (never the desert's heightfield at a level's x, z)
 - `shared/levels/datacenter.ts` — the datacenter's layout (boxes with `use` both/collide/draw, racks, fixtures, zones,
   spawns, its exit's trigger; seeded, docs/levels/datacenter.md) and its `Level`; `shared/levels/boxes.ts` — box collision for
-  box-built levels (support, push-out, ceiling, ground) over a 2 m grid. `tools/levels.test.mjs`: spawns clear and away from
+  box-built levels (support, push-out, ceiling, ground) over a 2 m grid, gated boxes (`BoxGrid.gate`: solid while a
+  `PlayerState.gates` bit is clear, or once one is set). `tools/levels.test.mjs`: spawns clear and away from
   doors, doors reachable, walls closed, walks never jump, walls stop, jumps under every ceiling go straight up;
   `tools/server-levels.test.mjs` (real world server): `?spawn=datacenter`, interest by level, a refused drop's notice
   and bag, out by the exit and in by the entrance walked to, F twice not bouncing, rejoining inside, looks re-sent to
@@ -61,7 +63,20 @@ when you find it stale.
   walk from the pods, solid in `desertLevel`, its trigger (F, `TEXT.prompt.open(TEXT.places.steelDoor)`) and where
   you come out; `src/world/entrance.ts` draws it and plays the muffled hum by distance
 - `src/levels/lightPool.ts` — a level's fixed light pool (6 `PooledPointLight` + 1 shadowing `PooledSpotLight`,
-  `src/world/pooledLight.ts`) handed to the fixtures nearest the camera, never moved while lit
+  `src/world/pooledLight.ts`) handed to the fixtures nearest the camera, never moved while lit; per-fixture `weight`
+  (lights out without a shader rebuild). `src/levels/boxLevel.ts` — any box-built layout into a stage's root (boxes
+  merged per material, gated boxes as their own meshes, instanced racks, the pool, a hemisphere fill)
+- The beginning (docs/levels/tutorial.md): `shared/levels/beginning.ts` — its layout (eight rooms along +z, gated doors,
+  triggers, `GATE` bits, `BEAT_STARTS`, `beatAt`) and its `Level` (private, immortal, crouch-under, skippable, no doors);
+  `shared/levels/beginningCabinet.ts` — the dead control cabinet (fixed seed, only its relay left: `tut_relay`,
+  `shared/items.ts` `levelOnly`); `server/tutorial.ts` — trigger bits, each player's cabinet session (never saved), the
+  pod's panel and the ride down (`RIDE_MS`), `BEGINNING_DONE`; `server/world.ts` starts new players there, `finishBeginning`
+  (the ride, the Esc menu's skip), strips level items on any move out, refuses hurt/die where `!mortal`, hides private
+  levels' players. `src/levels/beginning/` — its stage (`index.ts`: doors, lights out, rumble, the cabinet's work site, the
+  hatch's F), `props.ts` (screens, cart, blast door, pod, window, drawing, plaque, city labels), `planet.ts` (TSL planet),
+  `sound.ts` (the fall's roar, groan, jolt, chime), `ride.ts` (the dust card on the way down), `stuck.ts` (key hints after
+  8 s stuck, once per world). Tests: `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and
+  hatch rules), `tools/server-beginning.test.mjs` (new players start there alone and unhurt, the ride, skip, the grant)
 
 ## Worlds, server and players
 

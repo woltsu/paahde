@@ -447,7 +447,7 @@ net.onTeleport = (state) => {
   orbit.pitch = 0;
 };
 levels.onBroken = () => { audio.suspendForRecovery(); showReload(TEXT.recovery.update); };
-if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed, BED } });
+if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed, BED }, fall: () => import('./levels/beginning/sound.ts') });
 terrain.loading = true;
 let joined = false; // until the first welcome, net.me is the default spawn, not our saved position
 // ?spawn=crash / field: once joined, turn to face the machine or the scrap field we were put next to.
@@ -607,7 +607,8 @@ renderer.setAnimationLoop((time) => {
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);
-  orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding, heading: v.heading, lean: bikes.get(0)?.leanAngle }, frameDt);
+  orbit.rumble = stage.level === net.me.level ? (stage.rumble ?? 0) : 0;
+  orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding, heading: v.heading, lean: bikes.get(0)?.leanAngle, short: L.crouchUnder }, frameDt);
   bossFx.update(net, frameDt, orbit.camera);
   bossBar.update(frameDt, bossFx.bar);
   guardianFx.update(net, frameDt, orbit.camera, focus);
@@ -819,7 +820,7 @@ renderer.setAnimationLoop((time) => {
     atPump: L.things && !!waterAt(m.x, m.y, m.z), dryWell: L.things ? dryWell(m) : null, mudflat: L.things && biome('mudflat', m.x, m.z) > 0.7, heat: survival.heatLevel, rising: w.rising, shade: w.shade, sips: w.sips, maxSips: w.maxSips,
     storm: storm.level, stormWarning: storm.warning, frontComing: storm.frontComing, choking: storm.choking, lee: storm.lee, gasComing: gas.coming, gassed: gas.gassing, riding: s.riding, boss: bossFx.combat,
     bag: net.boxes.bag ?? [], dead: survival.dead || net.down !== null, atPod: L.things && nearPod(m.x, m.z, 4),
-    beat: stage.level === m.level && stage.beat ? { n: stage.beat(m), gates: m.gates } : null });
+    beat: stage.level === m.level && stage.beat ? { ...stage.beat(m), gates: m.gates } : null });
   const vehicleKey = vehicle ? `${vehicle.v.id}:${vehicle.v.up}` : null;
   if (vehicleKey !== seenVehicle) {
     seenVehicle = vehicleKey;

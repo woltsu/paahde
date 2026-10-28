@@ -15,6 +15,7 @@ import { RECEIVERS, RELICS } from '../shared/bosses.ts';
 import { RELIC_DROPS } from '../shared/tables.ts';
 import { COMPONENTS, SALVAGE } from '../shared/salvage.ts';
 import { TEXT } from '../shared/text.ts';
+import { GATE } from '../shared/levels/beginning.ts';
 import type { Aggro, Kill } from './guardians';
 
 /** What a line can look at, sampled every frame by src/main.ts. */
@@ -55,8 +56,9 @@ export type SpeechState = {
   dead: boolean;
   /** By a crashed pod, like the one we came down in (shared/pods.ts). */
   atPod: boolean;
-  /** In the beginning (docs/levels/tutorial.md): its beat (shared/levels/beginning.ts BEATS) and its gates; null elsewhere. */
-  beat: { n: number; gates: number } | null;
+  /** In the beginning (docs/levels/tutorial.md): its beat (shared/levels/beginning.ts BEATS), its gates and the thing in
+   *  front of us (src/levels/beginning: the tray, the gap, the cabinet, the window); null elsewhere. */
+  beat: { n: number; gates: number; near: 'tray' | 'gap' | 'cabinet' | 'window' | null } | null;
 };
 
 /** Events and what each one carries. `tick` is polled a couple of times a second, for remarks about the state. */
@@ -117,8 +119,27 @@ const aggro = (kind: Aggro): Line =>
 const killed = (kind: Kill | 'boss', again: number): Line =>
   ({ id: `killed.${kind}`, on: 'killed', when: (_, k) => k === kind, say: TEXT.speech.killed[kind], again });
 
+/** The beginning's lines: one each, as you get there. */
+function beginning(): Line[] {
+  const T = TEXT.speech.tutorial;
+  const at = (id: string, say: string, when: (b: NonNullable<SpeechState['beat']>) => boolean): Line =>
+    ({ id: `tutorial.${id}`, on: 'tick', when: (s) => !!s.beat && when(s.beat), say, world: true, priority: 2 });
+  return [
+    at('pod', T.pod, (b) => (b.gates & GATE.launch) !== 0),
+    at('lights', T.lights, (b) => (b.gates & GATE.lights) !== 0 && b.n === 2),
+    at('wake', T.wake, (b) => b.n === 0),
+    at('tray', T.tray, (b) => b.near === 'tray'),
+    at('gap', T.gap, (b) => b.near === 'gap'),
+    at('cabinet', T.cabinet, (b) => b.near === 'cabinet' && !(b.gates & GATE.control)),
+    at('window', T.window, (b) => b.near === 'window'),
+    { id: 'tutorial.relay', on: 'got', when: (s, it) => !!s.beat && it.kind === 'tut_relay', say: T.relay, world: true, priority: 2 },
+  ];
+}
+
 /** Highest priority first; ties keep this order. Variants share their once/again memory. */
 export const LINES: Line[] = [
+  // The beginning, once each in a world (docs/levels/tutorial.md "What the character says").
+  ...beginning(),
   // The first thing said on arriving in a world (then the inventory hint: src/main.ts).
   { id: 'start', on: 'tick', when: (s) => !s.dead && !s.beat, say: TEXT.speech.start, world: true },
 

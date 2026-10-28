@@ -54,7 +54,7 @@ const lines = (c: F, pitch: number, width: number): F => {
 };
 
 /** `stripsOff`: the light strips over z from `z0` up to the uniform `cut` are dark (the beginning's hall going out row by
- *  row, src/levels/beginning: a uniform, so no shader rebuild). */
+ *  row, src/levels/beginning: a uniform, so no shader rebuild), the downlight discs there too. */
 export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
   const bakeUV = (p: V2) => p.sub(vec2(maps.min.x, maps.min.y)).div(vec2(maps.size.x, maps.size.y));
   const bakeAt = (p: V2) => texture(maps.bake, bakeUV(p));
@@ -164,17 +164,17 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
 
   // --- Light: strips (emissive underside, one in eight tired and flickering), downlight discs, emergency lamps.
   const stripM = std(0x3a3d41, 0.6, 0.3);
+  const lit = stripsOff ? float(1).sub(step(stripsOff.z0, positionLocal.z).mul(step(positionLocal.z, stripsOff.cut))) : float(1);
   {
     const seed = hash(floor(positionLocal.z.mul(4)).add(select(positionLocal.x.greaterThan(0), float(37), float(0))));
     const tired = step(0.875, seed);
     const flicker = mix(float(1), float(0.2), step(0.97, hash(floor(time.mul(7)).add(seed.mul(100)))));
     const bright = mix(float(1), float(0.6).mul(flicker), tired);
     const under = step(normalLocal.y, -0.5);
-    const lit = stripsOff ? float(1).sub(step(stripsOff.z0, positionLocal.z).mul(step(positionLocal.z, stripsOff.cut))) : float(1);
     stripM.emissiveNode = color(0xeef3ff).mul(under).mul(bright).mul(lit).mul(dcLook.strip);
   }
   const downM = std(0x3a3d41, 0.6, 0.3);
-  downM.emissiveNode = color(0xeef3ff).mul(step(normalLocal.y, -0.5)).mul(4);
+  downM.emissiveNode = color(0xeef3ff).mul(step(normalLocal.y, -0.5)).mul(lit).mul(4);
   const emergM = std(0x553322, 0.6);
   emergM.emissiveNode = color(0xff7a1a).mul(3);
 
