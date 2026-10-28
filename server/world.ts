@@ -83,9 +83,7 @@ import { isTrophy, trophyFree } from '../shared/trophies.ts';
 import { CALM, LIVES, WORLD_ID } from '../shared/world.ts';
 import { TEXT } from '../shared/text.ts';
 import { pickupLimit, type PickupLimit } from './pickupLimit.ts';
-import { DESERT, inBox, level, levelByKey, type Box, type Level } from '../shared/levels.ts';
-import { datacenterLevel } from '../shared/levels/datacenter.ts';
-import { entrance } from '../shared/levels/entrance.ts';
+import { DESERT, desertArrival, doorAt, level, levelByKey, type Level } from '../shared/levels.ts';
 
 /** Nobody on for this long: the world saves and exits until someone comes back. */
 const EMPTY_EXIT_MS = 10 * 60_000;
@@ -173,6 +171,8 @@ type Player = {
   jam: { kind: 'jet' | 'drone'; id: number; acc: number; at: number } | null;
   /** ?spawn=<level> (dev): moved into that level once loaded, through moveTo like a door. */
   levelWanted: number | null;
+  /** The last moveTo (performance.now() ms). */
+  movedAt: number;
 };
 
 // --- Levels (shared/levels.ts, docs/levels.md): the gate that keeps the desert's systems to the levels they belong in,
@@ -180,6 +180,8 @@ type Player = {
 const levelOf = (p: Player): Level => level(p.state.level);
 /** Players weather reaches (storms, gas fronts, vortices). */
 const outside = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p).weather);
+/** Players among the desert's things (Level.things): what's placed and what shades them is theirs to bump into. */
+const withThings = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p).things);
 /** Players the walkers, drones, jets, harvesters and bosses can hunt. */
 const hunted = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p).enemies);
 /** `o` is in the same level as `s` and within r (m) of it on the ground plane. */
@@ -260,8 +262,8 @@ wss.on('connection', (ws) => {
     if (msg.t === 'setEpoch' && p) return onSetEpoch(ws, msg.epoch);
     if ((msg.t === 'storm' || msg.t === 'summon') && LAB) stirred = true;
     if (msg.t === 'storm' && p && msg.vortex) return storms.summonVortex(p.state.x, p.state.z, 600, performance.now());
-    if (msg.t === 'storm' && p && msg.gas) return storms.spawnGas([...players.values()].map((o) => o.state), performance.now());
-    if (msg.t === 'storm' && p && msg.front) return storms.spawnFront([...players.values()].map((o) => o.state), performance.now());
+    if (msg.t === 'storm' && p && msg.gas) return storms.spawnGas(outside(players.values()).map((o) => o.state), performance.now());
+    if (msg.t === 'storm' && p && msg.front) return storms.spawnFront(outside(players.values()).map((o) => o.state), performance.now());
     if (msg.t === 'storm' && p) return storms.spawn(p.state.x, p.state.z, 0, performance.now());
     if (msg.t === 'summon' && msg.what === 'jet' && p) return jets.spawn(p.state.x, p.state.z, 0, performance.now(), true);
     if (msg.t === 'summon' && msg.what === 'harvester' && p) return void harvesters.spawn(p.state.x, p.state.z, performance.now(), true);
@@ -371,7 +373,15 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   const pod = spawnPoint(podOf(browserId));
   let state = row && !atPod ? spawnState(row.x, row.z) : spawnState(pod.x, pod.z);
   // Someone who left in a level (shared/levels.ts) is back where they stood in it (its frame's x, y, z).
-  if (row && !atPod && row.level !== DESERT && level(row.level).id === row.level) state = spawnState(row.x, row.z, row.y, row.level);
+  if (row && !atPod && row.level !== DESERT) {
+    // A level that is no more (a row from another build): out at the desert's door, not at the level's x, z in the desert.
+    if (level(row.level).id === row.level) state = spawnState(row.x, row.z, row.y, row.level);
+    else {
+      const o = desertArrival(row.level);
+      if (o) state = spawnState(o.x, o.z, heightAt(o.x, o.z), DESERT, o.facing);
+      else state = spawnState(pod.x, pod.z);
+    }
+  }
   // Someone who left in a shelter starts outside its door.
   const left = row && !atPod && state.level === DESERT && overShelter(row.x, row.z, 0.5) ? shelterAt(row.x, row.z) : null;
   if (left) state = spawnState(left.x + left.dx * 4, left.z + left.dz * 4);
@@ -406,7 +416,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,
     heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, heardAt: performance.now(), hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: 0, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
-    levelWanted: typeof spawn === 'string' ? (levelByKey(spawn)?.id ?? null) : null,
+    levelWanted: typeof spawn === 'string' ? (levelByKey(spawn)?.id ?? null) : null, movedAt: -Infinity,
   };
   players.set(ws, p);
   everJoined = true;
@@ -424,7 +434,8 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   }
   db.setName(browserId, p.name);
   // Terrain first, so the client never sees its spawn without the holes.
-  if (!await sendStream(ws, terrain.viewMessages(p.terrainView, state.x, state.z))) return;
+  // (In a level the desert's terrain is streamed once they come out: broadcast's needsView.)
+  if (level(state.level).things && !await sendStream(ws, terrain.viewMessages(p.terrainView, state.x, state.z))) return;
   send(ws, scrap.joinMessage());
   send(ws, crash.joinMessage());
   send(ws, crash.progressMessage());
@@ -456,16 +467,25 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
 
 // --- Moving between levels (docs/levels.md "Getting in and out"). Only the server changes PlayerState.level.
 
-/** Where a player in a level comes out into the desert: on the sand in front of its door (shared/levels/entrance.ts). */
-function levelDoor(_p: Player): PlayerState {
-  const o = entrance().out;
-  return spawnState(o.x, o.z, heightAt(o.x, o.z), DESERT, o.facing);
+/** Where someone in level `from` comes out into the desert: on the sand in front of the desert's door that leads there
+ *  (shared/levels.ts desertArrival); their pod's hatch if there is none. */
+function levelDoor(p: Player, from = p.state.level): PlayerState {
+  const o = desertArrival(from);
+  if (o) return spawnState(o.x, o.z, heightAt(o.x, o.z), DESERT, o.facing);
+  const pod = spawnPoint(podOf(p.browserId));
+  return spawnState(pod.x, pod.z);
 }
+
+/** No second move this soon after one (ms): an F pressed twice, or the debug menu clicked fast (each move saves). */
+const MOVE_GAP_MS = 1000;
 
 /** Put `p` at `to` (another level, or back out): a teleport. Off the bike (it stays parked where they were), out of
  *  any machine they were taking apart, their queued inputs dropped; the client is told with 'level' and switches stage. */
 function moveTo(p: Player, to: PlayerState) {
-  if (p.down || !p.ready) return;
+  if (p.down || !p.ready || performance.now() - p.movedAt < MOVE_GAP_MS) return;
+  p.movedAt = performance.now();
+  // The client forgot who it was drawing (src/net.ts teleport): the looks of whoever is there come whole again.
+  p.appearances.clear();
   vehicleSrv.release(p.id, p.state.riding ? p.state : undefined);
   crash.leaveAll(p.id);
   p.inputs.clear();
@@ -479,13 +499,11 @@ function moveTo(p: Player, to: PlayerState) {
 /** How far outside a level's exit box (m) F still counts: the client asks from where it predicts it is. */
 const EXIT_SLACK = 0.6;
 
-/** F at the datacenter's door out in the desert (shared/levels/entrance.ts): in, at a spawn in its vestibule; F at a
- *  level's way out (Level.exits): back out at its door. On the bike: off it, the bike stays parked at the door. */
+/** F at one of the level's doors (Level.doors): into the level it leads to, at a spawn there, or out to the desert in
+ *  front of the door back. On the bike: off it, the bike stays parked at the door. */
 function onEnter(p: Player) {
-  const L = levelOf(p), s = p.state, e = EXIT_SLACK;
-  const at = (b: Box) => inBox([b[0] - e, b[1] + e, b[2] - e, b[3] + e, b[4] - e, b[5] + e], s.x, s.y, s.z);
-  if (L.things && at(entrance().trigger)) moveTo(p, levelSpawn(datacenterLevel.id, p.id));
-  else if (L.exits.some(at)) moveTo(p, levelDoor(p));
+  const s = p.state, d = doorAt(levelOf(p), s.x, s.y, s.z, EXIT_SLACK);
+  if (d) moveTo(p, d.to === DESERT ? levelDoor(p) : levelSpawn(d.to, p.id));
 }
 
 /** Debug menu (F3 → Go to level): into level `key` at a spawn, or out to the desert, the way a door does it. */
@@ -559,7 +577,7 @@ function shadeCasters(now: number): Caster[] {
   casters = [];
   for (const o of players.values()) {
     const s = o.state;
-    if (o.down || !o.ready) continue;
+    if (o.down || !o.ready || !levelOf(o).things) continue; // (someone in a level stands in its frame, not on the sand)
     casters.push({ x: s.x, z: s.z, ax: 1, az: 0, half: 0, r: 0.28, y0: s.y, y1: s.y + (s.crouching ? 1.2 : 1.8), id: o.id });
     if (s.riding) casters.push({ x: s.x, z: s.z, ax: -Math.sin(s.heading), az: -Math.cos(s.heading), half: 0.55, r: 0.35, y0: s.y, y1: s.y + 1, id: o.id });
   }
@@ -1274,7 +1292,7 @@ function onTend(p: Player, bed: unknown) {
 // the workbench (shared/crafting.ts). Refusals get a notice (and the bag back, in case the client guessed). A
 // building's box goes to everyone as it opens; when it's picked up, the placed list closes it.
 function onPlace(p: Player, slot: unknown, x: unknown, z: unknown, rot: unknown) {
-  const r = placedThings.place(p.browserId, p.state, slot, x, z, rot, [...players.values()].map((o) => o.state));
+  const r = placedThings.place(p.browserId, p.state, slot, x, z, rot, withThings(players.values()).map((o) => o.state));
   if (typeof r === 'string') send(p.ws, { t: 'notice', text: r });
   else if (isBuilding(r.kind)) sendBox(p, buildingBox(r.id));
   sendBox(p, 'bag');
@@ -1285,7 +1303,7 @@ function onPlace(p: Player, slot: unknown, x: unknown, z: unknown, rot: unknown)
 // A building put up with the wrench from the base materials in the bag (server/placed.ts build).
 function onBuild(p: Player, kind: unknown, x: unknown, z: unknown, rot: unknown) {
   // A boss's trophy only once its kind is beaten, and one of each (shared/trophies.ts).
-  const r = p.down || (typeof kind === 'string' && isTrophy(kind) && !trophyFree(kind, beaten, placed)) ? TEXT.notice.cantPlace : placedThings.build(p.browserId, p.state, kind, x, z, rot, [...players.values()].map((o) => o.state));
+  const r = p.down || (typeof kind === 'string' && isTrophy(kind) && !trophyFree(kind, beaten, placed)) ? TEXT.notice.cantPlace : placedThings.build(p.browserId, p.state, kind, x, z, rot, withThings(players.values()).map((o) => o.state));
   if (typeof r === 'string') send(p.ws, { t: 'notice', text: r });
   else if (isBuilding(r.kind)) sendBox(p, buildingBox(r.id));
   else if (r.kind === CHEST) sendBox(p, storeBox(r.id));
