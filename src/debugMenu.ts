@@ -15,6 +15,7 @@
 // "Give item" puts any one item (shared/items.ts ITEMS; type to search by name or id) in your bag: a count of it, or gear
 // repaired with parts of the chosen tier, or broken.
 import { isBound } from './bindings';
+import { BEATS } from '../shared/levels/beginning.ts';
 import { LEVELS } from '../shared/levels.ts';
 import { ui } from './input';
 import { BOSS_KINDS, BOSSES, type BossKind } from '../shared/bosses.ts';
@@ -85,6 +86,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${['Scrap', 'Basic', 'Quality', 'Space'].map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
 <button id="dbgGive">Give</button></div>
 <div class="row">Go to level ${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
+<div class="row">Beginning beat ${BEATS.map((b, i) => `<button data-level="beginning:${i}" title="At the start of the beginning's ${b} beat, what comes before it open">${i}</button>`).join('')}</div>
 <div class="row">Motorcycle <button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken</button><button id="dbgBikeWorking" title="A working motorcycle 3 m in front of you, Scrap parts, yours once you ride it (for everyone)">Working</button></div>
 <div class="row">Test lab <button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div>
 <label title="No heat build-up for you (the meter drops to zero)"><input id="dbgNoHeat" type="checkbox"> Disable heat</label>

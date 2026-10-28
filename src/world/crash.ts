@@ -462,7 +462,8 @@ const freeMenu = (bag: Slots | undefined): TableMenu => ({
 });
 
 /** Apply the server's progress to a machine without any animation. `taken` are part indexes (Slot.index). */
-function fastForward(junk: Junk, done: Iterable<number>, taken: Iterable<number>) {
+/** Bring a built machine up to `done` and `taken` at once (no animation). */
+export function fastForward(junk: Junk, done: Iterable<number>, taken: Iterable<number>) {
   for (const i of done) {
     const s = junk.steps[i];
     if (!s || s.done) continue;

@@ -55,6 +55,8 @@ export type SpeechState = {
   dead: boolean;
   /** By a crashed pod, like the one we came down in (shared/pods.ts). */
   atPod: boolean;
+  /** In the beginning (docs/levels/tutorial.md): its beat (shared/levels/beginning.ts BEATS) and its gates; null elsewhere. */
+  beat: { n: number; gates: number } | null;
 };
 
 /** Events and what each one carries. `tick` is polled a couple of times a second, for remarks about the state. */
@@ -118,7 +120,7 @@ const killed = (kind: Kill | 'boss', again: number): Line =>
 /** Highest priority first; ties keep this order. Variants share their once/again memory. */
 export const LINES: Line[] = [
   // The first thing said on arriving in a world (then the inventory hint: src/main.ts).
-  { id: 'start', on: 'tick', when: (s) => !s.dead, say: TEXT.speech.start, world: true },
+  { id: 'start', on: 'tick', when: (s) => !s.dead && !s.beat, say: TEXT.speech.start, world: true },
 
   // A water bottle, and we have none: the first thing anyone needs out here.
   { id: 'bottle', on: 'see', when: (s, l) => l.kind === 'canteen' && !carries(s, 'canteen') && s.day,

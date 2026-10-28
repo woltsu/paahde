@@ -5,6 +5,9 @@
 import type * as THREE from 'three/webgpu';
 import type { Post } from '../post.ts';
 import type { PlayerState } from '../../shared/sim.ts';
+import type { Slots } from '../../shared/items.ts';
+import type { SiteLink, WorkSite } from '../teardown/teardown.ts';
+import type { SiteMsg } from '../net.ts';
 
 export type { PostProfile } from '../post.ts';
 
@@ -37,6 +40,16 @@ export interface Stage {
   update(frame: StageFrame): void;
   /** Built (and, for a level, its materials compiled) before the first enter. */
   readonly ready: Promise<void>;
+  /** A machine of the level's own you stand at, to take apart (the beginning's cabinet), or null. `link`: its session. */
+  workSite?(me: PlayerState, link: (id: string) => SiteLink): WorkSite | null;
+  /** A disassembly message about one of its machines (src/net.ts onSite); true if it was. */
+  site?(m: SiteMsg): boolean;
+  /** What F does here before anything else (the beginning's hatch), or null. */
+  interact?(me: PlayerState, bag: Slots | undefined): { prompt: string; act: () => void } | null;
+  /** The beginning's beat `me` is at (shared/levels/beginning.ts BEATS: its speech, hints and rumble). */
+  beat?(me: PlayerState): number;
+  /** The player's keys do nothing now (in the pod going down). */
+  frozen?(me: PlayerState): boolean;
 }
 
 /** The fade to black and back (ms each way). */

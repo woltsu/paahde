@@ -205,7 +205,8 @@ if (location.search.includes('debug')) Object.assign((window as unknown as { dbg
 // and the one being worked on gets it through the disassembly mode, animated.
 net.onSite = (m) => {
   const cur = teardown.current;
-  machines.apply(m, cur?.id ?? null);
+  // A machine of the level's own (the beginning's cabinet) is its stage's; the rest the desert's.
+  if (!stage.site?.(m)) machines.apply(m, cur?.id ?? null);
   // Someone scrapped the table's machine while we work on it (a finished one stays open until we leave).
   if (m.t === 'bench' && !m.job && cur?.id === m.id) teardown.end();
   if (m.t === 'siteTook' && cur?.id === m.id) {
@@ -326,6 +327,7 @@ let seenVehicle: string | null = null;
 let seenSite: string | null = null;
 let bagIds: Set<number> | null = null;
 const menu = new Menu(renderer.domElement, (v) => post.setAoIntensity(v));
+menu.onSkip = () => net.tutorial('skip');
 const telescope = new Telescope(orbit);
 if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { telescope });
 const grinder = new Grinder(scene, orbit.camera, [me.root]);
@@ -430,7 +432,7 @@ const warm = new Warmup([scene, orbit.camera], () => post.render(), renderer.bac
 const levels = new StageSwitch(scene, post, desert, async (id) => {
   if (id === beginningLevel.id) {
     const { BeginningStage } = await import('./levels/beginning/index.ts');
-    return BeginningStage.build();
+    return BeginningStage.build(() => net.tutorial('hatch'));
   }
   if (id !== datacenterLevel.id) return null;
   const { DatacenterStage } = await import('./levels/datacenter/index.ts');
@@ -469,13 +471,18 @@ renderer.setAnimationLoop((time) => {
   if (!joined && !net.connected) {
     return;
   }
-  if (!joined) prologue.joined();
+  if (!joined) {
+    prologue.joined();
+    // Joined inside a level (a new player's beginning): facing the way its spawn faces.
+    if (!level(net.me.level).things) orbit.yaw = net.me.facing;
+  }
   joined = true;
   artBench?.frame(frameDt); // (from the first frame on, so the world streams in round the shot behind the loading screen)
   perf.milestone('joined');
   // Once the models and terrain are in, draw real frames a few materials at a time (src/warmup.ts): the first full
   // frame would take seconds to build every shader and freeze the page. Nothing else is drawn until that is done.
-  const modelsIn = bodyLoaded && terrain.built;
+  // (Joined inside a level, a new player's beginning above all, the desert's terrain isn't streamed: nothing to wait for.)
+  const modelsIn = bodyLoaded && (terrain.built || !level(net.me.level).things);
   if (modelsIn) perf.milestone('models-in');
   loaded ||= coverTimedOut || warmed;
   if (loaded) perf.milestone('loaded');
@@ -504,7 +511,7 @@ renderer.setAnimationLoop((time) => {
     orbit.pitch = fly.heldPitch;
   }
   pollPad(frameDt, orbit, renderer.domElement, net.boxes.bag);
-  const input = !net.isReady || fly.active ? 0 : readInput(); // standing still until named
+  const input = !net.isReady || fly.active || stage.frozen?.(net.me) ? 0 : readInput(); // standing still until named (or in the pod going down)
   while (accumulator >= DT) {
     net.tick(input, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch));
     accumulator -= DT;
@@ -515,6 +522,7 @@ renderer.setAnimationLoop((time) => {
   const L = level(net.me.level);
   if (joined && loaded) levels.follow(net.me.level);
   me.levelFloor = L.flat;
+  menu.skippable = L.skippable;
   setGround(net.me.level, net.me.y);
   for (const a of remotes.values()) a.levelFloor = L.flat;
   // The gun raised (or just fired), or the spyglass: others see it shouldered, or at the eye (src/models/scavenger.ts).
@@ -719,6 +727,9 @@ renderer.setAnimationLoop((time) => {
   // A small one is picked up with F; a big one starts its disassembly by itself when you come close (src/teardown).
   const site = small ? nearSite : null;
   if (nearSite && !small && !teardown.active) teardown.begin(machines.workSite(nearSite, net.siteLink(nearSite.site.id)));
+  // A machine of the level's own (the beginning's cabinet): the same, in its frame.
+  const levelSite = !teardown.active && net.connected && !net.down && stage.level === net.me.level ? stage.workSite?.(net.me, (id) => net.siteLink(id)) : null;
+  if (levelSite) teardown.begin(levelSite);
   // A machine on the disassembly table is worked like a big one: it starts by itself when you stand at the table.
   if (!teardown.active && !benchMenu.isOpen && here) {
     const b = machines.benchNear(net.me.x, net.me.z, 3.5);
@@ -753,13 +764,16 @@ renderer.setAnimationLoop((time) => {
   const doorPrompt = atDoor ? TEXT.prompt.open(TEXT.places.steelDoor) : null;
   // Near the door the level's stage is built ahead, so going in only has to compile it (behind the fade).
   for (const d of L.doors()) if (Math.hypot(s.x - (d.trigger[0] + d.trigger[1]) / 2, s.z - (d.trigger[4] + d.trigger[5]) / 2) < 60) levels.prefetch(d.to);
-  const fPrompt = doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
+  // What the level asks F for first (the beginning's pod hatch).
+  const levelAct = net.connected && !net.down && stage.level === net.me.level ? (stage.interact?.(net.me, net.boxes.bag) ?? null) : null;
+  const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));
   const extra = [growing, wirePrompt, placing.prompt].filter(Boolean).join(' ');
   hud.setTarget(fPrompt && extra && typeof fPrompt === 'string' ? `${kbd('interact')}${fPrompt} ${extra}` : (fPrompt ?? (extra || null)));
   const interact = takePickup() && !fly.active;
-  if (interact && atDoor) net.enter();
+  if (interact && levelAct) levelAct.act();
+  else if (interact && atDoor) net.enter();
   else if (interact && onBike) tools.getOff = true; // (src/input.ts: the bike key's input, one tick)
   else if (interact && piecePrompt) {
     if (teardown.holding) teardown.putDown();
@@ -797,14 +811,15 @@ renderer.setAnimationLoop((time) => {
     } else if (wreck) net.crashTake(wreck.id);
     else if (pack || chest) hud.open();
   }
-  const targeted = doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
+  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
   survival.update(frameDt, net.me, targeted, interact && !targeted, clockText(sky.day.tod));
   const w = net.water;
   const m = net.me;
   speech.update(frameDt, { day: sky.day.elevation > 0, indoors: L.indoors || indoors(m.x, m.y, m.z), shelter: L.things && inShelter(m.x, m.y, m.z),
     atPump: L.things && !!waterAt(m.x, m.y, m.z), dryWell: L.things ? dryWell(m) : null, mudflat: L.things && biome('mudflat', m.x, m.z) > 0.7, heat: survival.heatLevel, rising: w.rising, shade: w.shade, sips: w.sips, maxSips: w.maxSips,
     storm: storm.level, stormWarning: storm.warning, frontComing: storm.frontComing, choking: storm.choking, lee: storm.lee, gasComing: gas.coming, gassed: gas.gassing, riding: s.riding, boss: bossFx.combat,
-    bag: net.boxes.bag ?? [], dead: survival.dead || net.down !== null, atPod: L.things && nearPod(m.x, m.z, 4) });
+    bag: net.boxes.bag ?? [], dead: survival.dead || net.down !== null, atPod: L.things && nearPod(m.x, m.z, 4),
+    beat: stage.level === m.level && stage.beat ? { n: stage.beat(m), gates: m.gates } : null });
   const vehicleKey = vehicle ? `${vehicle.v.id}:${vehicle.v.up}` : null;
   if (vehicleKey !== seenVehicle) {
     seenVehicle = vehicleKey;

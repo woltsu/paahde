@@ -9,7 +9,7 @@
 // the doors are boxes that collide while their bit in PlayerState.gates is clear, set only by the server
 // (server/tutorial.ts) when you reach a trigger or do the thing. Some bits move nothing and only tell the client how far
 // you are (the blast door coming down, the hall's lights going out). Pure data, no three.js, Node type stripping rules.
-import { DESERT, STEP_UP, inBox, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
+import { STEP_UP, inBox, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
 import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes } from './boxes.ts';
 import { mulberry32 } from '../noise.ts';
 import type { BoxUse, Fixture, LevelBox, LevelLayout, LevelMat, Rack } from './datacenter.ts';
@@ -90,6 +90,19 @@ export function beatAt(x: number, y: number, z: number): number {
   if (z < R.bay.z1) return 6;
   return 7;
 }
+
+/** Where each beat starts, and the gates the ones before it opened (the debug menu's "Go to beat": server/world.ts). The
+ *  sub-floor's is down in it. */
+export const BEAT_STARTS: readonly (LevelPoint & { gates: number })[] = [
+  { x: 1.6, y: 0, z: 1.6, facing: Math.PI, gates: 0 },
+  { x: 0, y: 0, z: 9.5, facing: Math.PI, gates: GATE.quarters },
+  { x: 0, y: 0, z: 25.5, facing: Math.PI, gates: GATE.quarters },
+  { x: 0, y: 0, z: 45.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights },
+  { x: 0, y: 0, z: 65.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights },
+  { x: 0, y: GAP.floor, z: 57.5, facing: 0, gates: GATE.quarters | GATE.cart | GATE.lights },
+  { x: 0, y: 0, z: 75.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights | GATE.control | GATE.blast },
+  { x: 0, y: 0, z: 93.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights | GATE.control | GATE.blast | GATE.shut },
+];
 
 /** The station's screens: where they hang (facing the walk, -z), the words by how far you are (TEXT.tutorial.screens). */
 export const SCREENS: readonly { x: number; y: number; z: number; face: 1 | -1 }[] = [
@@ -304,7 +317,7 @@ export function triggersAt(x: number, y: number, z: number): number {
   return bits;
 }
 
-let doors: LevelDoor[] | null = null;
+const NO_DOORS: readonly LevelDoor[] = [];
 
 /** The beginning as a Level (shared/levels.ts): one per player, nothing hurts in it, still air; its one way out is the pod. */
 export const beginningLevel: Level = {
@@ -316,8 +329,9 @@ export const beginningLevel: Level = {
   flat: true,
   bounds: BEGINNING.bounds,
   spawns: BEGINNING.spawns as readonly LevelPoint[],
-  // The pod's hatch: F there is the server's (server/tutorial.ts: the relay first, then the ride down to the desert).
-  doors: () => (doors ??= BEGINNING.exits.map((trigger) => ({ trigger, to: DESERT }))),
+  // No door: its one way out is the pod's hatch (POD.hatch), and that is the server's (server/tutorial.ts: the relay
+  // into its panel first, then the ride down to the desert), never an F that just takes you out.
+  doors: () => NO_DOORS,
   indoors: true,
   climate: { tempC: 20 },
   weather: false,
@@ -327,4 +341,5 @@ export const beginningLevel: Level = {
   private: true,
   mortal: false,
   crouchUnder: true,
+  skippable: true,
 };

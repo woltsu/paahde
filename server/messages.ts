@@ -33,6 +33,7 @@ export function clientMessage(v: unknown): v is ClientMsg {
     case 'setEpoch': return m.epoch === null || num(m.epoch, -8.64e15, 8.64e15);
     case 'drink': case 'fill': case 'call': case 'debugHit': case 'debugVortexVisit': case 'debugSolarVisit': case 'ready': case 'enter': return true;
     case 'debugLevel': return str(m.key) && m.key.length <= 32;
+    case 'tutorial': return m.what === 'hatch' || m.what === 'skip';
     case 'hands': return int(m.hands, 0, 5) && optional(m.slot, (x) => int(x, -1, 4095)) && optional(m.aim, bool);
     case 'telemetry': return Array.isArray(m.ev) && m.ev.length <= 16 && optional(m.sum, (x) => !!x && typeof x === 'object' && !Array.isArray(x));
     case 'storm': return optional(m.front, bool) && optional(m.gas, bool) && optional(m.vortex, bool);

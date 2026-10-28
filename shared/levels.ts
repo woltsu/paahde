@@ -76,6 +76,8 @@ export type Level = {
   /** Crouched or sliding you are CROUCH_HEIGHT tall (shared/sim.ts), short enough to pass under its low things, and stay
    *  crouched while there is no room to stand. The desert's solids are built for a standing height: there you never are. */
   crouchUnder: boolean;
+  /** The Esc menu offers to leave it straight for the desert (the beginning: server/tutorial.ts). */
+  skippable: boolean;
 };
 
 /** The sand's height as ground for feet that were at `prevY`: none inside a shelter's entrance and rooms. */
@@ -113,6 +115,7 @@ export const desertLevel: Level = {
   private: false,
   mortal: true,
   crouchUnder: false,
+  skippable: false,
 };
 
 let desertDoors: LevelDoor[] | null = null;

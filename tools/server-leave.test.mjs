@@ -62,7 +62,7 @@ async function startWorld(t) {
     peers.add(ws);
     ws.on('error', () => {});
     const welcome = message(ws, (m) => m.t === 'welcome');
-    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, browserId: randomUUID(), name: 'Tester' })));
+    ws.on('open', () => ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, browserId: randomUUID(), name: 'Tester', spawn: 'pod' })));
     const self = await welcome;
     const ready = message(ws, (m) => m.t === 'snap' && m.players.some((p) => (Array.isArray(p) ? p[0] : p.id) === self.id));
     ws.send(JSON.stringify({ t: 'ready' }));
@@ -83,7 +83,7 @@ test('a player whose close frame came is gone at once, though the TCP close lags
   raw.on('data', () => {});
   await new Promise((resolve) => raw.once('connect', resolve));
   raw.write(`GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${randomBytes(16).toString('base64')}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
-  raw.write(frame(1, JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, browserId: randomUUID(), name: 'Leaver' })));
+  raw.write(frame(1, JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, browserId: randomUUID(), name: 'Leaver', spawn: 'pod' })));
   raw.write(frame(1, JSON.stringify({ t: 'ready' })));
   await message(observer, (m) => m.t === 'snap' && m.players.length === 2, 10000);
   const sent = performance.now();

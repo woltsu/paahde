@@ -66,6 +66,14 @@ export class Menu {
   private el = document.createElement('div');
   private serverEl!: HTMLElement;
   private stats = false;
+  /** The beginning's skip was clicked (main.ts: net.tutorial('skip')). */
+  onSkip?: () => void;
+
+  /** Offer the skip (in the beginning) or not. */
+  set skippable(on: boolean) {
+    const b = this.el.querySelector<HTMLElement>('.skipBeginning');
+    if (b) b.style.display = on ? '' : 'none';
+  }
 
   constructor(canvas: HTMLElement, onAo: (intensity: number) => void) {
     const style = document.createElement('style');
@@ -78,6 +86,7 @@ export class Menu {
     this.el.innerHTML = `<div class="panel"><div class="main"><h2>${TEXT.game.name}</h2><button class="resume">${kbd('menu')}${TEXT.menu.resume}</button>
 <button class="opt" style="margin-top:12px">${TEXT.menu.options}</button>
 <button class="fs" style="margin-top:8px"></button>
+<button class="skipBeginning" style="margin-top:8px;display:none">${TEXT.menu.skipBeginning}</button>
 <button class="leaveGame" style="margin-top:8px">${TEXT.menu.mainMenu}</button>
 <div class="foot"><a href="./credits.txt" target="_blank" rel="noopener">${TEXT.menu.credits}</a></div></div>
 ${optionsHtml()}</div>
@@ -112,6 +121,11 @@ ${optionsHtml()}</div>
     fs.addEventListener('click', () => {
       setGraphics('fullscreen', !graphics.fullscreen);
       setFullscreen(graphics.fullscreen);
+    });
+    // Out of the beginning (docs/levels/tutorial.md) straight to the pod in the desert: shown only while in it (main.ts).
+    this.el.querySelector('.skipBeginning')!.addEventListener('click', () => {
+      this.onSkip?.();
+      resume();
     });
     // Back to the main menu (the page without a world in its address).
     this.el.querySelector('.leaveGame')!.addEventListener('click', () => location.assign(location.pathname));

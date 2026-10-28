@@ -964,6 +964,11 @@ export class Net {
     this.send({ t: 'enter' });
   }
 
+  /** The beginning (server/tutorial.ts): F at the pod's hatch, or the Esc menu's skip. */
+  tutorial(what: 'hatch' | 'skip') {
+    if (this.connected) this.send({ t: 'tutorial', what });
+  }
+
   /** Debug menu: into level `key` (shared/levels.ts), or back out to the desert. */
   debugLevel(key: string) {
     this.send({ t: 'debugLevel', key });

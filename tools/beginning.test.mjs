@@ -89,7 +89,7 @@ test('the walk: bunk to pod with every gate opened in order', () => {
   // The hatch.
   s = walk(s, 0, 97.6, { open: relayOut });
   assert.ok(inBoxFeet(POD.hatch, s), `not at the hatch: ${s.x.toFixed(2)}, ${s.z.toFixed(2)}`);
-  assert.ok(L.doors().some((d) => inBoxFeet(d.trigger, s)));
+  assert.equal(L.doors().length, 0, 'an F that just takes you out');
 });
 
 test('crouching under the fallen tray', () => {
@@ -159,4 +159,50 @@ test('the relay is the only item it gives, never loot, and it belongs to the lev
     const B = BEGINNING.bounds;
     assert.ok(b.b[0] >= B[0] - 1e-6 && b.b[1] <= B[1] + 1e-6 && b.b[4] >= B[4] - 1e-6 && b.b[5] <= B[5] + 1e-6, `box out of bounds ${b.b}`);
   }
+});
+
+test('the cabinet and the pod on the server: the relay out opens the door, into the panel powers the pod, F rides it down', async () => {
+  const { TutorialServer, RIDE_MS, atHatch } = await import('../server/tutorial.ts');
+  const { CABINET_GONE, RELAY_INDEX, cabinetSteps } = await import('../shared/levels/beginningCabinet.ts');
+  const t = new TutorialServer();
+  const at = (x, z, gates = 0) => ({ ...levelSpawn(L.id), x, z, gates });
+  // Too far from it: nothing.
+  assert.equal(t.site(1, at(0, 2), { t: 'siteJoin' }, () => true).answers.length, 0);
+  const s = at(CABINET.x - 1.5, CABINET.z);
+  const join = t.site(1, s, { t: 'siteJoin' }, () => true).answers[0];
+  assert.equal(join.t, 'siteState');
+  assert.deepEqual([...join.taken].sort(), [...CABINET_GONE].sort(), 'only the relay is left to take');
+  // The relay can't come out before what holds it; every step in an allowed order, then it does.
+  let bag = 0;
+  const give = () => (bag++, true);
+  assert.equal(t.site(1, s, { t: 'siteTake', i: RELAY_INDEX }, give).answers.length, 0);
+  const rules = cabinetSteps();
+  const done = new Set();
+  while (done.size < rules.list.length) {
+    const i = rules.list.findIndex((r, k) => !done.has(k) && r.after.every((n) => done.has(n)));
+    assert.ok(i >= 0, 'a step left that can never be done');
+    const r = t.site(1, s, { t: 'siteDone', i }, give);
+    assert.equal(r.answers[0]?.t, 'siteDone');
+    assert.equal(r.gates, 0, 'a step opened something');
+    done.add(i);
+  }
+  for (const i of CABINET_GONE) assert.equal(t.site(1, s, { t: 'siteTake', i }, give).answers.length, 0, 'another part came out');
+  const took = t.site(1, s, { t: 'siteTake', i: RELAY_INDEX }, give);
+  assert.ok(took.gates & GATE.control, 'the door stayed shut');
+  assert.equal(bag, 1);
+  assert.equal(took.answers.find((a) => a.t === 'siteTook').kind, 'tut_relay');
+  assert.equal(t.site(1, s, { t: 'siteTake', i: RELAY_INDEX }, give).answers.length, 0, 'a second relay');
+  // Another player's cabinet is whole.
+  assert.ok(!t.site(2, s, { t: 'siteJoin' }, give).answers[0].taken.includes(RELAY_INDEX));
+  // The hatch: away from it nothing; without the relay nothing; with it, powered (it is used up); then in and down.
+  const hatch = at(0, 98, took.gates);
+  assert.ok(atHatch(hatch));
+  assert.equal(t.hatch(1, at(0, 90, took.gates), () => true, 0), null);
+  assert.equal(t.hatch(1, hatch, () => false, 0), null);
+  let used = 0;
+  const powered = t.hatch(1, hatch, () => (used++, true), 0);
+  assert.ok(powered & GATE.powered && used === 1);
+  const launch = t.hatch(1, { ...hatch, gates: powered }, () => (used++, true), 1000);
+  assert.ok(launch & GATE.launch && used === 1, 'the pod took a second relay');
+  assert.ok(t.riding(1) && !t.landed(1, 1000 + RIDE_MS - 1) && t.landed(1, 1000 + RIDE_MS) && !t.riding(1));
 });

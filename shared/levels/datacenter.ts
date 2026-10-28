@@ -238,4 +238,5 @@ export const datacenterLevel: Level = {
   private: false,
   mortal: true,
   crouchUnder: false,
+  skippable: false,
 };

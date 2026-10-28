@@ -36,6 +36,9 @@ export type ClientMsg =
   // F at a level's way in (shared/levels.ts entrances) or out (Level.exits): the server checks you are at one and moves
   // you ('level'), else nothing.
   | { t: 'enter' }
+  // The beginning (docs/levels/tutorial.md, server/tutorial.ts): F at the pod's hatch (the relay into its panel, then in
+  // and down), or the Esc menu's skip (straight to the pod in the desert).
+  | { t: 'tutorial'; what: 'hatch' | 'skip' }
   // Debug menu (F3 → Go to level): into level `key` (shared/levels.ts LEVELS) at a spawn, or back out to the desert,
   // through the same move as a door.
   | { t: 'debugLevel'; key: string }

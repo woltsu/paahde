@@ -15,7 +15,7 @@ import { PITCH_STEPS, quantizePitch } from '../shared/dig.ts';
 import { bottleSips, equipped, GEAR_KINDS, isBuilding, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { scrapKey, scrapTaken } from '../shared/scrap.ts';
-import { CLOTH, HOTBAR, ITEMS, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
+import { CLOTH, HOTBAR, ITEMS, levelOnlyItems, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
 import { foundData, type Drop } from '../shared/lootRoll.ts';
 import { ENEMIES } from '../shared/enemies.ts';
 import { allBeaten, BOSS_KINDS, BOSS_LIVES, BOSS_SEND_R, BOSSES, bossBit, receiverBoss, RELICS, type BossKind } from '../shared/bosses.ts';
@@ -49,7 +49,8 @@ import { PowerServer } from './power.ts';
 import { WireServer } from './wires.ts';
 import { ItemServer } from './items.ts';
 import { grantKits } from './grants.ts';
-import { tickTriggers } from './tutorial.ts';
+import { BEGINNING_DONE, TUTORIAL, TutorialServer, tickTriggers } from './tutorial.ts';
+import { BEAT_STARTS, GATE } from '../shared/levels/beginning.ts';
 import { LootServer } from './loot.ts';
 import { CorpseServer } from './corpses.ts';
 import { canDropAt } from '../shared/loot.ts';
@@ -186,7 +187,10 @@ const withThings = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p
 /** Players the walkers, drones, jets, harvesters and bosses can hunt. */
 const hunted = (list: Iterable<Player>) => [...list].filter((p) => levelOf(p).enemies);
 /** `o` is in the same level as `s` and within r (m) of it on the ground plane. */
-const sameNear = (o: Player, s: PlayerState, r: number) => o.state.level === s.level && Math.hypot(o.state.x - s.x, o.state.z - s.z) < r;
+const sameNear = (o: Player, s: PlayerState, r: number) => o.state.level === s.level && Math.hypot(o.state.x - s.x, o.state.z - s.z) < r
+  && (!level(s.level).private || o.state === s); // (in a private level only they themselves)
+/** `o` is someone `p` may see: in the same level, and not in a private one (each player has their own: Level.private). */
+const seenBy = (p: Player, o: Player) => o === p || (o.state.level === p.state.level && !levelOf(p).private);
 /** What a player in a level without the world's things (Level.things) may still send: the rest asks about the
  *  desert's layout or the things lying about by position, and must not reach them through the shared coordinates. */
 const IN_LEVEL = new Set<ClientMsg['t']>(['input', 'ready', 'hands', 'telemetry', 'chat', 'siteLeave', 'drink', 'move', 'sort', 'fire', 'swing',
@@ -245,6 +249,9 @@ wss.on('connection', (ws) => {
     // Loading is a server state, not an invulnerability mode for gameplay actions.
     if (p && !p.ready && !['ready', 'hands', 'telemetry', 'chat'].includes(msg.t)) return;
     if (p?.down && !['input', 'ready', 'hands', 'telemetry', 'chat', 'siteLeave'].includes(msg.t)) return;
+    // The beginning's cabinet (server/tutorial.ts): its session is the player's own, in a level without the world's things.
+    if (p && (msg.t === 'siteJoin' || msg.t === 'siteDone' || msg.t === 'siteTake' || msg.t === 'siteLeave') && tutorial.isSite(msg.id)) return onTutorialSite(p, msg);
+    if (msg.t === 'tutorial' && p) return onTutorial(p, msg.what);
     if (p && !levelOf(p).things && !IN_LEVEL.has(msg.t)) return refuseInLevel(p, msg);
     if (msg.t === 'enter' && p) return onEnter(p);
     if (msg.t === 'debugLevel' && p) return onDebugLevel(p, msg.key);
@@ -352,6 +359,7 @@ function leave(ws: WebSocket) {
   corpses.expire(playingOwners());
   save(p);
   crash.leaveAll(p.id);
+  tutorial.forget(p.id);
   vehicleSrv.release(p.id, p.state.riding ? p.state : undefined); // the bike stays where they left
   players.delete(ws);
   if (p.ready) leftAt.set(p.browserId, performance.now());
@@ -376,7 +384,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   // Someone who left in a level (shared/levels.ts) is back where they stood in it (its frame's x, y, z).
   if (row && !atPod && row.level !== DESERT) {
     // A level that is no more (a row from another build): out at the desert's door, not at the level's x, z in the desert.
-    if (level(row.level).id === row.level) state = spawnState(row.x, row.z, row.y, row.level);
+    if (level(row.level).id === row.level) state = { ...spawnState(row.x, row.z, row.y, row.level), gates: row.gates ?? 0 };
     else {
       const o = desertArrival(row.level);
       if (o) state = spawnState(o.x, o.z, heightAt(o.x, o.z), DESERT, o.facing);
@@ -409,6 +417,12 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
     const c = canyonFloorNear(state.x, state.z);
     if (c) state = spawnState(c.x, c.z);
   }
+  // Someone new to this world (never here, never through it) begins aboard the falling datacenter (docs/levels/tutorial.md),
+  // not in the lab or the art bench, and not with a dev spawn asked for (?spawn=pod skips it; ?spawn=beginning goes in
+  // every time, on ready, like any level).
+  if (!row && !CALM && spawn === undefined && !db.hasGrant(browserId, BEGINNING_DONE)) state = levelSpawn(TUTORIAL);
+  // Whatever of a level's own is in the bag outside it goes (a crash mid-level, a level left some other way).
+  if (state.level !== TUTORIAL) stripLevelItems(browserId, level(TUTORIAL).key);
   grantKits(items, db, browserId);
   // Their own broken bike by their pod (before the list goes out to them; the others are told now).
   const bike = row?.name ? null : vehicleSrv.arrive(browserId, podOf(browserId));
@@ -482,9 +496,10 @@ const MOVE_GAP_MS = 1000;
 
 /** Put `p` at `to` (another level, or back out): a teleport. Off the bike (it stays parked where they were), out of
  *  any machine they were taking apart, their queued inputs dropped; the client is told with 'level' and switches stage. */
-function moveTo(p: Player, to: PlayerState) {
-  if (p.down || !p.ready || performance.now() - p.movedAt < MOVE_GAP_MS) return;
+function moveTo(p: Player, to: PlayerState): boolean {
+  if (p.down || !p.ready || performance.now() - p.movedAt < MOVE_GAP_MS) return false;
   p.movedAt = performance.now();
+  const from = levelOf(p);
   // The client forgot who it was drawing (src/net.ts teleport): the looks of whoever is there come whole again.
   p.appearances.clear();
   vehicleSrv.release(p.id, p.state.riding ? p.state : undefined);
@@ -492,9 +507,50 @@ function moveTo(p: Player, to: PlayerState) {
   p.inputs.clear();
   p.input = 0;
   p.jam = null;
-  p.state = to;
+  p.state = to; // (with its own gates: 0 from every spawn, the beginning's debug beats aside)
+  // Out of a level: what was its own is taken back (the beginning's relay), and it forgets them.
+  if (from.id !== to.level) {
+    if (stripLevelItems(p.browserId, from.key)) sendBox(p, 'bag');
+    if (from.id === TUTORIAL) tutorial.forget(p.id);
+  }
   save(p);
-  send(p.ws, { t: 'level', level: to.level, state: round(to) });
+  send(p.ws, { t: 'level', level: to.level, state: round(p.state) });
+  return true;
+}
+
+/** Take the items of level `key` (shared/items.ts levelOnly) out of their bag. True if there were any. */
+function stripLevelItems(browserId: string, key: string): boolean {
+  let any = false;
+  for (const kind of levelOnlyItems(key)) while (items.take(browserId, kind)) any = true;
+  return any;
+}
+
+// --- The beginning (docs/levels/tutorial.md, server/tutorial.ts): one per player, ending in the pod's ride down.
+const tutorial = new TutorialServer();
+
+/** The cabinet's disassembly, the player's own session. */
+function onTutorialSite(p: Player, msg: ClientMsg & { t: 'siteJoin' | 'siteDone' | 'siteTake' | 'siteLeave' }) {
+  const r = tutorial.site(p.id, p.state, msg, () => items.give(p.browserId, 'tut_relay'));
+  for (const a of r.answers) send(p.ws, a);
+  if (r.gates !== p.state.gates) p.state = { ...p.state, gates: r.gates };
+  if (r.answers.some((a) => a.t === 'siteTook' && a.ok)) sendBox(p, 'bag', 'tut_relay');
+}
+
+/** F at the pod's hatch (the relay in, then in and down), or Esc menu → skip: straight to the pod in the desert. */
+function onTutorial(p: Player, what: unknown) {
+  if (p.state.level !== TUTORIAL || p.down) return;
+  if (what === 'skip') return void finishBeginning(p);
+  if (what !== 'hatch') return;
+  const gates = tutorial.hatch(p.id, p.state, () => items.take(p.browserId, 'tut_relay'), performance.now());
+  if (gates === null) return;
+  if (!(p.state.gates & GATE.powered) && gates & GATE.powered) sendBox(p, 'bag'); // (the relay used up)
+  p.state = { ...p.state, gates, vx: 0, vz: 0 };
+}
+
+/** Out of the beginning, for good in this world: beside their pod's hatch in the desert, as a new player starts. */
+function finishBeginning(p: Player) {
+  const pod = spawnPoint(podOf(p.browserId));
+  if (moveTo(p, spawnState(pod.x, pod.z))) db.markGrant(p.browserId, BEGINNING_DONE);
 }
 
 /** How far outside a level's exit box (m) F still counts: the client asks from where it predicts it is. */
@@ -509,6 +565,10 @@ function onEnter(p: Player) {
 
 /** Debug menu (F3 → Go to level): into level `key` at a spawn, or out to the desert, the way a door does it. */
 function onDebugLevel(p: Player, key: unknown) {
+  // "beginning:<n>": at the start of the beginning's beat n, the gates before it open (shared/levels/beginning.ts).
+  const beat = typeof key === 'string' ? /^beginning:(\d)$/.exec(key) : null;
+  const b = beat ? BEAT_STARTS[Number(beat[1])] : undefined;
+  if (b) return void moveTo(p, { ...spawnState(b.x, b.z, b.y, TUTORIAL, b.facing), gates: b.gates });
   const L = typeof key === 'string' ? levelByKey(key) : undefined;
   if (!L || L.id === p.state.level) return;
   moveTo(p, L.id === DESERT ? levelDoor(p) : levelSpawn(L.id, p.id));
@@ -631,7 +691,7 @@ const FLING_UP = 32;
 /** A blow of `damage` (shared/health.ts): a shield plate takes it whole (shielded), else it comes off their health
  *  and they die of it at 0. `push` and `bolt` as for die(). */
 function hurt(p: Player, cause: DeathCause, damage: number, push: [number, number, number] = [0, 0, 0], bolt?: number) {
-  if (p.down || !p.ready || lives <= 0 || shielded(p, push)) return;
+  if (p.down || !p.ready || lives <= 0 || !levelOf(p).mortal || shielded(p, push)) return;
   p.health = Math.max(0, p.health - damage);
   if (p.health <= 0) die(p, cause, push, bolt);
 }
@@ -640,7 +700,7 @@ function hurt(p: Player, cause: DeathCause, damage: number, push: [number, numbe
  *  Drop where they stand (off the bike, stopped) for DOWN_MS, as a ragdoll thrown by `push`; then respawn().
  *  `bolt`: the guardian's bolt that did it, which the client lets reach them first. */
 function die(p: Player, cause: DeathCause, push: [number, number, number] = [0, 0, 0], bolt?: number) {
-  if (p.down || !p.ready || lives <= 0) return;
+  if (p.down || !p.ready || lives <= 0 || !levelOf(p).mortal) return; // (nothing kills in an immortal level: Level.mortal)
   p.health = 0;
   p.down = { until: Date.now() + DOWN_MS, push };
   p.inputs.clear();
@@ -1365,6 +1425,9 @@ function simulate(p: Player, now: number) {
   p.input = command?.input ?? 0;
   if (command) { p.yaw = command.yaw; p.pitch = command.pitch; }
   const L = levelOf(p);
+  // In the pod going down: nothing moves them; landed, they wake in the desert.
+  if (tutorial.landed(p.id, now)) return finishBeginning(p);
+  if (tutorial.riding(p.id)) return;
   const drag = L.weather ? stormDrag(storms.storms, p.state.x, p.state.y, p.state.z, now) : 0;
   const pull = L.weather ? vortexPull(storms.vorticesNear(p.state.x, p.state.z, 500, nearScratch), p.state.x, p.state.y, p.state.z, now, { x: 0, z: 0 }) : NO_PULL;
   const before = p.state;
@@ -1500,7 +1563,7 @@ function broadcast(time: number) {
     // Keep reliable changes; omit obsolete poses when this connection cannot keep up.
     if (!p.syncing && !p.terrainStreaming && p.ws.bufferedAmount <= SOFT_BACKLOG_BYTES) {
       // Interest by level: only the players in your own level (who leaves it vanishes from your snapshots).
-      const seen = all.filter((o) => o.player === p || (o.player.ready && o.player.state.level === p.state.level
+      const seen = all.filter((o) => o.player === p || (o.player.ready && seenBy(p, o.player)
         && Math.hypot(o.player.state.x - p.state.x, o.player.state.z - p.state.z) <= PLAYER_VIEW_RADIUS));
       const appearance = seen.filter((o) => p.appearances.get(o.player.id) !== o.key).map((o) => o.appearance);
       if (send(p.ws, { t: 'snap', time, ack: p.inputs.ack, state: round(p.state), players: seen.map((o) => o.pose), ...(appearance.length ? { appearance } : {}) })) {
@@ -1559,7 +1622,7 @@ function save(p: Player) {
   const now = Date.now();
   const played = p.ready ? now - p.savedAt : 0;
   p.savedAt = now;
-  db.savePlayer({ id: p.browserId, color: p.color, x: at.x, y: at.y, z: at.z, level: at.level, heat: p.heat.heat, sips: p.heat.sips }, played);
+  db.savePlayer({ id: p.browserId, color: p.color, x: at.x, y: at.y, z: at.z, level: at.level, gates: p.down ? 0 : p.state.gates, heat: p.heat.heat, sips: p.heat.sips }, played);
 }
 
 function playingOwners(): Set<string> {

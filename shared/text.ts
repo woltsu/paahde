@@ -159,6 +159,8 @@ const en = {
     repair: (what: string) => `Repair ${lower(what)}`,
     /** A working one: F gets on. */
     getOn: 'Get on',
+    /** The beginning's pod, its panel lit (docs/levels/tutorial.md). */
+    getIn: 'Get in',
     plantSeeds: 'Plant seeds',
     harvest: 'Harvest',
     needsUvLamp: 'Needs UV lamp',
@@ -310,6 +312,8 @@ const en = {
 
   menu: {
     resume: 'Resume',
+    /** In the beginning (docs/levels/tutorial.md): straight to the pod in the desert. */
+    skipBeginning: 'Skip to the desert',
     settings: 'Settings',
     options: 'Options',
     gameplay: 'Gameplay',
