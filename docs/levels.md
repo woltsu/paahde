@@ -320,6 +320,29 @@ Each phase is a push to `main` that leaves the game working.
 - **Machines in a level**: a stage may offer its own work site (`Stage.workSite`, the beginning's cabinet), with its own
   messages (`Stage.site`); the server routes them before the `IN_LEVEL` gate (server/tutorial.ts).
 
+## Building with boxes: z-fighting, hangers, bakes (October 2026)
+
+**Z-fighting**: two faces in one plane, facing the same way, flicker (the depth buffer can't order them; it shows as
+crawling stripes along the edges as you move). The beginning's bunks had it: posts flush with the bed's and the upper
+frame's sides, and a blanket ending where the posts did. Rules:
+
+- Never let two drawn boxes share a face plane facing the same way where they overlap. A part that sits on or in
+  another is inset (or stands proud) by **≥ 5 mm** on every side it shares (the bunk's bed and frame 1 cm inside the
+  posts; the blast door's hazard band 5 mm proud of its underside, inset at its ends).
+- Back to back is fine (a box on the floor, against a wall: one face is culled), and so is a face buried in a wall.
+- Decals and labels (planes: screens, signs, the drawing) sit ≥ 1 cm off their wall; floor paint is 3 mm up and uses
+  `polygonOffset` (the paint and hazard materials).
+- `tools/level-zfight.test.mjs` (`npm test`) checks every box-built layout's drawn boxes and racks: same-facing coplanar
+  faces that overlap where a camera can see them (inside a zone, not in another box) fail it. Planes and meshes built in
+  `src/` (props, glbs) aren't in it: keep them off surfaces by hand.
+
+**Nothing floats**: a light, tray or pipe is either flush with the ceiling (`strip`, `spot`'s disc in
+`shared/levels/beginning.ts`) or hangs from it on rods (`strip(..., drop)`, the hall's trays on trapezes).
+
+**The far-light bake** (`src/levels/datacenter/bake.ts`): the walls read it 0.3 m out from themselves, so a texel
+under something standing must not go dark (it drew stripes up the pod bay's wall behind its low cradles); under a box it
+holds the light on the box's top.
+
 ## Open questions
 
 - **The lab** (`?w=lab`) is a flat level in all but name: ~20 scattered `if (LAB)` in `shared/` (terrain, rocks,

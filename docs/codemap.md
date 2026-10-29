@@ -77,7 +77,8 @@ when you find it stale.
   hatch's F), `props.ts` (screens, cart, fallen rack, blast door, pod, window, drawing, plaque, city labels), `planet.ts` (TSL planet),
   `sound.ts` (the fall's roar, groan, jolt, chime), `ride.ts` (the dust card on the way down), `stuck.ts` (key hints after
   8 s stuck, once per world). Tests: `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and
-  hatch rules), `tools/server-beginning.test.mjs` (new players start there alone and unhurt, the ride, skip, the grant)
+  hatch rules), `tools/server-beginning.test.mjs` (new players start there alone and unhurt, the ride, skip, the grant), `tools/level-zfight.test.mjs` (no
+  coplanar same-facing drawn boxes in any box-built layout: docs/levels.md "Building with boxes")
 
 ## Worlds, server and players
 

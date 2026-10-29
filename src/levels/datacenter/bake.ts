@@ -2,7 +2,8 @@
 // stage is built, deterministic, no downloads:
 // - bake (RGBA half float, linear, 0.1 m over the bounds): r floor contact AO (the footprints of the boxes standing on the
 //   floor, blurred), g ceiling contact AO (the boxes touching the ceiling), b far light (diffuse light on the floor from
-//   every point fixture inside its range, blocked by what stands between: what the light pool doesn't light any more)
+//   every point fixture inside its range, blocked by what stands between: what the light pool doesn't light any more;
+//   under something standing, the light on its top, so the walls' reading 0.3 m out never drops to 0 by a low box)
 // - tiles (one byte per 0.6 m floor tile, nearest): 255 (1 to the shader) where a tile is perforated (the cold aisles).
 import * as THREE from 'three/webgpu';
 import type { LevelLayout as Layout } from '../../../shared/levels/datacenter.ts';
@@ -86,8 +87,9 @@ function* bakeSteps(L: Layout<string>): Generator<void, BakeData> {
     const ja = Math.max(0, Math.floor((fz - R - z0) / TEXEL)), jb = Math.min(nz - 1, Math.ceil((fz + R - z0) / TEXEL));
     for (let j = ja; j <= jb; j++) {
       for (let i = ia; i <= ib; i++) {
-        const k = j * nx + i;
-        if (tall[k] > 0.05) continue; // under something standing: never seen
+        // Lit at the top of whatever stands here (the floor where nothing does): what's under a low cradle still lights
+        // the wall behind it (the walls read the map 0.3 m out from them: zero under every cradle drew stripes up them).
+        const k = j * nx + i, y0 = tall[k];
         const x = x0 + (i + 0.5) * TEXEL, z = z0 + (j + 0.5) * TEXEL;
         const dx = x - fx, dz = z - fz, h = Math.hypot(dx, dz), d = Math.hypot(h, fy);
         if (d >= R) continue;
@@ -99,15 +101,16 @@ function* bakeSteps(L: Layout<string>): Generator<void, BakeData> {
           const sx = x - (dx / h) * t, sz = z - (dz / h) * t;
           const si = Math.floor((sx - x0) / TEXEL), sj = Math.floor((sz - z0) / TEXEL);
           if (si < 0 || sj < 0 || si >= nx || sj >= nz) break;
-          if (tall[sj * nx + si] > (fy * t) / h) { lit = 0; break; }
+          if (tall[sj * nx + si] > y0 + ((fy - y0) * t) / h) { lit = 0; break; }
         }
         far[k] += lit;
       }
     }
   }
+  // Normalised by the open floor's brightest (as before tops were lit: they don't dim the rest), tops capped at that.
   let max = 0;
-  for (const v of far) max = Math.max(max, v);
-  if (max > 0) for (let k = 0; k < far.length; k++) far[k] /= max;
+  for (let k = 0; k < far.length; k++) if (tall[k] <= 0.05) max = Math.max(max, far[k]);
+  if (max > 0) for (let k = 0; k < far.length; k++) far[k] = Math.min(1, far[k] / max);
 
   // Perforated tiles: the cold aisles' (z between two rows whose fronts face each other), not the cross aisle.
   const tnx = Math.ceil((x1 - x0) / TILE), tnz = Math.ceil((z1 - z0) / TILE);

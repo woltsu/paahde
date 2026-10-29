@@ -161,11 +161,19 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   };
   const point = (role: Fixture['role'], zone: BeginningZone, x: number, y: number, z: number, color: number, intensity: number, range: number) =>
     fixtures.push({ kind: 'point', role, pos: [x, y, z], color, intensity, range, decay: 1.5, castsShadow: false, zone });
-  const spot = (zone: BeginningZone, x: number, y: number, z: number, intensity = 6) => {
-    fixtures.push({ kind: 'spot', role: 'main', pos: [x, y, z], angle: 0.95, penumbra: 0.5, color: MAIN, intensity, range: 10, decay: 1.5, castsShadow: true, zone });
-    add('downlight', zone, 'draw', x - 0.2, x + 0.2, y + 0.02, y + 0.06, z - 0.2, z + 0.2);
+  /** A thin steel rod from `y` up into the ceiling at `ceil` (what a light or a tray hangs from). */
+  const rod = (zone: BeginningZone, x: number, y: number, ceil: number, z: number) => add('steel', zone, 'draw', x - 0.012, x + 0.012, y, ceil, z - 0.012, z + 0.012);
+  /** The shadowing spot in its disc, the disc flush with the ceiling at `ceil` (never floating under it). */
+  const spot = (zone: BeginningZone, x: number, ceil: number, z: number, intensity = 6) => {
+    fixtures.push({ kind: 'spot', role: 'main', pos: [x, ceil - 0.1, z], angle: 0.95, penumbra: 0.5, color: MAIN, intensity, range: 10, decay: 1.5, castsShadow: true, zone });
+    add('downlight', zone, 'draw', x - 0.2, x + 0.2, ceil - 0.05, ceil, z - 0.2, z + 0.2);
   };
-  const strip = (zone: BeginningZone, x0: number, x1: number, y: number, z: number) => add('strip', zone, 'draw', x0, x1, y, y + 0.06, z - 0.06, z + 0.06);
+  /** A light strip across x at z: flush with the ceiling at `ceil`, or hung `drop` m under it on two rods. */
+  const strip = (zone: BeginningZone, x0: number, x1: number, ceil: number, z: number, drop = 0) => {
+    const y = ceil - drop - 0.06;
+    add('strip', zone, 'draw', x0, x1, y, y + 0.06, z - 0.06, z + 0.06);
+    if (drop > 0) for (const x of [x0 + 0.15, x1 - 0.15]) rod(zone, x, y + 0.06, ceil, z);
+  };
   const top = 5.3; // the dividers rise to the tallest room's ceiling slab
 
   // --- 1. Crew quarters: twelve bunks in six frames (two high) along the side walls, one made; lockers on the back wall.
@@ -175,17 +183,19 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   for (const side of [-1, 1]) {
     for (const [z0, z1] of [[0.5, 2.5], [3, 5], [5.5, 7.5]]) {
       const xa = side < 0 ? -Q.x : Q.x - 0.9, xb = xa + 0.9;
-      add('equipment', 'quarters', 'both', xa, xb, 0, 0.45, z0, z1); // the lower bed (solid: you don't walk over it)
-      add('steel', 'quarters', 'draw', xa, xb, 1.3, 1.36, z0, z1); // the upper one's frame
+      // The posts stand at the corners; the bed and the upper frame sit 1 cm inside their outline, so no face of one
+      // lies in a post's face (coplanar faces flicker: docs/levels.md "Z-fighting").
+      add('equipment', 'quarters', 'both', xa + 0.01, xb - 0.01, 0, 0.45, z0 + 0.01, z1 - 0.01); // the lower bed (solid: you don't walk over it)
+      add('steel', 'quarters', 'draw', xa + 0.01, xb - 0.01, 1.3, 1.36, z0 + 0.01, z1 - 0.01); // the upper one's frame
       for (const [px, pz] of [[xa, z0], [xb - 0.05, z0], [xa, z1 - 0.05], [xb - 0.05, z1 - 0.05]]) add('steel', 'quarters', 'draw', px, px + 0.05, 0, 1.9, pz, pz + 0.05);
     }
   }
   // The one made bed: a blanket on it (the others are bare frames: the 'equipment' slab reads as a stripped mattress).
-  add('cable', 'quarters', 'draw', BUNK.x - 0.4, BUNK.x + 0.42, 0.45, 0.55, BUNK.z0 + 0.4, BUNK.z1);
+  add('cable', 'quarters', 'draw', BUNK.x - 0.4, BUNK.x + 0.38, 0.45, 0.55, BUNK.z0 + 0.4, BUNK.z1 - 0.07); // (clear of the posts)
   for (let i = 0; i < 6; i++) add('equipment', 'quarters', 'both', -2.4 + i * 0.8, -1.7 + i * 0.8, 0, 1.9, Q.z0, Q.z0 + 0.45); // lockers
   point('emergency', 'quarters', 0, Q.h - 0.15, 3.5, RED, 1.6, 7); // the alarm light over the room
-  spot('quarters', 0, Q.h - 0.1, 4.6, 2.5);
-  strip('quarters', -1.2, 1.2, Q.h - 0.06, 4);
+  spot('quarters', 0, Q.h, 4.6, 2.5);
+  strip('quarters', -1.2, 1.2, Q.h, 4);
   divider('quarters', Q.z1, Q.x, top, 0.6, 2.1, GATE.quarters);
 
   // --- 2. The corridor: the cable tray down across it, its cut end sparking.
@@ -195,7 +205,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('cable', 'corridor', 'draw', -0.9, 0.7, TRAY.y1, TRAY.y1 + 0.08, TRAY.z0 + 0.1, TRAY.z0 + 0.3);
   add('steel', 'corridor', 'draw', 0.9, 0.92, TRAY.y1, C.h, TRAY.z0 + 0.25, TRAY.z0 + 0.27); // the one rod still holding it
   for (const z of [12, 20]) point('main', 'corridor', 0, C.h - 0.2, z, MAIN, 2.2, 7);
-  for (const z of [10, 13, 18, 22]) strip('corridor', -0.6, 0.6, C.h - 0.06, z);
+  for (const z of [10, 13, 18, 22]) strip('corridor', -0.6, 0.6, C.h, z);
   divider('corridor', C.z1, R.hall.x, top, 0.9, 2.4);
 
   // --- 3. The server hall: four rows either side of the long aisle up the middle.
@@ -212,16 +222,21 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
         racks.push({ x: side * (1.2 + (i + 0.5) * 0.6), z: zc, face, variant: v < 0.75 ? 0 : v < 0.9 ? 1 : 2 });
       }
       add('tray', 'hall', 'draw', xa, xb, 2.4, 2.55, zc - 0.22, zc + 0.22);
+      // Hung on trapezes: a bar under it, a rod either side up into the ceiling.
+      for (const x of [xa + 0.3, (xa + xb) / 2, xb - 0.3]) {
+        add('steel', 'hall', 'draw', x - 0.02, x + 0.02, 2.37, 2.4, zc - 0.27, zc + 0.27);
+        for (const dz of [-0.25, 0.25]) rod('hall', x, 2.4, H.h, zc + dz);
+      }
       add('paint', 'hall', 'draw', xa - 0.38, xb + 0.38, 0, 0.003, z0 - 0.38, z0 - 0.3);
       add('paint', 'hall', 'draw', xa - 0.38, xb + 0.38, 0, 0.003, z1 + 0.3, z1 + 0.38);
     }
     // One row of lights per row of racks: they go out row by row (src/levels/beginning: the pool's weights).
     for (const x of [-3.3, 3.3]) point('main', 'hall', x, 3.5, z0 + 2.4, MAIN, 4, 9);
-    strip('hall', -5.6, -1.0, 3.6, z0 + 2.4);
-    strip('hall', 1.0, 5.6, 3.6, z0 + 2.4);
+    strip('hall', -5.6, -1.0, H.h, z0 + 2.4, 0.54);
+    strip('hall', 1.0, 5.6, H.h, z0 + 2.4, 0.54);
   });
-  spot('hall', 0, H.h - 0.3, 29);
-  spot('hall', 0, H.h - 0.3, 38);
+  spot('hall', 0, H.h, 29);
+  spot('hall', 0, H.h, 38);
   point('emergency', 'hall', 0, 2.7, H.z1 - 0.4, AMBER, 0.8, 4);
   divider('hall', H.z1, H.x, top, 0.9, 2.4);
 
@@ -243,8 +258,8 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('rack', 'aisle', 'collide', -FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1); // (drawn: src/levels/beginning/props.ts)
   for (const z of [50, 62.5]) point('main', 'aisle', 0, A.h - 0.6, z, MAIN, 3.5, 10);
   point('emergency', 'aisle', 0, 2.6, (GAP.z0 + GAP.z1) / 2, AMBER, 1.2, 6);
-  for (const z of [46, 51, 62]) strip('aisle', -1.5, 1.5, A.h - 0.06, z);
-  spot('aisle', 0, A.h - 0.1, 45.6);
+  for (const z of [46, 51, 62]) strip('aisle', -1.5, 1.5, A.h, z);
+  spot('aisle', 0, A.h, 45.6);
 
   // --- 6. The sub-floor under the gap: dust, old cables, a custodian's bag; a ladder of fallen trays back up (each a
   // jump), then a jump to the aisle's floor.
@@ -267,8 +282,8 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('equipment', 'control', 'collide', CABINET.x - 0.7, CABINET.x + 0.7, 0, 0.5, CABINET.z - 0.65, CABINET.z + 0.65); // the cabinet (drawn by the disassembly)
   point('main', 'control', 0, K.h - 0.2, 66, MAIN, 2, 7);
   point('emergency', 'control', 0, 2.5, K.z1 - 0.4, RED, 1, 4);
-  spot('control', CABINET.x, K.h - 0.1, CABINET.z, 5);
-  strip('control', -1.5, 1.5, K.h - 0.06, 66);
+  spot('control', CABINET.x, K.h, CABINET.z, 5);
+  strip('control', -1.5, 1.5, K.h, 66);
   divider('control', K.z1, K.x, top, 0.6, 2.1, GATE.control);
 
   // --- 7. The bay corridor: amber light, the blast door at its end (its edge is solid from the start, the drawn door
@@ -279,7 +294,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('door', 'bay', 'collide', -B.x, B.x, 0, BLAST.y0, BLAST.z0, BLAST.z1, -GATE.shut);
   add('hazard', 'bay', 'draw', -B.x, B.x, 0, 0.003, BLAST.z0 - 0.6, BLAST.z1 + 0.6);
   for (const z of [76, 83, 90.5]) point('emergency', 'bay', 0, B.h - 0.2, z, AMBER, 1.4, 7);
-  for (const z of [74, 79, 84]) strip('bay', -0.5, 0.5, B.h - 0.06, z);
+  for (const z of [74, 79, 84]) strip('bay', -0.5, 0.5, B.h, z);
   divider('bay', B.z1, R.pod.x, top, 0.9, 2.4);
 
   // --- 8. The pod bay: eleven empty cradles, one pod, the window.
@@ -299,8 +314,8 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   for (const [x, z] of [[-3, 95.5], [3, 95.5], [-3, 101.5]]) point('main', 'pod', x, P.h - 0.5, z, MAIN, 3, 9);
   point('main', 'pod', P.x - 0.6, 2.4, 99, PLANET, 1.2, 6); // the planet's weak orange by the window
   point('emergency', 'pod', 0, 2.7, P.z0 + 0.4, AMBER, 0.8, 4);
-  spot('pod', 0, P.h - 0.1, 97.5);
-  for (const z of [94, 98, 102]) strip('pod', -3, 3, P.h - 0.06, z);
+  spot('pod', 0, P.h, 97.5);
+  for (const z of [94, 98, 102]) strip('pod', -3, 3, P.h, z);
 
   const zones = Object.fromEntries((Object.keys(R) as (keyof typeof R)[]).map((k) => {
     const r = R[k];

@@ -108,7 +108,9 @@ export class Props {
     this.blast = new THREE.Mesh(boxGeometry([{ b: [-1.2, 1.2, 0, 2.6, BLAST.z0, BLAST.z1], zone: 'bay' }], { bay: 2.6 }), mats.door);
     this.blast.position.y = this.blastY;
     this.group.add(this.blast);
-    const stripes = new THREE.Mesh(boxGeometry([{ b: [-1.2, 1.2, 0, 0.12, BLAST.z0 - 0.005, BLAST.z1 + 0.005], zone: 'bay' }], { bay: 2.6 }), mats.hazard);
+    // Its hazard band wraps the edge 5 mm proud of every face it covers (its underside too: you crouch under it), never
+    // in one plane with the door's (docs/levels.md "Z-fighting").
+    const stripes = new THREE.Mesh(boxGeometry([{ b: [-1.195, 1.195, -0.005, 0.12, BLAST.z0 - 0.005, BLAST.z1 + 0.005], zone: 'bay' }], { bay: 2.6 }), mats.hazard);
     this.blast.add(stripes);
 
     // The window: a thin pane, space and the planet far behind it.
