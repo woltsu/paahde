@@ -162,11 +162,15 @@ export class TeardownView {
   private act: { step: Step; angle: number; end: number; sx: number; sy: number; lastMove: number } | null = null;
 
   private scene: THREE.Object3D;
+  /** Where what comes off the machine flies (world coordinates): the root of the stage the machine is in (the desert's or a
+   *  level's, src/levels/stage.ts), so it is seen wherever the machine is; the desert's stays hidden inside a level. */
+  private debris: THREE.Object3D;
   private camera: THREE.PerspectiveCamera;
   private canvas: HTMLElement;
 
   constructor(scene: THREE.Object3D, camera: THREE.PerspectiveCamera, canvas: HTMLElement) {
     this.scene = scene;
+    this.debris = scene;
     this.camera = camera;
     this.canvas = canvas;
     this.ui = new TeardownUi();
@@ -204,6 +208,7 @@ export class TeardownView {
     this.ui.setScrap(!!site.scrap);
     site.link?.join();
     if (!site.junk.root.parent) this.scene.add(site.junk.root);
+    this.debris = stageRoot(site.junk.root) ?? this.scene;
     attachAll(site.junk); // (the machine's own view of the world may have taken its fasteners out of the scene)
     wake(site.junk.root); // it moves while it is worked on (settle() stops the matrix updates again when the work ends)
     this.home.set(site.x, site.ground(site.x, site.z), site.z);
@@ -252,7 +257,7 @@ export class TeardownView {
       if (l.piece) {
         site.junk.root.attach(l.obj); // a piece with more in it stays: it lies where it fell
         l.piece.inner!.resting = true;
-      } else this.scene.remove(l.obj);
+      } else l.obj.removeFromParent();
     }
     this.loose = [];
     site.link?.leave();
@@ -920,7 +925,7 @@ export class TeardownView {
   }
 
   private release(obj: THREE.Object3D, floorY: number, life: number, vel: THREE.Vector3, spin: THREE.Vector3, piece?: Piece): Loose {
-    this.scene.attach(obj); // keeps the world transform
+    this.debris.attach(obj); // keeps the world transform
     const l: Loose = { obj, vel, spin, floorY: floorY * (this.site?.junk.scale ?? 1) * (this.site?.junk.root.scale.x ?? 1), life, piece };
     this.loose.push(l);
     return l;
@@ -1113,14 +1118,14 @@ export class TeardownView {
         o.rotation.x += l.spin.x * dt;
         o.rotation.y += l.spin.y * dt;
         if (l.life <= 0) {
-          this.scene.remove(o);
+          o.removeFromParent();
           this.loose.splice(i, 1);
         }
         continue;
       }
       if (l.life < 0.5) o.scale.setScalar(Math.max(l.life / 0.5, 0.001));
       if (l.life <= 0) {
-        this.scene.remove(o);
+        o.removeFromParent();
         this.loose.splice(i, 1);
         continue;
       }
@@ -1226,4 +1231,11 @@ export class TeardownView {
 function inside(o: THREE.Object3D, root: THREE.Object3D) {
   for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === root) return true;
   return false;
+}
+
+/** The top object above `o` that is not the scene: its stage's root (null if `o` hangs off the scene itself). */
+function stageRoot(o: THREE.Object3D): THREE.Object3D | null {
+  let p = o;
+  while (p.parent && !(p.parent as THREE.Scene).isScene) p = p.parent;
+  return p === o ? null : p;
 }

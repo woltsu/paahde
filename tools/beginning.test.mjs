@@ -161,6 +161,18 @@ test('the relay is the only item it gives, never loot, and it belongs to the lev
   }
 });
 
+test('the cabinet door comes first: nothing inside it can be worked (or shows its marker) while it is shut', async () => {
+  const { cabinetSteps, CABINET_SEED } = await import('../shared/levels/beginningCabinet.ts');
+  const { stepList, stepAllowed } = await import('../shared/machineSteps.ts');
+  for (const rules of [cabinetSteps(), ...[1, 7919, 23757].map((seed) => stepList('control_cabinet', seed + CABINET_SEED, 2))]) {
+    const first = rules.list.map((_, i) => i).filter((i) => stepAllowed(rules, new Set(), i));
+    assert.equal(first.length, 1, 'more than the door latch can be worked at first');
+    // Every other step waits on the latch (and so on the door's seam after it).
+    const waits = (i, seen = new Set()) => rules.list[i].after.some((n) => n === first[0] || (!seen.has(n) && (seen.add(n), waits(n, seen))));
+    rules.list.forEach((_, i) => i === first[0] || assert.ok(waits(i), `step ${i} can be worked through the shut door`));
+  }
+});
+
 test('the cabinet and the pod on the server: the relay out opens the door, into the panel powers the pod, F rides it down', async () => {
   const { TutorialServer, RIDE_MS, atHatch } = await import('../server/tutorial.ts');
   const { CABINET_GONE, RELAY_INDEX, cabinetSteps } = await import('../shared/levels/beginningCabinet.ts');
