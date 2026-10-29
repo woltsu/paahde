@@ -16,7 +16,7 @@ import WebSocket from 'ws';
 process.env.WORLD_ID = 'begintest';
 const { PROTOCOL_VERSION } = await import('../shared/protocol.ts');
 const { FORWARD, quantizeYaw, spawnPoint } = await import('../shared/sim.ts');
-const { beginningLevel, GATE } = await import('../shared/levels/beginning.ts');
+const { beginningLevel, GATE, POD_OPEN_MS } = await import('../shared/levels/beginning.ts');
 const { podOf } = await import('../shared/pods.ts');
 const { RIDE_MS } = await import('../server/tutorial.ts');
 
@@ -102,6 +102,12 @@ test('the beginning: new players start in it alone and unhurt, ride the pod down
   a.send({ t: 'tutorial', what: 'hatch' });
   await until(() => (a.snap().state.gates & GATE.powered) !== 0);
   await until(() => !a.bag().some((it) => it?.kind === 'tut_relay'));
+  const poweredAt = performance.now();
+  // Its panel shuts and its hatch swings open first: F does nothing till then.
+  a.send({ t: 'tutorial', what: 'hatch' });
+  await sleep(600);
+  assert.equal(a.snap().state.gates & GATE.launch, 0, 'in before the hatch was open');
+  await sleep(Math.max(0, POD_OPEN_MS + 200 - (performance.now() - poweredAt)));
   a.send({ t: 'tutorial', what: 'hatch' });
   await until(() => (a.snap().state.gates & GATE.launch) !== 0);
   const launched = performance.now();

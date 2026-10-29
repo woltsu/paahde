@@ -61,8 +61,16 @@ export const BLAST = { z0: 88.6, z1: 89.0, y0: 1.1 };
 export const WINDOW = { x: R.pod.x, z0: 96, z1: 102, y0: 1, y1: 3.6 };
 /** The control cabinet lying on its back in the control room, taken apart in place (server/tutorial.ts). */
 export const CABINET = { x: 1.4, z: 68.2, yaw: 0, kind: 'control_cabinet' as const };
-/** The last pod, its hatch towards you. */
-export const POD = { x: 0, z: 100.5, yaw: Math.PI, hatch: [-1.0, 1.0, 0, 2.6, 97.0, 98.9] as Box };
+/** The last pod, lying across the bay, its hatch towards you (pod.glb's Pod at full size, its axis along x, its nose to
+ *  -x: `yaw` turns the model's hatch side, -x, to -z). `hatch`: where F reaches it; `hull`: what you bump into. */
+export const POD = {
+  x: 0, z: 100.2, yaw: -Math.PI / 2,
+  hatch: [-1.0, 1.0, 0, 2.6, 96.8, 98.7] as Box,
+  hull: [-1.8, 2.0, 0, 2.5, 99.0, 101.5] as Box,
+};
+/** From the relay going into the pod's panel to its hatch lying open (ms): the panel's cover shuts, the pod wakes, the
+ *  hatch swings down (src/levels/beginning/pod.ts plays it). F gets in only after (server/tutorial.ts). */
+export const POD_OPEN_MS = 3200;
 /** The quarters' bunk you wake on, made (the other eleven are stripped). */
 export const BUNK = { x: 2.55, z0: 0.5, z1: 2.5 };
 
@@ -310,7 +318,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   divider('pod', P.z1, P.x, top, 0, 0);
   for (let i = 0; i < 6; i++) add('steel', 'pod', 'both', -P.x + 0.2, -P.x + 1.6, 0, 0.3, 93 + i * 1.8, 94.2 + i * 1.8);
   for (let i = 0; i < 5; i++) add('steel', 'pod', 'both', P.x - 1.6, P.x - 0.2, 0, 0.3, 93.4 + i * 2.1, 94.6 + i * 2.1);
-  add('equipment', 'pod', 'collide', POD.x - 1.2, POD.x + 1.2, 0, 2.3, POD.hatch[5] + 0.1, 102.4); // the pod (drawn: pod.glb)
+  add('equipment', 'pod', 'collide', ...POD.hull); // the pod (drawn: pod.glb)
   for (const [x, z] of [[-3, 95.5], [3, 95.5], [-3, 101.5]]) point('main', 'pod', x, P.h - 0.5, z, MAIN, 3, 9);
   point('main', 'pod', P.x - 0.6, 2.4, 99, PLANET, 1.2, 6); // the planet's weak orange by the window
   point('emergency', 'pod', 0, 2.7, P.z0 + 0.4, AMBER, 0.8, 4);

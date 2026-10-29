@@ -74,9 +74,11 @@ when you find it stale.
   pod's panel and the ride down (`RIDE_MS`), `BEGINNING_DONE`; `server/world.ts` starts new players there, `finishBeginning`
   (the ride, the Esc menu's skip), strips level items on any move out, refuses hurt/die where `!mortal`, hides private
   levels' players. `src/levels/beginning/` — its stage (`index.ts`: doors, lights out, rumble, the cabinet's work site, the
-  hatch's F), `props.ts` (screens, cart, fallen rack, blast door, pod, window frame and glass, drawing, plaque, city
-  labels), `planet.ts` (space: a camera-centred TSL dome with the stars, Milky Way, sun and the analytic planet),
-  `sound.ts` (the fall's roar, groan, jolt, chime), `ride.ts` (the dust card on the way down), `stuck.ts` (key hints after
+  hatch's F), `props.ts` (screens, cart, fallen rack, blast door, window frame and glass, drawing, plaque, city
+  labels), `pod.ts` (the pod: the relay's ghost in its junction box, the cover shutting, the hatch cut out of pod.glb
+  and swung open), `planet.ts` (space: a camera-centred TSL dome with the stars, Milky Way, sun and the analytic planet),
+  `sound.ts` (the fall's roar, groan, jolt, chime; the pod's click, clunk, chirp, hiss, thud), `ride.ts` (the dust card
+  on the way down), `stuck.ts` (key hints after
   8 s stuck, once per world). Tests: `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and
   hatch rules), `tools/server-beginning.test.mjs` (new players start there alone and unhurt, the ride, skip, the grant), `tools/level-zfight.test.mjs` (no
   coplanar same-facing drawn boxes in any box-built layout: docs/levels.md "Building with boxes")

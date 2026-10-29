@@ -252,7 +252,16 @@ it; the look and the telling. Where it differs from the design above:
   with its card (`TEXT.tutorial.card`), held over the move until the desert is drawn under it (`RIDE_MS` 7 s on the
   server; then the switch waits for the desert to arrive, its terrain and dune shadows round the pod and its
   materials compiled, docs/levels.md "Arriving", and only then `Stage.gone` clears the card). The Esc menu's skip
-  waits the same behind the level fade. The pod is pod.glb's `Pod` fitted into its cradle, as modelled; the hatch doesn't animate.
+  waits the same behind the level fade.
+- **The pod** (src/levels/beginning/pod.ts): pod.glb's `Pod` at full size (the desert's), lying across the bay with its
+  hatch towards you (`POD.yaw`, `POD.hull` the solid). The model has its hatch blown open and merged into the hull, so
+  pod.ts finds the hatch's triangles by the transform pod.py hangs it open with, cuts them out shut and swings them on
+  the same lower hinge. Its panel is a junction box on the hull beside the hatch, its cover hanging open: while you carry
+  the relay and it isn't in, a translucent ghost of the relay breathes in the socket (no marker, no text). F puts it in
+  (`GATE.powered`): the relay seats, the cover swings shut, the box's lamp goes green with a chirp, the seal hisses and
+  the hatch swings down to lie as a ramp, the cabin lit warm behind it, over `POD_OPEN_MS` (3.2 s); only then does F
+  get in (the prompt waits, and the server refuses till then). Seen already done (a reconnect, joining inside) it is
+  simply open. Sounds in sound.ts `pod(cue)`, levelled with the fall (docs/audio.md).
 - **Sound**: the datacenter's bed plus the fall (src/levels/beginning/sound.ts, docs/audio.md "The beginning's fall");
   the station's recorded "please" is not done, only its chime.
 - **The window** is two transparent panes (the one exception to the datacenter's no-transparency rule) in a steel frame,
@@ -264,5 +273,5 @@ it; the look and the telling. Where it differs from the design above:
   world on this browser (localStorage); the cabinet has the disassembly mode's own guides.
 - **Economy**: `npm run econ -- --base fd0ba38`: "No significant change".
 
-Known gaps: the relay has no held-item model (its icon is a
-relay's); the facing isn't saved on a reconnect; the level's own reverb (as the datacenter's) is not done.
+Known gaps: the relay has no held-item model (its icon is a relay's; its part model is the ghost and the seated relay
+in the pod's box); the facing isn't saved on a reconnect; the level's own reverb (as the datacenter's) is not done.

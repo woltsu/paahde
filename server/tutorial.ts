@@ -5,7 +5,7 @@
 // reconciliation, as `level` does: no input bit asks for it. server/world.ts does the moving and the bag; this keeps the
 // per-player state: the cabinet's session (never saved: the level is short, a reconnect finds it whole again, its relay
 // out if `gates` says so) and the ride down.
-import { CABINET, GATE, POD, beginningLevel, beatAt, triggersAt } from '../shared/levels/beginning.ts';
+import { CABINET, GATE, POD, POD_OPEN_MS, beginningLevel, beatAt, triggersAt } from '../shared/levels/beginning.ts';
 import { CABINET_GONE, CABINET_ID, RELAY_INDEX, cabinetSteps } from '../shared/levels/beginningCabinet.ts';
 import { partAllowed, stepAllowed } from '../shared/machineSteps.ts';
 import { inBox } from '../shared/levels.ts';
@@ -47,6 +47,8 @@ export class TutorialServer {
   private cabinets = new Map<number, Session>();
   /** Who is in the pod going down, and when they land (performance.now() ms), by public id. */
   private rides = new Map<number, number>();
+  /** Whose pod is still opening (its panel shutting, its hatch swinging down), and till when (ms), by public id. */
+  private opening = new Map<number, number>();
 
   private cabinet(pid: number, gates: number): Session {
     let c = this.cabinets.get(pid);
@@ -93,10 +95,17 @@ export class TutorialServer {
   }
 
   /** F at the hatch: the relay into the pod's panel (`take()` uses it up: false if it isn't in the bag), or, once it is
-   *  in, into the pod and down. The gates to set, or null if nothing happens. */
+   *  in and the hatch has swung open (POD_OPEN_MS), into the pod and down. The gates to set, or null if nothing happens. */
   hatch(pid: number, s: PlayerState, take: () => boolean, now: number): number | null {
     if (!atHatch(s) || this.rides.has(pid)) return null;
-    if (!(s.gates & GATE.powered)) return take() ? s.gates | GATE.powered : null;
+    if (!(s.gates & GATE.powered)) {
+      if (!take()) return null;
+      this.opening.set(pid, now + POD_OPEN_MS);
+      return s.gates | GATE.powered;
+    }
+    // (Back after a reconnect with the relay in: it stands open.)
+    if (now < (this.opening.get(pid) ?? 0)) return null;
+    this.opening.delete(pid);
     this.rides.set(pid, now + RIDE_MS);
     return s.gates | GATE.launch;
   }
@@ -118,5 +127,6 @@ export class TutorialServer {
   forget(pid: number) {
     this.cabinets.delete(pid);
     this.rides.delete(pid);
+    this.opening.delete(pid);
   }
 }

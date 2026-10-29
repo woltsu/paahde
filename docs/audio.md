@@ -118,6 +118,11 @@ the fall alone: −48.6 LUFS at rumble 0.3 (the control room), −38.9 at 0.55 w
 1 (the ride down); sample peak −8.2 dBFS at volume 1 with the boom and a chime. With the bed (−30) the ride sums to
 about −26.7: still under the −23 target, a bed and not a scene.
 
+The pod opening (`pod(cue)`: the relay's click, the cover's clunk, the wake chirp, the seal's hiss over the hatch's
+motor, the hatch's thud; src/levels/beginning/pod.ts times them over 3.2 s), the five cues alone, rendered the same way:
+−31.1 LUFS integrated over 4.5 s at master volume 0.4, momentary at most −28.0 (the clunk and the hiss), true peak
+−11.2 dBTP (−3.3 at volume 1). One-shots a little over the bay's bed, as foley should be.
+
 ## Limits of these numbers
 
 These are scripted scenes using the game's actual sound entry points, not recordings of a complete multiplayer

@@ -1,6 +1,7 @@
 // The beginning's sound over the datacenter's bed (src/levels/datacenter/ambience.ts): the fall, a low roar and the
 // structure groaning that grow with how far you are (the beat, not time: docs/levels/tutorial.md), a jolt's boom; the
-// station's chime in the bay corridor, over and over; in the pod going down, the roar all the way up. Synthesised, no
+// station's chime in the bay corridor, over and over; the pod opening (its relay, cover, hatch); in the pod going down,
+// the roar all the way up. Synthesised, no
 // samples; through the shared ambience bed (src/audio.ts: master gain and limiter), every gain ramped. Levelled offline
 // like the datacenter's (docs/audio.md "The beginning's fall"): `?debug` exposes `dbg.fall` (buildFall) to repeat it.
 import { audio } from '../../audio.ts';
@@ -12,7 +13,12 @@ const CHIME = 0.05;
 /** A time constant for every level change (s). */
 const EASE = 0.5;
 
-export type Fall = { roar: GainNode; groan: GainNode; boom: (when: number, size: number) => void; chime: (when: number) => void; stop: () => void };
+/** The pod opening (src/levels/beginning/pod.ts): each at `when`. */
+export type PodCue = 'click' | 'clunk' | 'wake' | 'hiss' | 'thud';
+export type Fall = { roar: GainNode; groan: GainNode; boom: (when: number, size: number) => void; chime: (when: number) => void;
+  pod: (cue: PodCue, when: number) => void; stop: () => void };
+/** The pod's sounds' peaks (docs/audio.md "The beginning's fall"). */
+const POD_LEVEL = { click: 0.55, clunk: 1.2, wake: 0.1, hiss: 0.22, servo: 0.12, thud: 1.1 };
 
 /** Brown noise, `seconds` long (it loops under a lowpass). */
 function brown(ctx: BaseAudioContext, seconds: number): AudioBuffer {
@@ -98,6 +104,83 @@ export function buildFall(ctx: BaseAudioContext, dest: AudioNode): Fall {
       o.stop(when + at + 1.2);
     }
   };
+  const white = (() => {
+    const n = ctx.sampleRate * 2, buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    let seed = 0x2f6b1a93;
+    for (let i = 0; i < n; i++) d[i] = ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296) * 2 - 1;
+    return buf;
+  })();
+  /** A burst of `buf` through a filter, its gain shaped attack, then decay (s). */
+  const burst = (buf: AudioBuffer, when: number, type: BiquadFilterType, freq: number, q: number, peak: number, attack: number, decay: number) => {
+    const s = ctx.createBufferSource();
+    s.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(peak, when + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + attack + decay);
+    s.connect(f).connect(g).connect(dest);
+    s.start(when);
+    s.stop(when + attack + decay + 0.05);
+    return f;
+  };
+  /** A tone gliding `f0` to `f1`, shaped as a burst. */
+  const tone = (when: number, type: OscillatorType, f0: number, f1: number, peak: number, attack: number, decay: number) => {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, when);
+    o.frequency.exponentialRampToValueAtTime(f1, when + attack + decay);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(peak, when + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + attack + decay);
+    o.connect(g).connect(dest);
+    o.start(when);
+    o.stop(when + attack + decay + 0.05);
+  };
+  /** The pod opening: the relay clicking home, the cover shutting, the pod waking (a chirp up), the seal's hiss with the
+   *  hatch's motor under it, the hatch coming down on its stops. */
+  const pod = (cue: PodCue, when: number) => {
+    const L = POD_LEVEL;
+    if (cue === 'click') {
+      burst(white, when, 'highpass', 2500, 0.7, L.click, 0.002, 0.04);
+      tone(when, 'triangle', 1900, 1500, L.click * 0.3, 0.002, 0.06);
+    } else if (cue === 'clunk') {
+      burst(hit, when, 'lowpass', 420, 0.8, L.clunk, 0.004, 0.22);
+      tone(when, 'sine', 150, 80, L.clunk * 0.5, 0.004, 0.18);
+      burst(white, when + 0.01, 'bandpass', 1800, 2, L.click * 0.5, 0.002, 0.05);
+    } else if (cue === 'wake') {
+      tone(when, 'sine', 420, 880, L.wake, 0.03, 0.3);
+      tone(when + 0.16, 'sine', 660, 1320, L.wake * 0.8, 0.03, 0.4);
+    } else if (cue === 'hiss') {
+      const f = burst(white, when, 'bandpass', 4200, 0.9, L.hiss, 0.03, 1.3);
+      f.frequency.setValueAtTime(5200, when);
+      f.frequency.exponentialRampToValueAtTime(2400, when + 1.3);
+      // The hatch's motor, all the way down (pod.ts HATCH).
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(70, when + 0.08);
+      o.frequency.linearRampToValueAtTime(95, when + 0.8);
+      o.frequency.linearRampToValueAtTime(60, when + 1.55);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 380;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, when + 0.08);
+      g.gain.linearRampToValueAtTime(L.servo, when + 0.35);
+      g.gain.setValueAtTime(L.servo, when + 1.3);
+      g.gain.linearRampToValueAtTime(0.0001, when + 1.6);
+      o.connect(lp).connect(g).connect(dest);
+      o.start(when + 0.08);
+      o.stop(when + 1.7);
+    } else {
+      burst(hit, when, 'lowpass', 260, 0.7, L.thud, 0.005, 0.5);
+      burst(white, when, 'bandpass', 900, 1.5, L.click * 0.4, 0.003, 0.12);
+    }
+  };
   const stop = () => {
     noise.stop();
     gn.stop();
@@ -106,7 +189,7 @@ export function buildFall(ctx: BaseAudioContext, dest: AudioNode): Fall {
     roar.disconnect();
     groan.disconnect();
   };
-  return { roar, groan, boom, chime, stop };
+  return { roar, groan, boom, chime, pod, stop };
 }
 
 /** The fall in the game: built on entering, faded by `set`, stopped once faded out after leaving. */
@@ -150,6 +233,12 @@ export class FallSound {
       this.chimeIn = 5;
       f.chime(now + 0.05);
     }
+  }
+
+  /** The pod opening (src/levels/beginning/pod.ts). */
+  pod(cue: PodCue) {
+    const ctx = audio.ctx;
+    if (ctx && this.fall && ctx.state === 'running') this.fall.pod(cue, ctx.currentTime + 0.01);
   }
 
   /** A jolt (the hall's lights going out). */

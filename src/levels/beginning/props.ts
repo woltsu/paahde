@@ -1,12 +1,11 @@
 // The beginning's set pieces and dressing (docs/levels/tutorial.md "Set pieces"), client-only and read off the player's
 // gates (they never touch the sim, the cart's solid is the sim's: CART): the station's screens, the cleaning cart crossing
-// the hall, the fallen rack, the blast door coming down, the pod in its cradle, the window on the planet, and the things
+// the hall, the fallen rack, the blast door coming down, the window on the planet, and the things
 // to find (a child's drawing of rain on a locker,
 // the water-drop plaque, the rack rows' city labels). Words on them are TEXT's (shared/text.ts TEXT.tutorial).
 import * as THREE from 'three/webgpu';
 import { abs, cameraPosition, color, dot, float, mx_fractal_noise_float, mx_noise_float, normalize, positionWorld, smoothstep, uv, vec3 } from 'three/tsl';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { BLAST, CART, FALLEN, GAP, POD, SCREENS, WINDOW, cartX } from '../../../shared/levels/beginning.ts';
+import { BLAST, CART, FALLEN, GAP, SCREENS, WINDOW, cartX } from '../../../shared/levels/beginning.ts';
 import { TEXT } from '../../../shared/text.ts';
 import { boxGeometry } from '../boxLevel.ts';
 import { spaceDome } from './planet.ts';
@@ -53,8 +52,6 @@ export class Props {
   /** The blast door's edge (m over the floor), easing to where the gates say. */
   private blastY = 2.6;
   private blastSince = -1;
-  /** The pod (pod.glb's Pod), once loaded. */
-  pod: THREE.Object3D | null = null;
 
   constructor(mats: Record<string, THREE.Material>) {
     // The station's screens along the walls.
@@ -138,29 +135,6 @@ export class Props {
       this.group.add(pane);
     }
     this.group.add(spaceDome());
-
-    // The last pod, upright in its cradle, its hatch towards you.
-    new GLTFLoader().load('./models/pod.glb', (gltf) => {
-      const pod = gltf.scene.getObjectByName('Pod');
-      if (!pod) return;
-      pod.removeFromParent();
-      pod.position.set(0, 0, 0);
-      pod.rotation.set(0, 0, 0);
-      pod.updateMatrixWorld(true);
-      // Fit it into its cradle's box (shared/levels/beginning.ts: what you bump into).
-      const box = new THREE.Box3().setFromObject(pod), size = box.getSize(new THREE.Vector3());
-      const holder = new THREE.Group();
-      const k = Math.min(2.4 / Math.max(size.x, 0.01), 3.4 / Math.max(size.z, 0.01), 2.3 / Math.max(size.y, 0.01));
-      holder.scale.setScalar(k);
-      const c = box.getCenter(new THREE.Vector3());
-      pod.position.set(-c.x, -box.min.y, -c.z);
-      holder.add(pod);
-      holder.position.set(POD.x, 0, POD.z + 0.2);
-      holder.rotation.y = POD.yaw;
-      pod.traverse((o) => { o.castShadow = o.receiveShadow = true; });
-      this.group.add(holder);
-      this.pod = holder;
-    }, undefined, (e) => console.warn('beginning: the pod failed to load', e));
   }
 
   /** Every frame: the screens' word, the cart (where `gates` put it), the blast door (`blastDown`: its bit; `shut`: down

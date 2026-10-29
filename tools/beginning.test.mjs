@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { level, LEVELS } from '../shared/levels.ts';
-import { BEGINNING, BLAST, CABINET, CART, CART_CROSSED, FALLEN, GAP, GATE, POD, TRAY, WINDOW, beatAt, beginningLevel, cartTicks, cartX, triggersAt } from '../shared/levels/beginning.ts';
+import { BEGINNING, BLAST, CABINET, CART, CART_CROSSED, FALLEN, GAP, GATE, POD, POD_OPEN_MS, TRAY, WINDOW, beatAt, beginningLevel, cartTicks, cartX, triggersAt } from '../shared/levels/beginning.ts';
 import { CROUCH, FORWARD, JUMP, PLAYER_RADIUS, SLIDE, levelSpawn, quantizeYaw, step } from '../shared/sim.ts';
 import { ITEMS, levelOnlyItems } from '../shared/items.ts';
 import * as tables from '../shared/tables.ts';
@@ -89,6 +89,9 @@ test('the walk: bunk to pod with every gate opened in order', () => {
   // The hatch.
   s = walk(s, 0, 97.6, { open: relayOut });
   assert.ok(inBoxFeet(POD.hatch, s), `not at the hatch: ${s.x.toFixed(2)}, ${s.z.toFixed(2)}`);
+  // The pod's hull stops you short of it, still at the hatch.
+  const bumped = walk({ ...s }, 0, 100.2, { open: relayOut, max: 3 });
+  assert.ok(bumped.z < POD.hull[4] && inBoxFeet(POD.hatch, bumped), `into the pod or past its hatch: ${bumped.z.toFixed(2)}`);
   assert.equal(L.doors().length, 0, 'an F that just takes you out');
 });
 
@@ -214,9 +217,15 @@ test('the cabinet and the pod on the server: the relay out opens the door, into 
   let used = 0;
   const powered = t.hatch(1, hatch, () => (used++, true), 0);
   assert.ok(powered & GATE.powered && used === 1);
-  const launch = t.hatch(1, { ...hatch, gates: powered }, () => (used++, true), 1000);
+  // Not in while its hatch is still swinging open (POD_OPEN_MS), then in.
+  assert.equal(t.hatch(1, { ...hatch, gates: powered }, () => (used++, true), POD_OPEN_MS - 1), null, 'in before the hatch was open');
+  const go = POD_OPEN_MS;
+  const launch = t.hatch(1, { ...hatch, gates: powered }, () => (used++, true), go);
   assert.ok(launch & GATE.launch && used === 1, 'the pod took a second relay');
-  assert.ok(t.riding(1) && !t.landed(1, 1000 + RIDE_MS - 1) && t.landed(1, 1000 + RIDE_MS) && !t.riding(1));
+  assert.ok(t.riding(1) && !t.landed(1, go + RIDE_MS - 1) && t.landed(1, go + RIDE_MS) && !t.riding(1));
+  // Back after a reconnect with the relay already in (a new server's memory): its hatch stands open, in at once.
+  const fresh = new TutorialServer();
+  assert.ok(fresh.hatch(3, { ...hatch, gates: powered }, () => false, 0) & GATE.launch);
 });
 
 test('every solid is drawn: nothing invisible in your way', () => {
@@ -224,7 +233,7 @@ test('every solid is drawn: nothing invisible in your way', () => {
   const byStage = [
     [-FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1], // the fallen rack (props.ts)
     [CABINET.x - 0.7, CABINET.x + 0.7, 0, 0.5, CABINET.z - 0.65, CABINET.z + 0.65], // the cabinet (the disassembly)
-    [POD.x - 1.2, POD.x + 1.2, 0, 2.3, POD.hatch[5] + 0.1, 102.4], // the pod (pod.glb)
+    POD.hull, // the pod (pod.glb: src/levels/beginning/pod.ts)
     [WINDOW.x, WINDOW.x + 0.3, WINDOW.y0, WINDOW.y1, WINDOW.z0, WINDOW.z1], // the window's pane (props.ts)
     [-1.2, 1.2, BLAST.y0, 2.6, BLAST.z0, BLAST.z1], // the blast door over its edge, and shut (props.ts)
     [-1.2, 1.2, 0, BLAST.y0, BLAST.z0, BLAST.z1],

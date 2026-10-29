@@ -27,6 +27,7 @@ import { bakeDataSliced, bakeMaps } from '../datacenter/bake.ts';
 import { makeMaterials } from '../datacenter/materials.ts';
 import { DATACENTER_ENV, DATACENTER_POST, datacenterEnvironment } from '../datacenter/environment.ts';
 import { DatacenterAmbience } from '../datacenter/ambience.ts';
+import { Pod } from './pod.ts';
 import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
 import { Ride } from './ride.ts';
@@ -50,6 +51,10 @@ export class BeginningStage implements Stage {
   /** How hard it shakes now (src/camera.ts rumble). */
   rumble = 0;
   private props: Props;
+  /** The last pod: the relay's ghost in its panel, its cover shutting, its hatch swinging open. */
+  private pod: Pod;
+  /** The relay in the bag (its ghost shows where it goes). */
+  private carrying = false;
   private ride = new Ride();
   private stuck = new StuckHints();
   /** The gates as of last frame (null: none yet since entering): a bit set since is seen happen. */
@@ -86,6 +91,11 @@ export class BeginningStage implements Stage {
     this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient);
     this.props = new Props(mats);
     this.root.add(this.props.group);
+    this.pod = new Pod({
+      click: () => this.fall.pod('click'), clunk: () => this.fall.pod('clunk'), wake: () => this.fall.pod('wake'),
+      hiss: () => this.fall.pod('hiss'), thud: () => this.fall.pod('thud'),
+    });
+    this.root.add(this.pod.group);
     L.fixtures.forEach((f, i) => { if (f.zone === 'hall' && f.role === 'main') this.hallLights.push(i); });
     // The cabinet lies on its back on the floor, everything but its relay long gone.
     this.cabinet = buildJunk(CABINET.kind, CABINET_SEED, CABINET_LEVEL);
@@ -139,11 +149,13 @@ export class BeginningStage implements Stage {
     return 'id' in m && m.id === CABINET_ID;
   }
 
-  /** At the pod's hatch: its panel dark until the relay is in (F puts it in, if it's in the bag), then F gets in. */
+  /** At the pod's hatch: its panel dark until the relay is in (F puts it in, if it's in the bag), then, once the hatch
+   *  has swung open, F gets in. */
   interact(me: PlayerState, bag: Slots | undefined) {
+    this.carrying = !!bag && hasItem(bag, RELAY);
     if (me.level !== this.level || !inBox(POD.hatch, me.x, me.y, me.z) || me.gates & GATE.launch) return null;
     const act = this.hatch;
-    if (me.gates & GATE.powered) return { prompt: TEXT.prompt.getIn, act };
+    if (me.gates & GATE.powered) return this.pod.open ? { prompt: TEXT.prompt.getIn, act } : null;
     return bag && hasItem(bag, RELAY) ? { prompt: TEXT.prompt.place(TEXT.parts.relay), act } : null;
   }
 
@@ -199,6 +211,7 @@ export class BeginningStage implements Stage {
     // The lights shudder with it.
     const flick = this.jolt > 0 || riding > 0 ? 0.35 * this.rumble * (0.5 + 0.5 * Math.sin(f.time * 37) * Math.sin(f.time * 11.3)) : 0;
     this.box.pool.scale = (riding > 0 ? 0.6 : 1) - flick;
+    this.pod.update(f.dt, f.time, gates, this.carrying, fresh);
     this.props.update(f.dt, beat, gates, (gates & GATE.blast) !== 0, (gates & GATE.shut) !== 0, fresh);
     this.stuck.update(f.dt, me, riding === 0);
     const zone = zoneAt(BEGINNING, cam.x, cam.z);
