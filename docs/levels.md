@@ -26,6 +26,8 @@ export type Level = {
   collide(p: { x: number; z: number; vx: number; vz: number }, y: number, prevY: number, radius: number, height: number, stepUp: number): number;
   /** Lowest ceiling over (x, z) for a mover of this height (jumping into the ceiling). */
   ceiling(x: number, z: number, prevY: number, height: number, radius: number): number;
+  /** Is a solid within r of (x, y, z)? The third-person camera's boom pulls in short of it (src/camera.ts, src/ground.ts solidAt). */
+  solid(x: number, y: number, z: number, r: number, gates?: number): boolean;
   bounds: Box;                      // nothing in the level leaves this; a mover outside it is put back at a spawn
   spawns: readonly { x: number; y: number; z: number; facing: number }[];
   /** Ways out: F in one takes you to `to` (a level and a point in it). The layout gives the trigger boxes
@@ -267,7 +269,10 @@ Each phase is a push to `main` that leaves the game working.
   asked for again for 10 s, and a failed load offers a reload; it never loops fades. A stage is updated only while it
   is the level we're in; the clock (`Sky.tickClock`) and the wind tick in every level. The client's own ground checks
   (camera, ragdolls, shots, blows, thrown junk, sparks, the spyglass, sound occlusion, the fly camera) go through
-  `src/ground.ts` `groundAt`, the floor in a flat level, never the desert's heightfield there. The Web Audio listener
+  `src/ground.ts` `groundAt`, the floor in a flat level, never the desert's heightfield there. The third-person camera's boom
+  is stepped out and stops 0.2 m short of the level's solids (`Level.solid` through `src/ground.ts` `solidAt`, with the
+  player's gates: a shut door stops it, an open one doesn't); in the desert the sand, shelters, tarps and the datacenter's
+  block. (Built things, scrap and machines are not tested yet.) The Web Audio listener
   follows the camera everywhere (`CrashSound.update`, its beacons only where the desert's things are). A storm's dust
   at the eye drops at once in a level without weather (`StormFx.calm`). The desert's post profile is kept as it was on
   leaving (the art bench's tuning survives a visit). Faded-out ambience beds stop their sources.

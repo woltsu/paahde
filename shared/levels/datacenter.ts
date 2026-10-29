@@ -5,7 +5,7 @@
 // (the shader hashes the instance index): keep the generator's loop order stable.
 import { mulberry32 } from '../noise.ts';
 import { DESERT, STEP_UP, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
-import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes } from './boxes.ts';
+import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes, solidNear } from './boxes.ts';
 
 export type Vec3 = [number, number, number];
 export type ZoneId = 'hall' | 'vestibule' | 'ups';
@@ -225,6 +225,7 @@ export const datacenterLevel: Level = {
   ground: (x, z, prevY) => groundBoxes(solids, x, z, prevY, STEP_UP),
   collide: (c, y, prevY, radius, height, stepUp) => collideBoxes(solids, c, y, prevY, radius, height, stepUp),
   ceiling: (x, z, prevY, height, radius) => ceilingBoxes(solids, x, z, prevY, height, radius),
+  solid: (x, y, z, r) => solidNear(solids, x, y, z, r),
   flat: true,
   bounds: DATACENTER.bounds,
   spawns: DATACENTER.spawns,

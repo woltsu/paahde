@@ -523,7 +523,7 @@ renderer.setAnimationLoop((time) => {
   if (joined && loaded) levels.follow(net.me.level);
   me.levelFloor = L.flat;
   menu.skippable = L.skippable;
-  setGround(net.me.level, net.me.y);
+  setGround(net.me.level, net.me.y, net.me.gates);
   for (const a of remotes.values()) a.levelFloor = L.flat;
   // The gun raised (or just fired), or the spyglass: others see it shouldered, or at the eye (src/models/scavenger.ts).
   const aiming = playerHands.aim > 0.5 || playerHands.looking;

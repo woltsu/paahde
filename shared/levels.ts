@@ -17,7 +17,7 @@ import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
 import { datacenterLevel } from './levels/datacenter.ts';
 import { beginningLevel } from './levels/beginning.ts';
-import { collideEntrance, entrance } from './levels/entrance.ts';
+import { collideEntrance, entrance, solidEntrance } from './levels/entrance.ts';
 
 export const DESERT = 0;
 /** Things whose top is at most this far above the feet are stepped onto instead of blocking (shared/sim.ts re-exports
@@ -49,6 +49,9 @@ export type Level = {
   collide(c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number, prevX: number, prevZ: number, gates?: number): number;
   /** Lowest ceiling over (x, z) for a mover of this height (jumping into a roof). */
   ceiling(x: number, z: number, prevY: number, height: number, radius: number, gates?: number): number;
+  /** Is one of its solids within r of (x, y, z)? The third-person camera's boom pulls in short of them (src/camera.ts). In
+   *  the desert only what isn't sand or a shelter (the camera has those already): the datacenter's entrance block. */
+  solid(x: number, y: number, z: number, r: number, gates?: number): boolean;
   /** Hard flat floors: no sand slopes, slip faces or rock walls in the sim (shared/sim.ts reads the terrain only when not). */
   flat: boolean;
   /** Nothing in the level leaves this: a mover outside it is put back at the first spawn. Null: no bounds (the desert). */
@@ -102,6 +105,7 @@ export const desertLevel: Level = {
   },
   // Under a shelter's roof or a solar farm's mirror.
   ceiling: (x, z, prevY, height, radius) => Math.min(shelterCeiling(x, z, prevY, height, radius), solarCeiling(x, z, prevY, height)),
+  solid: solidEntrance,
   flat: false,
   bounds: null,
   spawns: [],

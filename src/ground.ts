@@ -8,12 +8,18 @@ import { DESERT, level, type Level } from '../shared/levels.ts';
 let L: Level = level(DESERT);
 /** Where the local player's feet are (main.ts, each frame): a level's floors are looked up from about there. */
 let refY = 0;
+/** The local player's PlayerState.gates: which of a level's gated solids (doors) are in the way for us. */
+let myGates = 0;
 
-/** main.ts, each frame: the level we're in, and our feet. */
-export function setGround(id: number, feetY: number) {
+/** main.ts, each frame: the level we're in, our feet and our gates. */
+export function setGround(id: number, feetY: number, gates = 0) {
   L = level(id);
   refY = feetY;
+  myGates = gates;
 }
+
+/** Is one of the level's solids within r of (x, y, z) (Level.solid: the third-person camera's boom)? */
+export const solidAt = (x: number, y: number, z: number, r: number) => L.solid(x, y, z, r, myGates);
 
 /** In a level with flat floors: no sand, no slopes, no shelters (their x, z are the desert's). */
 export const onFlat = () => L.flat;

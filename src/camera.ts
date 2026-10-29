@@ -5,14 +5,14 @@
 // landings dip the view on a spring, strafing rolls it slightly, and sprinting kicks the FOV out.
 // T toggles a third-person view over the right shoulder: the camera backs off behind the eye and to its right, turned
 // in so the screen centre (crosshair) crosses the dig/pickup ray at about arm's reach, and the boom shortens so it
-// never sinks into a dune.
+// never sinks into a dune or passes through a wall, floor or ceiling (a shelter's, a level's: Level.solid).
 // Holding Alt (Option) looks around freely: the mouse turns only the view (freeYaw / freePitch on top of yaw / pitch),
 // so you keep running or sliding the way you were going; letting go swings the view back.
 import * as THREE from 'three/webgpu';
 import { isBound } from './bindings';
 import { tools } from './input';
 import { comfort, COMFORT_RANGES } from './comfort';
-import { groundAt, onFlat } from './ground.ts';
+import { groundAt, onFlat, solidAt } from './ground.ts';
 import { placed, TARP, type Placed } from '../shared/placed.ts';
 import { canvasYAt, TARP_HALF, tarpRig, type TarpRig } from '../shared/tarp.ts';
 import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, slopeAt } from '../shared/sim.ts';
@@ -42,7 +42,8 @@ const OTS_BOOM = 3.0; // third person: the camera sits behind the shoulder (m)
 const OTS_SIDE = 0.55; // ...and over it, to the right of the aim line (m)
 const OTS_MEET = 3; // ...turned in so its centre ray crosses the eye's look ray this far ahead (m): pickups' reach
 const BOOM_CLEARANCE = 0.35; // keep the camera this far above the sand
-const WALL_CLEARANCE = 0.2; // ...and this far from the shelters' walls, floors and ceilings (m)
+const WALL_CLEARANCE = 0.2; // ...and this far from the shelters' and levels' walls, floors and ceilings (m)
+const BOOM_STEPS = 12; // the boom is tested this many times out to its full length (then halved finer where it's cut)
 /** Speed slide: the view rolls this far (rad) towards the trailing left hand. */
 const SLIDE_ROLL = 0.07;
 const SPRING_DT = 1 / 120; // the landing dip's longest step (s): a slow frame taken whole would make it swing ever harder
@@ -276,12 +277,25 @@ export class FirstPersonCamera {
     const third = (this.thirdPerson && !this.aimIn) || this.down;
     const ots = this.thirdPerson && !this.aimIn && !this.down;
     const full = ots ? OTS_BOOM : BOOM, side = ots ? OTS_SIDE : 0;
-    let room = third ? 1 : 0;
-    for (let i = 1; i <= 12 && room > 0; i++) {
-      const f = i / 12;
-      if (f > room) break;
+    // Stepped out along the boom; the first blocked step is then halved down to a couple of cm, so the boom slides
+    // along a wall or under a ceiling instead of jumping a whole step at a time.
+    const clear = (f: number) => {
       const px = x + (bx * full + vc * side) * f, py = y + by * full * f, pz = z + (bz * full - vs * side) * f;
-      if (blocked(px, py, pz) || tarpBetween(x, y, z, px, py, pz)) room = f - 1 / 12;
+      return !blocked(px, py, pz) && !tarpBetween(x, y, z, px, py, pz);
+    };
+    let room = third ? 1 : 0;
+    if (third) {
+      for (let i = 1; i <= BOOM_STEPS; i++) {
+        if (clear(i / BOOM_STEPS)) continue;
+        let lo = (i - 1) / BOOM_STEPS, hi = i / BOOM_STEPS;
+        for (let k = 0; k < 4; k++) {
+          const m = (lo + hi) / 2;
+          if (clear(m)) lo = m;
+          else hi = m;
+        }
+        room = lo;
+        break;
+      }
     }
     const reach = full * room;
     // Ease out smoothly, but snap in when something cuts the boom short.
@@ -317,13 +331,15 @@ export class FirstPersonCamera {
   }
 }
 
-/** The camera can't be at world (x, y, z): within WALL_CLEARANCE of a shelter's solid, or too near the sand. */
+/** The camera can't be at world (x, y, z): within WALL_CLEARANCE of a level's solid (Level.solid: in a level its walls,
+ *  floors, ceilings and shut doors; in the desert the datacenter's block) or a shelter's, or too near the sand. */
 function blocked(x: number, y: number, z: number): boolean {
   const c = WALL_CLEARANCE;
+  if (solidAt(x, y, z, c)) return true;
+  if (onFlat()) return false; // a level's floors are its solids: no sand, no shelters
   for (const [dx, dy, dz] of PROBE) {
     const px = x + dx * c, py = y + dy * c, pz = z + dz * c;
-    const solid = onFlat() ? null : shelterSolid(px, py, pz);
-    if (solid ?? y < groundAt(px, pz, y) + BOOM_CLEARANCE) return true;
+    if (shelterSolid(px, py, pz) ?? y < groundAt(px, pz, y) + BOOM_CLEARANCE) return true;
   }
   return false;
 }

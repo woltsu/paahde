@@ -155,3 +155,16 @@ export function groundBoxes(g: BoxGrid, x: number, z: number, prevY: number, ste
   }
   return top;
 }
+
+/** Is a box of `g` (not gated off) within r of the point (x, y, z)? The third-person camera's boom (src/camera.ts). */
+export function solidNear(g: BoxGrid, x: number, y: number, z: number, r: number, gates = 0): boolean {
+  boxesNear(g, x, z, r, near);
+  for (let n = 0; n < near.length; n++) {
+    const b = g.boxes[near[n]];
+    const dx = x < b[0] ? b[0] - x : x > b[1] ? x - b[1] : 0;
+    const dy = y < b[2] ? b[2] - y : y > b[3] ? y - b[3] : 0;
+    const dz = z < b[4] ? b[4] - z : z > b[5] ? z - b[5] : 0;
+    if (dx * dx + dy * dy + dz * dz < r * r && !gatedOff(g, near[n], gates)) return true;
+  }
+  return false;
+}

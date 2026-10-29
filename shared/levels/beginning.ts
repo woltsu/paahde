@@ -10,7 +10,7 @@
 // (server/tutorial.ts) when you reach a trigger or do the thing. Some bits move nothing and only tell the client how far
 // you are (the blast door coming down, the hall's lights going out). Pure data, no three.js, Node type stripping rules.
 import { STEP_UP, inBox, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
-import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes } from './boxes.ts';
+import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes, solidNear } from './boxes.ts';
 import { mulberry32 } from '../noise.ts';
 import type { BoxUse, Fixture, LevelBox, LevelLayout, LevelMat, Rack } from './datacenter.ts';
 
@@ -325,6 +325,7 @@ export const beginningLevel: Level = {
   ground: (x, z, prevY, gates = 0) => groundBoxes(solids, x, z, prevY, STEP_UP, gates),
   collide: (c, y, prevY, radius, height, stepUp, _px, _pz, gates = 0) => collideBoxes(solids, c, y, prevY, radius, height, stepUp, gates),
   ceiling: (x, z, prevY, height, radius, gates = 0) => ceilingBoxes(solids, x, z, prevY, height, radius, gates),
+  solid: (x, y, z, r, gates = 0) => solidNear(solids, x, y, z, r, gates),
   flat: true,
   bounds: BEGINNING.bounds,
   spawns: BEGINNING.spawns as readonly LevelPoint[],

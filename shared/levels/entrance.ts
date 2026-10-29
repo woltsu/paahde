@@ -10,7 +10,7 @@ import { LAB_SPAWN } from '../lab.ts';
 import { overShelter } from '../shelters.ts';
 import { baseHeight, onRock } from '../terrain.ts';
 import type { Box, Mover } from '../levels.ts';
-import { boxGrid, collideBoxes, type BoxGrid } from './boxes.ts';
+import { boxGrid, collideBoxes, solidNear, type BoxGrid } from './boxes.ts';
 
 export type Entrance = {
   /** The block's middle on the sand, and the sand's height there (its floor line). */
@@ -100,4 +100,12 @@ export function collideEntrance(c: Mover, y: number, prevY: number, radius: numb
   if (c.x < b[0] - radius - 1 || c.x > b[1] + radius + 1 || c.z < b[4] - radius - 1 || c.z > b[5] + radius + 1) return -Infinity;
   grid ??= boxGrid([b], 8);
   return collideBoxes(grid, c, y, prevY, radius, height, stepUp);
+}
+
+/** Is the block within r of (x, y, z)? (desertLevel.solid: the third-person camera.) */
+export function solidEntrance(x: number, y: number, z: number, r: number): boolean {
+  const b = entrance().box;
+  if (x < b[0] - r || x > b[1] + r || z < b[4] - r || z > b[5] + r) return false;
+  grid ??= boxGrid([b], 8);
+  return solidNear(grid, x, y, z, r);
 }
