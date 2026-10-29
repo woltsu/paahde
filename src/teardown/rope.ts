@@ -28,7 +28,7 @@ export class Rope {
 
   private tube: THREE.Mesh;
   private hit: THREE.Mesh;
-  private radius: number;
+  readonly radius: number;
 
   constructor(curve: THREE.Curve<THREE.Vector3>, tube: THREE.Mesh, hit: THREE.Mesh, radius: number) {
     this.tube = tube;
@@ -46,8 +46,9 @@ export class Rope {
   }
 
   /** Move one frame. `pin0` / `pin1`: where the first / last particle is held, or null when that end is free. `gravity`:
-   *  the pull of weight in the cable's frame (units per second squared); `k`: the spring back toward the modelled shape. */
-  step(dt: number, pin0: THREE.Vector3 | null, pin1: THREE.Vector3 | null, gravity: THREE.Vector3, k: number) {
+   *  the pull of weight in the cable's frame (units per second squared); `k`: the spring back toward the modelled shape.
+   *  `floor`: the ground in the cable's frame, a plane every particle stays on the upper side of (`up`·p >= `at`). */
+  step(dt: number, pin0: THREE.Vector3 | null, pin1: THREE.Vector3 | null, gravity: THREE.Vector3, k: number, floor?: { up: THREE.Vector3; at: number }) {
     const h = Math.min(dt, 1 / 30) / SUBSTEPS;
     const pins = [pin0, pin1];
     let moved = 0;
@@ -79,6 +80,14 @@ export class Rope {
           a.x += dx * diff * wa; a.y += dy * diff * wa; a.z += dz * diff * wa;
           b.x -= dx * diff * wb; b.y -= dy * diff * wb; b.z -= dz * diff * wb;
         }
+      }
+    }
+    // It lies on the ground, never through it.
+    if (floor) {
+      const u = floor.up, uu = u.lengthSq();
+      for (let i = 0; i < N; i++) {
+        const p = this.pts[i], under = floor.at - u.dot(p);
+        if (under > 0) p.addScaledVector(u, under / uu);
       }
     }
     for (let i = 0; i < N; i++) moved += this.pts[i].distanceToSquared(this.prev[i]);

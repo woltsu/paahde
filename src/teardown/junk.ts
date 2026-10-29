@@ -233,17 +233,23 @@ export function restPiece(p: Piece) {
   if (n.loaded) p.obj.position.set(n.rest.x, p.floorY, n.rest.y);
 }
 
-/** Distance from `root`'s origin down to the lowest drawn point: where to put it so it rests on the ground. */
+/** Distance from `root`'s origin down to the lowest drawn point: where to put it so it rests on the ground. What is marked
+ *  `userData.ignoreBounds` is left out with all under it: markers, and the wires (a loose one hangs, and must not lift the
+ *  machine onto itself). */
 export function lowestOffset(root: THREE.Object3D): number | null {
   root.updateMatrixWorld(true);
   const box = new THREE.Box3();
   const b = new THREE.Box3();
-  root.traverse((o) => {
+  const walk = (o: THREE.Object3D) => {
+    if (o.userData.ignoreBounds) return;
     const m = o as THREE.Mesh;
-    if (!m.isMesh || !m.visible || m.userData.ignoreBounds) return;
-    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-    box.union(b.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld));
-  });
+    if (m.isMesh && m.visible) {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      box.union(b.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld));
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(root);
   return box.isEmpty() ? null : root.position.y - box.min.y;
 }
 
@@ -731,6 +737,7 @@ export class Kit {
     const rel = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p).sub(mid)));
     const g = new THREE.Group();
     g.position.copy(mid);
+    g.userData.ignoreBounds = true; // (not what the machine rests on: one with an end off hangs, lowestOffset)
     const mat = this.mats[key].clone();
     const tube = new THREE.Mesh(new THREE.TubeGeometry(rel, 28, r, 6), mat);
     this.add(tube, g);

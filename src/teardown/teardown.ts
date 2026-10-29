@@ -763,6 +763,7 @@ export class TeardownView {
   private ropeQ = new THREE.Quaternion();
   private ropeQ2 = new THREE.Quaternion();
   private ropePin = [new THREE.Vector3(), new THREE.Vector3()];
+  private ropeFloor = { up: new THREE.Vector3(), at: 0 };
 
   /** A cable moves while it is shaken (the held end is pulled about and the rest follows) and once an end has come off it
    *  hangs from the other and swings, floppy; one that has stopped moving with both ends held is the modelled tube again. */
@@ -800,7 +801,12 @@ export class TeardownView {
       pins[i] = pin;
     }
     // Held at both ends it is stiff and light; with one end off it is limp and its weight takes it.
-    r.step(dt, pins[0], pins[1], this.ropeG.multiplyScalar(both ? 0.15 : 1), both ? 120 : 1.5);
+    // The ground under it, in its frame: world y = row 1 of its matrix · p + its y (it hangs within a step of the machine).
+    const e = s.obj.matrixWorld.elements, at = s.obj.getWorldPosition(this.tmpA);
+    const ground = this.site!.ground(at.x, at.z) + r.radius * scale;
+    this.ropeFloor.up.set(e[1], e[5], e[9]);
+    this.ropeFloor.at = ground - e[13];
+    r.step(dt, pins[0], pins[1], this.ropeG.multiplyScalar(both ? 0.15 : 1), both ? 120 : 1.5, this.ropeFloor);
     r.rebuild();
     // The lugs ride the ends: pulled about with a held end, hanging from a loose one.
     for (const i of [0, 1] as const) {
