@@ -76,7 +76,8 @@ when you find it stale.
   levels' players. `src/levels/beginning/` — its stage (`index.ts`: doors, lights out, rumble, the cabinet's work site, the
   hatch's F), `props.ts` (screens, cart, fallen rack, blast door, window frame and glass, drawing, plaque, city
   labels), `pod.ts` (the pod: the relay's ghost in its junction box, the cover shutting, the hatch cut out of pod.glb
-  and swung open), `planet.ts` (space: a camera-centred TSL dome with the stars, Milky Way, sun and the analytic planet),
+  and swung open), `cabin.ts` (the pod's cabin seen through the hatch, lit by the pool's `CABIN_LIGHT`), `podHull.ts`
+  (pod.py's hull profile and hatch, in three's frame), `planet.ts` (space: a camera-centred TSL dome with the stars, Milky Way, sun and the analytic planet),
   `sound.ts` (the fall's roar, groan, jolt, chime; the pod's click, clunk, chirp, hiss, thud), `ride.ts` (the dust card
   on the way down), `stuck.ts` (key hints after
   8 s stuck, once per world). Tests: `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and

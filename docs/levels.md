@@ -320,6 +320,11 @@ Each phase is a push to `main` that leaves the game working.
 - **Machines in a level**: a stage may offer its own work site (`Stage.workSite`, the beginning's cabinet), with its own
   messages (`Stage.site`); the server routes them before the `IN_LEVEL` gate (server/tutorial.ts).
 
+**A pooled light and new materials** (October 2026, the beginning's pod cabin): a material first drawn while a pool
+slot's light stood at zero never took that light up later (it stayed lit by the others and the ambient only). The
+pod's cabin makes its materials once its light's slot is lit (src/levels/beginning/cabin.ts `show`). Anything else made
+ahead and lit by one particular fixture may need the same.
+
 ## Building with boxes: z-fighting, hangers, bakes (October 2026)
 
 **Z-fighting**: two faces in one plane, facing the same way, flicker (the depth buffer can't order them; it shows as

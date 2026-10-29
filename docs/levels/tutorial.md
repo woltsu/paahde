@@ -259,9 +259,18 @@ it; the look and the telling. Where it differs from the design above:
   the same lower hinge. Its panel is a junction box on the hull beside the hatch, its cover hanging open: while you carry
   the relay and it isn't in, a translucent ghost of the relay breathes in the socket (no marker, no text). F puts it in
   (`GATE.powered`): the relay seats, the cover swings shut, the box's lamp goes green with a chirp, the seal hisses and
-  the hatch swings down to lie as a ramp, the cabin lit warm behind it, over `POD_OPEN_MS` (3.2 s); only then does F
-  get in (the prompt waits, and the server refuses till then). Seen already done (a reconnect, joining inside) it is
-  simply open. Sounds in sound.ts `pod(cue)`, levelled with the fall (docs/audio.md).
+  the hatch swings down to lie as a ramp, over `POD_OPEN_MS` (3.2 s); only then does F get in (the prompt waits, and
+  the server refuses till then). Seen already done (a reconnect, joining inside) it is simply open. Sounds in sound.ts
+  `pod(cue)`, levelled with the fall (docs/audio.md).
+- **The pod's cabin** (src/levels/beginning/cabin.ts), seen through the open hatch: a cramped one-person capsule inside
+  the hull (podHull.ts: pod.py's profile; everything inside a 1.12 m shell, so nothing shows through the hull from any
+  side): a curved inner shell with ribs and two bulkheads, a deck a step down from the sill, a padded acceleration couch
+  facing the hatch with its harness, an instrument panel (the station's screen, `ENTRY`, lit buttons, switches) over a
+  cabinet at the nose end, a dome light and two light strips, grab bars, cable runs, a locker and an extinguisher, the
+  opening's jamb. pod.ts cuts away what was in the way (the dark core over the opening, pod.py's token cabin, hull
+  panels that ran over the opening's edges). Boxes, cylinders and arcs merged per material with vertex colours. Its
+  light is one fixture of the bay's light pool (`CABIN_LIGHT`, near the hatch so the far side falls darker), held
+  just above zero from the cover shutting and flickering on once the hatch is down, with the lamps' glow.
 - **Sound**: the datacenter's bed plus the fall (src/levels/beginning/sound.ts, docs/audio.md "The beginning's fall");
   the station's recorded "please" is not done, only its chime.
 - **The window** is two transparent panes (the one exception to the datacenter's no-transparency rule) in a steel frame,

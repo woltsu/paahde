@@ -6,7 +6,7 @@
 // it is going; the pod rides down. All client-only: nothing here is in the sim. Built on the first visit and kept.
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
-import { BEGINNING, CABINET, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
+import { BEGINNING, CABIN_LIGHT, CABINET, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
 import { CABINET_GONE, CABINET_ID, CABINET_LEVEL, CABINET_SEED, RELAY, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
 import { CRASH_REACH } from '../../../shared/crash.ts';
 import { hasItem, type Slots } from '../../../shared/items.ts';
@@ -53,6 +53,8 @@ export class BeginningStage implements Stage {
   private props: Props;
   /** The last pod: the relay's ghost in its panel, its cover shutting, its hatch swinging open. */
   private pod: Pod;
+  /** The pod cabin's light, by its index in the layout's fixtures. */
+  private cabinLight: number;
   /** The relay in the bag (its ghost shows where it goes). */
   private carrying = false;
   private ride = new Ride();
@@ -96,6 +98,9 @@ export class BeginningStage implements Stage {
       hiss: () => this.fall.pod('hiss'), thud: () => this.fall.pod('thud'),
     });
     this.root.add(this.pod.group);
+    // The pod cabin's light: dark till its hatch is down.
+    this.cabinLight = L.fixtures.findIndex((f) => f.pos[0] === CABIN_LIGHT.x && f.pos[1] === CABIN_LIGHT.y && f.pos[2] === CABIN_LIGHT.z);
+    this.box.pool.weight[this.cabinLight] = 0;
     L.fixtures.forEach((f, i) => { if (f.zone === 'hall' && f.role === 'main') this.hallLights.push(i); });
     // The cabinet lies on its back on the floor, everything but its relay long gone.
     this.cabinet = buildJunk(CABINET.kind, CABINET_SEED, CABINET_LEVEL);
@@ -211,7 +216,9 @@ export class BeginningStage implements Stage {
     // The lights shudder with it.
     const flick = this.jolt > 0 || riding > 0 ? 0.35 * this.rumble * (0.5 + 0.5 * Math.sin(f.time * 37) * Math.sin(f.time * 11.3)) : 0;
     this.box.pool.scale = (riding > 0 ? 0.6 : 1) - flick;
-    this.pod.update(f.dt, f.time, gates, this.carrying, fresh);
+    const cabinOn = this.box.pool.points.some((l) => l.intensity > 0 && l.position.x === CABIN_LIGHT.x && l.position.y === CABIN_LIGHT.y && l.position.z === CABIN_LIGHT.z);
+    this.pod.update(f.dt, f.time, gates, this.carrying, fresh, cabinOn);
+    this.box.pool.weight[this.cabinLight] = this.pod.light;
     this.props.update(f.dt, beat, gates, (gates & GATE.blast) !== 0, (gates & GATE.shut) !== 0, fresh);
     this.stuck.update(f.dt, me, riding === 0);
     const zone = zoneAt(BEGINNING, cam.x, cam.z);

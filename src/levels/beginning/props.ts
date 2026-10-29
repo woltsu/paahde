@@ -11,7 +11,7 @@ import { boxGeometry } from '../boxLevel.ts';
 import { spaceDome } from './planet.ts';
 
 /** A word or two in light on dark (a screen, a label): a canvas texture on a basic material, bright enough to read. */
-function sign(text: string, w: number, h: number, color: string, bg: string, glow = 1.6): { mesh: THREE.Mesh; set: (t: string) => void } {
+export function sign(text: string, w: number, h: number, color: string, bg: string, glow = 1.6): { mesh: THREE.Mesh; set: (t: string) => void } {
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = Math.round((512 * h) / w);

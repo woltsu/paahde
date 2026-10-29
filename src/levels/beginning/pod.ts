@@ -3,7 +3,7 @@
 // sim). While you carry the relay and it isn't in, a ghost of it breathes in the open junction box beside the hatch: that
 // is where it goes. Once it is in (GATE.powered) the relay seats, the box's cover swings shut, the pod wakes (its lamp
 // green, a chirp), the seal lets go with a hiss and the hatch swings down on its lower hinge until it lies open as a ramp,
-// the cabin lit behind it; F then gets in (src/levels/beginning/index.ts, server/tutorial.ts: not before POD_OPEN_MS).
+// the cabin's lights flickering on behind it (cabin.ts, its pooled light); F then gets in (src/levels/beginning/index.ts, server/tutorial.ts: not before POD_OPEN_MS).
 // Seen already done (a reconnect, a late load), it is simply so.
 //
 // pod.glb has its hatch modelled blown open (tools/blender/pod.py: the desert's crashed pod) and merged into the hull, so
@@ -15,35 +15,11 @@ import { CABINET, GATE, POD, POD_OPEN_MS } from '../../../shared/levels/beginnin
 import { CABINET_LEVEL, CABINET_SEED, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
 import { machineParts } from '../../../shared/machine.ts';
 import { loadPart } from '../../teardown/junk.ts';
+import { Cabin } from './cabin.ts';
+import { HATCH_A, HATCH_A0, HATCH_A1, HATCH_HALF, HATCH_Y0, HATCH_Y1, hullFrame, onHull, polar, radiusAt } from './podHull.ts';
 
-// ---- pod.py's hull, in three.js's frame (blender (x, y, z) is three (x, z, -y): the axis along z, the nose +z) -------
-
-const PROFILE: [number, number][] = [[-1.86, 0.0], [-1.85, 0.26], [-1.79, 0.5], [-1.66, 0.76], [-1.44, 1.0], [-1.12, 1.15],
-  [-0.72, 1.22], [-0.12, 1.25], [0.42, 1.24], [0.68, 1.21]];
-const AXIS_Y = 1.2;
-const DEG = Math.PI / 180;
-const HATCH_A = 196 * DEG, HATCH_HALF = 24 * DEG, HATCH_Y0 = -0.62, HATCH_Y1 = 0.36;
 /** How far pod.py swings the hatch open (rad, about +z through its lower hinge). */
 const OPEN = 1.75;
-
-/** The hull's radius at pod.py's axial `y` (three's -z). */
-function radiusAt(y: number): number {
-  for (let i = 0; i < PROFILE.length - 1; i++) {
-    const [y0, r0] = PROFILE[i], [y1, r1] = PROFILE[i + 1];
-    if (y0 <= y && y <= y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0);
-  }
-  return y > 0 ? PROFILE[PROFILE.length - 1][1] : 0;
-}
-/** The point on the hull at angle `a` round the axis (pod.py's: from +x towards +y here), axial `y`, `out` off it. */
-function onHull(a: number, y: number, out = 0): THREE.Vector3 {
-  const r = radiusAt(y) + out;
-  return new THREE.Vector3(Math.cos(a) * r, AXIS_Y + Math.sin(a) * r, -y);
-}
-/** A frame on the hull at (a, y): +z out of it, +y up round it, +x along the axis towards the nose. */
-function hullFrame(a: number, y: number, out = 0): THREE.Matrix4 {
-  const n = new THREE.Vector3(Math.cos(a), Math.sin(a), 0), up = new THREE.Vector3(Math.sin(a), -Math.cos(a), 0);
-  return new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), up, n).setPosition(onHull(a, y, out));
-}
 /** The hatch's hinge line (through this point, along z). */
 const HINGE = onHull(HATCH_A + HATCH_HALF, 0);
 
@@ -51,7 +27,7 @@ const HINGE = onHull(HATCH_A + HATCH_HALF, 0);
 function onHatch(x: number, y: number, z: number): boolean {
   const c = Math.cos(-OPEN), s = Math.sin(-OPEN), dx = x - HINGE.x, dy = y - HINGE.y;
   const ux = HINGE.x + dx * c - dy * s, uy = HINGE.y + dx * s + dy * c;
-  const ay = -z, a = (Math.atan2(uy - AXIS_Y, ux) + 2 * Math.PI) % (2 * Math.PI), r = Math.hypot(ux, uy - AXIS_Y), R = radiusAt(ay);
+  const ay = -z, { a, r } = polar(ux, uy), R = radiusAt(ay);
   return a > HATCH_A - HATCH_HALF - 0.06 && a < HATCH_A + HATCH_HALF + 0.06 && ay > HATCH_Y0 - 0.02 && ay < HATCH_Y1 + 0.02
     && r > R - 0.16 && r < R + 0.04;
 }
@@ -91,6 +67,38 @@ function cutHatch(pod: THREE.Object3D): THREE.Group {
   return hinge;
 }
 
+/** In the way of the cabin (a triangle, three points): inside the hull round the hatch (the dark core, pod.py's own token
+ *  cabin), or anything over the opening itself (hull panels that ran over its edges, the token cabin's face). */
+function inTheWay(p: THREE.Vector3[]): boolean {
+  const D = Math.PI / 180, pol = p.map((v) => ({ ...polar(v.x, v.y), ay: -v.z }));
+  if (pol.every(({ a, r, ay }) => ay > -0.75 && ay < 0.45 && a > 150 * D && a < 242 * D && r > 0.02 && r < radiusAt(ay) - 0.03)) return true;
+  const c = p[0].clone().add(p[1]).add(p[2]).divideScalar(3), cp = polar(c.x, c.y), cy = -c.z;
+  if (!pol.every(({ r, ay }) => r < radiusAt(ay) + 0.035)) return false;
+  if (cp.a > HATCH_A0 && cp.a < HATCH_A1 && cy > HATCH_Y0 && cy < HATCH_Y1) return true;
+  // (A hull panel's triangle reaching into the opening from past its edge: its whole quad goes, cabin.ts backs the gap.)
+  if (pol.some(({ a }) => a > HATCH_A0 + 0.05 && a < HATCH_A1 - 0.05)
+    && pol.every(({ a, ay }) => a > HATCH_A0 - 0.15 && a < HATCH_A1 + 0.15 && ay > HATCH_Y0 - 0.02 && ay < HATCH_Y1 + 0.02)) return true;
+  // (A face of the token cabin reaching in from the opening's edge: it dips under the hull.)
+  return cp.r < radiusAt(cy) - 0.03 && pol.every(({ a, ay }) => a > 160 * D && a < 232 * D && ay > HATCH_Y0 - 0.06 && ay < HATCH_Y1 + 0.06);
+}
+
+/** Drop the triangles `test` says are in the way from the pod's meshes. */
+function cutAway(pod: THREE.Object3D, test: (p: THREE.Vector3[]) => boolean) {
+  const v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  pod.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !m.geometry.index) return;
+    const g = m.geometry, index = g.index!, pos = g.attributes.position;
+    const keep: number[] = [];
+    for (let t = 0; t < index.count; t += 3) {
+      const i = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+      i.forEach((k, j) => v[j].fromBufferAttribute(pos, k));
+      if (!test(v)) keep.push(...i);
+    }
+    if (keep.length < index.count) g.setIndex(keep);
+  });
+}
+
 // ---- the timeline after the relay goes in (s): POD_OPEN_MS covers it ---------------------------------------------------
 
 const SEAT_S = 0.25;
@@ -98,6 +106,12 @@ const COVER = [0.4, 1.0] as const;
 const WAKE_S = 1.15;
 const HATCH = [1.55, 3.05] as const;
 const DONE_S = POD_OPEN_MS / 1000;
+/** The cabin's lights flicker on once the hatch is down: (seconds after it lands, how lit) steps, then on. */
+const FLICKER: readonly [number, number][] = [[0, 0], [0.06, 0.8], [0.12, 0.05], [0.24, 0.55], [0.3, 0], [0.42, 1]];
+const LIT_END = HATCH[1] + 0.45;
+/** From the cover shutting its light already holds a pool slot, unseen (so it comes on at once, not eased in, and the
+ *  cabin's materials are made while it is lit: Cabin.show). */
+const LIGHT_HELD = 0.002;
 /** The junction box's cover hanging open (rad about its bottom hinge: out and down, the socket open to the eye). */
 const COVER_OPEN = 1.95;
 
@@ -107,7 +121,7 @@ const easeInOut = (u: number) => { const t = Math.min(1, Math.max(0, u)); return
 /** What the pod sounds like as it opens (src/levels/beginning/sound.ts). */
 export type PodSounds = { click(): void; clunk(): void; wake(): void; hiss(): void; thud(): void };
 
-/** A soft round glow (additive planes: the ghost's halo, the lit cabin). */
+/** A soft round glow (the ghost's halo). */
 function glowTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
@@ -139,7 +153,9 @@ export class Pod {
   private ghostMat = additive(0x6fdcff, null);
   private halo: THREE.Mesh;
   private lamp = new THREE.MeshBasicNodeMaterial({ color: 0x3a0c08 });
-  private cabin: THREE.Mesh;
+  private cabin = new Cabin();
+  /** How lit the cabin is (0..1): its pooled light's weight (index.ts). */
+  light = 0;
   /** Seconds since the relay went in (-1: not yet; past DONE_S: open). */
   private since = -1;
   private sounds: PodSounds;
@@ -185,12 +201,8 @@ export class Pod {
     box.add(this.halo);
     this.group.add(box);
 
-    // The cabin's light behind the hatch, coming on as it opens (it is shut over it till then).
-    this.cabin = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), additive(0xffb468, glowTexture()));
-    this.cabin.matrixAutoUpdate = false;
-    this.cabin.matrix.copy(hullFrame(HATCH_A, (HATCH_Y0 + HATCH_Y1) / 2, -0.03));
-    this.cabin.visible = false;
-    this.group.add(this.cabin);
+    // The cabin behind the hatch (cabin.ts), its lights out till the hatch is down.
+    this.group.add(this.cabin.group);
 
     const tier = machineParts(CABINET.kind, CABINET_SEED, CABINET_LEVEL)[RELAY_INDEX].tier;
     loadPart('relay', tier).then((model) => {
@@ -220,6 +232,7 @@ export class Pod {
       pod.rotation.set(0, 0, 0);
       pod.traverse((o) => { o.castShadow = o.receiveShadow = true; });
       this.hatch = cutHatch(pod);
+      cutAway(pod, inTheWay); // (the core over the opening and the model's token cabin: cabin.ts is there)
       pod.add(this.hatch);
       this.group.add(pod);
       this.pose();
@@ -233,12 +246,12 @@ export class Pod {
 
   /** Every frame: `gates` the player's, `carrying` the relay in their bag, `fresh` (not the first frame since entering):
    *  a relay going in now is seen happen, else it is simply in. */
-  update(dt: number, time: number, gates: number, carrying: boolean, fresh: boolean) {
+  update(dt: number, time: number, gates: number, carrying: boolean, fresh: boolean, lightOn: boolean) {
     const powered = (gates & GATE.powered) !== 0;
     if (!powered) this.since = -1;
-    else if (this.since < 0) this.since = fresh ? 0 : DONE_S;
-    else if (this.since < DONE_S) {
-      const was = this.since, now = (this.since = Math.min(DONE_S, this.since + dt));
+    else if (this.since < 0) this.since = fresh ? 0 : LIT_END;
+    else if (this.since < LIT_END) {
+      const was = this.since, now = (this.since = Math.min(LIT_END, this.since + dt));
       const at = (t: number) => was < t && now >= t;
       if (at(SEAT_S)) this.sounds.click();
       if (at(COVER[1])) this.sounds.clunk();
@@ -246,6 +259,7 @@ export class Pod {
       if (at(HATCH[0] - 0.08)) this.sounds.hiss();
       if (at(HATCH[1])) this.sounds.thud();
     }
+    if (lightOn) this.cabin.show();
     // The ghost: breathing slowly, the halo with it.
     const ghost = carrying && !powered;
     this.ghost.visible = this.halo.visible = ghost;
@@ -266,8 +280,9 @@ export class Pod {
     this.lamp.color.setHex(on && t >= WAKE_S ? 0x7dffa8 : 0x3a0c08);
     const swing = on ? easeInOut((t - HATCH[0]) / (HATCH[1] - HATCH[0])) : 0;
     if (this.hatch) this.hatch.rotation.z = OPEN * swing;
-    const lit = on ? smooth((t - HATCH[0] - 0.1) / 1.0) : 0;
-    this.cabin.visible = lit > 0;
-    (this.cabin.material as THREE.MeshBasicNodeMaterial).opacity = 0.28 * lit;
+    let lit = on && t >= COVER[0] ? LIGHT_HELD : 0;
+    if (on && t >= HATCH[1]) for (const [after, level] of FLICKER) if (t - HATCH[1] >= after) lit = Math.max(level, LIGHT_HELD);
+    this.light = lit;
+    this.cabin.setLit(lit);
   }
 }

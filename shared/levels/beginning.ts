@@ -71,6 +71,9 @@ export const POD = {
 /** From the relay going into the pod's panel to its hatch lying open (ms): the panel's cover shuts, the pod wakes, the
  *  hatch swings down (src/levels/beginning/pod.ts plays it). F gets in only after (server/tutorial.ts). */
 export const POD_OPEN_MS = 3200;
+/** The pod cabin's light (src/levels/beginning/cabin.ts: under its dome, towards the hatch), a fixture of the bay's light
+ *  pool that the stage keeps dark until the hatch is down. */
+export const CABIN_LIGHT = { x: POD.x - 0.13, y: 2.05, z: POD.z - 0.45, color: 0xffc98e, intensity: 3.6, range: 2.4 };
 /** The quarters' bunk you wake on, made (the other eleven are stripped). */
 export const BUNK = { x: 2.55, z0: 0.5, z1: 2.5 };
 
@@ -322,6 +325,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   for (const [x, z] of [[-3, 95.5], [3, 95.5], [-3, 101.5]]) point('main', 'pod', x, P.h - 0.5, z, MAIN, 3, 9);
   point('main', 'pod', P.x - 0.6, 2.4, 99, PLANET, 1.2, 6); // the planet's weak orange by the window
   point('emergency', 'pod', 0, 2.7, P.z0 + 0.4, AMBER, 0.8, 4);
+  point('emergency', 'pod', CABIN_LIGHT.x, CABIN_LIGHT.y, CABIN_LIGHT.z, CABIN_LIGHT.color, CABIN_LIGHT.intensity, CABIN_LIGHT.range);
   spot('pod', 0, P.h, 97.5);
   for (const z of [94, 98, 102]) strip('pod', -3, 3, P.h, z);
 
