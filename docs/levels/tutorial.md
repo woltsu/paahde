@@ -150,8 +150,11 @@ site id per player (`tut:cabinet:<public id>`) so nothing else in the machine co
   the walls. All by view direction, in TSL: round stars of many brightnesses and colours, the Milky Way's faint band with
   its dust lanes, a dim nebula, the sun (a hard disc with its glare, seen slantwise from the window's left end), and the
   planet low out of the window, an analytic sphere (a ray against it per pixel: a sharp, round limb at any size) with a
-  desert surface in 3D noise (dune seas, rock, canyons, faint pans, slow dust), turning slowly, lit from the side with a
-  terminator and a black night side, and a thin hot atmosphere (haze to the limb, a glow past it, brightest sunward). No
+  desert surface in 3D noise in the desert's own palette (docs/look.md): large domain-warped regions (sand seas with
+  faint dune streaks, dark eroded plateaus behind a scarp), branching dry canyons cut into them, a few craters, pale salt
+  flats, a polar haze, wispy dust bands drifting; contrast falls off to the limb, and every fine detail fades out by its
+  screen footprint (fwidth) before it could shimmer. It turns slowly, lit from the side with a reddish twilight band
+  along the terminator and a black night side, under a thin hot atmosphere (haze to the limb, a glow past it). No
   sun light: it lights nothing but itself and a weak orange fill pooled light by the window.
 - **The ride down:** in the pod's seat (the pod's interior is a small model built for this, or the camera inside the
   existing `pod.glb` with its hatch shut), shake and roar growing, then the dust screen.

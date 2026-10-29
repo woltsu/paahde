@@ -81,31 +81,95 @@ function sky(dir: V3, pix: F): V3 {
   return vec3(0.0012, 0.0014, 0.0022).add(milky).add(nebula).add(s) as V3;
 }
 
-/** The planet's surface colour at `n` (a point on the unit sphere in its own turning frame). */
-function ground(n: V3): V3 {
-  const big = mx_fractal_noise_float(n.mul(1.7), 5, 2.1, 0.5);
-  const fine = mx_fractal_noise_float(n.mul(14), 3, 2.2, 0.5).mul(0.5).add(0.5);
-  // Dune seas: long streaks along the wind belts (stretched across latitude).
-  const streak = mx_noise_float(vec3(n.x.mul(5), n.y.mul(46), n.z.mul(5))).mul(0.5).add(0.5);
-  const sandMid = color(0x9c4a18), sandLit = color(0xec9a3e), flats = color(0xe2b882), rock = color(0x4a2212), basin = color(0x2a120a);
-  let c: V3 = mix(sandMid, sandLit, smoothstep(0.25, 0.85, fine.mul(0.6).add(streak.mul(0.4)))) as V3;
-  // Dark rock highlands and old basins where the big noise is low, pale dry pans where a second one peaks.
-  c = mix(c, rock, smoothstep(-0.05, -0.3, big).mul(fine.mul(0.5).add(0.6)).min(1)) as V3;
-  c = mix(c, basin, smoothstep(-0.35, -0.6, big)) as V3;
-  const pans = mx_fractal_noise_float(n.mul(3.3).add(7.7), 3, 2, 0.5);
-  c = mix(c, flats, smoothstep(0.45, 0.6, pans).mul(0.2)) as V3;
-  // Canyons: thin dark lines (ridged noise near zero) through the rock.
-  const ridge = abs(mx_noise_float(n.mul(6.5).add(3.3)));
-  c = mix(c, basin, float(1).sub(smoothstep(0.0, 0.012, ridge)).mul(smoothstep(-0.15, -0.4, big)).mul(0.55)) as V3;
+// The planet's own frame: its tilted axis is y (spun() turns a world direction into it).
+const EX = new THREE.Vector3(1, 0, 0).addScaledVector(AXIS, -AXIS.x).normalize();
+const EZ = new THREE.Vector3().crossVectors(EX, AXIS);
+const toPlanet = (v: THREE.Vector3) => new THREE.Vector3(v.dot(EX), v.dot(AXIS), v.dot(EZ)).normalize();
+
+/** A few impact craters (direction in the planet's frame, angular radius): scattered round the face seen first from
+ *  the window, and some round the far side for later. */
+const CRATERS: { dir: THREE.Vector3; r: number }[] = (() => {
+  const face = toPlanet(PLANET_DIR.clone().negate()).add(new THREE.Vector3(0, 0.45, 0)).normalize();
+  const out: { dir: THREE.Vector3; r: number }[] = [];
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 9; i++) {
+    const near = i < 5;
+    const v = new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1).normalize();
+    const dir = near ? face.clone().addScaledVector(v, 0.75).normalize() : v;
+    out.push({ dir, r: 0.035 + rnd() * rnd() * 0.09 });
+  }
+  return out;
+})();
+
+/** The desert's colours (docs/look.md's palette: sand mid-tone #c46a24, lit sand #e8902e, rust shadows; the rock and
+ *  dry pans of src/world/sandMaterial.ts), linear, a little under the ground's own: seen from orbit in full sun. */
+const SAND_RED = vec3(0.5, 0.15, 0.03), SAND_GOLD = vec3(0.72, 0.28, 0.05);
+const ROCK_DARK = vec3(0.1, 0.035, 0.015), ROCK_LIGHT = vec3(0.3, 0.11, 0.04);
+const SALT = vec3(0.72, 0.5, 0.3), SILT = vec3(0.5, 0.3, 0.17);
+
+/** 1 while a feature `freq` cycles per unit is several pixels across, 0 once it would alias (`fw`: a pixel's size on
+ *  the unit sphere): fine detail fades out smoothly instead of shimmering. */
+const keep = (freq: number, fw: F): F => float(1).sub(smoothstep(0.12, 0.35, fw.mul(freq)));
+
+/** The planet's surface colour at `n` (a point on the unit sphere in its own turning frame); `fw`: a pixel's footprint. */
+function ground(n: V3, fw: F): V3 {
+  // Large, coherent regions: a domain-warped low-frequency field (a few octaves only, all far above a pixel here).
+  const warp = vec3(mx_noise_float(n.mul(1.1).add(3.1)), mx_noise_float(n.mul(1.1).add(7.4)), mx_noise_float(n.mul(1.1).add(1.7)));
+  const q = n.add(warp.mul(0.35)) as V3;
+  const h = mx_fractal_noise_float(q.mul(1.4), 3, 2.0, 0.5);
+  // Sand seas where it is low and smooth, rock plateaus where it rises, a soft scarp between.
+  const plateau = smoothstep(0.0, 0.07, h);
+  const tone = mx_noise_float(q.mul(2.3).add(5.5)).mul(0.5).add(0.5);
+  const sand = mix(SAND_RED, SAND_GOLD, smoothstep(0.2, 0.8, tone)) as V3;
+  // Dune streaks: faint long bands across the wind (along the latitude, wavering), only where they are big enough.
+  const phase = n.y.mul(170).add(mx_noise_float(q.mul(2.5)).mul(7)).add(mx_noise_float(q.mul(9)).mul(1.2));
+  const crest = sin(phase).mul(0.5).add(0.5).pow(3);
+  const dunes = crest.mul(keep(170 / 6.28, fw)).mul(float(1).sub(plateau)).mul(mx_noise_float(q.mul(2.2).add(8.8)).mul(0.5).add(0.6).min(1));
+  // Sand's own mid-scale variation (drifts of redder and paler sand), faded by the footprint.
+  const drift = mx_fractal_noise_float(q.mul(9).add(3.7), 2, 2.1, 0.5).mul(keep(18, fw));
+  const seas = sand.mul(float(0.8).add(dunes.mul(0.35)).add(drift.mul(0.4))) as V3;
+  // Eroded rock: broken mid-scale texture (ridged), faded by the footprint.
+  const ridges = smoothstep(0.82, 0.97, float(1).sub(abs(mx_fractal_noise_float(q.mul(11).add(2.2), 3, 2.1, 0.5)))).mul(keep(40, fw));
+  const rockT = mx_noise_float(q.mul(5).add(2.2)).mul(0.5).add(0.5).mul(keep(5, fw));
+  const rock0 = mix(ROCK_LIGHT, ROCK_DARK, smoothstep(0.1, 0.4, h).mul(0.5).add(rockT.mul(0.3))) as V3;
+  const rock = mix(rock0, ROCK_LIGHT.mul(1.35), ridges.mul(0.55)) as V3;
+  let c: V3 = mix(seas, rock, plateau) as V3;
+  // The scarp: a darker rim where the plateaus break off into the sand.
+  c = c.mul(float(1).sub(smoothstep(0.0, 0.05, h).mul(float(1).sub(smoothstep(0.05, 0.12, h))).mul(0.25))) as V3;
+  // Branching dry canyons and riverbeds: ridged, warped noise (main valleys, then tributaries only near them), cut into
+  // the plateaus and running out into the sand; their width never under a pixel.
+  const r1 = float(1).sub(abs(mx_noise_float(q.mul(3.2).add(9.1))));
+  const w1 = fw.mul(3.2 * 2).max(mx_noise_float(q.mul(6)).mul(0.012).add(0.032));
+  const main = smoothstep(float(1).sub(w1), float(1).sub(w1.mul(0.15)), r1);
+  const r2 = float(1).sub(abs(mx_noise_float(q.mul(8).add(4.4))));
+  const w2 = fw.mul(8 * 2).max(0.03);
+  const trib = smoothstep(float(1).sub(w2), float(1).sub(w2.mul(0.3)), r2).mul(smoothstep(0.88, 0.96, r1)).mul(keep(8, fw));
+  const canyon = main.max(trib.mul(0.6)).mul(smoothstep(0.06, 0.2, h));
+  // A valley: lit walls a touch paler along its edge, its floor dark.
+  c = mix(c, ROCK_LIGHT.mul(1.3), smoothstep(0.0, 0.4, canyon).mul(float(1).sub(smoothstep(0.4, 0.8, canyon))).mul(0.3)) as V3;
+  c = mix(c, ROCK_DARK.mul(0.6), smoothstep(0.35, 1.0, canyon).mul(0.65)) as V3;
+  // Pale salt flats in a few low basins of the seas.
+  const flat = smoothstep(0.55, 0.7, mx_noise_float(q.mul(2.6).add(12.3)).mul(0.5).add(0.5)).mul(float(1).sub(smoothstep(-0.3, -0.15, h)));
+  c = mix(c, mix(SILT, SALT, smoothstep(0.62, 0.72, mx_noise_float(q.mul(2.6).add(12.3)).mul(0.5).add(0.5))) as V3, flat.mul(0.7)) as V3;
+  // Impact craters: a dark floor, a bright rim, faint ejecta round them.
+  for (const k of CRATERS) {
+    const d = length(n.sub(v3(k.dir))).div(k.r);
+    const aa = fw.div(k.r).max(0.02);
+    const floor_ = float(1).sub(smoothstep(float(0.75).sub(aa), float(0.75).add(aa), d));
+    const rim = exp(d.sub(0.95).div(aa.max(0.08)).pow(2).negate());
+    const ejecta = float(1).sub(smoothstep(1.0, 2.4, d)).mul(float(1).sub(floor_));
+    c = mix(c, ROCK_DARK.mul(0.8), floor_.mul(0.5)) as V3;
+    c = mix(c, ROCK_LIGHT.mul(1.6), rim.mul(0.35).add(ejecta.mul(0.1))) as V3;
+  }
+  // A pale polar haze.
+  c = mix(c, SALT.mul(0.9), smoothstep(0.82, 0.97, abs(n.y)).mul(0.35)) as V3;
   return c;
 }
 
 /** Turns a world direction into the planet's own frame (its tilted axis is y), spun by `angle` about that axis. */
 function spun(n: V3, angle: F | number): V3 {
-  const up = AXIS;
-  const ex = new THREE.Vector3(1, 0, 0).addScaledVector(up, -up.x).normalize();
-  const ez = new THREE.Vector3().crossVectors(ex, up);
-  const x = dot(n, v3(ex)), y = dot(n, v3(up)), z = dot(n, v3(ez));
+  const x = dot(n, v3(EX)), y = dot(n, v3(AXIS)), z = dot(n, v3(EZ));
   const c = cos(angle), s = sin(angle);
   return vec3(x.mul(c).sub(z.mul(s)), y, x.mul(s).add(z.mul(c))) as V3;
 }
@@ -126,15 +190,24 @@ function planetOver(dir: V3, pix: F, bg: V3): V3 {
   const ndl = dot(N, L);
   const mu = max(dot(N, dir.negate()), 0); // 1 facing us, 0 at the limb
   const spin = time.mul(SPIN);
-  const surf = ground(spun(N, spin));
-  // Dust drifting over it, a little faster than the ground turns.
-  const dustN = spun(N, spin.mul(1.25).add(0.6));
-  const dust = smoothstep(0.55, 0.85, mx_fractal_noise_float(dustN.mul(3.2).add(vec3(0, 0, time.mul(0.002))), 4, 2, 0.55).mul(0.5).add(0.5));
-  const albedo = mix(surf, color(0xf0b47a), dust.mul(0.18)) as V3;
-  // Sunlight with a soft terminator (the air carries it a little past), a reddened band along it, the night side black.
-  const day = smoothstep(-0.05, 0.2, ndl);
-  const lit = albedo.mul(day.mul(max(ndl, 0).mul(1.1).add(0.3))).add(albedo.mul(0.004));
-  const dusk = vec3(0.55, 0.13, 0.03).mul(exp(ndl.div(0.04).pow(2).negate()).mul(0.1));
+  const Np = spun(N, spin);
+  // A pixel's footprint on the unit sphere (grows to the limb): fine detail fades out by it, never shimmers.
+  const fw = max(length(fwidth(Np)).mul(0.5), 1e-5) as F;
+  const surf = ground(Np, fw);
+  // Wispy dust storms and bands, drifting a little faster than the ground turns: stretched along the latitude.
+  const dn = spun(N, spin.mul(1.3).add(0.6));
+  const dwarp = mx_noise_float(dn.mul(2).add(vec3(time.mul(0.003), 0, 0))).mul(0.6);
+  const wisp = mx_fractal_noise_float(vec3(dn.x.mul(3), dn.y.mul(14).add(dwarp), dn.z.mul(3)), 3, 2, 0.55).mul(0.5).add(0.5);
+  const dust = smoothstep(0.6, 0.85, wisp).mul(keep(14, fw).mul(0.5).add(0.5));
+  let albedo: V3 = mix(surf, vec3(0.7, 0.36, 0.14), dust.mul(0.2)) as V3;
+  // Contrast falls off softly to the limb: the more air we look through, the more it is one warm haze.
+  albedo = mix(albedo, vec3(0.6, 0.27, 0.08), float(1).sub(mu).pow(2.5).mul(0.6)) as V3;
+  // Sunlight with a soft terminator, a reddish twilight band along it, the night side black.
+  const day = smoothstep(-0.06, 0.22, ndl);
+  const twilight = exp(ndl.sub(0.03).div(0.09).pow(2).negate());
+  const tint = mix(vec3(1, 1, 1), vec3(1.0, 0.5, 0.3), twilight.mul(0.8));
+  const lit = albedo.mul(tint).mul(day.mul(max(ndl, 0).mul(1.1).add(0.3))).add(albedo.mul(0.004));
+  const dusk = vec3(0.5, 0.12, 0.04).mul(exp(ndl.div(0.04).pow(2).negate()).mul(0.06));
   // The atmosphere seen through: haze thickening to the limb, lit sunward.
   const airLit = smoothstep(-0.25, 0.4, ndl);
   const haze = color(0xffb36b).mul(float(1).sub(mu).pow(4).mul(airLit).mul(0.7));
