@@ -7,6 +7,7 @@
 // always open, and a slot on the workbench ('bench') for the item they are repairing, open beside any workbench. The client lists whatever is open next to the bag in the Tab
 // inventory (src/inventory.ts); the server checks the same thing, with slack, before every move.
 import { level } from './levels.ts';
+import { lootReach } from './loot.ts';
 import { corpseId, corpsesNear } from './corpse.ts';
 import { boxKind, buildingId, cargoId, storeId, vehicleId, type BoxKind } from './boxes.ts';
 import { EQUIP_SLOTS, isBuilding } from './gear.ts';
@@ -112,3 +113,16 @@ export function openBoxes(s: PlayerState, slack = 0): BoxId[] {
 
 /** Can a player at `s` use this box? */
 export const canOpen = (s: PlayerState, box: string, slack = 0) => box === 'bag' || box === 'equip' || openBoxes(s, slack).includes(box as BoxId);
+
+/** The loot lying in reach of a player at `s` (shared/loot.ts lootReach), oldest first. */
+export function lootNear<L extends { id: number; x: number; z: number }>(s: PlayerState, loot: Iterable<L>): L[] {
+  return [...loot].filter((l) => lootReach(s, l)).sort((a, b) => a.id - b.id);
+}
+
+/** Everything in reach of a player at `s` that the open inventory (src/inventory.ts) draws from: every box open to
+ *  them and the loot lying in reach, as one key, whatever the view shows of it (a vehicle's repair view shows no
+ *  ground). The inventory redraws when it changes and only then: kept from what one view showed, loot in reach
+ *  looked new every frame, and the redraw replaced the panel under every click (the bike's Repair did nothing). */
+export function reachKey(s: PlayerState, loot: Iterable<{ id: number; x: number; z: number }>): string {
+  return `${openBoxes(s).join()}|${lootNear(s, loot).map((l) => l.id).join()}`;
+}

@@ -28,9 +28,9 @@ import { capacity, cells } from '../shared/power.ts';
 import type { ScrapPiece } from '../shared/scrap.ts';
 import { Hints } from './hints';
 import type { PlayerState } from '../shared/sim.ts';
-import { boxLabel, openBoxes } from '../shared/storage.ts';
+import { boxLabel, lootNear, openBoxes, reachKey } from '../shared/storage.ts';
 
-import { canDropAt, lootReach, type Loot } from '../shared/loot.ts';
+import { canDropAt, type Loot } from '../shared/loot.ts';
 import { isPlaceable } from '../shared/placed.ts';
 import { vehicleById } from '../shared/vehicles.ts';
 import { ctl, hintKeys, isBound, kbd } from './bindings';
@@ -282,10 +282,9 @@ export class InventoryHud {
   private canvas: HTMLElement;
   /** Storage boxes in reach (shared/storage.ts openBoxes), as last drawn (one building of those in reach). */
   private storages: string[] = [];
-  /** Loot in reach, as last drawn (the GROUND panel), and its ids. */
+  /** Loot in reach, as last drawn (the GROUND panel; none in a vehicle's repair view). */
   private ground: Loot[] = [];
-  private groundIds = '';
-  /** Every box in reach, as last drawn. */
+  /** Every box and all the loot in reach when last drawn (shared/storage.ts reachKey), whether shown or not. */
   private reachable = '';
   /** Within reach of the workbench last frame. */
   private atBench = false;
@@ -441,13 +440,7 @@ export class InventoryHud {
     if (this.atBench && !atBench && this.net.boxes.bench?.[0]) this.toBag('bench', 0);
     this.atBench = atBench;
     if (!ui.inventoryOpen) return;
-    if (open.join() !== this.reachable || this.groundNow().map((l) => l.id).join() !== this.groundIds) this.render();
-  }
-
-  /** Loot lying in reach, oldest first. */
-  private groundNow(): Loot[] {
-    const me = this.net.me;
-    return [...this.net.loot.values()].filter((l) => lootReach(me, l)).sort((a, b) => a.id - b.id);
+    if (reachKey(s, this.net.loot.values()) !== this.reachable) this.render();
   }
 
   toast(text: string) {
@@ -478,7 +471,7 @@ export class InventoryHud {
     if (!ui.inventoryOpen) return;
     // One building at a time: the one F was pressed on while it's in reach, else the nearest.
     const open: string[] = openBoxes(this.net.me).filter((b) => this.net.boxes[b]);
-    this.reachable = openBoxes(this.net.me).join();
+    this.reachable = reachKey(this.net.me, this.net.loot.values());
     const near = open.filter((b) => buildingId(b) >= 0);
     const shown = this.focus && near.includes(this.focus) ? this.focus : near[0];
     // A vehicle F was pressed on: a broken one alone (to repair it), a working one's cargo with its part slots.
@@ -513,8 +506,7 @@ export class InventoryHud {
       html += `<div class="box storage"><div class="head"><h3>${boxLabel(box)}</h3><span class="btns">${takeOnly(box) ? '' : `<button data-store="${box}">${TEXT.inventory.storeAll}</button>`}<button data-all="${box}">${TEXT.inventory.takeAll}</button><button data-sort="${box}">${TEXT.inventory.sort}</button></span></div>`
         + `${this.gridHtml(box, slots, boxShape(box, this.net.boxes))}</div>`;
     }
-    this.ground = vehicle ? [] : this.groundNow();
-    this.groundIds = this.ground.map((l) => l.id).join();
+    this.ground = vehicle ? [] : lootNear(this.net.me, this.net.loot.values());
     if (vehicle) {
       // (The repair view: the bag and the vehicle, nothing else.)
     } else if (this.ground.length) {
