@@ -13,7 +13,7 @@
 // An electric well (shared/wells.ts) that runs has its control box's lamp lit, a wet patch under its spigot and a drop
 // falling from it every so often (quicker while someone fills a bottle there).
 // Also the see-through green / red preview of where the held placeable would go (src/placing.ts), wrapped in a fainter
-// gridded hull so its openings (a tarp's mouth, under a bench) read as part of it.
+// gridded hull so its openings (under a bench) read as part of it; a tarp, open on every side, without one.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
@@ -72,6 +72,9 @@ export class PlacedView {
   private ghost: { kind: string; obj: THREE.Object3D } | null = null;
   private ghostOk = new THREE.MeshBasicNodeMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.4, depthWrite: false });
   private ghostBad = new THREE.MeshBasicNodeMaterial({ color: 0xff5a3c, transparent: true, opacity: 0.4, depthWrite: false });
+  /** The same, both sides (a tarp's canvas). */
+  private ghostOk2 = Object.assign(this.ghostOk.clone(), { side: THREE.DoubleSide, opacity: 0.3 });
+  private ghostBad2 = Object.assign(this.ghostBad.clone(), { side: THREE.DoubleSide, opacity: 0.3 });
   private hullOk = hullMaterial(0x7dff9a);
   private hullBad = hullMaterial(0xff5a3c);
   private pool = poolMaterial();
@@ -341,7 +344,8 @@ export class PlacedView {
         if (o) o.visible = false;
       });
       obj.traverse((o) => ((o as THREE.Mesh).castShadow = false));
-      const hull = hullOf(obj, kind === TARP ? 'tarp_canvas' : undefined);
+      // (A tarp's is open on every side: its canvas, seen from both sides, says where it goes.)
+      const hull = kind === TARP ? null : hullOf(obj);
       if (hull) obj.add(hull);
       this.group.add(obj);
       this.ghost = { kind: spot, obj };
@@ -353,7 +357,7 @@ export class PlacedView {
     const mat = ok ? this.ghostOk : this.ghostBad;
     g.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh) m.material = m.name === HULL ? (ok ? this.hullOk : this.hullBad) : mat;
+      if (m.isMesh) m.material = m.name === HULL ? (ok ? this.hullOk : this.hullBad) : m.name === 'tarp_canvas' ? (ok ? this.ghostOk2 : this.ghostBad2) : mat;
     });
   }
 }
@@ -363,8 +367,7 @@ const HULL = 'ghost_hull';
 /** The hull's grid: a line every this many metres, in world space. */
 const GRID = 0.5;
 
-/** The convex hull of `obj`'s meshes (only the one named `only`, if given: a tarp's canvas, not its guy lines out to
- *  the stakes), each point also dropped to the model's foot so the space under it is filled; in `obj`'s own frame. */
+/** The convex hull of `obj`'s meshes (only the one named `only`, if given), each point also dropped to the model's foot so the space under it is filled; in `obj`'s own frame. */
 function hullOf(obj: THREE.Object3D, only?: string): THREE.Mesh | null {
   obj.updateMatrixWorld(true);
   const inv = obj.matrixWorld.clone().invert();

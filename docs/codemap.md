@@ -208,7 +208,7 @@ Everything built is shared, and anyone can take a building down.
 - `server/bunkerGone.ts` — once per world (settings `bunker_gone`): what was kept in the old bunker comes out (its chests
   into new chests by the spawn, the machine on its table, repair slots back to the bags, things on its floor back to
   their owners or moved out onto the sand, players and vehicles in it to the spawn)
-- Buildings — the windmill, the battery station, the power pole, the beacon, the light pole, the tarp, the well, the workbench, the
+- Buildings — the windmill, the battery station, the power pole, the beacon, the light pole, the well, the workbench, the
   dismantling bench and the chest, anywhere on the sand: put up with the wrench (made by hand; right mouse with it in
   hand opens the build menu, `src/buildMenu.ts`, placing in `src/placing.ts`)
   from base materials only (scrap, cloth, wiring: `shared/tables.ts` BUILD_TABLE, `shared/crafting.ts` BUILDS), used up
@@ -247,12 +247,16 @@ Everything built is shared, and anyone can take a building down.
   dusk to dawn (shared/power.ts `LIGHT_POLE_W`, `poleDark`; server/power.ts puts it in `PowerState.lit`). Model made in
   code; the light is a pool of shadowless spot lights put in the scene at startup and handed to the lit poles nearest
   the camera (src/world/lightPoles.ts `PoleLamps`, src/world/pooledLight.ts)
-- Tarps (`tarp`, shared/placed.ts `TARP`) — shade you build: an 8 m canvas pyramid on a 4.6 m centre pole, corners
-  staked low, one edge up on a short pole as the doorway; wrench-built (3 cloth, 2 scrap), four turns (R: which way the
-  doorway faces); the poles and the canvas lower than a head collide (you go in by the doorway; bedrolls, chests,
-  benches fit inside: `shelteredBy`), and the camera stays on its side of the canvas. The rig (peak, corners, doorway, stakes, each over its own
-  sand) and the canvas's shape are `shared/tarp.ts`, used by `shared/shade.ts` (the canvas as a fan of triangles: inside
-  is shade for the heat, low sun included) and by `src/world/tarps.ts` (model made in code; the canvas billows in
+- Tarps (`tarp`, shared/placed.ts `TARP`) — shade you put up: a patched canvas diamond stretched tight between two
+  leaning scavenged poles (4.0 and 4.4 m) at opposite corners, the other two corners pulled down to 0.6 m and staked, a
+  taut saddle; made by hand (no wrench: shared/tables.ts HAND_TABLE, 3 cloth, 2 scrap), put down from the hotbar and
+  picked back up whole with G like a bedroll; four turns (R: which way the low sides face, ±Z by default, towards the
+  sun's rise and set). The poles collide, and so does the canvas where it's lower than a head (`tarpBoxes`: steps under
+  each low side), so you walk in between the poles and stand along the high middle (bedrolls, chests, benches fit
+  under: `shelteredBy`); the camera stays on its side of the canvas. The rig (corners each over its own sand, poles, guy
+  lines) and the canvas's shape (`canvasAt`, `canvasYAt`) are `shared/tarp.ts`, used by `shared/shade.ts` (`tarpTris`:
+  a 4×4 grid of the canvas; under it is shade for the heat, low sun included with the low sides to the sun) and by
+  `src/world/tarps.ts` (model made in code; seams, patches and corners painted from its uv; the canvas billows in
   `windSpeed` in a TSL vertex shader)
 - Electric wells (`well`, `shared/wells.ts`) — a borehole with a submersible pump, water at home: built with the wrench
   (scrap, wiring), gear with three slots (motor, valve, relay: `GEAR.well`), wired to a grid. Its control box is a small

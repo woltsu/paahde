@@ -66,7 +66,7 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   beacon_light: { label: TEXT.items.beacon_light, stack: 1, size: [1, 3] },
   // A tall mast with a floodlight on an arm, lighting the sand round it at night (src/world/lightPoles.ts).
   light_pole: { label: TEXT.items.light_pole, stack: 1, size: [1, 3] },
-  // A canvas pyramid on a centre pole (shared/tarp.ts): shade, put up anywhere.
+  // A canvas stretched between two poles (shared/tarp.ts): shade, made by hand and put up anywhere on the sand.
   tarp: { label: TEXT.items.tarp, stack: 1, size: [2, 2] },
   // Work stations and a chest, put up anywhere on the sand or a shelter's floor (shared/stations.ts, shared/storage.ts).
   workbench: { label: TEXT.items.workbench, stack: 1, size: [3, 2] },

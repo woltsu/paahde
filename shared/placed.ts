@@ -31,7 +31,7 @@ import { solarBlocked } from './solarfarms.ts';
 import { nearEntrance } from './levels/entrance.ts';
 import { nearPod } from './podSpot.ts';
 import { heightAt } from './terrain.ts';
-import { canvasYAt, TARP_DOOR_HALF, TARP_HALF, TARP_INNER, TARP_PEAK, tarpRig } from './tarp.ts';
+import { canvasYAt, TARP_HALF, TARP_HEAD, TARP_POLES, TARP_REACH_A, TARP_REACH_B, tarpBoxes, tarpRig, tarpTies } from './tarp.ts';
 import { TROPHY_PLACEABLES } from './trophies.ts';
 import { TEXT } from './text.ts';
 
@@ -104,22 +104,18 @@ export const PLACEABLES: Record<string, { hx: number; hz: number; boxes: Box[]; 
       { x0: -0.22, x1: 0.22, y0: 5.25, y1: 5.65, z0: 0, z1: 1.45 },
     ],
   },
-  // A tarp (shared/tarp.ts): a canvas pyramid on a centre pole, the doorway's edge (+Z) up on a short pole. Both poles
-  // collide (up to `tilt` taller: each stands on its own sand), and so does the canvas wherever it's lower than a head
-  // (TARP_INNER out from the centre): a band under each closed side and under the doorway's side either side of the
-  // doorway (its capsule as thick as the band, as high as a head), so the walls are solid from outside and in and you go
-  // in by the doorway. The canvas above is only looked at. Its shade: shared/shade.ts.
+  // A tarp (shared/tarp.ts): a canvas diamond stretched between two poles (along X), its other corners staked low (±Z).
+  // The poles collide (up to `tilt` taller: each stands on its own sand, leaning out a little at the foot), and so does
+  // the canvas wherever it's lower than a head (tarpBoxes: steps under each low side), so you walk in between the poles
+  // and stand where it's high. The box over the middle (not standing on the sand) is only looked at: aiming at the
+  // canvas finds the tarp. Its shade: shared/shade.ts.
   tarp: {
-    hx: TARP_HALF + 0.1, hz: TARP_HALF + 0.1, sand: true, gap: 1, tilt: 1.2,
+    hx: TARP_REACH_A, hz: TARP_REACH_B, sand: true, gap: 1, tilt: 1.4,
     boxes: [
-      { x0: -0.07, x1: 0.07, y0: 0, y1: TARP_PEAK + 1.3, z0: -0.07, z1: 0.07 },
-      { x0: -0.06, x1: 0.06, y0: 0, y1: 4.1, z0: TARP_HALF - 0.06, z1: TARP_HALF + 0.06 },
-      { x0: -TARP_HALF, x1: TARP_HALF, y0: 0, y1: 1.9, z0: -TARP_HALF, z1: -TARP_INNER },
-      { x0: -TARP_HALF, x1: -TARP_INNER, y0: 0, y1: 1.9, z0: -TARP_HALF, z1: TARP_HALF },
-      { x0: TARP_INNER, x1: TARP_HALF, y0: 0, y1: 1.9, z0: -TARP_HALF, z1: TARP_HALF },
-      { x0: -TARP_HALF, x1: -TARP_DOOR_HALF, y0: 0, y1: 1.9, z0: TARP_INNER, z1: TARP_HALF },
-      { x0: TARP_DOOR_HALF, x1: TARP_HALF, y0: 0, y1: 1.9, z0: TARP_INNER, z1: TARP_HALF },
-      { x0: -TARP_HALF, x1: TARP_HALF, y0: 2, y1: TARP_PEAK, z0: -TARP_HALF, z1: TARP_HALF },
+      { x0: -TARP_HALF - 0.32, x1: -TARP_HALF + 0.08, y0: 0, y1: TARP_POLES[0] + 0.2, z0: -0.07, z1: 0.07 },
+      { x0: TARP_HALF - 0.08, x1: TARP_HALF + 0.32, y0: 0, y1: TARP_POLES[1] + 0.2, z0: -0.07, z1: 0.07 },
+      ...tarpBoxes(),
+      { x0: -TARP_HALF + 0.6, x1: TARP_HALF - 0.6, y0: TARP_HEAD + 0.1, y1: TARP_POLES[1], z0: -1, z1: 1 },
     ],
   },
   // The workbench (shared/stations.ts): the bench, its front +Z; the pegboard behind it is only looked at.
@@ -282,20 +278,19 @@ const UNDER_TARP = new Set(['bedroll', 'storage_chest', 'workbench', 'dismantle_
 /** Kept this far (m) from a tarp's poles inside it, and under its canvas by this much. */
 const TARP_CLEAR = 0.1;
 
-/** Does `kind` at (x, z) turned `rot` stand inside tarp `t` (its footprint within the canvas's square, clear of its poles,
+/** Does `kind` at (x, z) turned `rot` stand inside tarp `t` (its footprint under the canvas, clear of its poles,
  *  and under the canvas with room to spare)? Then neither keeps a gap from the other, nor counts as in the
  *  other's way. Deterministic: canvasAt is + - * / and heightAt. */
 function shelteredBy(kind: string, x: number, z: number, rot: number, t: { x: number; z: number; rot: number; y: number }): boolean {
   if (!UNDER_TARP.has(kind)) return false;
   const f = footprint(kind, x, z, rot);
-  if (f[0] < t.x - TARP_HALF || f[2] > t.x + TARP_HALF || f[1] < t.z - TARP_HALF || f[3] > t.z + TARP_HALF) return false;
   const g = [f[0] - TARP_CLEAR, f[1] - TARP_CLEAR, f[2] + TARP_CLEAR, f[3] + TARP_CLEAR];
   // Only its poles are in the way: the walls under the low canvas keep people out, but something low enough fits under there.
   for (const b of worldBoxes({ id: 0, kind: TARP, ...t })) {
     if (Math.min(b.x1 - b.x0, b.z1 - b.z0) > 0.5) continue;
     if (b.y0 <= t.y + 1e-6 && overlap(g, [b.x0, b.z0, b.x1, b.z1])) return false;
   }
-  // Its top under the canvas at its corners and centre (the canvas's faces are flat or sag, so between them too).
+  // Its top under the canvas at its corners and centre (a taut saddle: near enough between them too).
   const top = placedY(kind, x, z, rot, null) + Math.max(...PLACEABLES[kind].boxes.map((b) => b.y1)) + TARP_CLEAR;
   const r = tarpRig(t.x, t.z, t.rot);
   for (const [px, pz] of [[x, z], [f[0], f[1]], [f[2], f[1]], [f[0], f[3]], [f[2], f[3]]]) {
@@ -335,7 +330,8 @@ export function placeError(kind: string, x: number, z: number, rot: number, floo
     if (outline.some(([cx, cz]) => nearPod(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.pod);
     if (outline.some(([cx, cz]) => solarBlocked(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.solar);
     if (outline.some(([cx, cz]) => nearEntrance(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.doorway);
-    const hs = corners.map(([cx, cz]) => heightAt(cx, cz));
+    // (A tarp's diamond by where it's tied down: its footprint's corners are bare sand.)
+    const hs = (kind === TARP ? tarpTies(x, z, rot) : corners).map(([cx, cz]) => heightAt(cx, cz));
     if (Math.max(...hs) - Math.min(...hs) > (PLACEABLES[kind].tilt ?? MAX_TILT)) return TEXT.notice.tooSteep;
   } else if (shelter && Math.abs(shelter.y + shelter.L.floor - floor) < 1e-3) {
     const why = shelterRoomClear(shelter, f);

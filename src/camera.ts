@@ -346,7 +346,7 @@ function blocked(x: number, y: number, z: number): boolean {
 /** The tarps' rigs (shared/tarp.ts), per placed thing. */
 const rigs = new WeakMap<Placed, TarpRig>();
 /** Would the camera at (px, py, pz) be on the other side of a tarp's canvas from the eye at (ex, ey, ez), or in it? Under
- *  the canvas is one side, everything else (over it, or out past its edge) the other; the doorway counts as canvas,
+ *  the canvas is one side, everything else (over it, or out past its edge) the other; the canvas's edge counts as canvas,
  *  which only shortens the boom there. */
 function tarpBetween(ex: number, ey: number, ez: number, px: number, py: number, pz: number): boolean {
   for (const p of placed) {

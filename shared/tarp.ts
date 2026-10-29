@@ -1,45 +1,52 @@
-// The tarp (shared/placed.ts TARP): shade you build yourself, a square of canvas pitched as a pyramid ("mid") over one
-// tall centre pole, its four corners staked down close to the sand on short lines, so its sides are steep walls that
-// keep out a low morning or evening sun too. One side's edge is lifted in the middle on a short pole and a guy line: the
-// doorway. Put up with the wrench like the other buildings (shared/tables.ts BUILD_TABLE), anywhere on the sand; R turns
-// it a quarter at a time (4 turns: which way the doorway faces, best away from the sun).
+// The tarp (shared/placed.ts TARP): shade you put up yourself, a square of patched canvas stretched tight as a diamond
+// between two tall scavenged poles at opposite corners, the other two corners pulled down low to stakes. Taut like that
+// it's a saddle (a hyperbolic paraboloid): high and open between the poles, where you walk in and stand, low on the two
+// staked sides, which come down to keep a low morning or evening sun out. Each pole is held up by two guy lines. Made by
+// hand (shared/tables.ts HAND_TABLE) and put down from the hotbar like a bedroll, anywhere on the sand; R turns it a
+// quarter at a time (which way the low sides face: best towards the sun's rise and set, ±Z, shared/sun.ts).
 //
-// The rig here is what both sides need: the poles and the closed edges (their collision is shared/placed.ts
-// PLACEABLES.tarp's boxes), and the canvas, which shared/shade.ts tests the sun's rays against (a fan of triangles round
-// the peak), so standing inside cools you like any shade (server/water.ts). The peak, every corner and the doorway's
-// point each stand a fixed height over their own sand (heightAt), so the canvas follows the ground. The client draws it
-// (src/world/tarps.ts): the canvas subdivided, sagging between its ridges, billowing in the wind on the GPU.
+// The rig here is what both sides need: the poles and where the canvas is too low to stand (their collision is
+// shared/placed.ts PLACEABLES.tarp's boxes, `tarpBoxes`), and the canvas, which shared/shade.ts tests the sun's rays
+// against (`tarpTris`), so standing under it cools you like any shade (server/water.ts). Every corner stands a fixed
+// height over its own sand (heightAt), so the canvas follows the ground. The client draws it from the same canvasAt
+// (src/world/tarps.ts), finer, billowing in the wind on the GPU.
 //
-// The canvas over its square, (a, b) ∈ [−1, 1]² from the centre (b = +1 the doorway's side): along each ray from the
-// peak to the edge it runs straight down to the edge's height there (a cone over the square), so each side between two
-// corners is one flat face, and the doorway's side two, folded at the ridge up to its pole.
+// The canvas in its own square (s, t) ∈ [−1, 1]²: the poles at (−1, −1) and (1, 1), the low corners at (1, −1) and
+// (−1, 1). Its height is the four corners' bilinear blend (the saddle) less a little sag; its edges are drawn in towards
+// the middle (taut edges curve in), by SCALLOP. On the ground the square stands as a diamond: the poles along the
+// tarp's own a (X in its frame), the low corners along b (Z), TARP_HALF out from the centre.
 //
 // Deterministic: + - * / and heightAt only.
 import { heightAt } from './terrain.ts';
 
-/** Half the canvas's side (m): an 8 m square, room for three or four to stand round the pole. */
-export const TARP_HALF = 4;
-/** The peak (top of the centre pole), the corners, and the doorway's point, over their sand (m). */
-export const TARP_PEAK = 4.6;
-const CORNER_H = 0.4, DOOR_H = 2.8;
-/** Where the canvas comes down below this (m over the sand) it's solid: a player's head height. */
-const HEAD = 1.9;
-/** How far out from the centre (m, along a or b) the closed sides come down to HEAD; inside that you can stand. */
-export const TARP_INNER = (TARP_HALF * (TARP_PEAK - HEAD)) / (TARP_PEAK - CORNER_H);
-/** Half the doorway's width (m) along its edge where the canvas there is over HEAD. */
-export const TARP_DOOR_HALF = TARP_HALF * ((HEAD - CORNER_H) / (DOOR_H - CORNER_H) > 1 ? 0 : 1 - (HEAD - CORNER_H) / (DOOR_H - CORNER_H));
-/** Corners in the tarp's own frame (turn 0), round the square from (−, −); the doorway is mid-way along +b (+Z). */
-const CORNER: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-/** Corner lines: staked this far (m) out along the diagonal. The doorway's guy line: this far out in front. */
-const CORNER_OUT = 0.55, DOOR_OUT = 1.9;
-/** How far the faces sag between their ridges (m, at the middle of a face). */
-export const TARP_SAG = 0.17;
+/** Centre to each corner (m): the poles and the low corners stand this far out, the canvas ~6.5 m a side. */
+export const TARP_HALF = 4.6;
+/** The poles' tops over their sand (m): two scavenged lengths, not quite the same; the canvas's corners just under. */
+export const TARP_POLES: [number, number] = [4.0, 4.4];
+/** The low corners over their sand (m). */
+const LOW_H = 0.6;
+/** The pole's tip over the canvas's corner (m). */
+const TIP = 0.14;
+/** The poles lean out at the foot this far (m) along a. */
+const LEAN = 0.22;
+/** The guy lines: each pole's two run out this far (m, on the ground) at ±GUY_ANGLE off its line; a low corner's this far out. */
+const GUY_OUT = 1.7, GUY_ANGLE = Math.PI / 4, LOW_OUT = 0.75;
+/** Below this (m over the sand) the canvas is too low to stand under: solid (a head). */
+export const TARP_HEAD = 1.9;
+/** How far the canvas sags (m) mid-way between its corners. */
+export const TARP_SAG = 0.12;
+/** How far its edges curve in, as a share of the square's half side, at their middle. */
+const SCALLOP = 0.1;
+/** How far the footprint reaches along a and b (m): the poles' feet, the low corners (the stakes go a little further,
+ *  like any tent's lines). */
+export const TARP_REACH_A = TARP_HALF + LEAN + 0.15;
+export const TARP_REACH_B = TARP_HALF;
 
 export type Vec = { x: number; y: number; z: number };
-/** A tarp as it stands: its centre pole and door pole (foot and top), the canvas's corners (0..3), its peak and its
- *  doorway's point, and the lines from a point on the canvas or a pole to a stake. */
-export type TarpRig = { poles: { foot: Vec; top: Vec }[]; corners: Vec[]; peak: Vec; door: Vec; guys: { from: Vec; stake: Vec }[];
-  /** Turned frame: world (x, z) = centre + a·(ax, az) + b·(bx, bz), in metres. */
+/** A tarp as it stands: its two poles (foot and top), the canvas's corners in its square's order ((−1, −1) pole,
+ *  (1, −1) low, (−1, 1) low, (1, 1) pole: index (s > 0) + 2·(t > 0)), and the lines from a pole or corner to a stake. */
+export type TarpRig = { poles: { foot: Vec; top: Vec }[]; corners: Vec[]; guys: { from: Vec; stake: Vec }[];
+  /** Turned frame: world (x, z) = centre + a·(ax, az) + b·(bx, bz), a and b ∈ [−1, 1] (×TARP_HALF m). */
   cx: number; cz: number; ax: number; az: number; bx: number; bz: number };
 
 /** Turn `rot` (quarter turns) of a point in the tarp's frame, about its centre: world offset. Matches three.js's
@@ -60,63 +67,98 @@ export function tarpRig(x: number, z: number, rot: number, ground: (x: number, z
     const px = x + a * ax + b * bx, pz = z + a * az + b * bz;
     return { x: px, y: ground(px, pz) + h, z: pz };
   };
-  const peak = at(0, 0, TARP_PEAK), door = at(0, 1, DOOR_H);
-  const corners = CORNER.map(([a, b]) => at(a, b, CORNER_H));
-  const foot = (v: Vec, h: number): Vec => ({ x: v.x, y: v.y - h - 0.2, z: v.z });
-  const poles = [{ foot: foot(peak, TARP_PEAK), top: peak }, { foot: foot(door, DOOR_H), top: door }];
-  const k = 1 + CORNER_OUT / (TARP_HALF * Math.SQRT2);
-  const guys = [
-    ...CORNER.map(([a, b], i) => ({ from: corners[i], stake: at(a * k, b * k, 0) })),
-    { from: { ...door, y: door.y - 0.05 }, stake: at(0, 1 + DOOR_OUT / TARP_HALF, 0) },
-  ];
-  return { poles, corners, peak, door, guys, cx: x, cz: z, ax, az, bx, bz };
+  // Square corner (s, t) → frame (a, b) = ((s + t)/2, (t − s)/2).
+  const corners = [at(-1, 0, TARP_POLES[0]), at(0, -1, LOW_H), at(0, 1, LOW_H), at(1, 0, TARP_POLES[1])];
+  const poles = [-1, 1].map((side, i) => {
+    const c = corners[i === 0 ? 0 : 3];
+    const foot = at(side * (1 + LEAN / TARP_HALF), 0, 0);
+    return { foot: { ...foot, y: foot.y - 0.2 }, top: { x: c.x, y: c.y + TIP, z: c.z } };
+  });
+  const guys: { from: Vec; stake: Vec }[] = [];
+  for (const [i, side] of [[0, -1], [3, 1]]) {
+    const c = corners[i], from = { x: c.x, y: c.y + TIP * 0.6, z: c.z };
+    for (const k of [-1, 1]) {
+      guys.push({ from, stake: at(side * (1 + (GUY_OUT * Math.cos(GUY_ANGLE)) / TARP_HALF), (k * GUY_OUT * Math.sin(GUY_ANGLE)) / TARP_HALF, 0) });
+    }
+  }
+  for (const [i, side] of [[1, -1], [2, 1]]) guys.push({ from: corners[i], stake: at(0, side * (1 + LOW_OUT / TARP_HALF), 0) });
+  return { poles, corners, guys, cx: x, cz: z, ax, az, bx, bz };
 }
 
-/** The canvas's edge points in order round the square, for a fan from the peak: each corner, then the middle of the edge
- *  after it (the doorway's point on the +b edge, between corners 2 and 3). */
-export function tarpRim(r: TarpRig): Vec[] {
-  const mid = (p: Vec, q: Vec): Vec => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, z: (p.z + q.z) / 2 });
-  const [c0, c1, c2, c3] = r.corners;
-  return [c0, mid(c0, c1), c1, mid(c1, c2), c2, r.door, c3, mid(c3, c0)];
+/** Where a tarp at (x, z) turned `rot` stands on the sand (world x, z): its centre, its poles' feet and its low corners. */
+export function tarpTies(x: number, z: number, rot: number): [number, number][] {
+  return [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]].map(([a, b]) => {
+    const [dx, dz] = turn(rot, a * TARP_HALF, b * TARP_HALF);
+    return [x + dx, z + dz];
+  });
 }
 
-/** A point of the canvas at (u, v) ∈ [0, 1]² (u along a, v along b), without the wind. */
+/** The canvas's height over its square's point (s, t) (already drawn in: inside the scalloped edge), without the wind. */
+function surface(r: TarpRig, s: number, t: number): number {
+  const [c00, c10, c01, c11] = r.corners;
+  const u = (s + 1) / 2, v = (t + 1) / 2;
+  const y = (c00.y * (1 - u) + c10.y * u) * (1 - v) + (c01.y * (1 - u) + c11.y * u) * v;
+  return y - TARP_SAG * (1 - s * s * t * t);
+}
+
+/** A point of the canvas at (u, v) ∈ [0, 1]² of its square (u along s, v along t), without the wind. */
 export function canvasAt(r: TarpRig, u: number, v: number, out: Vec = { x: 0, y: 0, z: 0 }): Vec {
-  const a = 2 * u - 1, b = 2 * v - 1;
-  const ra = a < 0 ? -a : a, rb = b < 0 ? -b : b;
-  const s = ra > rb ? ra : rb; // 0 at the peak, 1 on the edge
+  const s0 = 2 * u - 1, t0 = 2 * v - 1;
+  // The edges drawn in: none at the corners, most mid-edge.
+  const s = s0 * (1 - SCALLOP * (1 - t0 * t0)), t = t0 * (1 - SCALLOP * (1 - s0 * s0));
+  const a = (s + t) / 2, b = (t - s) / 2;
   out.x = r.cx + a * r.ax + b * r.bx;
   out.z = r.cz + a * r.az + b * r.bz;
-  if (s < 1e-9) {
-    out.y = r.peak.y;
-    return out;
-  }
-  // Where the ray from the peak meets the edge: on which side, and t ∈ [−1, 1] along it.
-  const [c0, c1, c2, c3] = r.corners;
-  let p: Vec, q: Vec, t: number, door = false;
-  if (ra >= rb) {
-    t = b / s;
-    [p, q] = a > 0 ? [c1, c2] : [c0, c3];
-  } else {
-    t = a / s;
-    [p, q] = b > 0 ? [c3, c2] : [c0, c1];
-    door = b > 0;
-  }
-  const w = (t + 1) / 2;
-  let edge = p.y + (q.y - p.y) * w;
-  const tt = t < 0 ? -t : t;
-  if (door) edge += (r.door.y - edge) * (1 - tt);
-  // Sag: none on the ridges (to the corners, and to the doorway's point), most mid-face and mid-way down.
-  let g = 1 - t * t;
-  if (door) g *= 4 * tt < 1 ? 4 * tt : 1;
-  out.y = r.peak.y + (edge - r.peak.y) * s - TARP_SAG * 4 * s * (1 - s) * g;
+  out.y = surface(r, s, t);
   return out;
 }
 
-/** The canvas's height (without the wind) over world (x, z), or NaN outside its square. */
+/** The canvas's height (without the wind) over world (x, z), or NaN outside it. */
 export function canvasYAt(r: TarpRig, x: number, z: number): number {
   const h2 = TARP_HALF * TARP_HALF, dx = x - r.cx, dz = z - r.cz;
   const a = (dx * r.ax + dz * r.az) / h2, b = (dx * r.bx + dz * r.bz) / h2;
-  if (a < -1 || a > 1 || b < -1 || b > 1) return NaN;
-  return canvasAt(r, (a + 1) / 2, (b + 1) / 2).y;
+  const s = a - b, t = a + b;
+  const as = s < 0 ? -s : s, at = t < 0 ? -t : t;
+  if (as > 1 - SCALLOP * (1 - t * t) || at > 1 - SCALLOP * (1 - s * s)) return NaN;
+  return surface(r, s, t);
+}
+
+/** Grid cells along each side of the canvas for the shade's triangles. */
+const SHADE_N = 4;
+/** The canvas as triangles (three corners each, flattened) for the shade (shared/shade.ts): a SHADE_N² grid of canvasAt,
+ *  within a few cm of what's drawn. */
+export function tarpTris(r: TarpRig): Vec[] {
+  const n = SHADE_N + 1, pts: Vec[] = [];
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) pts.push(canvasAt(r, i / SHADE_N, j / SHADE_N));
+  const out: Vec[] = [];
+  for (let j = 0; j < SHADE_N; j++) {
+    for (let i = 0; i < SHADE_N; i++) {
+      const k = j * n + i;
+      out.push(pts[k], pts[k + n], pts[k + n + 1], pts[k], pts[k + n + 1], pts[k + 1]);
+    }
+  }
+  return out;
+}
+
+/** Where the canvas is too low to stand (under TARP_HEAD), on level sand, as boxes in the tarp's frame (x along a, z
+ *  along b, metres): steps along a, each from where it's head-high at the step's inner side out to the edge, on both
+ *  low sides. For shared/placed.ts PLACEABLES.tarp. */
+export function tarpBoxes(): { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[] {
+  const r = tarpRig(0, 0, 0, () => 0);
+  const out: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }[] = [];
+  const STEP = 0.7, H = TARP_HALF;
+  for (let x0 = 0; x0 < H - 0.3; x0 += STEP) {
+    const x1 = Math.min(x0 + STEP, H);
+    // Out from the middle along b at the step's inner side (lowest there): the first point under head height.
+    let z = 0;
+    while (z < H && !(canvasYAt(r, x0, z) < TARP_HEAD)) z += 0.05;
+    const edge = H - (x0 + x1) / 2;
+    if (z >= edge - 0.15) continue;
+    for (const sb of [-1, 1]) {
+      const [z0, z1] = sb > 0 ? [z, edge] : [-edge, -z];
+      if (x0 === 0) out.push({ x0: -x1, x1, y0: 0, y1: TARP_HEAD, z0, z1 });
+      else for (const sa of [-1, 1]) out.push({ x0: sa > 0 ? x0 : -x1, x1: sa > 0 ? x1 : -x0, y0: 0, y1: TARP_HEAD, z0, z1 });
+    }
+  }
+  return out;
 }

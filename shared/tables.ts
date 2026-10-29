@@ -58,6 +58,10 @@ export const HAND_TABLE: Record<string, IngredientSpec[]> = {
   scrap_mace: [SCRAP(6)],
   // A bedroll (shared/placed.ts): canvas and a blanket, a couple of scrap buckles. Where you wake up after dying.
   bedroll: [CLOTH(2), SCRAP(1)],
+  // A tarp (shared/tarp.ts): canvas stitched from cloth, two scrap-pipe poles, the lines and stakes from the scraps.
+  // Cheap and made by hand, no wrench: it's the first shade, from the first trip's finds round the pods. Put down from
+  // the hotbar like the bedroll, picked back up whole.
+  tarp: [CLOTH(3), SCRAP(2)],
 };
 
 /** The buildings, put up with the wrench (shared/crafting.ts BUILDS): only base materials (scrap, cloth, wiring), used up
@@ -75,9 +79,6 @@ export const BUILD_TABLE: Record<string, IngredientSpec[]> = {
   beacon_light: [SCRAP(6), WIRING(2)],
   // A taller scrap mast with an arm, a floodlight on its end, its wiring (the battery goes in after).
   light_pole: [SCRAP(8), WIRING(2)],
-  // A tarp (shared/tarp.ts): canvas stitched from cloth, two scrap-pipe poles, the lines and stakes from the scraps.
-  // Cheap: it's the early game's shade, built from the first trip's finds.
-  tarp: [CLOTH(3), SCRAP(2)],
   // A scrap bench with a pegboard, a lamp wired in (shared/stations.ts: repairs and recipes).
   workbench: [SCRAP(6), WIRING(1)],
   // A heavy slatted steel table with a vise, a hand-cranked grinder, a tarp for the parts (carried machines are taken

@@ -2,6 +2,32 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-10-29 — The tarp: a shelter strung between two poles, made by hand
+
+- **Why:** the user wanted to put the tarp up without a wrench, from what lies by the pods, and didn't like the pyramid
+  tent: "more like a tarp shelter", a diamond stretched between two tall poles, the other corners pegged low.
+- **Made by hand:** `tarp` moved from BUILD_TABLE to HAND_TABLE (same 3 cloth, 2 scrap): crafted in the Tab inventory,
+  put down from the hotbar and picked back up whole with G, like the bedroll. Tarps already standing come back as a
+  tarp, not their materials. Econsim: no significant change (no goal needs one).
+- **Shape (shared/tarp.ts):** a square of canvas laid as a diamond, 4.6 m from the centre to each corner: two poles at
+  opposite corners (4.0 and 4.4 m, leaning out a little, two guy lines each), the other corners 0.6 m over the sand on a
+  short line to a stake. Taut between them it's the corners' bilinear blend, a saddle (2.3 m at the middle, 0.12 m sag),
+  its edges drawn in by a tenth of the half side (`canvasAt`; `canvasYAt` inverts it exactly). Every corner over its own
+  sand; the tilt check is taken where it's tied down (`tarpTies`), not the footprint's bare corners: placeable on ~63%
+  of random desert spots against the pyramid's ~51%.
+- **Collision:** the poles, and steps under the two low sides where the canvas is below 1.9 m (`tarpBoxes`, computed from
+  the canvas on level sand). You walk in between the poles or past them, stand along the high middle; bedrolls, chests
+  and benches fit under.
+- **Shade:** `tarpTris`, a 4×4 grid of the canvas (32 triangles, within a few cm of the drawn 12×12). Standing in the
+  middle with the low sides to ±Z (turn 0, the default) is full shade from sun-up to sun-down; turned the other way the
+  low sun gets in before ~9:30 and after ~15:00 (the sun rises towards +Z, sets towards −Z). Near the poles a quarter of
+  the body is lit at times.
+- **Look (src/world/tarps.ts):** the canvas painted in its fragment shader from its uv: three widths with darker seams,
+  a hem, doubled corners, two sewn-on patches (a bleached offcut, darker sacking); one pole a dark pipe, the other two
+  rusty lengths spliced and lashed; rope wraps where the corners tie on; rebar stakes. Pinned only at its corners in
+  the wind, and moving less (taut). 464 triangles in all. The placement preview shows the canvas both sides and no hull
+  (it's open). Icon re-rendered (tools/icons/dump.mjs, tools/blender/icons.py).
+
 ## 2026-10-29 — The first noon doesn't kill a newcomer
 
 Reported: landing by the pod after the beginning, it was so hot you nearly died. The day is 30 min, and from 10:00 to
@@ -19,6 +45,7 @@ read the first line, with no canteen yet, and it cost the world a life.
   Players from before the beginning get none, and dying doesn't restart it. The shared clock is untouched.
 - tools/arrival-heat.test.mjs: landed at noon in full sun, alive after 5 min and past the glow; long here, dead within
   90 s; the ease over after 8 min; cooling unchanged; the pod shades within 5 m of the hatch at noon.
+
 
 ## 2026-10-25 — A calm start: no storm front at the spawn, a first line, a cheaper dismantling bench
 

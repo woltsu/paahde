@@ -7,7 +7,7 @@
 // - the shelters' huts (shared/shelters.ts, as boxes) within HUT_DIST;
 // - crash-site wrecks and debris (their collision capsules, shared/crashsites.ts) within CRASH_DIST, and the crashed
 //   pods' (shared/pods.ts);
-// - tarps (shared/tarp.ts) within TARP_DIST: their canvas, as a fan of triangles from the peak to the rim;
+// - tarps (shared/tarp.ts) within TARP_DIST: their canvas, as a coarse grid of triangles (tarpTris);
 // - the solar farms' mirrors (shared/solarfarms.ts) within MIRROR_DIST, two triangles each, and their towers within
 //   MAX_DIST, as prisms;
 // - `casters`: things that move, passed in by the caller: other players, their bikes, motorcycles lying on the sand;
@@ -28,7 +28,7 @@ import { podCasters } from './pods.ts';
 import { DECL, skyVector, sunHourAngle, type Vec3 } from './sun.ts';
 import { ROCK_H_MAX } from './rocks.ts';
 import { placed, TARP, type Placed } from './placed.ts';
-import { tarpRig, tarpRim, type TarpRig, type Vec } from './tarp.ts';
+import { tarpRig, tarpTris, type Vec } from './tarp.ts';
 import { heightAt } from './terrain.ts';
 import { mirrorCorners, mirrorsNear, solarFarmsNear, TOWER, type Heliostat, type SolarFarm } from './solarfarms.ts';
 
@@ -50,7 +50,7 @@ const SCRAP_DIST = 25;
 const CRASH_DIST = 80;
 /** Shelter huts (2.6 m tall) are tested this close (m). */
 const HUT_DIST = 60;
-/** Tarps (peak up to ~6 m) are tested this close (m, centre to point on each axis): long shade at a low sun. */
+/** Tarps (poles up to ~4.5 m) are tested this close (m, centre to point on each axis): long shade at a low sun. */
 const TARP_DIST = 60;
 /** A solar farm's mirrors (up to ~8 m up) are tested this close (m): long shade at a low sun. */
 const MIRROR_DIST = 35;
@@ -179,18 +179,12 @@ function hutsNear(x: number, z: number): number[][] {
   });
 }
 
-/** A tarp's canvas as a fan of triangles from its peak to its rim (shared/tarp.ts: its faces are flat but for the sag),
- *  cached per placed thing (the list is replaced whole when it changes). */
-const tarpTris = new WeakMap<Placed, Vec[]>();
+/** A tarp's canvas as triangles (shared/tarp.ts tarpTris: a coarse grid of the drawn canvas), cached per placed thing
+ *  (the list is replaced whole when it changes). */
+const tarpTriCache = new WeakMap<Placed, Vec[]>();
 function trisOf(p: Placed): Vec[] {
-  let t = tarpTris.get(p);
-  if (!t) {
-    const r: TarpRig = tarpRig(p.x, p.z, p.rot);
-    const rim = tarpRim(r);
-    t = [];
-    for (let i = 0; i < rim.length; i++) t.push(r.peak, rim[i], rim[(i + 1) % rim.length]);
-    tarpTris.set(p, t);
-  }
+  let t = tarpTriCache.get(p);
+  if (!t) tarpTriCache.set(p, (t = tarpTris(tarpRig(p.x, p.z, p.rot))));
   return t;
 }
 
