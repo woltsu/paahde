@@ -4,11 +4,12 @@
 // to find (a child's drawing of rain on a locker,
 // the water-drop plaque, the rack rows' city labels). Words on them are TEXT's (shared/text.ts TEXT.tutorial).
 import * as THREE from 'three/webgpu';
+import { abs, cameraPosition, color, dot, float, mx_fractal_noise_float, mx_noise_float, normalize, positionWorld, smoothstep, uv, vec3 } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { BLAST, CART, FALLEN, GAP, POD, SCREENS, WINDOW, cartX } from '../../../shared/levels/beginning.ts';
 import { TEXT } from '../../../shared/text.ts';
 import { boxGeometry } from '../boxLevel.ts';
-import { planet, space } from './planet.ts';
+import { spaceDome } from './planet.ts';
 
 /** A word or two in light on dark (a screen, a label): a canvas texture on a basic material, bright enough to read. */
 function sign(text: string, w: number, h: number, color: string, bg: string, glow = 1.6): { mesh: THREE.Mesh; set: (t: string) => void } {
@@ -113,14 +114,30 @@ export class Props {
     const stripes = new THREE.Mesh(boxGeometry([{ b: [-1.195, 1.195, -0.005, 0.12, BLAST.z0 - 0.005, BLAST.z1 + 0.005], zone: 'bay' }], { bay: 2.6 }), mats.hazard);
     this.blast.add(stripes);
 
-    // The window: a thin pane, space and the planet far behind it.
-    const glass = new THREE.MeshPhysicalNodeMaterial({ color: 0x9fb4c8, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.12 });
-    const pane = new THREE.Mesh(new THREE.PlaneGeometry(WINDOW.z1 - WINDOW.z0, WINDOW.y1 - WINDOW.y0), glass);
-    pane.position.set(WINDOW.x + 0.15, (WINDOW.y0 + WINDOW.y1) / 2, (WINDOW.z0 + WINDOW.z1) / 2);
-    pane.rotation.y = -Math.PI / 2;
-    this.group.add(pane);
-    this.group.add(space(new THREE.Vector3(WINDOW.x + 120, 2, 99), 320));
-    this.group.add(planet(new THREE.Vector3(WINDOW.x + 90, -26, 140), 50));
+    // The window: a dark steel frame lining the hole, a deep sill, two mullions, two panes of glass (a dirty inner one,
+    // a clean outer one), and space all round behind it (planet.ts: never through the walls).
+    const W = WINDOW, T = 0.3, f = 0.12, zone = 'pod';
+    const frame = [
+      [W.x - 0.06, W.x, W.y0 - f, W.y0, W.z0 - f, W.z1 + f], // the trim round it on the wall's face
+      [W.x - 0.06, W.x, W.y1, W.y1 + f, W.z0 - f, W.z1 + f],
+      [W.x - 0.06, W.x, W.y0, W.y1, W.z0 - f, W.z0],
+      [W.x - 0.06, W.x, W.y0, W.y1, W.z1, W.z1 + f],
+      [W.x, W.x + T, W.y1 - 0.05, W.y1, W.z0, W.z1], // the reveal's lining
+      [W.x, W.x + T, W.y0, W.y1, W.z0, W.z0 + 0.05],
+      [W.x, W.x + T, W.y0, W.y1, W.z1 - 0.05, W.z1],
+      ...[1, 2].map((i) => [W.x + 0.08, W.x + 0.24, W.y0, W.y1, W.z0 + (i * (W.z1 - W.z0)) / 3 - 0.06, W.z0 + (i * (W.z1 - W.z0)) / 3 + 0.06]), // mullions
+    ].map((b) => ({ b, zone }));
+    this.group.add(new THREE.Mesh(boxGeometry(frame, { pod: 5 }), mats.door));
+    // (Its top a little over the wall's under the window, never level with it: no z-fighting.)
+    const sill = [{ b: [W.x - 0.24, W.x + T, W.y0 - 0.1, W.y0 + 0.02, W.z0 - f - 0.06, W.z1 + f + 0.06], zone }];
+    this.group.add(new THREE.Mesh(boxGeometry(sill, { pod: 5 }), mats.steel));
+    for (const [x, dirt] of [[W.x + 0.1, 1], [W.x + 0.22, 0.25]] as const) {
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(W.z1 - W.z0, W.y1 - W.y0), glass(dirt));
+      pane.position.set(x, (W.y0 + W.y1) / 2, (W.z0 + W.z1) / 2);
+      pane.rotation.y = -Math.PI / 2;
+      this.group.add(pane);
+    }
+    this.group.add(spaceDome());
 
     // The last pod, upright in its cradle, its hatch towards you.
     new GLTFLoader().load('./models/pod.glb', (gltf) => {
@@ -220,4 +237,24 @@ function dropPlaque(): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+/** A pane of the window's glass: nearly clear, a faint cool tint, the room's dim reflection growing at grazing angles,
+ *  and (by `dirt`) smudges thicker towards its corners and fine scratches catching the light. */
+function glass(dirt: number): THREE.MeshBasicNodeMaterial {
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  m.fog = false;
+  const p = uv();
+  const view = normalize(positionWorld.sub(cameraPosition));
+  const grazing = float(1).sub(abs(dot(view, vec3(1, 0, 0)))).pow(4);
+  const edge = smoothstep(0.25, 0.5, p.sub(0.5).abs().length());
+  const smudge = smoothstep(0.1, 0.7, mx_fractal_noise_float(vec3(p.x.mul(7), p.y.mul(3.5), 1.3), 4, 2, 0.6).add(edge.mul(0.5)));
+  // Scratches: thin near-vertical lines (ridged noise near zero, stretched), only in patches.
+  const line = float(1).sub(smoothstep(0.0, 0.015, abs(mx_noise_float(vec3(p.x.mul(60), p.y.mul(0.6), 4.2)))));
+  const scratch = line.mul(smoothstep(0.55, 0.8, mx_noise_float(vec3(p.x.mul(5), p.y.mul(5), 9)).mul(0.5).add(0.5)));
+  const d = smudge.mul(0.025).add(scratch.mul(0.025)).mul(dirt);
+  const reflect = color(0x6a6f76).mul(grazing.mul(0.35).add(0.025));
+  m.colorNode = reflect.add(color(0xbfae98).mul(d.mul(2)));
+  m.opacityNode = grazing.mul(0.35).add(0.05).add(d).min(0.6);
+  return m;
 }

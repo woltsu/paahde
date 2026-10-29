@@ -1,65 +1,180 @@
-// The planet through the pod bay's window (docs/levels/tutorial.md "The window"): a big disc far behind the glass, its
-// shader the whole of it (TSL, no textures): an orange world with no clouds, banded dust and dark dry seas turning slowly,
-// darker towards its limb, a thin hot rim of atmosphere; stars round it. Basic (unlit) materials: it lights nothing but
-// itself, and the bay's weak orange fill light by the window stands in for its glow.
+// Space through the pod bay's window (docs/levels/tutorial.md "The window"): one camera-centred dome, its shader the
+// whole of it (TSL, no textures), so space never ends at any angle and nothing in it can come through the walls. Drawn
+// after every opaque thing (depth-tested, never writing depth), so only the pixels the window shows are shaded, and the
+// depth buffer stays at 1 there, as under the desert's sky (post tells sky from ground by it).
+// In it, by view direction only (everything is infinitely far): round stars of many brightnesses and colours, the
+// Milky Way's faint band with its dust lanes, a far dim nebula; the sun, a hard white disc with its glare; and the
+// planet below, an analytic sphere (a ray against it per pixel: a perfectly round, sharp limb at any size) with a desert
+// surface in 3D noise (dune seas, pale pans, dark rock and canyons, dust drifting over it), turning slowly, lit by the sun
+// with a soft terminator, and a thin hot atmosphere: haze towards its limb and a glow just past it, brightest sunward.
+// Basic (unlit) material: it lights nothing but itself; the bay's weak orange fill light by the window stands in for it.
 import * as THREE from 'three/webgpu';
-import { Fn, float, hash, length, mix, mx_fractal_noise_float, mx_noise_float, smoothstep, sqrt, step, time, uv, vec3 } from 'three/tsl';
+import {
+  Fn, abs, cameraPosition, clamp, color, cos, dot, exp, float, floor, fract, fwidth, length, max, mix, mx_fractal_noise_float,
+  mx_noise_float, normalize, positionWorld, sin, smoothstep, sqrt, step, time, vec3,
+} from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 
-/** The disc: `r` m across from `at`, facing -x (the window is in the bay's east wall). */
-export function planet(at: THREE.Vector3, r: number): THREE.Mesh {
-  const m = new THREE.MeshBasicNodeMaterial();
-  m.fog = false;
-  m.colorNode = Fn(() => {
-    const p = uv().sub(0.5).mul(2); // -1..1 over the disc's square
-    const d = length(p);
-    const disc = float(1).sub(smoothstep(0.985, 1.0, d));
-    // On the sphere: its depth towards us, and where on its surface (longitude turning with time).
-    const nz = sqrt(float(1).sub(d.mul(d)).max(0));
-    const lon = p.x.div(nz.add(0.15)).add(time.mul(0.004));
-    const lat = p.y;
-    const q = vec3(lon.mul(1.6), lat.mul(2.2), 0);
-    const bands = mx_noise_float(vec3(lat.mul(9), lon.mul(0.6), 3)).mul(0.5).add(0.5);
-    const seas = smoothstep(0.08, 0.32, mx_fractal_noise_float(q, 4, 2, 0.5)) as F;
-    const sand = mix(vec3(0.85, 0.3, 0.07), vec3(0.95, 0.48, 0.15), bands) as V3;
-    const dry = vec3(0.32, 0.1, 0.03) as V3;
-    const ground = mix(dry, sand, seas) as V3;
-    // Lit from the upper right, darker to the limb; the night side faint.
-    const lit = smoothstep(-0.35, 0.6, p.x.mul(0.6).add(p.y.mul(0.3)).add(nz.mul(0.55))) as F;
-    const limb = nz.pow(0.55) as F;
-    const surface = ground.mul(lit.mul(0.9).add(0.05)).mul(limb).mul(1.05);
-    // The atmosphere: a thin hot rim just past the edge and over it.
-    const rim = smoothstep(0.9, 1.0, d).mul(float(1).sub(smoothstep(1.0, 1.06, d))).mul(lit.add(0.2));
-    const glow = vec3(1.0, 0.55, 0.22).mul(rim).mul(2.2) as V3;
-    // Stars where the planet isn't (never under it).
-    const cell = p.mul(90).floor();
-    const star = step(0.996, hash(cell.x.add(cell.y.mul(173)))).mul(hash(cell.x.mul(7).add(cell.y)).mul(0.8).add(0.2));
-    const sky = vec3(star, star, star.mul(1.1)).mul(smoothstep(1.0, 1.1, d)) as V3;
-    return surface.mul(disc).add(glow).add(sky);
-  })();
-  // Twice the disc's size, so its rim and the stars round it fit.
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(r * 2.4, r * 2.4), m);
-  mesh.position.copy(at);
-  mesh.rotation.y = -Math.PI / 2; // facing -x
-  mesh.name = 'planet';
-  return mesh;
+const v3 = (v: THREE.Vector3) => vec3(v.x, v.y, v.z);
+
+/** Where the planet is (its centre's direction from the bay) and how big it looks (angular radius): low out of the
+ *  window (east, +x) and a little to the left, its limb a gentle curve across the lower half of the view. */
+const PLANET_DIR = new THREE.Vector3(1, -0.6, -0.2).normalize();
+const PLANET_ANGLE = THREE.MathUtils.degToRad(34);
+/** The sun: off to the right of the planet, lighting it from the side (the night on its left), seen slantwise through
+ *  the glass from the window's left end. */
+const SUN_DIR = new THREE.Vector3(0.3, 0.3, 0.9).normalize();
+const SUN_ANGLE = THREE.MathUtils.degToRad(0.7);
+/** The planet's spin axis (tilted) and how fast it turns (rad/s: a slow drift you see if you stay). */
+const AXIS = new THREE.Vector3(0.25, 1, 0.3).normalize();
+const SPIN = 0.0035;
+/** Milky Way: the great circle round this pole, brightest towards the core. */
+const GALAXY_POLE = new THREE.Vector3(0.2, 0.55, -0.81).normalize();
+const GALAXY_CORE = new THREE.Vector3(0.85, 0.45, 0.1);
+GALAXY_CORE.addScaledVector(GALAXY_POLE, -GALAXY_CORE.dot(GALAXY_POLE)).normalize();
+
+/** A float-only hash of a 3D cell (Dave Hoskins' hash33): three values in 0..1. */
+function hash33(p: V3): V3 {
+  const q = fract(p.mul(vec3(0.1031, 0.103, 0.0973))) as V3;
+  const r = q.add(dot(q, q.yxz.add(33.33))) as V3;
+  return fract(r.xxy.add(r.yxx).mul(r.zyx)) as V3;
 }
 
-/** Black space behind it (a far wall the window looks out on), stars only. */
-export function space(at: THREE.Vector3, size: number): THREE.Mesh {
-  const m = new THREE.MeshBasicNodeMaterial();
-  m.fog = false;
+/** A layer of round stars, `n` cells per unit of direction, `p` of the cells holding one; `pix`: a pixel's angle. */
+function stars(dir: V3, pix: F, n: number, p: F | number, gain: number, salt: number): V3 {
+  const cell = floor(dir.mul(n)) as V3;
+  const h = hash33(cell.add(salt));
+  const g = hash33(cell.add(salt + 71.3));
+  const spot = normalize(cell.add(h.mul(0.8).add(0.1)).div(n)) as V3;
+  // Only a star that lands in its own cell (else it is cut at the cell's edge).
+  const own = step(length(floor(spot.mul(n)).sub(cell)), 0.5);
+  const on = step(float(1).sub(p), g.x).mul(own);
+  const bright = g.y.pow(5).mul(0.9).add(0.1);
+  // Round points about a pixel and a half across, the bright ones a little wider (bloom does the rest).
+  const r = length(dir.sub(spot)).div(pix.mul(bright.mul(0.6).add(0.55)));
+  const point = exp(r.mul(r).negate());
+  // Colour: red-orange giants through white to blue-white.
+  const tint = mix(mix(vec3(1.0, 0.72, 0.5), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.45, g.z)), vec3(0.72, 0.82, 1.0), smoothstep(0.6, 1.0, g.z));
+  return tint.mul(point.mul(on).mul(bright).mul(gain)) as V3;
+}
+
+/** The far sky: black, the Milky Way and a dim nebula, stars. */
+function sky(dir: V3, pix: F): V3 {
+  const lat = dot(dir, v3(GALAXY_POLE));
+  const core = exp(length(dir.sub(v3(GALAXY_CORE))).pow(2).mul(-1.6));
+  const wobble = mx_noise_float(dir.mul(3).add(4.1)).mul(0.05);
+  const bx = lat.add(wobble).div(mix(float(0.1), float(0.22), core));
+  const band = exp(bx.mul(bx).negate());
+  const clump = mx_fractal_noise_float(dir.mul(4.5), 4, 2, 0.5).mul(0.5).add(0.55).max(0);
+  const lane = smoothstep(0.1, 0.55, mx_fractal_noise_float(dir.mul(9).add(2.7), 3, 2, 0.5)).mul(exp(lat.div(0.05).pow(2).negate()));
+  const glow = band.mul(clump.mul(clump)).mul(float(1).sub(lane.mul(0.8))).mul(core.mul(1.5).add(0.35));
+  const milky = mix(vec3(0.75, 0.8, 0.95), vec3(1.0, 0.86, 0.7), core).mul(glow.mul(0.022));
+  // A wide, very faint rust-violet nebula off to one side: space is not quite flat black.
+  const neb = smoothstep(0.15, 0.9, mx_fractal_noise_float(dir.mul(1.6).add(9.1), 3, 2, 0.5)).mul(0.012);
+  const nebula = vec3(0.9, 0.35, 0.45).mul(neb);
+  const s = stars(dir, pix, 70, band.mul(0.22).add(0.06), 0.35, 0)
+    .add(stars(dir, pix, 26, 0.12, 0.8, 13.7))
+    .add(stars(dir, pix, 9, 0.2, 2.2, 41.9));
+  return vec3(0.0012, 0.0014, 0.0022).add(milky).add(nebula).add(s) as V3;
+}
+
+/** The planet's surface colour at `n` (a point on the unit sphere in its own turning frame). */
+function ground(n: V3): V3 {
+  const big = mx_fractal_noise_float(n.mul(1.7), 5, 2.1, 0.5);
+  const fine = mx_fractal_noise_float(n.mul(14), 3, 2.2, 0.5).mul(0.5).add(0.5);
+  // Dune seas: long streaks along the wind belts (stretched across latitude).
+  const streak = mx_noise_float(vec3(n.x.mul(5), n.y.mul(46), n.z.mul(5))).mul(0.5).add(0.5);
+  const sandMid = color(0x9c4a18), sandLit = color(0xec9a3e), flats = color(0xe2b882), rock = color(0x4a2212), basin = color(0x2a120a);
+  let c: V3 = mix(sandMid, sandLit, smoothstep(0.25, 0.85, fine.mul(0.6).add(streak.mul(0.4)))) as V3;
+  // Dark rock highlands and old basins where the big noise is low, pale dry pans where a second one peaks.
+  c = mix(c, rock, smoothstep(-0.05, -0.3, big).mul(fine.mul(0.5).add(0.6)).min(1)) as V3;
+  c = mix(c, basin, smoothstep(-0.35, -0.6, big)) as V3;
+  const pans = mx_fractal_noise_float(n.mul(3.3).add(7.7), 3, 2, 0.5);
+  c = mix(c, flats, smoothstep(0.45, 0.6, pans).mul(0.2)) as V3;
+  // Canyons: thin dark lines (ridged noise near zero) through the rock.
+  const ridge = abs(mx_noise_float(n.mul(6.5).add(3.3)));
+  c = mix(c, basin, float(1).sub(smoothstep(0.0, 0.012, ridge)).mul(smoothstep(-0.15, -0.4, big)).mul(0.55)) as V3;
+  return c;
+}
+
+/** Turns a world direction into the planet's own frame (its tilted axis is y), spun by `angle` about that axis. */
+function spun(n: V3, angle: F | number): V3 {
+  const up = AXIS;
+  const ex = new THREE.Vector3(1, 0, 0).addScaledVector(up, -up.x).normalize();
+  const ez = new THREE.Vector3().crossVectors(ex, up);
+  const x = dot(n, v3(ex)), y = dot(n, v3(up)), z = dot(n, v3(ez));
+  const c = cos(angle), s = sin(angle);
+  return vec3(x.mul(c).sub(z.mul(s)), y, x.mul(s).add(z.mul(c))) as V3;
+}
+
+/** The planet over `bg` for view direction `dir`. */
+function planetOver(dir: V3, pix: F, bg: V3): V3 {
+  const C = v3(PLANET_DIR), L = v3(SUN_DIR);
+  const rad = Math.sin(PLANET_ANGLE);
+  const b = dot(dir, C);
+  const h2 = max(float(1).sub(b.mul(b)), 0);
+  const h = sqrt(h2); // the ray's closest approach to the centre (the centre at distance 1)
+  const front = step(0, b);
+  // A sharp limb, antialiased over one pixel.
+  const cover = clamp(float(rad).sub(h).div(pix).add(0.5), 0, 1).mul(front);
+  // Where the ray meets the sphere and the surface normal there.
+  const t = b.sub(sqrt(max(float(rad * rad).sub(h2), 0)));
+  const N = normalize(dir.mul(t).sub(C)) as V3;
+  const ndl = dot(N, L);
+  const mu = max(dot(N, dir.negate()), 0); // 1 facing us, 0 at the limb
+  const spin = time.mul(SPIN);
+  const surf = ground(spun(N, spin));
+  // Dust drifting over it, a little faster than the ground turns.
+  const dustN = spun(N, spin.mul(1.25).add(0.6));
+  const dust = smoothstep(0.55, 0.85, mx_fractal_noise_float(dustN.mul(3.2).add(vec3(0, 0, time.mul(0.002))), 4, 2, 0.55).mul(0.5).add(0.5));
+  const albedo = mix(surf, color(0xf0b47a), dust.mul(0.18)) as V3;
+  // Sunlight with a soft terminator (the air carries it a little past), a reddened band along it, the night side black.
+  const day = smoothstep(-0.05, 0.2, ndl);
+  const lit = albedo.mul(day.mul(max(ndl, 0).mul(1.1).add(0.3))).add(albedo.mul(0.004));
+  const dusk = vec3(0.55, 0.13, 0.03).mul(exp(ndl.div(0.04).pow(2).negate()).mul(0.1));
+  // The atmosphere seen through: haze thickening to the limb, lit sunward.
+  const airLit = smoothstep(-0.25, 0.4, ndl);
+  const haze = color(0xffb36b).mul(float(1).sub(mu).pow(4).mul(airLit).mul(0.7));
+  const disc = lit.add(dusk).add(haze);
+  // Past the limb: a thin glowing shell falling off with height, lit where the sun is on that side, brighter with the sun
+  // behind (forward scatter).
+  const alt = max(h.sub(rad), 0).div(rad);
+  const Nc = normalize(dir.mul(b).sub(C));
+  const sideLit = smoothstep(-0.3, 0.35, dot(Nc, L));
+  const forward = max(dot(dir, L), 0).pow(6).mul(1.5).add(1);
+  const shell = exp(alt.div(0.012).negate()).mul(0.9).add(exp(alt.div(0.05).negate()).mul(0.12));
+  const air = color(0xffa860).mul(shell.mul(sideLit).mul(forward).mul(front).mul(float(1).sub(cover)));
+  return mix(bg, disc, cover).add(air) as V3;
+}
+
+/** The sun: a hard white disc, a tight glare and a wide faint halo. */
+function sun(dir: V3, pix: F): V3 {
+  const a = length(dir.sub(v3(SUN_DIR)));
+  const disc = clamp(float(SUN_ANGLE).sub(a).div(pix).add(0.5), 0, 1);
+  const glare = exp(a.div(0.02).negate()).mul(1.2).add(exp(a.div(0.12).negate()).mul(0.06));
+  return vec3(1.0, 0.95, 0.86).mul(disc.mul(40).add(glare)) as V3;
+}
+
+/** The dome: a big camera-centred sphere drawn last among the opaque things, behind everything. */
+export function spaceDome(): THREE.Mesh {
+  const m = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
   m.colorNode = Fn(() => {
-    const cell = uv().mul(size * 1.5).floor();
-    const s = step(0.997, hash(cell.x.add(cell.y.mul(311)))).mul(hash(cell.y.mul(13).add(cell.x)).mul(0.7).add(0.3));
-    return vec3(s, s, s.mul(1.1));
+    const dir = normalize(positionWorld.sub(cameraPosition)) as V3;
+    // One pixel's angle (fwidth is |dx| + |dy|, about two pixels' worth; guarded: it can be 0 on helper lanes).
+    const pix = max(length(fwidth(dir)).mul(0.5), 1e-5) as F;
+    // The sun shows where the planet isn't (planetOver covers it).
+    return planetOver(dir, pix, sky(dir, pix).add(sun(dir, pix)) as V3);
   })();
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), m);
-  mesh.position.copy(at);
-  mesh.rotation.y = -Math.PI / 2;
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), m);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 1000; // after the opaque rooms: their depth leaves only the window's pixels to shade
+  mesh.onBeforeRender = (_r, _s, camera) => {
+    mesh.position.copy(camera.position);
+    mesh.updateMatrixWorld();
+  };
   mesh.name = 'space';
   return mesh;
 }

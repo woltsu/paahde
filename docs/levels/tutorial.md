@@ -143,9 +143,16 @@ site id per player (`tut:cabinet:<public id>`) so nothing else in the machine co
 - **The blast door (7):** descends from the top on a fixed curve from the moment you enter the corridor's trigger; its
   collision is a gated solid at 0.8 m from the start (the visual comes down to meet it), so the sim never sees a moving
   solid.
-- **The window (8):** the planet is a big emissive disc with a TSL orange-planet shader (limb darkening, a thin hot
-  atmosphere rim, slow rotation), far behind a glass pane in the level's root. No sky, no sun light: it lights nothing
-  but itself and a weak orange fill pooled light by the window.
+- **The window (8):** a dark steel frame lining the hole, two mullions, a deep sill and two panes (a smudged, scratched
+  inner one, a clean outer one: basic transparent, a cool tint, the room's dim reflection at grazing angles). Behind it,
+  space is one camera-centred dome (src/levels/beginning/planet.ts) drawn after the opaque rooms, depth-tested and never
+  writing depth: only the window's pixels are shaded, space never ends at any angle, and nothing in it can come through
+  the walls. All by view direction, in TSL: round stars of many brightnesses and colours, the Milky Way's faint band with
+  its dust lanes, a dim nebula, the sun (a hard disc with its glare, seen slantwise from the window's left end), and the
+  planet low out of the window, an analytic sphere (a ray against it per pixel: a sharp, round limb at any size) with a
+  desert surface in 3D noise (dune seas, rock, canyons, faint pans, slow dust), turning slowly, lit from the side with a
+  terminator and a black night side, and a thin hot atmosphere (haze to the limb, a glow past it, brightest sunward). No
+  sun light: it lights nothing but itself and a weak orange fill pooled light by the window.
 - **The ride down:** in the pod's seat (the pod's interior is a small model built for this, or the camera inside the
   existing `pod.glb` with its hatch shut), shake and roar growing, then the dust screen.
 
@@ -245,8 +252,8 @@ it; the look and the telling. Where it differs from the design above:
   waits the same behind the level fade. The pod is pod.glb's `Pod` fitted into its cradle, as modelled; the hatch doesn't animate.
 - **Sound**: the datacenter's bed plus the fall (src/levels/beginning/sound.ts, docs/audio.md "The beginning's fall");
   the station's recorded "please" is not done, only its chime.
-- **The window** is one transparent pane (the one exception to the datacenter's no-transparency rule), a starfield
-  plane and the planet disc (src/levels/beginning/planet.ts) far behind it.
+- **The window** is two transparent panes (the one exception to the datacenter's no-transparency rule) in a steel frame,
+  and the space dome (src/levels/beginning/planet.ts) behind every wall, seen only through them.
 - **Who goes through it**: new players (no row in this world, no `beginning_done` grant), not in the lab or the bench,
   and not with any dev spawn (`?spawn=pod`, `crash`, ...: the server tests and the bench's bots use `pod`).
   `?spawn=beginning` goes in on ready like any level. Joining inside, loading no longer waits for the desert's terrain.
@@ -254,5 +261,5 @@ it; the look and the telling. Where it differs from the design above:
   world on this browser (localStorage); the cabinet has the disassembly mode's own guides.
 - **Economy**: `npm run econ -- --base fd0ba38`: "No significant change".
 
-Known gaps: the planet is best seen from in front of the window; the relay has no held-item model (its icon is a
+Known gaps: the relay has no held-item model (its icon is a
 relay's); the facing isn't saved on a reconnect; the level's own reverb (as the datacenter's) is not done.
