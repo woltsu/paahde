@@ -121,8 +121,11 @@ export class BeginningStage implements Stage {
     this.ambience.stop();
     this.fall.stop();
     this.stuck.clear();
-    this.ride.landed(); // (down in the desert: the dust clears over it)
     this.rumble = 0;
+  }
+
+  gone() {
+    this.ride.landed(); // (down in the desert, drawn round us: the dust clears over it)
   }
 
   workSite(me: PlayerState, link: (id: string) => SiteLink): WorkSite | null {

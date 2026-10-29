@@ -233,6 +233,15 @@ export class HeightShadow {
     renderer.setRenderTarget(target);
   }
 
+  /** Every grid has a shadow drawn round `focus` (or there is none to draw: off, or the light down). */
+  settledAt(focus: THREE.Vector3) {
+    if (!this.enabled || this.light.value.y < 0.005) return true;
+    return this.levels.every((l) => {
+      const c = l.front.centre.value;
+      return l.ready && Math.max(Math.abs(focus.x - c.x), Math.abs(focus.z - c.y)) <= l.size * RECENTRE;
+    });
+  }
+
   /** Every frame: start a level's job when it is due, run one pass of the one in progress. */
   update(renderer: THREE.WebGPURenderer, scene: THREE.Scene, focus: THREE.Vector3) {
     if (!this.enabled) return;

@@ -38,6 +38,11 @@ export interface Stage {
   leave(scene: THREE.Scene): void;
   /** Per-frame work while active. */
   update(frame: StageFrame): void;
+  /** Just entered, still under the cover: resolves once it can be seen where the player now is (the desert's terrain
+   *  streamed in and its dune shadows drawn round them), driven by update(); gives up after its own time limit. */
+  arrive?(): Promise<void>;
+  /** The switch away from it is over: the next stage is being drawn (the beginning's ride card clears). */
+  gone?(): void;
   /** Built (and, for a level, its materials compiled) before the first enter. */
   readonly ready: Promise<void>;
   /** A machine of the level's own you stand at, to take apart (the beginning's cabinet), or null. `link`: its session. */
@@ -56,15 +61,17 @@ export interface Stage {
 
 /** The fade to black and back (ms each way). */
 const FADE_MS = 250;
+/** The longest a switch waits for a stage to arrive (Stage.arrive) before showing it anyway (ms). */
+const ARRIVE_MAX_MS = 8000;
 /** A level whose stage failed is asked for again after this long (ms). */
 const RETRY_MS = 10_000;
 
 /**
  * Switching stages (docs/levels.md "Switching stages"): main.ts calls follow(level) every frame with the level the
  * local player is in. On a change the view fades to black over the last frame drawn (nothing is drawn meanwhile), the
- * stage is built on its first visit and kept, swapped in (the old one leaves, the new one enters), its materials are
- * compiled behind the black on the first visit (`warm`, src/warmup.ts: the light count is fixed, so that is the only
- * compile), and the view fades back in.
+ * stage is built on its first visit and kept, swapped in (the old one leaves, the new one enters), it arrives behind
+ * the black (Stage.arrive: the desert streams its terrain round where we now stand), its materials are compiled on the
+ * first visit (`warm`, src/warmup.ts: the light count is fixed, so that is the only compile), and the view fades back in.
  */
 export class StageSwitch {
   /** False while a switch runs: main.ts draws nothing then. */
@@ -117,6 +124,12 @@ export class StageSwitch {
     void this.switchTo(id);
   }
 
+  /** Compile level `id`'s materials again on its next switch in (the desert, when we joined inside a level: its terrain
+   *  wasn't there to be compiled behind the loading screen). */
+  warmAgain(id: number) {
+    this.warmed.delete(id);
+  }
+
   /** Build level `id`'s stage ahead (near its door), so the switch only has to compile it. */
   prefetch(id: number) {
     if (performance.now() >= (this.failedUntil.get(id) ?? 0)) void this.stage(id).catch(() => {});
@@ -147,6 +160,7 @@ export class StageSwitch {
     this.busy = true;
     this.drawing = false;
     this.fade.style.opacity = '1';
+    let from: Stage | null = null;
     try {
       const [next] = await Promise.all([this.stage(id).catch((e) => {
         console.error('level stage failed to load', e);
@@ -157,10 +171,13 @@ export class StageSwitch {
       if (!next) this.failedUntil.set(id, performance.now() + RETRY_MS);
       const to = next ?? this.current;
       if (to !== this.current) {
-        this.current.leave(this.scene);
+        from = this.current;
+        from.leave(this.scene);
         to.enter(this.scene, this.post);
         this.current = to;
         this.onStage(to);
+        // (main.ts updates it meanwhile: it is the stage, and the level we are in)
+        if (to.arrive) await Promise.race([to.arrive(), new Promise((r) => setTimeout(r, ARRIVE_MAX_MS))]);
       }
       if (!this.warmed.has(to.level)) {
         this.warmed.add(to.level);
@@ -173,6 +190,7 @@ export class StageSwitch {
       this.drawing = true;
       requestAnimationFrame(() => requestAnimationFrame(() => (this.fade.style.opacity = '0')));
       this.busy = false;
+      from?.gone?.();
     }
   }
 }

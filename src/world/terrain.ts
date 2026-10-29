@@ -112,6 +112,10 @@ export class Terrain {
   get built() {
     return this.shown.size > 0;
   }
+  /** The layout round (x, z) is complete and showing: arriving there (a level's door, the ride down) shows no holes. */
+  shownAt(x: number, z: number) {
+    return this.shown.size > 0 && this.pendingSince === 0 && Math.abs(x - this.lastX) + Math.abs(z - this.lastZ) <= 0.5;
+  }
   private desired: { key: string; level: number; ix: number; iz: number; dist: number }[] = [];
   private pendingSince = 0;
   private dirty = new Set<string>();

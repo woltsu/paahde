@@ -240,7 +240,9 @@ it; the look and the telling. Where it differs from the design above:
   light, not an item.
 - **The ride**: the view stays at the hatch (no seat): the shaking and the roar grow for 2.8 s, then the dust screen
   with its card (`TEXT.tutorial.card`), held over the move until the desert is drawn under it (`RIDE_MS` 7 s on the
-  server). The pod is pod.glb's `Pod` fitted into its cradle, as modelled; the hatch doesn't animate.
+  server; then the switch waits for the desert to arrive, its terrain and dune shadows round the pod and its
+  materials compiled, docs/levels.md "Arriving", and only then `Stage.gone` clears the card). The Esc menu's skip
+  waits the same behind the level fade. The pod is pod.glb's `Pod` fitted into its cradle, as modelled; the hatch doesn't animate.
 - **Sound**: the datacenter's bed plus the fall (src/levels/beginning/sound.ts, docs/audio.md "The beginning's fall");
   the station's recorded "please" is not done, only its chime.
 - **The window** is one transparent pane (the one exception to the datacenter's no-transparency rule), a starfield

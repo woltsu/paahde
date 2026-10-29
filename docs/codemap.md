@@ -52,7 +52,8 @@ when you find it stale.
   `shared/temperature.ts` `felt` for a level's climate
 - `src/levels/stage.ts` — `Stage`: what the client draws for one level, one root per stage in the one scene; the
   active stage owns fog, environment, background and the post profile (`Post.setProfile`, `src/post.ts` `PostProfile`),
-  and its root's lights are the scene's only lights. `StageSwitch`: the fade, building on the first visit, the
+  and its root's lights are the scene's only lights. `StageSwitch`: the fade, building on the first visit, waiting
+  for the stage to arrive (`Stage.arrive`: the desert's terrain and dune shadows round the landing spot), the
   compile behind the black (src/warmup.ts)
 - `src/levels/desert.ts` — the desert stage: sky, terrain, pods, shelters, crash sites, walkers, bosses, loot ...
   built into its root (moved out of `src/main.ts`), and their per-frame updates

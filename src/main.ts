@@ -473,8 +473,12 @@ renderer.setAnimationLoop((time) => {
   }
   if (!joined) {
     prologue.joined();
-    // Joined inside a level (a new player's beginning): facing the way its spawn faces.
-    if (!level(net.me.level).things) orbit.yaw = net.me.facing;
+    // Joined inside a level (a new player's beginning): facing the way its spawn faces. The desert's terrain is first
+    // streamed on the way out, so its materials are compiled then, behind the switch's cover.
+    if (!level(net.me.level).things) {
+      orbit.yaw = net.me.facing;
+      levels.warmAgain(desert.level);
+    }
   }
   joined = true;
   artBench?.frame(frameDt); // (from the first frame on, so the world streams in round the shot behind the loading screen)

@@ -175,7 +175,8 @@ export interface Stage {
    small; the desert's terrain chunk cache stays (it is the expensive one to rebuild).
 3. The first visit pays for compiling the level's materials. `Warmup` (src/warmup.ts) compiles the stage's root behind
    the fade (`renderer.compileAsync(root, camera)`); a prefetch when you come near an entrance hides it entirely.
-   The desert is never warmed twice: its pipelines stay cached.
+   The desert is warmed again only after joining inside a level (its terrain wasn't there to compile); otherwise
+   its pipelines stay cached.
 
 ## Getting in and out
 
@@ -276,6 +277,14 @@ Each phase is a push to `main` that leaves the game working.
   follows the camera everywhere (`CrashSound.update`, its beacons only where the desert's things are). A storm's dust
   at the eye drops at once in a level without weather (`StormFx.calm`). The desert's post profile is kept as it was on
   leaving (the art bench's tuning survives a visit). Faded-out ambience beds stop their sources.
+- **Arriving** (`Stage.arrive`): the new stage is shown only once it can be seen where we now stand. The desert
+  streams its terrain round the landing spot with the loading screen's budget (`Terrain.shownAt`), only then runs the
+  rest of its update (the dune shadows are drawn off the terrain's heights), and is ready once every heightfield
+  grid is drawn round us (`HeightShadow.settledAt`); 7 s at most (the switch's own limit 8 s). Without it the
+  first frames out of a level showed no ground at all (a new player's terrain had never been streamed) or the old
+  layout round the door. Joined inside a level (a new player's beginning), the desert's materials are compiled
+  again on the first way out (`StageSwitch.warmAgain`): behind the loading screen there was no terrain to compile.
+  The stage left is told when the new one shows (`Stage.gone`: the beginning's ride card clears then, not before).
 - **Prefetch** builds the stage (geometry, the bake a few ms at a time: `bakeDataSliced`) within 60 m of a door; compiling still happens behind the fade on
   the first visit (a hidden root's lights aren't in the scene, so the level's pipelines can't be compiled ahead
   without entering it). The first entry measured ~0.3 s from F to the new stage on an M2 Pro (WebGPU) once built.

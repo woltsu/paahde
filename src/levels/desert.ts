@@ -36,6 +36,9 @@ import { EntranceView } from '../world/entrance.ts';
 import { setLevelShade } from '../world/materialLighting.ts';
 import type { Stage, StageFrame } from './stage.ts';
 
+/** The longest arriving waits for the terrain and the dune shadows round where we stand (ms). */
+const ARRIVE_MS = 7000;
+
 export class DesertStage implements Stage {
   readonly level = 0;
   readonly root = new THREE.Group();
@@ -74,6 +77,9 @@ export class DesertStage implements Stage {
   /** Its post profile: DESERT_POST, then as it was when it last left (the art bench's tuning survives a visit inside). */
   private profile = DESERT_POST;
   private post: Post | null = null;
+  /** Arriving (behind the switch's cover): the terrain's layout round us isn't in yet (`terrain`), then the dune
+   *  shadows aren't drawn round us; `done` shows the desert. */
+  private arriving: { terrain: boolean; done: () => void } | null = null;
 
   private constructor() {
     this.root.name = 'desert';
@@ -139,13 +145,39 @@ export class DesertStage implements Stage {
   leave(_scene: THREE.Scene) {
     // The sun, its cascades and the dune shadows are under the root: hidden, they are neither updated nor drawn.
     this.root.visible = false;
+    this.arriving?.done();
     if (this.post) this.profile = this.post.liveProfile();
     this.entrance.silence();
+  }
+
+  /** Under the cover (a level's door, the ride down, a respawn out of a level): the terrain round us is streamed with
+   *  the loading screen's budget, and only then does the rest run (the dune shadows are drawn off the terrain's heights,
+   *  so not before it is in); shown once both are there, or after ARRIVE_MS whatever is in. */
+  arrive(): Promise<void> {
+    this.arriving?.done();
+    return new Promise((resolve) => {
+      const done = () => {
+        if (this.arriving !== a) return;
+        this.arriving = null;
+        this.terrain.loading = false;
+        clearTimeout(timer);
+        resolve();
+      };
+      const a = { terrain: true, done };
+      const timer = setTimeout(done, ARRIVE_MS);
+      this.arriving = a;
+      this.terrain.loading = true;
+    });
   }
 
   update(f: StageFrame) {
     const { focus, camera } = f;
     this.terrain.update(focus);
+    const a = this.arriving;
+    if (a?.terrain) {
+      if (!this.terrain.shownAt(focus.x, focus.z)) return;
+      a.terrain = false;
+    }
     this.scrap.update(focus);
     this.crashSites.update(focus);
     this.pods.update(f.time);
@@ -167,5 +199,6 @@ export class DesertStage implements Stage {
     this.shelters.update(camera.position);
     this.entrance.update(camera.position, true);
     this.solarFarms.update(camera.position);
+    if (a && (!this.sky.csm.enabled.value || this.sky.heights.settledAt(focus))) a.done();
   }
 }
