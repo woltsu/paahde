@@ -139,7 +139,7 @@ site id per player (`tut:cabinet:<public id>`) so nothing else in the machine co
 - **Lights out (3):** the hall's fixture rows switch off behind you, through the light pool's per-fixture weights (no
   shader rebuilds).
 - **The cleaning cart (3):** a kinematic prop on a fixed path, not a mover: it never blocks you (it passes in front of
-  you on a cross aisle when you trigger it, and is gone).
+  you on a cross aisle when you trigger it, and is gone). *As built it is solid (below, "As built").*
 - **The blast door (7):** descends from the top on a fixed curve from the moment you enter the corridor's trigger; its
   collision is a gated solid at 0.8 m from the start (the visual comes down to meet it), so the sim never sees a moving
   solid.
@@ -217,6 +217,17 @@ it; the look and the telling. Where it differs from the design above:
   `shut` closes the blast door behind you (a gate < 0: solid once set), and `blast`, `lights`, `cart`, `powered`,
   `launch` move nothing (the door coming down, the jolt, the cart, the panel, the ride). Saved with the player
   (`players.gates`); a reconnect puts you back where you stood with them, not at the start of the beat.
+- **The cleaning cart is solid** (a cart you walked through, which drove into the walls at both ends, read as broken):
+  parked at the west end of the hall's middle cross-aisle until `GATE.cart`, then across to park at the east end
+  (`CART`: 6 s, eased), a body's width short of each wall and clear of the racks. Its progress is 9 bits of `gates`
+  (`cartTicks`, above the `GATE` bits) that `step()` itself advances a tick at a time through `Level.tick`, so where it
+  is stays a function of state and input: the client predicts it exactly (no server clock, no lag behind the server, no
+  new message), the server only sets it off. Its solid is one box moved to `cartX(gates)` before each query; it pushes
+  you along and can be stood on. The stage draws it there (smoothed between ticks). The debug beats past the hall have
+  it crossed (`CART_CROSSED`).
+- **Every solid is drawn** (`tools/beginning.test.mjs`): a collide-only box is under the instanced racks drawn in it or
+  is one the stage draws (the fallen rack in props.ts, the cabinet, the pod, the window's pane, the blast door). The
+  fallen rack was once collision only, an invisible bar across the aisle; it is a rack on its side now.
 - **The beat** is not kept by the server: `beatAt(x, y, z)` (shared) gives it from where you are, for the speech, the
   rumble, the screens and the debug menu's "Beginning beat" (`debugLevel('beginning:<n>')`: at `BEAT_STARTS[n]` with the
   gates before it).

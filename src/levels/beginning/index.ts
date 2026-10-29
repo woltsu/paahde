@@ -196,7 +196,7 @@ export class BeginningStage implements Stage {
     // The lights shudder with it.
     const flick = this.jolt > 0 || riding > 0 ? 0.35 * this.rumble * (0.5 + 0.5 * Math.sin(f.time * 37) * Math.sin(f.time * 11.3)) : 0;
     this.box.pool.scale = (riding > 0 ? 0.6 : 1) - flick;
-    this.props.update(f.dt, beat, (gates & GATE.cart) !== 0, (gates & GATE.blast) !== 0, (gates & GATE.shut) !== 0, fresh);
+    this.props.update(f.dt, beat, gates, (gates & GATE.blast) !== 0, (gates & GATE.shut) !== 0, fresh);
     this.stuck.update(f.dt, me, riding === 0);
     const zone = zoneAt(BEGINNING, cam.x, cam.z);
     this.box.pool.update(f.dt, cam, zone);

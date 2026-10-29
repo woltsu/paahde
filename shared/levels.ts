@@ -81,6 +81,9 @@ export type Level = {
   crouchUnder: boolean;
   /** The Esc menu offers to leave it straight for the desert (the beginning: server/tutorial.ts). */
   skippable: boolean;
+  /** A player's gates after a tick here (shared/sim.ts step): what moves on its own once the server has set it going (the
+   *  beginning's cleaning cart counts its ticks in them), so it is a function of state and predicted like the rest. */
+  tick?: (gates: number) => number;
 };
 
 /** The sand's height as ground for feet that were at `prevY`: none inside a shelter's entrance and rooms. */

@@ -300,7 +300,8 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     vx = ux * boosted;
     vz = uz * boosted;
   }
-  const gates = s.gates ?? 0;
+  // What moves on its own in the level (Level.tick: the beginning's cart) moves a tick first, then you.
+  const gates = L.tick ? L.tick(s.gates ?? 0) : s.gates ?? 0;
   // Where a crouch makes you short (Level.crouchUnder): no room to stand over you keeps you crouched.
   const cramped = L.crouchUnder && L.ceiling(s.x, s.z, s.y, CROUCH_HEIGHT, PLAYER_RADIUS, gates) + CROUCH_HEIGHT < s.y + PLAYER_HEIGHT;
   const crouching = ((input & CROUCH) !== 0 || cramped) && s.grounded && !sliding;

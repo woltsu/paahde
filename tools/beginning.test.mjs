@@ -5,8 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { level, LEVELS } from '../shared/levels.ts';
-import { BEGINNING, BLAST, CABINET, FALLEN, GAP, GATE, POD, TRAY, beatAt, beginningLevel, triggersAt } from '../shared/levels/beginning.ts';
-import { CROUCH, FORWARD, JUMP, SLIDE, levelSpawn, quantizeYaw, step } from '../shared/sim.ts';
+import { BEGINNING, BLAST, CABINET, CART, CART_CROSSED, FALLEN, GAP, GATE, POD, TRAY, WINDOW, beatAt, beginningLevel, cartTicks, cartX, triggersAt } from '../shared/levels/beginning.ts';
+import { CROUCH, FORWARD, JUMP, PLAYER_RADIUS, SLIDE, levelSpawn, quantizeYaw, step } from '../shared/sim.ts';
 import { ITEMS, levelOnlyItems } from '../shared/items.ts';
 import * as tables from '../shared/tables.ts';
 
@@ -205,4 +205,75 @@ test('the cabinet and the pod on the server: the relay out opens the door, into 
   const launch = t.hatch(1, { ...hatch, gates: powered }, () => (used++, true), 1000);
   assert.ok(launch & GATE.launch && used === 1, 'the pod took a second relay');
   assert.ok(t.riding(1) && !t.landed(1, 1000 + RIDE_MS - 1) && t.landed(1, 1000 + RIDE_MS) && !t.riding(1));
+});
+
+test('every solid is drawn: nothing invisible in your way', () => {
+  // A collide-only box is drawn by the instanced racks standing in it, or by the stage (src/levels/beginning): these.
+  const byStage = [
+    [-FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1], // the fallen rack (props.ts)
+    [CABINET.x - 0.7, CABINET.x + 0.7, 0, 0.5, CABINET.z - 0.65, CABINET.z + 0.65], // the cabinet (the disassembly)
+    [POD.x - 1.2, POD.x + 1.2, 0, 2.3, POD.hatch[5] + 0.1, 102.4], // the pod (pod.glb)
+    [WINDOW.x, WINDOW.x + 0.3, WINDOW.y0, WINDOW.y1, WINDOW.z0, WINDOW.z1], // the window's pane (props.ts)
+    [-1.2, 1.2, BLAST.y0, 2.6, BLAST.z0, BLAST.z1], // the blast door over its edge, and shut (props.ts)
+    [-1.2, 1.2, 0, BLAST.y0, BLAST.z0, BLAST.z1],
+  ];
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
+  const inRack = (x, z) => BEGINNING.racks.some((r) => Math.abs(x - r.x) <= 0.3 + 1e-6 && Math.abs(z - r.z) <= 0.6 + 1e-6);
+  for (const b of BEGINNING.boxes) {
+    if (b.use !== 'collide') continue;
+    if (byStage.some((k) => same(k, b.b))) continue;
+    assert.equal(b.mat, 'rack', `an invisible solid ${b.mat} ${b.b}`);
+    // Every point of its footprint under a rack drawn there.
+    for (let x = b.b[0] + 0.01; x <= b.b[1]; x += 0.05) {
+      for (let z = b.b[4] + 0.01; z <= b.b[5]; z += 0.05) assert.ok(inRack(x, z), `no rack drawn at ${x.toFixed(2)}, ${z.toFixed(2)} in ${b.b}`);
+    }
+  }
+});
+
+test('walking the hall and the aisle, nothing stops you but the fallen rack and the gap', () => {
+  let s = toAisle();
+  // No jump: up to the fallen rack, and stopped right at it.
+  const walked = walk(s, 0, 52, { max: 4 });
+  assert.ok(walked.z > FALLEN.z0 - PLAYER_RADIUS - 0.05 && walked.z < FALLEN.z0, `stopped short of the fallen rack: ${walked.z.toFixed(2)}`);
+  // Over it, then along the aisle's floor to the gap's edge, by either side.
+  s = settle(walk(walk(s, 0, FALLEN.z0 - 0.9), 0, 50, { keys: jumps(false) }));
+  for (const x of [-1.45, 0, 1.45]) {
+    const edge = walk(walk(s, x, 50), x, GAP.z0 - 0.1, { max: 4 });
+    assert.ok(edge.z > GAP.z0 - 0.4 && Math.abs(edge.y) < 1e-6, `stopped short of the gap at x ${x}: ${edge.z.toFixed(2)}`);
+  }
+});
+
+test('the cleaning cart: solid, parked until you come in, across the hall in its own lane, never into a wall', () => {
+  // Parked at the west end, then across to the east end in CART.ticks ticks, counted by step() itself.
+  assert.equal(cartX(0), CART.x0);
+  assert.equal(cartX(CART_CROSSED), CART.x1);
+  let s = { ...levelSpawn(L.id), x: 0, z: 29, gates: GATE.quarters | GATE.cart };
+  for (let t = 0; t < CART.ticks + 30; t++) s = step(s, 0, quantizeYaw(0));
+  assert.equal(cartTicks(s.gates), CART.ticks);
+  assert.equal(step({ ...s, gates: GATE.quarters }, 0, 0).gates, GATE.quarters, 'it set off by itself');
+  // Its whole run is clear of every other solid, with a body's width left at each end to the wall.
+  const lane = [CART.x0 - CART.hx, CART.x1 + CART.hx, 0.01, CART.h, CART.z - CART.hz, CART.z + CART.hz];
+  for (const b of BEGINNING.boxes) {
+    if (b.use === 'draw') continue;
+    const hit = b.b[0] < lane[1] && b.b[1] > lane[0] && b.b[2] < lane[3] && b.b[3] > lane[2] && b.b[4] < lane[5] && b.b[5] > lane[4];
+    assert.ok(!hit, `the cart's run goes through ${b.mat} ${b.b}`);
+  }
+  assert.ok(6 - lane[1] >= 2 * PLAYER_RADIUS && lane[0] + 6 >= 2 * PLAYER_RADIUS, 'it can pin you to the wall');
+  // You walk into it, parked: it stops you.
+  const from = { ...levelSpawn(L.id), x: CART.x0, z: CART.z - 1.5, gates: GATE.quarters };
+  const parked = walk(from, CART.x0, CART.z + 1.5, { open: () => GATE.quarters, max: 3 });
+  assert.ok(parked.z < CART.z - CART.hz, `walked through the parked cart: ${parked.z.toFixed(2)}`);
+  // Standing in its way, it pushes you along (never through you), and you can't walk through it rolling either.
+  let stood = { ...levelSpawn(L.id), x: 0, z: CART.z, gates: GATE.quarters | GATE.cart };
+  for (let t = 0; t < CART.ticks; t++) {
+    stood = step(stood, 0, quantizeYaw(0));
+    const x = cartX(stood.gates), px = Math.max(x - CART.hx, Math.min(x + CART.hx, stood.x));
+    const pz = Math.max(CART.z - CART.hz, Math.min(CART.z + CART.hz, stood.z));
+    assert.ok(Math.hypot(stood.x - px, stood.z - pz) >= PLAYER_RADIUS - 1e-3, `inside the cart at tick ${t}`);
+  }
+  assert.ok(stood.x > CART.x1 + CART.hx, `not pushed along: ${stood.x.toFixed(2)}`);
+  // Jumped onto, it holds you up.
+  let top = { ...levelSpawn(L.id), x: CART.x0, z: CART.z, y: CART.h + 0.2, grounded: false, gates: GATE.quarters };
+  top = settle(top, 60);
+  assert.ok(Math.abs(top.y - CART.h) < 1e-6, `fell through the cart's top: ${top.y}`);
 });

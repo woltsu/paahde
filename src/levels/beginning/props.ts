@@ -1,10 +1,11 @@
 // The beginning's set pieces and dressing (docs/levels/tutorial.md "Set pieces"), client-only and read off the player's
-// gates (they never touch the sim): the station's screens, the cleaning cart crossing the hall, the blast door coming
-// down, the pod in its cradle, the window on the planet, and the things to find (a child's drawing of rain on a locker,
+// gates (they never touch the sim, the cart's solid is the sim's: CART): the station's screens, the cleaning cart crossing
+// the hall, the fallen rack, the blast door coming down, the pod in its cradle, the window on the planet, and the things
+// to find (a child's drawing of rain on a locker,
 // the water-drop plaque, the rack rows' city labels). Words on them are TEXT's (shared/text.ts TEXT.tutorial).
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { BLAST, CART, GAP, POD, SCREENS, WINDOW } from '../../../shared/levels/beginning.ts';
+import { BLAST, CART, FALLEN, GAP, POD, SCREENS, WINDOW, cartX } from '../../../shared/levels/beginning.ts';
 import { TEXT } from '../../../shared/text.ts';
 import { boxGeometry } from '../boxLevel.ts';
 import { planet, space } from './planet.ts';
@@ -45,8 +46,8 @@ export class Props {
   private screens: ((t: string) => void)[] = [];
   private word = '';
   private cart = new THREE.Group();
-  /** Seconds since the cart set off (-1: not yet; Infinity: crossed, or already gone when we came). */
-  private cartT = -1;
+  /** Seconds the cart has been rolling (its wheels' judder). */
+  private cartT = 0;
   private blast: THREE.Mesh;
   /** The blast door's edge (m over the floor), easing to where the gates say. */
   private blastY = 2.6;
@@ -87,8 +88,21 @@ export class Props {
     lamp.position.set(0.35, 0.92, 0);
     this.cart.add(body, bin, lamp);
     this.cart.position.set(CART.x0, 0, CART.z);
-    this.cart.visible = false;
     this.group.add(this.cart);
+
+    // The rack fallen across the collapsed aisle (its solid: shared/levels/beginning.ts FALLEN): a rack on its side, its
+    // door towards you, stretched to the box you climb over. The rack material reads the rack's own frame, so the
+    // geometry stays the racks' and the mesh's matrix lays it down: scaled, on its side (its height along x), turned.
+    const rack = new THREE.BoxGeometry(0.6, 2.0, 1.2).translate(0, 1, 0);
+    const fallen = new THREE.Mesh(rack, mats.rack);
+    const w = 2 * FALLEN.x, d = FALLEN.z1 - FALLEN.z0;
+    fallen.matrixAutoUpdate = false;
+    fallen.matrix.makeTranslation(w / 2, FALLEN.h / 2, (FALLEN.z0 + FALLEN.z1) / 2)
+      .multiply(new THREE.Matrix4().makeRotationY(Math.PI))
+      .multiply(new THREE.Matrix4().makeRotationZ(-Math.PI / 2))
+      .multiply(new THREE.Matrix4().makeScale(FALLEN.h / 0.6, w / 2.0, d / 1.2));
+    fallen.castShadow = fallen.receiveShadow = true;
+    this.group.add(fallen);
 
     // The blast door: a slab in a slot over the corridor's end, its edge coming down to BLAST.y0, then to the floor.
     this.blast = new THREE.Mesh(boxGeometry([{ b: [-1.2, 1.2, 0, 2.6, BLAST.z0, BLAST.z1], zone: 'bay' }], { bay: 2.6 }), mats.door);
@@ -130,22 +144,20 @@ export class Props {
     }, undefined, (e) => console.warn('beginning: the pod failed to load', e));
   }
 
-  /** Every frame: the screens' word, the cart, the blast door (`blastDown`: its bit; `shut`: down behind you). */
-  update(dt: number, beat: number, cartGo: boolean, blastDown: boolean, shut: boolean, fresh: boolean) {
+  /** Every frame: the screens' word, the cart (where `gates` put it), the blast door (`blastDown`: its bit; `shut`: down
+   *  behind you). */
+  update(dt: number, beat: number, gates: number, blastDown: boolean, shut: boolean, fresh: boolean) {
     const w = screenWord(beat);
     if (w !== this.word) {
       this.word = w;
       for (const set of this.screens) set(w);
     }
-    // The cart: once, when you come into the hall; already gone if it crossed before you came (a reconnect).
-    if (cartGo && this.cartT < 0) this.cartT = fresh ? 0 : Infinity;
-    if (this.cartT >= 0 && this.cartT < CART.s) {
-      this.cartT += dt;
-      const t = Math.min(1, this.cartT / CART.s);
-      this.cart.visible = t < 1;
-      this.cart.position.x = CART.x0 + (CART.x1 - CART.x0) * t;
-      this.cart.position.y = Math.abs(Math.sin(this.cartT * 9)) * 0.004;
-    }
+    // The cart: where the sim has it (its solid), smoothed between ticks; it judders while it rolls.
+    const x = cartX(gates), was = this.cart.position.x;
+    const moving = Math.abs(x - was) > 1e-4;
+    this.cart.position.x = moving && Math.abs(x - was) < 0.5 ? was + (x - was) * Math.min(1, dt * 30) : x;
+    if (moving) this.cartT += dt;
+    this.cart.position.y = moving ? Math.abs(Math.sin(this.cartT * 9)) * 0.004 : 0;
     // The blast door: from the moment you came in, down to its edge over ~2 s (it is solid there from the start: the
     // drawing comes down to meet it); shut to the floor once you are past.
     const target = shut ? 0 : blastDown ? BLAST.y0 : 2.6;

@@ -10,7 +10,7 @@
 // (server/tutorial.ts) when you reach a trigger or do the thing. Some bits move nothing and only tell the client how far
 // you are (the blast door coming down, the hall's lights going out). Pure data, no three.js, Node type stripping rules.
 import { STEP_UP, inBox, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
-import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes, solidNear } from './boxes.ts';
+import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes, solidNear, type BoxGrid } from './boxes.ts';
 import { mulberry32 } from '../noise.ts';
 import type { BoxUse, Fixture, LevelBox, LevelLayout, LevelMat, Rack } from './datacenter.ts';
 
@@ -33,7 +33,7 @@ export const GATE = {
   launch: 32,
   /** The big jolt in the hall: its lights go out behind you, row by row. */
   lights: 64,
-  /** Into the hall: the cleaning cart crosses in front of you. */
+  /** Into the hall: the cleaning cart crosses in front of you (its progress: CART_TICKS, counted by the sim). */
   cart: 128,
 } as const;
 
@@ -51,8 +51,8 @@ const R = {
 
 /** The fallen tray across the corridor: crouch under it (its underside over CROUCH_HEIGHT, under a standing head). */
 export const TRAY = { z0: 15, z1: 15.6, y0: 1.15, y1: 1.4 };
-/** The rack fallen across the collapsed aisle: jump onto it, over. */
-export const FALLEN = { z0: 47, z1: 48.2, h: 0.9 };
+/** The rack fallen across the collapsed aisle, wall rack to wall rack (|x| < `x`): jump onto it, over. */
+export const FALLEN = { x: 1.9, z0: 47, z1: 48.2, h: 0.9 };
 /** The gap where the aisle's floor dropped into the sub-floor: too far for one jump, not for the air jump. */
 export const GAP = { z0: 54, z1: 60.5, floor: -2.4 };
 /** The blast door at the end of the bay corridor: its edge stops at `y0`, over a crouch or a slide, under a head. */
@@ -65,6 +65,24 @@ export const CABINET = { x: 1.4, z: 68.2, yaw: 0, kind: 'control_cabinet' as con
 export const POD = { x: 0, z: 100.5, yaw: Math.PI, hatch: [-1.0, 1.0, 0, 2.6, 97.0, 98.9] as Box };
 /** The quarters' bunk you wake on, made (the other eleven are stripped). */
 export const BUNK = { x: 2.55, z0: 0.5, z1: 2.5 };
+
+/** The cleaning cart: parked at the west end of the hall's middle cross-aisle (between the second and third rows of
+ *  racks) until GATE.cart, then across it along x to park at the east end, `ticks` sim ticks (6 s) on the way. A solid
+ *  that moves (`hx`, `hz`: its half footprint, `h` its height): where it is is a pure function of your gates, which
+ *  step() advances a tick at a time (beginningLevel.tick), so the client predicts it exactly as the server has it. Each
+ *  end leaves more than a body's width to the wall (it never pins you there) and the lane misses the racks. */
+export const CART = { z: 33.4, x0: -4.8, x1: 4.8, ticks: 360, hx: 0.45, hz: 0.3, h: 1.05 };
+/** Where in PlayerState.gates the cart's ticks are counted (9 bits, well above the GATE bits). */
+const CART_SHIFT = 20, CART_MASK = 0x1ff << CART_SHIFT;
+/** The cart's ticks on its run so far, out of CART.ticks. */
+export const cartTicks = (gates: number) => (gates & CART_MASK) >>> CART_SHIFT;
+/** The gates of a cart that has crossed (GATE.cart and every tick: the debug beats after the hall). */
+export const CART_CROSSED = GATE.cart | (CART.ticks << CART_SHIFT);
+/** The cart's x for these gates: eased off and to a stop. */
+export function cartX(gates: number): number {
+  const t = Math.min(1, cartTicks(gates) / CART.ticks), e = t * t * (3 - 2 * t);
+  return CART.x0 + (CART.x1 - CART.x0) * e;
+}
 
 /** Trigger boxes (the server sets the bit when you are in one). */
 export const TRIGGERS: readonly { box: Box; bit: number }[] = [
@@ -97,11 +115,11 @@ export const BEAT_STARTS: readonly (LevelPoint & { gates: number })[] = [
   { x: 1.6, y: 0, z: 1.6, facing: Math.PI, gates: 0 },
   { x: 0, y: 0, z: 9.5, facing: Math.PI, gates: GATE.quarters },
   { x: 0, y: 0, z: 25.5, facing: Math.PI, gates: GATE.quarters },
-  { x: 0, y: 0, z: 45.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights },
-  { x: 0, y: 0, z: 65.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights },
-  { x: 0, y: GAP.floor, z: 57.5, facing: 0, gates: GATE.quarters | GATE.cart | GATE.lights },
-  { x: 0, y: 0, z: 75.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights | GATE.control | GATE.blast },
-  { x: 0, y: 0, z: 93.5, facing: Math.PI, gates: GATE.quarters | GATE.cart | GATE.lights | GATE.control | GATE.blast | GATE.shut },
+  { x: 0, y: 0, z: 45.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights },
+  { x: 0, y: 0, z: 65.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights },
+  { x: 0, y: GAP.floor, z: 57.5, facing: 0, gates: GATE.quarters | CART_CROSSED | GATE.lights },
+  { x: 0, y: 0, z: 75.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights | GATE.control | GATE.blast },
+  { x: 0, y: 0, z: 93.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights | GATE.control | GATE.blast | GATE.shut },
 ];
 
 /** The station's screens: where they hang (facing the walk, -z), the words by how far you are (TEXT.tutorial.screens). */
@@ -109,9 +127,6 @@ export const SCREENS: readonly { x: number; y: number; z: number; face: 1 | -1 }
   { x: -1.19, y: 1.7, z: 11, face: 1 }, { x: 1.19, y: 1.7, z: 19, face: -1 },
   { x: -2.99, y: 1.6, z: 67, face: 1 }, { x: -1.19, y: 1.7, z: 80, face: 1 }, { x: 1.19, y: 1.7, z: 86, face: -1 },
 ];
-
-/** The cleaning cart's run (client-only, it never blocks you): along x through the hall's aisle at z, seconds to cross. */
-export const CART = { z: 33.4, x0: -6.4, x1: 6.4, s: 6 };
 
 const MAIN = 0xeef3ff, AMBER = 0xff7a1a, RED = 0xff2a1a, PLANET = 0xff9a50;
 
@@ -218,13 +233,14 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('floor', 'aisle', 'both', -A.x - T, A.x + T, -T, 0, GAP.z1, A.z1);
   for (const [z0, z1] of [[A.z0 + 0.3, GAP.z0 - 0.6], [GAP.z1 + 0.6, A.z1 - 0.3]]) {
     for (const side of [-1, 1]) {
-      const xa = side < 0 ? -A.x : A.x - 0.6;
-      add('rack', 'aisle', 'collide', xa, xa + 0.6, 0, 2.0, z0, z1);
+      const xa = side < 0 ? -A.x : A.x - 0.6, n = Math.floor((z1 - z0) / 1.2 + 1e-6);
+      // As long as the racks drawn in it (a whole number of them: no solid sliver past the last one).
+      add('rack', 'aisle', 'collide', xa, xa + 0.6, 0, 2.0, z0, z0 + n * 1.2);
       // Racks turned side-on: their side panels to the aisle (the rack shader's sides are plain powder coat).
-      for (let z = z0 + 0.6; z + 0.6 <= z1 + 1e-6; z += 1.2) racks.push({ x: xa + 0.3, z, face: side < 0 ? 1 : -1, variant: 2 });
+      for (let i = 0; i < n; i++) racks.push({ x: xa + 0.3, z: z0 + 0.6 + i * 1.2, face: side < 0 ? 1 : -1, variant: 2 });
     }
   }
-  add('rack', 'aisle', 'collide', -A.x + 0.6, A.x - 0.6, 0, FALLEN.h, FALLEN.z0, FALLEN.z1);
+  add('rack', 'aisle', 'collide', -FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1); // (drawn: src/levels/beginning/props.ts)
   for (const z of [50, 62.5]) point('main', 'aisle', 0, A.h - 0.6, z, MAIN, 3.5, 10);
   point('emergency', 'aisle', 0, 2.6, (GAP.z0 + GAP.z1) / 2, AMBER, 1.2, 6);
   for (const z of [46, 51, 62]) strip('aisle', -1.5, 1.5, A.h - 0.06, z);
@@ -309,6 +325,17 @@ export const BEGINNING = beginningLayout();
 const solidList = BEGINNING.boxes.filter((b) => b.use !== 'draw');
 const solids = boxGrid(solidList.map((b) => b.b), 2, solidList.map((b) => b.gate ?? 0));
 
+/** The cart's solid: one box moved to where the gates put it before each query (its grid spans the whole run, so every
+ *  query near the run finds it). */
+const cartBox = [CART.x0 - CART.hx, CART.x1 + CART.hx, 0, CART.h, CART.z - CART.hz, CART.z + CART.hz];
+const cart = boxGrid([cartBox as unknown as Box], 2);
+function cartAt(gates: number): BoxGrid {
+  const x = cartX(gates);
+  cartBox[0] = x - CART.hx;
+  cartBox[1] = x + CART.hx;
+  return cart;
+}
+
 /** The trigger bits that (x, y, z) sets (TRIGGERS). */
 export function triggersAt(x: number, y: number, z: number): number {
   let bits = 0;
@@ -322,10 +349,14 @@ const NO_DOORS: readonly LevelDoor[] = [];
 export const beginningLevel: Level = {
   id: 2,
   key: 'beginning',
-  ground: (x, z, prevY, gates = 0) => groundBoxes(solids, x, z, prevY, STEP_UP, gates),
-  collide: (c, y, prevY, radius, height, stepUp, _px, _pz, gates = 0) => collideBoxes(solids, c, y, prevY, radius, height, stepUp, gates),
+  ground: (x, z, prevY, gates = 0) => Math.max(groundBoxes(solids, x, z, prevY, STEP_UP, gates), groundBoxes(cartAt(gates), x, z, prevY, STEP_UP)),
+  collide: (c, y, prevY, radius, height, stepUp, _px, _pz, gates = 0) => {
+    // The cart first: pushed by it, the walls and racks have the last word.
+    const onCart = collideBoxes(cartAt(gates), c, y, prevY, radius, height, stepUp);
+    return Math.max(onCart, collideBoxes(solids, c, y, prevY, radius, height, stepUp, gates));
+  },
   ceiling: (x, z, prevY, height, radius, gates = 0) => ceilingBoxes(solids, x, z, prevY, height, radius, gates),
-  solid: (x, y, z, r, gates = 0) => solidNear(solids, x, y, z, r, gates),
+  solid: (x, y, z, r, gates = 0) => solidNear(solids, x, y, z, r, gates) || solidNear(cartAt(gates), x, y, z, r),
   flat: true,
   bounds: BEGINNING.bounds,
   spawns: BEGINNING.spawns as readonly LevelPoint[],
@@ -342,4 +373,6 @@ export const beginningLevel: Level = {
   mortal: false,
   crouchUnder: true,
   skippable: true,
+  // The cart on its run (CART): a tick further each tick once it has set off.
+  tick: (gates) => (gates & GATE.cart && cartTicks(gates) < CART.ticks ? gates + (1 << CART_SHIFT) : gates),
 };

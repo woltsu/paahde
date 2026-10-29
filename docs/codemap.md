@@ -32,7 +32,7 @@ when you find it stale.
 ## Levels (docs/levels.md)
 
 - `shared/levels.ts` — `Level` (ground, solids, ceiling, bounds, spawns, `doors()` and its properties: `indoors`,
-  `climate`, `weather`, `enemies`, `building`, `things`, `private`, `mortal`, `crouchUnder`, `skippable`; ground,
+  `climate`, `weather`, `enemies`, `building`, `things`, `private`, `mortal`, `crouchUnder`, `skippable`, `tick`; ground,
   collide and ceiling take the player's `gates`), the `LEVELS` registry, `level(id)`; `desertLevel` wraps the
   desert's ground and collisions. `PlayerState.level` (`shared/sim.ts`) says which one a player is in; only the server
   changes it. `players.level`/`y` in the DB. `doorAt`, `desertArrival`: the doors between levels
@@ -67,13 +67,13 @@ when you find it stale.
   (lights out without a shader rebuild). `src/levels/boxLevel.ts` — any box-built layout into a stage's root (boxes
   merged per material, gated boxes as their own meshes, instanced racks, the pool, a hemisphere fill)
 - The beginning (docs/levels/tutorial.md): `shared/levels/beginning.ts` — its layout (eight rooms along +z, gated doors,
-  triggers, `GATE` bits, `BEAT_STARTS`, `beatAt`) and its `Level` (private, immortal, crouch-under, skippable, no doors);
+  triggers, `GATE` bits, `BEAT_STARTS`, `beatAt`, the cleaning cart's moving solid `CART`/`cartX`) and its `Level` (private, immortal, crouch-under, skippable, no doors);
   `shared/levels/beginningCabinet.ts` — the dead control cabinet (fixed seed, only its relay left: `tut_relay`,
   `shared/items.ts` `levelOnly`); `server/tutorial.ts` — trigger bits, each player's cabinet session (never saved), the
   pod's panel and the ride down (`RIDE_MS`), `BEGINNING_DONE`; `server/world.ts` starts new players there, `finishBeginning`
   (the ride, the Esc menu's skip), strips level items on any move out, refuses hurt/die where `!mortal`, hides private
   levels' players. `src/levels/beginning/` — its stage (`index.ts`: doors, lights out, rumble, the cabinet's work site, the
-  hatch's F), `props.ts` (screens, cart, blast door, pod, window, drawing, plaque, city labels), `planet.ts` (TSL planet),
+  hatch's F), `props.ts` (screens, cart, fallen rack, blast door, pod, window, drawing, plaque, city labels), `planet.ts` (TSL planet),
   `sound.ts` (the fall's roar, groan, jolt, chime), `ride.ts` (the dust card on the way down), `stuck.ts` (key hints after
   8 s stuck, once per world). Tests: `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and
   hatch rules), `tools/server-beginning.test.mjs` (new players start there alone and unhurt, the ride, skip, the grant)

@@ -303,6 +303,9 @@ Each phase is a push to `main` that leaves the game working.
   are set (a door shut behind you). Only the server sets bits (no input asks), so `step()` stays a function of state and
   input; `gates` comes in the next reconciliation like `level`, is saved with the player (`players.gates`) and is a
   spawn's own on any move (0 from every spawn).
+- **`tick`** (optional): the gates after a tick in the level, applied by `step()` before the mover moves: what moves on
+  its own once the server has set it going counts its ticks in `gates`, so a moving solid stays predicted exactly (the
+  beginning's cleaning cart).
 - **Level items**: an item with `levelOnly: <level key>` (`shared/items.ts`) is taken out of the bag on any move out of
   that level, and on joining anywhere else.
 - **Machines in a level**: a stage may offer its own work site (`Stage.workSite`, the beginning's cabinet), with its own
