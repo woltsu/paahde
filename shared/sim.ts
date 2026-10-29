@@ -23,6 +23,7 @@ import { podSpawn } from './pods.ts';
 import { DESERT, inBox, level, STEP_UP, type Level, type LevelId } from './levels.ts';
 import { WIND } from './dunes.ts';
 import { heightAt, onRock } from './terrain.ts';
+import { tarpSlope } from './tarp.ts';
 
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
@@ -340,9 +341,10 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
       vz *= MAX_GROUND_SPEED / cap;
     }
   } else if (s.grounded) {
-    // Standing on scrap (above the sand) is flat ground: no slope drag, no slip-face slide.
+    // Standing on scrap (above the sand) is flat ground: no slope drag, no slip-face slide. A tarp's canvas has its own
+    // slope (shared/tarp.ts): too steep and you slide off it.
     const onScrap = onFlat(L, s.x, s.y, s.z);
-    const g = onScrap ? flatSlope : slopeAt(s.x, s.z, tmpSlope);
+    const g = onScrap ? (!L.flat && tarpSlope(s.x, s.y, s.z, tmpSlope) ? tmpSlope : flatSlope) : slopeAt(s.x, s.z, tmpSlope);
     const steep = Math.hypot(g.gx, g.gz);
     if (steep > (onScrap || !onRock(s.x, s.z) ? SLIP_TAN : ROCK_CLIMB_TAN)) {
       // Slip face: the sand gives way. Gravity along the slope minus kinetic friction pulls you down;

@@ -251,14 +251,16 @@ Everything built is shared, and anyone can take a building down.
   code; the light is a pool of shadowless spot lights put in the scene at startup and handed to the lit poles nearest
   the camera (src/world/lightPoles.ts `PoleLamps`, src/world/pooledLight.ts)
 - Tarps (`tarp`, shared/placed.ts `TARP`) — shade you put up: a patched canvas diamond stretched tight between two
-  leaning scavenged poles (4.0 and 4.4 m) at opposite corners, the other two corners pulled down to 0.6 m and staked, a
-  taut saddle; made by hand (no wrench: shared/tables.ts HAND_TABLE, 3 cloth, 2 scrap), put down from the hotbar and
-  picked back up whole with G like a bedroll; four turns (R: which way the low sides face, ±Z by default, towards the
-  sun's rise and set). The poles collide, and so does the canvas where it's lower than a head (`tarpBoxes`: steps under
-  each low side), so you walk in between the poles and stand along the high middle (bedrolls, chests, benches fit
-  under: `shelteredBy`); the camera stays on its side of the canvas. The rig (corners each over its own sand, poles, guy
-  lines) and the canvas's shape (`canvasAt`, `canvasYAt`) are `shared/tarp.ts`, used by `shared/shade.ts` (`tarpTris`:
-  a 4×4 grid of the canvas; under it is shade for the heat, low sun included with the low sides to the sun) and by
+  leaning scavenged poles (5.0 and 5.5 m) at opposite corners, the other two corners pulled down to 1.5 m and staked, a
+  taut saddle (3.2 m in the middle); made by hand (no wrench: shared/tables.ts HAND_TABLE, 3 cloth, 2 scrap), put down
+  from the hotbar and picked back up whole with G like a bedroll; four turns (R: which way the low sides face, ±Z by
+  default, towards the sun's rise and set). The poles collide, and the canvas's low corners' tips (`tarpBoxes`); you
+  walk in under it from any side (bedrolls, chests, benches fit under: `shelteredBy`). The canvas is solid to the sim:
+  the desert level's ground and ceiling (`tarpGround`, `tarpCeiling`, set from the placed list by `setTarpRigs`): a jump
+  from under it stops at it, you land and stand on it from above, and slide off where it's steeper than SLIP_TAN
+  (`tarpSlope`, shared/sim.ts); the camera stays on its side of the canvas. The rig (corners each over its own sand,
+  poles, guy lines) and the canvas's shape (`canvasAt`, `canvasYAt`) are `shared/tarp.ts`, used by `shared/shade.ts`
+  (`tarpTris`: a 4×4 grid of the canvas; the middle is shade 9:00–17:30 with the low sides to the sun) and by
   `src/world/tarps.ts` (model made in code; seams, patches and corners painted from its uv; the canvas billows in
   `windSpeed` in a TSL vertex shader)
 - Electric wells (`well`, `shared/wells.ts`) — a borehole with a submersible pump, water at home: built with the wrench

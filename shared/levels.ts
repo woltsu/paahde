@@ -15,6 +15,7 @@ import { collideJetWrecks } from './jetcrash.ts';
 import { collideScrap } from './scrap.ts';
 import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
+import { tarpCeiling, tarpGround } from './tarp.ts';
 import { datacenterLevel } from './levels/datacenter.ts';
 import { beginningLevel } from './levels/beginning.ts';
 import { collideEntrance, entrance, solidEntrance } from './levels/entrance.ts';
@@ -91,12 +92,17 @@ function sandAt(x: number, z: number, prevY: number): number {
   return sandHidden(x, z, prevY) ? -Infinity : heightAt(x, z);
 }
 
+/** The desert's ground: the sand, or a tarp's canvas for feet that were on it (shared/tarp.ts). */
+function desertGround(x: number, z: number, prevY: number): number {
+  return Math.max(sandAt(x, z, prevY), tarpGround(x, z, prevY));
+}
+
 /** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, what is built
  *  outside and the datacenter's door (shared/levels/entrance.ts). */
 export const desertLevel: Level = {
   id: DESERT,
   key: 'desert',
-  ground: sandAt,
+  ground: desertGround,
   collide(c, y, prevY, radius, height, stepUp, prevX, prevZ) {
     // Low pieces become the ground, tall ones push you out (the order is the sim's from before levels).
     const scrapTop = Math.max(collideScrap(c, y, prevY, radius, stepUp), collideCrash(c, y, prevY, radius, stepUp),
@@ -106,8 +112,9 @@ export const desertLevel: Level = {
       collideSolar(c, y, prevY, radius, height, stepUp));
     return Math.max(scrapTop, builtTop);
   },
-  // Under a shelter's roof or a solar farm's mirror.
-  ceiling: (x, z, prevY, height, radius) => Math.min(shelterCeiling(x, z, prevY, height, radius), solarCeiling(x, z, prevY, height)),
+  // Under a shelter's roof, a solar farm's mirror or a tarp's canvas.
+  ceiling: (x, z, prevY, height, radius) => Math.min(shelterCeiling(x, z, prevY, height, radius), solarCeiling(x, z, prevY, height),
+    tarpCeiling(x, z, prevY, height)),
   solid: solidEntrance,
   flat: false,
   bounds: null,

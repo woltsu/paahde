@@ -1,15 +1,17 @@
 // The tarp (shared/placed.ts TARP): shade you put up yourself, a square of patched canvas stretched tight as a diamond
-// between two tall scavenged poles at opposite corners, the other two corners pulled down low to stakes. Taut like that
-// it's a saddle (a hyperbolic paraboloid): high and open between the poles, where you walk in and stand, low on the two
-// staked sides, which come down to keep a low morning or evening sun out. Each pole is held up by two guy lines. Made by
-// hand (shared/tables.ts HAND_TABLE) and put down from the hotbar like a bedroll, anywhere on the sand; R turns it a
-// quarter at a time (which way the low sides face: best towards the sun's rise and set, ±Z, shared/sun.ts).
+// between two tall scavenged poles at opposite corners, the other two corners pulled down to stakes at shoulder height.
+// Taut like that it's a saddle (a hyperbolic paraboloid): high between the poles, coming down on the two staked sides,
+// which keep a low morning or evening sun off the middle. You walk in under it from any side but the low corners' tips.
+// Each pole is held up by two guy lines. Made by hand (shared/tables.ts HAND_TABLE) and put down from the hotbar like a
+// bedroll, anywhere on the sand; R turns it a quarter at a time (which way the low sides face: best towards the sun's
+// rise and set, ±Z, shared/sun.ts).
 //
-// The rig here is what both sides need: the poles and where the canvas is too low to stand (their collision is
-// shared/placed.ts PLACEABLES.tarp's boxes, `tarpBoxes`), and the canvas, which shared/shade.ts tests the sun's rays
-// against (`tarpTris`), so standing under it cools you like any shade (server/water.ts). Every corner stands a fixed
-// height over its own sand (heightAt), so the canvas follows the ground. The client draws it from the same canvasAt
-// (src/world/tarps.ts), finer, billowing in the wind on the GPU.
+// The rig here is what everything needs: the poles and where the canvas is too low to stand (their collision is
+// shared/placed.ts PLACEABLES.tarp's boxes, `tarpBoxes`); the canvas, which shared/shade.ts tests the sun's rays against
+// (`tarpTris`), so standing under it cools you like any shade (server/water.ts), and which is solid to the sim
+// (`tarpGround`, `tarpCeiling`, `tarpSlope`: a jump from under it stops at it, you can stand on it). Every corner
+// stands a fixed height over its own sand (heightAt), so the canvas follows the ground. The client draws it from the
+// same canvasAt (src/world/tarps.ts), finer, billowing in the wind on the GPU.
 //
 // The canvas in its own square (s, t) ∈ [−1, 1]²: the poles at (−1, −1) and (1, 1), the low corners at (1, −1) and
 // (−1, 1). Its height is the four corners' bilinear blend (the saddle) less a little sag; its edges are drawn in towards
@@ -19,22 +21,22 @@
 // Deterministic: + - * / and heightAt only.
 import { heightAt } from './terrain.ts';
 
-/** Centre to each corner (m): the poles and the low corners stand this far out, the canvas ~6.5 m a side. */
-export const TARP_HALF = 4.6;
+/** Centre to each corner (m): the poles and the low corners stand this far out, the canvas ~7.4 m a side. */
+export const TARP_HALF = 5.2;
 /** The poles' tops over their sand (m): two scavenged lengths, not quite the same; the canvas's corners just under. */
-export const TARP_POLES: [number, number] = [4.0, 4.4];
-/** The low corners over their sand (m). */
-const LOW_H = 0.6;
+export const TARP_POLES: [number, number] = [5.0, 5.5];
+/** The low corners over their sand (m): about a shoulder's height, so most of it is walked under. */
+const LOW_H = 1.5;
 /** The pole's tip over the canvas's corner (m). */
 const TIP = 0.14;
 /** The poles lean out at the foot this far (m) along a. */
-const LEAN = 0.22;
+const LEAN = 0.3;
 /** The guy lines: each pole's two run out this far (m, on the ground) at ±GUY_ANGLE off its line; a low corner's this far out. */
-const GUY_OUT = 1.7, GUY_ANGLE = Math.PI / 4, LOW_OUT = 0.75;
+const GUY_OUT = 2.6, GUY_ANGLE = Math.PI / 6, LOW_OUT = 1.1;
 /** Below this (m over the sand) the canvas is too low to stand under: solid (a head). */
 export const TARP_HEAD = 1.9;
 /** How far the canvas sags (m) mid-way between its corners. */
-export const TARP_SAG = 0.12;
+export const TARP_SAG = 0.15;
 /** How far its edges curve in, as a share of the square's half side, at their middle. */
 const SCALLOP = 0.1;
 /** How far the footprint reaches along a and b (m): the poles' feet, the low corners (the stakes go a little further,
@@ -161,4 +163,57 @@ export function tarpBoxes(): { x0: number; x1: number; y0: number; y1: number; z
     }
   }
   return out;
+}
+
+// The canvas is solid to the sim (shared/levels.ts desertLevel's ground and ceiling, so client prediction and the server
+// agree): feet that were on or over it stand on it; a head that was under it stops at it (a jump from underneath).
+// The rigs of every tarp standing, set by shared/placed.ts setPlaced; tested only within the tarp's square.
+let rigs: TarpRig[] = [];
+/** Feet this far under the canvas a tick ago still land on it; a head this far over it still bumps it (m). */
+const SKIN = 0.3;
+
+/** The tarps standing now (shared/placed.ts setPlaced). */
+export function setTarpRigs(list: TarpRig[]) {
+  rigs = list;
+}
+
+/** The canvas under (x, z) for feet that were at `prevY`: the highest it's at under them (they were on or over it), or
+ *  -Infinity. */
+export function tarpGround(x: number, z: number, prevY: number): number {
+  let best = -Infinity;
+  for (const r of rigs) {
+    if (Math.abs(x - r.cx) > TARP_HALF || Math.abs(z - r.cz) > TARP_HALF) continue;
+    const y = canvasYAt(r, x, z);
+    if (y > best && prevY >= y - SKIN) best = y;
+  }
+  return best;
+}
+
+/** Feet at (x, y, z) standing on a canvas: its slope there (rise per metre along x and z) into `out`, and true; else
+ *  false. Steeper than the sand holds (shared/sim.ts SLIP_TAN), you slide off it like down a slip face. */
+export function tarpSlope(x: number, y: number, z: number, out: { gx: number; gz: number }): boolean {
+  const d = 0.1;
+  for (const r of rigs) {
+    if (Math.abs(x - r.cx) > TARP_HALF || Math.abs(z - r.cz) > TARP_HALF) continue;
+    const c = canvasYAt(r, x, z);
+    if (!(Math.abs(y - c) < 0.05)) continue;
+    // Central differences, one-sided at the edge (NaN past it).
+    const xp = canvasYAt(r, x + d, z), xm = canvasYAt(r, x - d, z), zp = canvasYAt(r, x, z + d), zm = canvasYAt(r, x, z - d);
+    out.gx = xp === xp ? (xm === xm ? (xp - xm) / (2 * d) : (xp - c) / d) : xm === xm ? (c - xm) / d : 0;
+    out.gz = zp === zp ? (zm === zm ? (zp - zm) / (2 * d) : (zp - c) / d) : zm === zm ? (c - zm) / d : 0;
+    return true;
+  }
+  return false;
+}
+
+/** The highest the feet of a mover `height` tall that were at `prevY` may go under a canvas over (x, z) (its head was
+ *  under it), or Infinity. */
+export function tarpCeiling(x: number, z: number, prevY: number, height: number): number {
+  let low = Infinity;
+  for (const r of rigs) {
+    if (Math.abs(x - r.cx) > TARP_HALF || Math.abs(z - r.cz) > TARP_HALF) continue;
+    const y = canvasYAt(r, x, z);
+    if (prevY + height <= y + SKIN && y - height < low) low = y - height;
+  }
+  return low;
 }

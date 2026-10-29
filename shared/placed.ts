@@ -31,7 +31,7 @@ import { solarBlocked } from './solarfarms.ts';
 import { nearEntrance } from './levels/entrance.ts';
 import { nearPod } from './podSpot.ts';
 import { heightAt } from './terrain.ts';
-import { canvasYAt, TARP_HALF, TARP_HEAD, TARP_POLES, TARP_REACH_A, TARP_REACH_B, tarpBoxes, tarpRig, tarpTies } from './tarp.ts';
+import { canvasYAt, TARP_HALF, TARP_HEAD, TARP_POLES, TARP_REACH_A, TARP_REACH_B, tarpBoxes, tarpRig, tarpTies, setTarpRigs } from './tarp.ts';
 import { TROPHY_PLACEABLES } from './trophies.ts';
 import { TEXT } from './text.ts';
 
@@ -104,16 +104,17 @@ export const PLACEABLES: Record<string, { hx: number; hz: number; boxes: Box[]; 
       { x0: -0.22, x1: 0.22, y0: 5.25, y1: 5.65, z0: 0, z1: 1.45 },
     ],
   },
-  // A tarp (shared/tarp.ts): a canvas diamond stretched between two poles (along X), its other corners staked low (±Z).
-  // The poles collide (up to `tilt` taller: each stands on its own sand, leaning out a little at the foot), and so does
-  // the canvas wherever it's lower than a head (tarpBoxes: steps under each low side), so you walk in between the poles
-  // and stand where it's high. The box over the middle (not standing on the sand) is only looked at: aiming at the
-  // canvas finds the tarp. Its shade: shared/shade.ts.
+  // A tarp (shared/tarp.ts): a canvas diamond stretched between two poles (along X), its other corners staked at
+  // shoulder height (±Z). The poles collide (up to `tilt` taller: each stands on its own sand, leaning out a little at
+  // the foot), and so does the canvas wherever it's lower than a head (tarpBoxes: just the low corners' tips), so you
+  // walk in under it from any side. The canvas itself is the sim's ground and ceiling (shared/tarp.ts tarpGround,
+  // tarpCeiling). The box over the middle (not standing on the sand) is only looked at: aiming up at the canvas finds
+  // the tarp. Its shade: shared/shade.ts.
   tarp: {
-    hx: TARP_REACH_A, hz: TARP_REACH_B, sand: true, gap: 1, tilt: 1.4,
+    hx: TARP_REACH_A, hz: TARP_REACH_B, sand: true, gap: 1, tilt: 1.6,
     boxes: [
-      { x0: -TARP_HALF - 0.32, x1: -TARP_HALF + 0.08, y0: 0, y1: TARP_POLES[0] + 0.2, z0: -0.07, z1: 0.07 },
-      { x0: TARP_HALF - 0.08, x1: TARP_HALF + 0.32, y0: 0, y1: TARP_POLES[1] + 0.2, z0: -0.07, z1: 0.07 },
+      { x0: -TARP_HALF - 0.4, x1: -TARP_HALF + 0.08, y0: 0, y1: TARP_POLES[0] + 0.2, z0: -0.07, z1: 0.07 },
+      { x0: TARP_HALF - 0.08, x1: TARP_HALF + 0.4, y0: 0, y1: TARP_POLES[1] + 0.2, z0: -0.07, z1: 0.07 },
       ...tarpBoxes(),
       { x0: -TARP_HALF + 0.6, x1: TARP_HALF - 0.6, y0: TARP_HEAD + 0.1, y1: TARP_POLES[1], z0: -1, z1: 1 },
     ],
@@ -229,6 +230,8 @@ export function setPlaced(list: Placed[]) {
     }
   }
   setPlacedCapsules(out, spots);
+  // The tarps' canvas: ground and ceiling in the sim (shared/tarp.ts).
+  setTarpRigs(list.filter((p) => p.kind === TARP && !standsIndoors(p)).map((p) => tarpRig(p.x, p.z, p.rot)));
 }
 
 /**

@@ -5,28 +5,36 @@ What we built, why, and what's left. Dated sessions newest first, then undated t
 ## 2026-10-29 — The tarp: a shelter strung between two poles, made by hand
 
 - **Why:** the user wanted to put the tarp up without a wrench, from what lies by the pods, and didn't like the pyramid
-  tent: "more like a tarp shelter", a diamond stretched between two tall poles, the other corners pegged low.
+  tent: "more like a tarp shelter", a diamond stretched between two tall poles, the other corners pegged low. Then: "a
+  bit bigger (higher)", and "now you can jump through it".
 - **Made by hand:** `tarp` moved from BUILD_TABLE to HAND_TABLE (same 3 cloth, 2 scrap): crafted in the Tab inventory,
   put down from the hotbar and picked back up whole with G, like the bedroll. Tarps already standing come back as a
   tarp, not their materials. Econsim: no significant change (no goal needs one).
-- **Shape (shared/tarp.ts):** a square of canvas laid as a diamond, 4.6 m from the centre to each corner: two poles at
-  opposite corners (4.0 and 4.4 m, leaning out a little, two guy lines each), the other corners 0.6 m over the sand on a
-  short line to a stake. Taut between them it's the corners' bilinear blend, a saddle (2.3 m at the middle, 0.12 m sag),
-  its edges drawn in by a tenth of the half side (`canvasAt`; `canvasYAt` inverts it exactly). Every corner over its own
-  sand; the tilt check is taken where it's tied down (`tarpTies`), not the footprint's bare corners: placeable on ~63%
-  of random desert spots against the pyramid's ~51%.
-- **Collision:** the poles, and steps under the two low sides where the canvas is below 1.9 m (`tarpBoxes`, computed from
-  the canvas on level sand). You walk in between the poles or past them, stand along the high middle; bedrolls, chests
-  and benches fit under.
+- **Shape (shared/tarp.ts):** a square of canvas laid as a diamond, 5.2 m from the centre to each corner: two poles at
+  opposite corners (5.0 and 5.5 m, leaning out a little, two guy lines each at ±30° off the pole's line, so neither
+  runs at you end-on from the usual views), the other corners 1.5 m over the sand on a line to a stake. Taut between
+  them it's the corners' bilinear blend, a saddle (3.2 m at the middle, 0.15 m sag), its edges drawn in by a tenth of
+  the half side (`canvasAt`; `canvasYAt` inverts it exactly). Every corner over its own sand; the tilt check (1.6 m) is
+  taken where it's tied down (`tarpTies`), not the footprint's bare corners: placeable on ~64% of random desert spots
+  against the pyramid's ~51%. The first cut (4.0/4.4 m poles, corners at 0.6 m) felt cramped.
+- **Collision:** the poles, and the low corners' tips where the canvas is below 1.9 m (`tarpBoxes`, computed from the
+  canvas on level sand); you walk in under it from any side. The canvas itself is the desert level's ground and ceiling
+  in the sim (`tarpGround`, `tarpCeiling`; rigs set by placed.ts setPlaced, only tarps whose square you're in are
+  tested): feet that were on or over it a tick ago stand on it, a head that was under it stops at it (a jump, even the
+  air jump, 4.8 m of head without it); standing on it is like standing on scrap but with the canvas's slope
+  (`tarpSlope`), so where it's steeper than SLIP_TAN you slide off. Same canvasYAt as the drawing and the shade.
 - **Shade:** `tarpTris`, a 4×4 grid of the canvas (32 triangles, within a few cm of the drawn 12×12). Standing in the
-  middle with the low sides to ±Z (turn 0, the default) is full shade from sun-up to sun-down; turned the other way the
-  low sun gets in before ~9:30 and after ~15:00 (the sun rises towards +Z, sets towards −Z). Near the poles a quarter of
-  the body is lit at times.
+  middle with the low sides to ±Z (turn 0, the default) is full shade from 9:00 to 17:30; raised, a low sun gets under
+  the 1.5 m edge before then (a quarter of the body until ~8:30) and the shade falls off-centre. Turned the other way
+  the low sun gets in before ~10:00 and after ~15:00 (the sun rises towards +Z, sets towards −Z).
 - **Look (src/world/tarps.ts):** the canvas painted in its fragment shader from its uv: three widths with darker seams,
-  a hem, doubled corners, two sewn-on patches (a bleached offcut, darker sacking); one pole a dark pipe, the other two
-  rusty lengths spliced and lashed; rope wraps where the corners tie on; rebar stakes. Pinned only at its corners in
-  the wind, and moving less (taut). 464 triangles in all. The placement preview shows the canvas both sides and no hull
-  (it's open). Icon re-rendered (tools/icons/dump.mjs, tools/blender/icons.py).
+  a hem, doubled corners, two sewn-on patches (a bleached offcut, darker sacking), greyer than the sand so it reads
+  against it; one pole a dark pipe, the other two rusty lengths spliced and lashed; rope wraps where the corners tie
+  on; rebar stakes. Pinned only at its corners in the wind, and moving less (taut). 464 triangles in all. The placement
+  preview shows the canvas both sides and no hull (it's open). Icon re-rendered (tools/icons/dump.mjs,
+  tools/blender/icons.py).
+- tools/tarp.test.mjs: made by hand, walked under from both sides, the poles solid, shade 9–17, a jump from under stops
+  at the canvas, a drop from above lands on it, things fit under.
 
 ## 2026-10-29 — The first noon doesn't kill a newcomer
 
