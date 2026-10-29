@@ -227,6 +227,7 @@ export function openDb(path: string) {
   // One-off gifts to the players there were at the time (e.g. 'rifle': the laser rifle, to everyone who tested before it).
   db.exec('CREATE TABLE IF NOT EXISTS grants (player_id TEXT NOT NULL, what TEXT NOT NULL, given_at INTEGER NOT NULL, PRIMARY KEY (player_id, what))');
   const getGrant = db.prepare('SELECT 1 FROM grants WHERE player_id = ? AND what = ?');
+  const getGrantAt = db.prepare('SELECT given_at FROM grants WHERE player_id = ? AND what = ?');
   const putGrant = db.prepare('INSERT OR IGNORE INTO grants (player_id, what, given_at) VALUES (?, ?, ?)');
   const getStarter = db.prepare('SELECT 1 FROM starter_kits WHERE player_id = ?');
   const putStarter = db.prepare('INSERT OR IGNORE INTO starter_kits (player_id, given_at) VALUES (?, ?)');
@@ -595,6 +596,8 @@ export function openDb(path: string) {
     hasGearKit: (playerId: string) => !!getGearKit.get(playerId),
     hasGrant: (playerId: string, what: string) => !!getGrant.get(playerId, what),
     markGrant: (playerId: string, what: string) => putGrant.run(playerId, what, Date.now()),
+    /** When `what` was granted (ms), or null if it never was. */
+    grantAt: (playerId: string, what: string) => (getGrantAt.get(playerId, what) as { given_at: number } | undefined)?.given_at ?? null,
     markGearKit: (playerId: string) => putGearKit.run(playerId, Date.now()),
     loadCrashTaken: () => allCrash.all() as { id: string; taken_at: number }[],
     takeCrash: (id: string, at: number) => insertCrash.run(id, at),

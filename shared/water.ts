@@ -46,3 +46,22 @@ export function heatPerSecond(temp: number, sprinting: boolean): number {
   const k = Math.pow((temp - COMFORT_TEMP) / (HOT_TEMP - COMFORT_TEMP), HEAT_POWER);
   return (k * HEAT_MAX * (sprinting ? SPRINT_HEAT : 1)) / HOT_FULL_BAR_S;
 }
+
+// A newcomer's first minutes in the desert (from waking by their pod, server/world.ts): the heat is real, the meter
+// climbs and the screen glows, but slower, and for a while it stops short of heatstroke, so the first noon teaches
+// shade (the pod's own shadow is a couple of metres off its hatch) instead of killing. It eases into the full desert
+// over ARRIVAL_EASE_S; it only slows the build-up, never the cooling.
+/** How long the ease lasts after arriving (s of wall clock). */
+export const ARRIVAL_EASE_S = 8 * 60;
+/** Build-up multiplier on arrival, rising linearly to 1 at ARRIVAL_EASE_S. */
+export const ARRIVAL_RATE = 0.3;
+/** The meter's ceiling on arrival (under HEAT_MAX: no heatstroke), rising linearly to HEAT_MAX at ARRIVAL_EASE_S. */
+export const ARRIVAL_CEILING = 88;
+
+/** The ease `sinceS` seconds after arriving: the build-up's multiplier and the meter's ceiling (1 and HEAT_MAX once it
+ *  is over, or before arriving at all). */
+export function arrivalEase(sinceS: number): { rate: number; ceiling: number } {
+  if (!(sinceS >= 0) || sinceS >= ARRIVAL_EASE_S) return { rate: 1, ceiling: HEAT_MAX };
+  const f = sinceS / ARRIVAL_EASE_S;
+  return { rate: ARRIVAL_RATE + (1 - ARRIVAL_RATE) * f, ceiling: ARRIVAL_CEILING + (HEAT_MAX - ARRIVAL_CEILING) * f };
+}

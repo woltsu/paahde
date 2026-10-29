@@ -2,6 +2,24 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-10-29 — The first noon doesn't kill a newcomer
+
+Reported: landing by the pod after the beginning, it was so hot you nearly died. The day is 30 min, and from 10:00 to
+16:00 (7.5 min of it) full sun feels 48–56 °C, which fills an empty meter in 53–107 s; at noon a newcomer standing at the
+hatch (in full sun then: the pod's shadow falls a couple of metres off) was dead of heatstroke in ~58 s, before they'd
+read the first line, with no canteen yet, and it cost the world a life.
+
+- **The first minutes are eased** (shared/water.ts `arrivalEase`, server/water.ts `tickHeat`): for `ARRIVAL_EASE_S`
+  (8 min of wall clock) after waking by the pod, heat builds at 0.3× rising linearly to 1×, and the meter can't climb
+  past a ceiling that rises from 88 to 100 (past the glow at 80, short of heatstroke). Cooling is never slowed. At noon
+  in full sun "I need shade" comes after ~1.5 min and the glow after ~2, but nobody dies in the first five
+  minutes; standing in the sun through the whole eight still kills. No text, no meter: the heat is felt, just slower.
+- **Who:** `Heat.arrivedAt`, set when the beginning ends (`finishBeginning`, the ride down or the skip), from the
+  `beginning_done` grant's `given_at` on a reconnect (`db.grantAt`), or now for someone new straight into the desert.
+  Players from before the beginning get none, and dying doesn't restart it. The shared clock is untouched.
+- tools/arrival-heat.test.mjs: landed at noon in full sun, alive after 5 min and past the glow; long here, dead within
+  90 s; the ease over after 8 min; cooling unchanged; the pod shades within 5 m of the hatch at noon.
+
 ## 2026-10-25 — A calm start: no storm front at the spawn, a first line, a cheaper dismantling bench
 
 - **No mega-storm front blows round where players arrive** (shared/storm.ts `frontCalm`): calm within 120 m of

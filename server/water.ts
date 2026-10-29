@@ -12,7 +12,7 @@ import { STORM_SHADE } from '../shared/storm.ts';
 import { felt, groundHeat } from '../shared/temperature.ts';
 import { level } from '../shared/levels.ts';
 import {
-  DRINK_COOLDOWN_MS, FILL_COOLDOWN_MS, FILL_MS, FILL_SLACK, HEAT_MAX, heatPerSecond, SIP_COOL, STROKE_RECOVER, STROKE_S,
+  arrivalEase, DRINK_COOLDOWN_MS, FILL_COOLDOWN_MS, FILL_MS, FILL_SLACK, HEAT_MAX, heatPerSecond, SIP_COOL, STROKE_RECOVER, STROKE_S,
 } from '../shared/water.ts';
 
 /** While the meter moves, a 'water' update goes out this often (the client eases between them). */
@@ -40,6 +40,7 @@ export type Heat = {
   lastFill: number;
   diedAt: number;
   off: boolean; // debug menu: no heat at all
+  arrivedAt: number; // when they first woke in the desert (wall-clock ms; shared/water.ts arrivalEase), -Infinity if long ago
 };
 
 export function newHeat(heat = 0, sips = 0, maxSips = 0): Heat {
@@ -49,6 +50,7 @@ export function newHeat(heat = 0, sips = 0, maxSips = 0): Heat {
     heat: h, stroke: 0, sips: s, maxSips, rising: false, temp: 20, sun: 0, shade: true, shadeAt: -Infinity,
     sentTemp: 20, sentShade: true,
     sentAt: 0, lastDrink: 0, lastFill: 0, diedAt: -Infinity, off: false,
+    arrivedAt: -Infinity,
   };
 }
 
@@ -85,10 +87,14 @@ export function tickHeat(t: Heat, dt: number, s: PlayerState, input: number, tod
   const sprinting = s.sliding; // speed slides are the exertion now (there is no sprint)
   // In a sandstorm the dust hides the sun: the heat stops rising (it still cools).
   const capped = t.off || (!inside && storm > STORM_SHADE);
-  const rate = capped ? Math.min(0, heatPerSecond(t.temp, sprinting)) : heatPerSecond(t.temp, sprinting);
+  const raw = heatPerSecond(t.temp, sprinting);
+  // Just arrived (shared/water.ts arrivalEase): it builds slower and stops short of heatstroke for a while.
+  const ease = arrivalEase((now - t.arrivedAt) / 1000);
+  const rate = capped ? Math.min(0, raw) : raw > 0 ? raw * ease.rate : raw;
   const rising = rate > 0;
   const before = t.heat;
-  t.heat = Math.min(HEAT_MAX, Math.max(0, t.heat + rate * dt));
+  const ceiling = rate > 0 ? Math.max(before, ease.ceiling) : HEAT_MAX; // (never pushed down: only the rise stops)
+  t.heat = Math.min(ceiling, Math.max(0, t.heat + rate * dt));
   const full = t.heat >= HEAT_MAX;
   t.stroke = Math.max(0, t.stroke + (full ? 1 : -STROKE_RECOVER) * dt);
   if (t.stroke >= STROKE_S) return 'died';

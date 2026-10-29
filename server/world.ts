@@ -433,6 +433,9 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
     heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, heardAt: performance.now(), hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: 0, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
     levelWanted: typeof spawn === 'string' ? (levelByKey(spawn)?.id ?? null) : null, movedAt: -Infinity,
   };
+  // Their first minutes in the desert are eased (shared/water.ts arrivalEase): from waking by the pod after the
+  // beginning (finishBeginning; a reconnect keeps the time it was granted), or from now for someone new straight here.
+  if (!LAB && state.level === DESERT) p.heat.arrivedAt = db.grantAt(browserId, BEGINNING_DONE) ?? (row ? -Infinity : Date.now());
   players.set(ws, p);
   everJoined = true;
   const loading = setTimeout(() => { if (!p.ready) ws.close(1008, 'loading timeout'); }, 180_000);
@@ -550,7 +553,9 @@ function onTutorial(p: Player, what: unknown) {
 /** Out of the beginning, for good in this world: beside their pod's hatch in the desert, as a new player starts. */
 function finishBeginning(p: Player) {
   const pod = spawnPoint(podOf(p.browserId));
-  if (moveTo(p, spawnState(pod.x, pod.z))) db.markGrant(p.browserId, BEGINNING_DONE);
+  if (!moveTo(p, spawnState(pod.x, pod.z))) return;
+  db.markGrant(p.browserId, BEGINNING_DONE);
+  p.heat.arrivedAt = Date.now(); // (the first minutes' heat eased: shared/water.ts arrivalEase)
 }
 
 /** How far outside a level's exit box (m) F still counts: the client asks from where it predicts it is. */

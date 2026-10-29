@@ -161,7 +161,8 @@ when you find it stale.
 ## Weather and survival
 
 - `shared/sun.ts` — day clock + sun elevation (client sky and server heat); `shared/water.ts` — thirst/canteen; where
-  it fills: `shared/wells.ts` `waterAt` (a pump, or a running electric well)
+  it fills: `shared/wells.ts` `waterAt` (a pump, or a running electric well); `arrivalEase`: a newcomer's first
+  minutes by the pod build heat slower and stop short of heatstroke (`Heat.arrivedAt`, set in server/world.ts)
 - `shared/health.ts` — health (`HEALTH_MAX`), apart from heat: blows go through `hurt` in server/world.ts (a shield
   takes each one whole), heatstroke, choking and vortices take it all (`die`); server-side only for now
 - Dying on the client: `src/water.ts` times it (grey `deathGrade` in `src/post.ts`, muffle `audio.setMuffled`, the
