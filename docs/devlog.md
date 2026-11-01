@@ -2727,6 +2727,12 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   rungs a step, three points always on), with a lift arc off the ladder as a limb moves, its hand open. The hands go a
   whole number of rungs over the feet, from the body's own shoulder height, so a dwarf or a gnome climbs the same rungs.
   First person draws your own headless body with the eye at its head, as on the bike: your hands on the rungs.
+  The hands: an overhand grip as climbers hold a rung (a playtest saw the wrist bent down 90° when the fingers were
+  aimed down past the rung): the wrist straight, in line with the forearm, behind the rung and a little over it, the
+  hand turned whole (orient, as the held items are) so the palm comes over the rung, the fingers along the reach and
+  tipped down round it, the thumb under towards the other hand; the hands from the chest to a little over the head
+  (ladder-climbing studies: arms near straight, elbow some 25° bent). The eye moved 0.1 m forward of the head and the
+  head turns at most 50° / looks down 25° while climbing (src/camera.ts), so you don't see into your own body.
   Sound: src/climbSound.ts, a knock and the rung's ring for each hand or foot landing (−31 LUFS climbing steadily).
 - **Fixing:** three fixtures, gear that stands in the world (`fixture` in shared/gear.ts): the radio in the cabinet
   (relay, compute, battery), the dish drive on the dish deck (motor), the antenna feed on the top deck (coil, wiring),

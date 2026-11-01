@@ -1160,8 +1160,9 @@ export class ScavengerModel {
     const at = (o: THREE.Object3D, v: THREE.Vector3) => parent.worldToLocal(o.getWorldPosition(v));
     const hipY = at(this.hips, _s0).y - Math.min(at(this.legs[0][2], _t).y, at(this.legs[1][2], _o).y) + ANKLE_OVER_RUNG;
     const shoulderY = at(this.arms[1][0], _p).y - at(this.hips, _t).y + hipY;
-    // The hands go a whole number of rungs over the feet: a little over the shoulders.
-    const up = Math.max(2, Math.round((shoulderY + 0.05) / RUNG)) * RUNG;
+    // The hands go a whole number of rungs over the feet: from the chest to a little over the head as they step (the
+    // arms near straight, as in climbers measured: the elbow some 25° bent at its most).
+    const up = Math.max(2, Math.round((shoulderY + 0.1) / RUNG)) * RUNG;
     const limbs = [0, 1, 2, 3].map((i) => limbAt(i, c.h, up, c.top));
     const rungZ = -CLIMB_D;
     // The hips: over the lower foot's rung by most of the legs' length, back from the rungs; swaying a little towards the
@@ -1181,10 +1182,22 @@ export class ScavengerModel {
       const side = i === 0 ? -1 : 1;
       // Arms: 0 left, 1 right; limbs: 0 right hand, 1 left hand.
       const hand = limbs[i === 0 ? LEFT_HAND : RIGHT_HAND], arm = this.arms[i];
-      const hx = side * HAND_X, hy = hand.y - c.h, hz = rungZ + hand.lift * HAND_LIFT;
-      reach(arm[0], arm[1], arm[2], world(hx - side * 0.02, hy + 0.05, hz + 0.07).clone(),
-        _pole.set(side, -0.8, 0.35).transformDirection(this.root.matrixWorld));
-      aim(arm[2], arm[3], world(hx, hy - 0.03, hz - 0.06));
+      // An overhand grip, as a climber holds a rung: the wrist straight, in line with the forearm, behind the rung
+      // and a little over it (the palm comes down on its top), the fingers wrapping over and round its front, the
+      // thumb under it towards the other hand. So the hand points the way the arm reaches from the shoulder.
+      const g = _cg.set(side * HAND_X, hand.y - c.h, rungZ + hand.lift * HAND_LIFT);
+      const d = _cd.copy(g).sub(parent.worldToLocal(arm[0].getWorldPosition(_cs))).normalize();
+      const w = world(g.x - d.x * GRIP_BACK, g.y - d.y * GRIP_BACK + GRIP_OVER, g.z - d.z * GRIP_BACK).clone();
+      reach(arm[0], arm[1], arm[2], w, _pole.set(side, -0.8, 0.35).transformDirection(this.root.matrixWorld));
+      const hm = this.hands[i];
+      if (hm) {
+        // Fingers along the reach, tipped down a little over the rung; thumb in towards the other hand. Parent space
+        // directions to world: the parent's rotation only.
+        parent.getWorldQuaternion(_cq);
+        _ga.set(d.x, d.y - GRIP_TIP, d.z).normalize().applyQuaternion(_cq);
+        _gt.set(-side, -0.3, 0).normalize().applyQuaternion(_cq);
+        orient(arm[2], hm.a, hm.t, _ga, _gt);
+      }
       this.close(i, hand.move > 0 ? OPEN : RUNG_FIST);
       const foot = limbs[i === 0 ? LEFT_FOOT : RIGHT_FOOT], leg = this.legs[i];
       const fx = side * FOOT_X, fy = foot.y - c.h + ANKLE_OVER_RUNG + foot.lift * FOOT_RAISE, fz = rungZ + ANKLE_BEHIND + foot.lift * FOOT_LIFT;
@@ -1518,6 +1531,10 @@ const HIP_BACK = 0.36, HIP_BEND = 0.9;
 const LEAN_IN = 0.12;
 const HAND_LIFT = 0.12, FOOT_LIFT = 0.14, FOOT_RAISE = 0.06;
 const RUNG_FIST = [1.1, 1.0, 1.0], OPEN = [0.25, 0.2, 0.1];
+// The overhand grip: the wrist this far back from the rung along the reach and this far over it; the fingers tipped
+// down over the rung by this much (of the reach direction's length).
+const GRIP_BACK = 0.075, GRIP_OVER = 0.025, GRIP_TIP = 0.3;
+const _cg = new THREE.Vector3(), _cd = new THREE.Vector3(), _cs = new THREE.Vector3(), _cq = new THREE.Quaternion();
 const _gs = new THREE.Vector3();
 const _gb = new THREE.Vector3();
 /** Each skeleton's inverse bind matrices as loaded (ScavengerModel.thickenSkins scales its own copies from these). */

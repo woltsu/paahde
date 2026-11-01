@@ -219,6 +219,7 @@ export class Towers {
   };
 
   constructor(root: THREE.Object3D) {
+    this.group.name = 'towers';
     root.add(this.group);
     // Sun-bleached galvanised steel, darker and rust-streaked low down where the sand scours it.
     const steel = mat(0x8f8b84, 0.62, 0.55);
