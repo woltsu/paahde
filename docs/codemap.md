@@ -110,7 +110,7 @@ when you find it stale.
   beside the hatch of "their" pod, `podOf(browserId)`: `podSpawn`, `spawnPoint(n)` in shared/sim.ts): each pod in the
   world (`podPlaces`), collision (`collidePods`), shade casters, the water tap on each hull (`atPodTap`, through
   shared/wells.ts `waterAt`), a starter machine by each (`podSites`, ids `pod:<n>`, through shared/crash.ts; kinds
-  `POD_MACHINES`, no winch: no bearing before the workbench) and loot spots (`POD_LOOT`, server/loot.ts: a starter kit
+  `POD_MACHINES`, no winch: no bearing before the cart's workbench) and loot spots (`POD_LOOT`, server/loot.ts: a starter kit
   kept whole, an older kit's surplus cleared on load). The kit's pod console and power box (`pod_console`,
   `pod_powerbox`) are carried machines (shared/salvage.ts COMPONENTS, never at crash sites) holding the first wiring and
   the first bike's battery: models `tools/blender/finds.py` → `public/models/finds/pod_*.glb` (lying, and the icons),
@@ -229,11 +229,14 @@ Everything built is shared, and anyone can take a building down.
 - `server/bunkerGone.ts` — once per world (settings `bunker_gone`): what was kept in the old bunker comes out (its chests
   into new chests by the spawn, the machine on its table, repair slots back to the bags, things on its floor back to
   their owners or moved out onto the sand, players and vehicles in it to the spawn)
-- Buildings — the windmill, the battery station, the power pole, the beacon, the light pole, the well, the workbench, the
-  dismantling bench and the chest, anywhere on the sand: put up with the wrench (made by hand; right mouse with it in
+- Buildings — the windmill, the battery station, the power pole, the beacon, the light pole and the well, anywhere on
+  the sand: put up with the wrench (made by hand; right mouse with it in
   hand opens the build menu, `src/buildMenu.ts`, placing in `src/placing.ts`)
   from base materials only (scrap, cloth, wiring: `shared/tables.ts` BUILD_TABLE, `shared/crafting.ts` BUILDS), used up
-  as it goes up and all given back when it's dismantled (G with the wrench); never carried as items. The windmill and
+  as it goes up and all given back when it's dismantled (G with the wrench); never carried as items. The workbench, the
+  dismantling bench and the chest are no longer built (the cart's workshop and box replaced them, docs/cart.md); ones
+  standing in older worlds still work and come down into what they took (`RETIRED_BUILD_TABLE`; `isBuildable` covers
+  both, `buildCost`). The windmill and
   station are gear with part slots and quality (`shared/gear.ts` `built`), standing with their slots empty (bearings
   and motor, batteries fitted after), placed via `shared/placed.ts` (`sand` kinds: `gap` between them,
   `STRUCTURE_GAP` from the shelters' huts, `POD_GAP` (0.8 m) off a crashed pod's hull (`nearPod`); where it goes by where you stand, `placeFloor`: the `floor` kinds also on a shelter's room floor,
@@ -241,16 +244,18 @@ Everything built is shared, and anyone can take a building down.
   `bld<id>`, whose parts are swapped in place (F, `src/inventory.ts` `part:<box>`); drawn by `src/world/placed.ts` (lit
   by the sky or a shelter's fill, by where it stands; materials `src/world/glbMaterial.ts`), models
   `tools/blender/placeables.py`
-- Work stations and chests built with the wrench (shared/placed.ts `WORKBENCH`, `TABLE`, `CHEST`; models
-  `tools/blender/stations.py` with the builders in `tools/blender/stationkit.py`, which also makes the shelters' hand
-  pump, `public/models/pump.glb`) — `shared/stations.ts` `stations()`: every placed one; any workbench opens the repair
-  slot ('bench', each player's own) and its recipes, any dismantling table takes carried machines apart
-  (shared/crash.ts `tables()`, a session per table, `bench<placed id>`; server/crash.ts keeps a job per table,
-  `bench_jobs`); a chest is box `store<placed id>` (CHEST_COLS × CHEST_ROWS, shared). A table with a machine on it or a
+- Work stations — `shared/stations.ts` `stations()`: the two sides of every unfolded level-2 cart (`shared/cart.ts`
+  `cartWorkshops`, the workbench x < 0, the table x > 0) and the placed ones still standing from before the cart
+  (shared/placed.ts `WORKBENCH`, `TABLE`, `CHEST`; models `tools/blender/stations.py` with the builders in
+  `tools/blender/stationkit.py`, which also makes the shelters' hand pump, `public/models/pump.glb`); each an oriented
+  look-target box (`yaw`, `stationLocal`, `stationReach`, `stationTarget`). Any workbench opens the repair slot
+  ('bench', each player's own) and its recipes, any dismantling table takes carried machines apart (shared/crash.ts
+  `tables()`, turned by `yaw`, `onTable`; a session per table, `cart<vehicle id>` or `bench<placed id>`; server/crash.ts
+  keeps a job per table, `bench_jobs`; a cart with one doesn't pack or hitch: `packBlocked` in server/world.ts); a chest is box `store<placed id>` (CHEST_COLS × CHEST_ROWS, shared). A table with a machine on it or a
   chest with anything in it can't be taken down (server/world.ts onUnplace)
 - Vehicles — `shared/vehicles.ts` (the list, reach, `vehicleTarget`), `server/vehicles.ts` (`vehicles` table: broken
   motorcycles by the pods and at the crash sites, repair, `mount`/`release`, `mine` per player), drawn by
-  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). The cart (docs/cart.md; phases 1–2): a
+  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). The cart (docs/cart.md): a
   vehicle kind (`GEAR.cart`, no part slots, its level `ItemData.level` in box `veh<id>`, its box `cargo<id>` chest size)
   — `shared/cart.ts` (dimensions, `TOW_LENGTH`/`HITCH_BACK`/`HITCH_MAX`, `towHitch` the towing step, `towedPose`,
   `couplerOf`, `backingUpTo`, `cartTarget`, `CART_LEVEL_NODES`); towing in `shared/sim.ts` (`PlayerState.tow`/`hitch`,
@@ -261,7 +266,8 @@ Everything built is shared, and anyone can take a building down.
   wrench's build menu by your cart; `shared/tables.ts` `CART_TABLE`, `shared/crafting.ts` `CART_UPGRADES`), `tryHitch`
   packs an open cart (hook `packBlocked`); `shared/cart.ts` `unfoldError` (tilt), `canopyRig` (a tarp rig: shade, solid
   canvas, billow), `cartCapsules` (parked carts are solid), `setCarts` (from `setVehicles`), `cartToWorld`; the hinge
-  animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Test `tools/cart.test.mjs`.
+  animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Phase 3: level 2's sides are the
+  workshop (above, Work stations); the pods' kit pays for the wrench and both levels. Test `tools/cart.test.mjs`.
   Each cart flies its owner's colour (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a pennant
   on a whip mast and a stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar
   (`src/world/vehicles.ts` `ownVehicleTargets`, shape `cart`)

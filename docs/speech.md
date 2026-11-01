@@ -67,7 +67,7 @@ rate and punctuation pauses at the top of `src/speech.ts`), so a remark is heard
 
 Has lines: arriving in a world (wanting a shelter; then the hint for the inventory, src/main.ts `onSaid`), a water
 bottle in sight with none in the bag (day/night), a machine to take apart (the big ones on the spot, the small ones and
-wrecks to carry home; the first one in the bag wants a dismantling bench built), the first of each item kind in the bag (each piece of gear broken
+wrecks to carry home; the first one in the bag wants a table: the cart's workshop), the first of each item kind in the bag (each piece of gear broken
 and working, scrap, cloth, parts and the space-grade ones, plant bed, UV lamp, bedroll, receivers, relics), the
 crashed pod we came down in (day/night), the first ride,
 a pump (with a bottle to fill, or in a shelter with none), the first shelter, overheating, an empty bottle, the storm

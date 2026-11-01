@@ -2,6 +2,20 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — The cart, phase 3: the workshop; the benches out of the build menu
+
+- **Why:** the cart replaces the wrench-built benches and chest (docs/cart.md): your camp goes where you go.
+- **Workshop:** unfolded at level 2, a parked cart's left side is a workbench and its right a dismantling table, for
+  anyone; stations are oriented boxes now, so carts at any heading work, and tables have a `cart<id>` session (jobs saved
+  in `bench_jobs` as before). A machine on its table stops it packing or hitching ("Bench in use").
+- **Build menu:** no workbench, dismantling bench or chest any more (`RETIRED_BUILD_TABLE`); ones standing still work
+  and come down into their materials.
+- **Beginning:** the pods' kit (scrap 22, cloth 9) pays for the wrench, the cart's levels 1 and 2, a tarp and a
+  bedroll; level 2 is scrap 12 + cloth 1, no wiring, because the first wiring comes off the pod's machines on that very
+  table. The order stays wrench → workshop → the pod's machines → bike.
+- **Econ:** the simulator plans the cart's levels instead; the win unchanged, the bike ~2 min later.
+- **Test:** `tools/cart.test.mjs` walks the beginning with the kit alone in the lab.
+
 ## 2026-11-01 — The cart, phase 2: unfold, upgrades, the canopy
 
 - **Why:** the cart becomes the camp (docs/cart.md): it unfolds where you leave it, levels up with the wrench, and from

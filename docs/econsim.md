@@ -110,10 +110,12 @@ picking the pack up if it's worth it.
 `tools/econsim/sim.ts`. Home (`tools/econsim/home.ts`) is by the crashed pods, where new players appear (`spawnPoint`:
 a pod's hatch, its water tap at hand; in older commits the shelter with a pump that lay near the crashed ship); it
 starts there and comes back
-there after dying, or to home once it has laid out its bedroll. Goals in order: the wrench (made by hand), the workbench (built with
-it; nothing is repaired or crafted at home without one), canteen, the dismantling bench (carried machines wait in the
-chest until it stands), the bedroll, backpack, pistol, motorcycle, the chest (what's kept at home is never short of
-room: until the chest stands it lies by the door), spyglass, shield, rifle, storm detector, jammer, wristpad, grinder, then each receiver and its boss, the worm last, the windmill, battery station and well. Each open goal
+there after dying, or to home once it has laid out its bedroll. Goals in order: the wrench (made by hand), the cart's levels 1
+and 2 (`cart1`, `cart2`: its workshop is the workbench and the dismantling table; nothing is repaired or crafted at home
+without it, and carried machines wait there until it's up), canteen, the bedroll, backpack, pistol, motorcycle,
+spyglass, shield, rifle, storm detector, jammer, wristpad, grinder, then each receiver and its boss, the worm last, the windmill, battery station and well. Against a commit from before the cart replaced the benches
+(docs/cart.md phase 3), the workbench (after the wrench) and the dismantling bench, built with it, and the chest
+(after the motorcycle; what's kept at home is never short of room either way) are goals in their place. Each open goal
 weighs 0.85× the one before. From that come needs (`needs()`: what's missing for each goal after the chest is
 counted off) and the value of anything it could pick up. A part no goal needs is a spare (worth less the more there are)
 or an upgrade for gear in use. Each stop is the known place with the best `value × (1 − risk) / time`. It heads home

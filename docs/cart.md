@@ -12,7 +12,7 @@ and so does the hand-made tarp.
 |---|---|---|
 | 0 | a lidded box on the bed: storage (`cargo<id>`, the chest's size), going wherever the cart goes | it stands by your pod from the start |
 | 1 Shade | a canopy on two poles over the cart (a tarp rig, `shared/tarp.ts`) | upgrade with the wrench: cloth + scrap |
-| 2 Workshop | fold-out sides: a workbench on one side, a dismantling table on the other | upgrade with the wrench: scrap + wiring |
+| 2 Workshop | fold-out sides: a workbench on one side, a dismantling table on the other | upgrade with the wrench: scrap + cloth |
 
 No level 3 for now. Towing slows the bike a little (below, "Towing"), the same whatever the level.
 
@@ -244,3 +244,43 @@ centre) was inside the rear tyre (its back is 1.05 m behind), with no tow ball d
   machines: phase 3's starter kit must pay for it.
 - **Not checked yet:** a towed cart and the unfolded canopy in a browser (headless Chrome couldn't render the game while
   the machine was busy). The sound measured −23.6 LUFS, −9.2 dBTP.
+
+## As built (phase 3, November 2026)
+
+- **The workshop:** `shared/cart.ts` keeps the carts that are workshops now (`isWorkshop`: parked, open, level ≥ 2;
+  `cartWorkshops()`, set by `setCarts`, so server and clients agree) and the benches' size (`CART_DECK_Y` 0.88,
+  `CART_BENCH_X` 1.005, `CART_BENCH_HX` 0.325, `CART_BENCH_HZ` 1.08; the capsules use them too). `shared/stations.ts`
+  `stations()` lists each one's two sides: the workbench (x < 0, id `cartwork<id>`) and the dismantling table (x > 0,
+  `cart<id>`). A station's look-target box is now oriented (centre, half sizes, `yaw` as a heading; `stationLocal`),
+  so `stationReach` (the server's reach and height check) and `stationTarget` (the crosshair) work at any heading; the
+  placed ones have yaw 0 and the boxes they had. Packed, hitched or below level 2, the sides aren't stations.
+- **Tables:** `shared/crash.ts` `Table` has `yaw` (no `placed` any more); `isTableId` takes `bench<n>` and `cart<n>`;
+  `tableById`, server/crash.ts jobs and `bench_jobs` work by the session id, so a cart's job is saved and comes back
+  like a placed table's. `onTable` tests a point against the turned top; `src/world/crash.ts` `Bench` stands the machine
+  on its middle turned with the table, and its ground (where pieces fall) is the turned top.
+- **Packing:** `server/world.ts` sets `vehicleSrv.packBlocked`: while the cart's table has a job (a machine on it, worked
+  or not) packing and so pack-and-hitch are refused with `TEXT.notice.benchInUse` ("Bench in use", reused). Scrapping
+  the machine frees it.
+- **Anyone** may use the sides (the stations don't look at owners); only the owner packs.
+- **The build menu:** the workbench, dismantling bench and chest moved from `BUILD_TABLE` to `RETIRED_BUILD_TABLE`,
+  so `BUILDS` (the menu, the `build` message, server/placed.ts `build`) no longer has them. `isBuildable` (taken down
+  with the wrench, never carried) covers both, and `buildCost` reads both, so ones standing in older worlds still work
+  and give back what they took. Their `PLACEABLES`, models and code stay.
+- **The beginning:** level 2 costs scrap 12 + cloth 1 (was wiring 1: a new player's only wiring is in the pod's console
+  and power box, which need the table first; cloth, the table's tarp for the parts as the old dismantling bench had, is
+  in the kit already, so this needed no new kit entry or code). The pods' kit is scrap 22, cloth 9 (wrench 3 scrap; level
+  1 cloth 3 + scrap 4; level 2 scrap 12 + cloth 1; tarp cloth 3 + scrap 2; bedroll cloth 2 + scrap 1), plus the
+  console and power box. Texts: the machine hint (`TEXT.hints.machine`, "Take it apart on your cart's workshop table.")
+  and the first carried machine's line (`TEXT.speech.machineBench`, "I can't take this apart by hand. My cart could do
+  with a proper table.").
+- **Econ** (`npm run econ -- --base origin/main`, 200 worlds): the simulator's goals are the wrench, `cart1`, `cart2`
+  (as buildings from `CART_UPGRADES`; its workbench and table are the workshop) in place of the benches and the chest,
+  which it still plans against older commits. Progression unchanged within noise (won 255 → 247 min, 99% → 100%); the
+  motorcycle 7 → 9 min (the workshop wants 22 scrap picked up before the table, the benches 14); `made:cart1`/`cart2`
+  at 7 min.
+- **Tests:** `tools/cart.test.mjs`: the sides as stations and a table at four headings (crosshair, `onTable`), none
+  packed, at level 1 or towed; the build menu without the three and old ones' costs back; the kit paying exactly; in
+  the lab, with an old workbench, table and chest seeded in its database: crafting at the old bench, the kit alone
+  making the wrench, both levels, a tarp and a bedroll, the console and power box refused on the packed cart, then
+  stripped step by step on the unfolded one (packing refused with each on it), wiring and a battery out, a bearing
+  hammered at the cart's bench, crafting refused once packed, and the old three taken down into their materials.
