@@ -12,7 +12,7 @@
 // waves (the surface's tangents, from the geometry, bent by the waves' slope), so the folds catch the low sun. The
 // cloth's seams, patches and corner reinforcements are painted in the fragment shader from its uv.
 import * as THREE from 'three/webgpu';
-import { abs, attribute, color, cos, dot, faceDirection, Fn, float, max, min, mix, normalLocal, positionLocal, sin, smoothstep, step, uniform, uv, vec2 } from 'three/tsl';
+import { abs, attribute, color, cos, dot, faceDirection, Fn, float, max, min, mix, normalLocal, positionLocal, positionWorld, renderGroup, sin, smoothstep, step, uniform, uv, vec2 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { canvasAt, tarpRig, type TarpRig, type Vec } from '../../shared/tarp.ts';
@@ -36,6 +36,10 @@ const POLE = 0x2e2824, RUST = 0x5a3524, CAP = 0x46403a, ROPE = 0x6b5843, STAKE =
 const CANOPY = 0x9c8c5c, CANOPY_SEAM = 0x7e7049, CANOPY_HEM = 0x564a30, CANOPY_PATCH = 0x8a7b4f, GROMMET = 0xb9b2a0;
 
 const canvasMats: Partial<Record<CanvasStyle, THREE.MeshStandardNodeMaterial>> = {};
+/** The nearest lit cart work lamps (src/world/carts.ts sets them every frame): each bulb's world position and how bright
+ *  (0 off); a canopy's underside takes a little warm light from them, falling off with distance. */
+export const canopyLamps = [0, 1].map(() => uniform(new THREE.Vector4()).setGroup(renderGroup));
+const LAMP_GLOW = 0xffb066;
 let rigMat: THREE.MeshStandardNodeMaterial | null = null;
 let ropeMat: THREE.MeshStandardNodeMaterial | null = null;
 
@@ -99,7 +103,15 @@ function canvasMaterial(style: CanvasStyle = 'tarp') {
     c = mix(c, color(0x2a241a) as unknown as V3, step(g, 0.008));
     m.colorNode = c;
     const under = faceDirection.mul(-0.5).add(0.5);
-    m.emissiveNode = (sunColor as unknown as V3).mul(c).mul(under.mul(0.1).add(0.015)).mul(max(float(1).sub(nightLevel), 0));
+    // The work lamps under it light the cloth over them: the underside, most right above a bulb, nothing past ~2.4 m.
+    let lamp = float(0) as F;
+    for (const l of canopyLamps) {
+      const d = (l.xyz as unknown as V3).sub(positionWorld as unknown as V3);
+      const r2 = dot(d, d);
+      lamp = lamp.add((l.w as unknown as F).div(r2.mul(6).add(1)).mul(smoothstep(1, 5.8, r2).oneMinus())); // (gone by 2.4 m)
+    }
+    m.emissiveNode = (sunColor as unknown as V3).mul(c).mul(under.mul(0.1).add(0.015)).mul(max(float(1).sub(nightLevel), 0))
+      .add(c.mul(color(LAMP_GLOW) as unknown as V3).mul(lamp.mul(under)));
     canvasMats[style] = m;
     return m;
   }

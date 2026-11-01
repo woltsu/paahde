@@ -127,7 +127,7 @@ camera 60 m for the picture (fly camera, no HUD), looking away from the sun: the
 
 ### Rendering review changes (2026-10-25)
 
-Inactive pooled bike headlights retain their lights and shadow texture bindings but branch before lighting, shadow and procedural sand work. A fixed-camera, fixed-setting WebGPU ABBA comparison on an M2 Pro (Chrome 156, AC power) used effectively invisible intensity `1e-10` to exercise the branch versus zero to skip it: 27.68/28.26 versus 32.91/32.91 fps, about 17.7% higher throughput. This is a local paired result, not a cross-device guarantee.
+Inactive pooled bike headlights retain their lights and shadow texture bindings but branch before lighting, shadow and procedural sand work. (The branch's on/off uniform is in three's shared render group: in the default object group a still object with a plain material never saw a slot come on after its first draw; docs/levels.md "A pooled light and new materials".) A fixed-camera, fixed-setting WebGPU ABBA comparison on an M2 Pro (Chrome 156, AC power) used effectively invisible intensity `1e-10` to exercise the branch versus zero to skip it: 27.68/28.26 versus 32.91/32.91 fps, about 17.7% higher throughput. This is a local paired result, not a cross-device guarantee.
 
 Sand detail changes shader work through uniforms: Low/Medium/High use 2/4/8 ripple integration samples, with fewer noise layers and glitter at lower settings. High also enables the AO denoiser. Switching tiers keeps pipeline structure stable. The initial tier timing claims were withdrawn after a shader branching defect produced false dark patches around the player; rendering incorrect lighting is not a valid performance comparison.
 

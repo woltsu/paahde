@@ -322,8 +322,14 @@ Each phase is a push to `main` that leaves the game working.
 
 **A pooled light and new materials** (October 2026, the beginning's pod cabin): a material first drawn while a pool
 slot's light stood at zero never took that light up later (it stayed lit by the others and the ambient only). The
-pod's cabin makes its materials once its light's slot is lit (src/levels/beginning/cabin.ts `show`). Anything else made
-ahead and lit by one particular fixture may need the same.
+pod's cabin makes its materials once its light's slot is lit (src/levels/beginning/cabin.ts `show`). **Root cause
+(November 2026, the cart's work lamps):** the pooled lights' on/off uniform (src/world/pooledLight.ts) sat in three's
+default *object* uniform group, which is re-uploaded for a draw only when its object is fully refreshed (it moved, its
+material changed, or its material has nodes of its own, like the sand's). A still object with a plain material kept the
+value it was first drawn with. It is in the shared *render* group now (as three's own light colour and cone are), so
+every material follows the light whenever it was compiled; `tools/pooled-light.test.mjs` checks it. The cabin's late
+materials are no longer needed but harmless. Any uniform a light node or a shared material changes at run time
+belongs in a shared group (`renderGroup`/`frameGroup`) for the same reason.
 
 ## Building with boxes: z-fighting, hangers, bakes (October 2026)
 

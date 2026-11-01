@@ -28,6 +28,18 @@ What we built, why, and what's left. Dated sessions newest first, then undated t
   tows it on the quad next; the migration keeps the fullest level-2 cart and nothing is lost), tools/cart-spawn.test.mjs
   (someone who came later wakes by it too), tools/cart-tow.test.mjs (the quad tows as the bike does).
 
+## 2026-11-01 — Work lamps that light the benches (pooled lights' on/off uniform)
+
+- **Why:** played at night on dev, the cart's level-2 work lamps lit the sand but not the benches, deck or the machine on
+  the table (the page was loaded by day), and the light looked fake.
+- **Root cause:** `src/world/pooledLight.ts`'s on/off uniform was in three's object uniform group, re-uploaded only on a
+  full refresh (object moved, material changed, or a material with nodes, like the sand's). Still objects with plain
+  materials kept the value from their first draw: dark if that was by day. Now in the shared render group; this also
+  explains the beginning cabin's October workaround and covers the light poles and bike headlights.
+- **Look:** decay 2, short reach, soft cone; glowing bulbs and dish insides; a little warm light on the canopy's
+  underside (docs/cart.md "As built: the work lamps light the benches").
+- **Tests:** tools/pooled-light.test.mjs (the uniform is in a shared group and follows the light's intensity).
+
 ## 2026-11-01 — Waking up by your cart
 
 - **Why:** the cart is your camp (docs/cart.md); dying out on a trip sent you back to a bedroll or the pod far behind.
@@ -187,7 +199,6 @@ read the first line, with no canteen yet, and it cost the world a life.
   Players from before the beginning get none, and dying doesn't restart it. The shared clock is untouched.
 - tools/arrival-heat.test.mjs: landed at noon in full sun, alive after 5 min and past the glow; long here, dead within
   90 s; the ease over after 8 min; cooling unchanged; the pod shades within 5 m of the hatch at noon.
-
 
 ## 2026-10-25 — A calm start: no storm front at the spawn, a first line, a cheaper dismantling bench
 
@@ -1896,7 +1907,6 @@ Local, short storms instead of the old global one (`wind.ts` used to hash a 3–
   be set by hand for a look-only storm (the server doesn't know about it), or `dbg.storm.summonHere()` puts a
   full-strength local one right on you for 90 s (only you see it).
 
-
 ## Throwing scrap
 
 So someone with no gun can still fight a drone: any scrap item (`SCRAP_ITEMS`) taken out from the hotbar is
@@ -1913,7 +1923,6 @@ thrown with left mouse / E (`src/throw.ts`, `shared/throw.ts`).
   in the hands (2026-10-18; before, full-size scrap props), tumbling. A swish on the throw, a clank and sparks off a drone, a sand thump.
 - **Gaps:** it only hits drones (not walkers or players); a bag-full return over the base loses the item. The swish/clank levels are by analogy with the beam's
   impact sounds, not measured.
-
 
 ## Fixed-wing drones
 
@@ -1940,7 +1949,6 @@ A second flying machine, by day and by night: a big unmanned plane (18 m span, `
 - **Testing:** F3 → "Jet here" sends a straight pass over you, ~13 s out, for everyone.
 - **Gaps:** thrown scrap doesn't reach them; no spoils from the wreck; holds one height over the whole flight
   (terrain at the player).
-
 
 ## Jammer
 
@@ -2058,7 +2066,6 @@ drawn by `src/world/shelters.ts`).
   −1.3 dBTP); the wearer gets a jolt and a flash over the screen.
 - **Debug (F3):** *Give gear* at any tier, *Hit me* (a killing blow).
 
-
 ## Disassembly table in the middle of the room
 
 - **Layout** (`BASE_PIECES`): the disassembly table now stands square in the middle of the main room, under the
@@ -2091,7 +2098,6 @@ drawn by `src/world/shelters.ts`).
   repaired at Scrap tier, the grinder).
 - **Replaced:** the earlier dev machine yard (`--yard`, `dev:yard`, `spawn=yard`) is gone; the normal game has no test
   machines. Yard progress ids (`yard:<n>`) are simply forgotten.
-
 
 ## Harvester
 
@@ -2179,7 +2185,6 @@ The local sandstorms are smaller now (radius 60–130 m, from 140–300), and ra
 - **Debug:** F3 → *Storm front* sends one over everyone (30 s to the first player). `dbg.storm.summonFront(ahead)`
   puts a still one `ahead` m upwind for 3 min, seen only by you (negative: you're in it; you choke on screen but the
   server doesn't know).
-
 
 ## Harvester, second take: no guns, it charges
 
@@ -2596,7 +2601,6 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   Keep on the same way and it has you; change course as it springs. It only ever bites mid-spring: running into you,
   crouched or standing after a miss, it does nothing. A first version crept in while crouched and locked from 0–2 m,
   which no strafe dodges; it holds still now.
-
 
 ## The scrap mace
 

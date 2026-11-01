@@ -350,7 +350,8 @@ the deck put your head through it (phase 2's note), and the workshop was dark at
   new size at four headings; the lab walks moved out past the leaves. Checked in headless Chrome: the unfold at level 2
   in frames, from ~6 and ~8 m, under the canopy, a person beside the table, packing, and at night with a machine on
   the table.
-- **Note:** the shadowless spots light the sand through the benches (as the light poles do through anything).
+- **Note:** the shadowless spots light the sand through the benches (as the light poles do through anything). (Fixed
+  and retuned below: "As built: the work lamps light the benches".)
 
 ## As built: one cart per world (November 2026)
 
@@ -394,3 +395,26 @@ had a bare one of their own, nothing to build it with, and a camp nobody else co
   topped up, and lays the rest (cloth 20, wiring 3, the console off the other table, scrap 10) behind it.
   `tools/cart-spawn.test.mjs`: someone who came later wakes beside the camp too. `tools/cart-tow.test.mjs`: the quad
   tows bit for bit as the bike does.
+
+## As built: the work lamps light the benches (November 2026)
+
+From play (dev, 01:16): the lamps lit a big flat orange pool on the sand under the cart, but the benches, the deck, the
+box and a machine on the table stayed dark, and it looked a bit fake. Earlier night checks had loaded the page at night.
+
+- **Root cause:** the pooled lights' on/off uniform (`src/world/pooledLight.ts`, read by every lit material to skip an
+  idle slot) was in three's default object uniform group. That group is re-uploaded for a draw only when the object is
+  fully refreshed: it moved, its material changed, or the material has nodes of its own. The sand's material has nodes,
+  so it followed the slot every frame; the parked cart's plain glTF materials kept "off" from their first draw by day.
+  Reproduced in headless Chrome: loaded at day, unfolded at level 2 with a power box on the table, clock moved to night
+  without a reload (the lab is always noon: the debug menu's time slider, not `?tod`). The uniform is in three's shared
+  render group now, like the lights' own colour and cone, so anything lit by a pooled light (the cart's lamps, the
+  light poles, the bikes' headlights, a level's pool) follows it whenever it was first drawn. `tools/pooled-light.test.mjs`.
+- **Less fake:** a bare bulb's falloff (decay 2, reach 3.4 m, 9, a 0.95 rad cone with a soft 0.85 penumbra, warmer
+  0xffb870): the bench tops and what's on them bright and warm, fading towards their ends; the sand 2 m under the bulb
+  (lit through the bench: no shadows) a small soft pool that's gone a couple of metres out. The bulbs glow brighter
+  (bloom); each lamp's dish gets its own material whose inside (facing down at the bulb) glows while lit
+  (`materialEmissive` × facing). The canopy's underside takes a little warm light from the two nearest lit bulbs
+  (`src/world/tarps.ts` `canopyLamps`, shared render-group uniforms set by `CartView.update`; inverse square, gone by
+  2.4 m): a few ALU per canopy pixel, no lights added. Same pool, same slots: no new lights or shadow maps.
+- **Checked:** night shots after a day load and after a night load, ~4 m from each bench and ~8 m from two sides, and
+  under the canopy looking up.

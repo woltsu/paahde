@@ -16,6 +16,7 @@
 // its back left corner post that hangs and stirs in the wind (streaming back a little towed), and a worn hand-painted
 // stripe of the same down the box's lid. (From a way off, it's on everyone's locator bar.)
 import * as THREE from 'three/webgpu';
+import { materialEmissive, normalWorld, smoothstep } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CANOPY_ROLL, CART_BENCH_X, CART_DECK_Y, CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, canopyRising, cartToWorld, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
 import { hangCart, newHang, turned, type Hang } from '../../shared/cartHang.ts';
@@ -24,7 +25,7 @@ import { cartSound } from '../cartSound';
 import { windDir } from './env.ts';
 import { TyreTrack } from '../footprints.ts';
 import type { Lamp } from './lightPoles.ts';
-import { CanopyModel } from './tarps.ts';
+import { canopyLamps, CanopyModel } from './tarps.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { heightAt } from '../../shared/terrain.ts';
 import { parked, type Vehicle } from '../../shared/vehicles.ts';
@@ -91,11 +92,17 @@ const FOLD: Fold[] = [
 /** The canopy on the level-1 clock: hauled up from its roll to the poles' tips, then spread out and pulled tight. */
 const CANOPY_HOIST = [0.6, 0.85], CANOPY_SPREAD = [0.8, 1];
 /** The work lamps (level 2, unfolded, dusk to dawn: shared/power.ts darkAt): warm spots from their bulbs down onto the
- *  benches' middles, borrowing the light poles' pool (src/world/lightPoles.ts). */
-const WORK_LAMP = { color: 0xffc27a, intensity: 6, angle: 0.85, penumbra: 0.55, distance: 7, decay: 1.3 };
+ *  benches' middles, borrowing the light poles' pool (src/world/lightPoles.ts). A bare bulb's falloff (decay 2) and a
+ *  short reach: the bench 1.2 m under it bright, the sand 2 m under it (lit through the bench: no shadows) a soft,
+ *  dimmer pool that's gone a couple of metres out. */
+const WORK_LAMP = { color: 0xffb870, intensity: 9, angle: 0.95, penumbra: 0.85, distance: 3.4, decay: 2 };
+/** How much a lit bulb lights the canopy's underside over it (src/world/tarps.ts canopyLamps). */
+const CANOPY_GLOW = 0.35;
 /** Switching on, a lamp stutters (its brightness each FLICKER_STEP s) before it holds. */
 const FLICKER = [0, 0.7, 0.05, 0, 0.9, 0.3, 1, 0.6, 1, 1], FLICKER_STEP = 0.07;
-const BULB_LIT = new THREE.Color(0xffc985).multiplyScalar(5), BULB_DARK = new THREE.Color(0x000000);
+const BULB_LIT = new THREE.Color(0xffc985).multiplyScalar(7), BULB_DARK = new THREE.Color(0x000000);
+/** The inside of a lit lamp's dish, lit by its bulb (and blooming a little at the rim). */
+const DISH_LIT = new THREE.Color(0xffa860).multiplyScalar(1.4);
 const ROLL = 0x9c8c5c, STRAP = 0x3a332d;
 const IDENTITY = new THREE.Quaternion();
 const ease = (t: number, a = 0, b = 1) => {
@@ -125,7 +132,7 @@ type Shown = {
   /** The canopy drawn (put up or being put up), the key of the pose it was made for, the canvas rolled on the deck. */
   canopy: CanopyModel | null; canopyKey: string; roll: THREE.Group;
   /** The work lamps: each one's bulb node and its own glowing material, and how long they've been on (s, -1 off). */
-  bulbs: { at: THREE.Object3D; mat: THREE.MeshStandardNodeMaterial; side: number }[]; lampS: number;
+  bulbs: { at: THREE.Object3D; mat: THREE.MeshStandardNodeMaterial; dish: THREE.MeshStandardNodeMaterial | null; side: number }[]; lampS: number;
   /** Towed: the two wheels' tyre tracks (left, right). */
   tracks: [TyreTrack, TyreTrack];
   /** The rag's dye and the lid's paint (its own materials), and the colour now. */
@@ -466,6 +473,15 @@ export class CartView {
       this.workLamps(s, v, dt, !!t, dark);
       this.rag(s, v, dt, wind, !!t, Math.hypot(pose.x - me.x, pose.z - me.z) < RAG_NEAR);
     }
+    // The canopy over the nearest lit lamps takes a little of their light on its underside (src/world/tarps.ts).
+    const near = this.lamps.length > canopyLamps.length
+      ? [...this.lamps].sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))
+      : this.lamps;
+    canopyLamps.forEach((u, i) => {
+      const l = near[i];
+      if (l) u.value.set(l.x, l.y + 0.05, l.z, (CANOPY_GLOW * l.intensity) / WORK_LAMP.intensity);
+      else u.value.w = 0;
+    });
     for (const [id, s] of this.shown) {
       if (seen.has(id)) continue;
       this.group.remove(s.obj);
@@ -473,7 +489,10 @@ export class CartView {
       for (const r of s.rags) r.geo.dispose();
       s.model?.traverse((o) => o.userData.own && (o as THREE.Mesh).geometry.dispose());
       s.cloth.dispose();
-      for (const b of s.bulbs) b.mat.dispose();
+      for (const b of s.bulbs) {
+        b.mat.dispose();
+        b.dish?.dispose();
+      }
       s.paint.dispose();
       this.shown.delete(id);
     }
@@ -530,14 +549,22 @@ export class CartView {
         const lamp = m.getObjectByName(name), at = m.getObjectByName(`${name}_bulb`);
         if (!lamp || !at) return [];
         const mat = new THREE.MeshStandardNodeMaterial({ color: 0xf2e2b8, roughness: 0.3, metalness: 0, emissive: BULB_DARK });
+        let dish: THREE.MeshStandardNodeMaterial | null = null;
         lamp.traverse((o) => {
           const mesh = o as THREE.Mesh;
-          if (mesh.isMesh && (mesh.material as THREE.Material).name === 'Bulb') {
+          if (!mesh.isMesh) return;
+          const was = mesh.material as THREE.MeshStandardMaterial;
+          if (was.name === 'Bulb') {
             mesh.material = mat;
             mesh.castShadow = false;
+          } else if (was.name === 'Teal') {
+            // The dish: its own paint, its inside (facing down at the bulb) glowing while it's lit.
+            dish ??= new THREE.MeshStandardNodeMaterial({ color: was.color, roughness: was.roughness, metalness: was.metalness, emissive: BULB_DARK });
+            dish.emissiveNode = materialEmissive.mul(smoothstep(0.1, 0.8, normalWorld.y.negate()));
+            mesh.material = dish;
           }
         });
-        return [{ at, mat, side: i ? 1 : -1 }];
+        return [{ at, mat, dish, side: i ? 1 : -1 }];
       });
       s.level = -1;
       paintLid(m, paint, dice(id * 40503 + 7));
@@ -683,6 +710,7 @@ export class CartView {
     const k = !on ? 0 : step < FLICKER.length ? FLICKER[step] : 0.97 + 0.03 * Math.sin(s.lampS * 23) * Math.sin(s.lampS * 7.3);
     for (const b of s.bulbs) {
       b.mat.emissive.copy(k > 0 ? BULB_LIT : BULB_DARK).multiplyScalar(k);
+      b.dish?.emissive.copy(k > 0 ? DISH_LIT : BULB_DARK).multiplyScalar(k);
       if (k <= 0) continue;
       b.at.getWorldPosition(tmpTipA);
       const bench = cartToWorld(v, b.side * CART_BENCH_X, 0);
