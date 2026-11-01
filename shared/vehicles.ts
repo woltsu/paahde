@@ -20,6 +20,9 @@ import type { PlayerState } from './sim.ts';
  *  ItemData.level). */
 export type Vehicle = { id: number; kind: string; x: number; y: number; z: number; heading: number; up: boolean;
   parts: (string | null)[]; rider?: number; hitched?: number; open?: boolean; level?: number;
+  /** A cart just unfolded (or raised to level 1 unfolded): its canopy is still being put up (shared/cart.ts canopyUp),
+   *  for UNFOLD_S. Never stored. */
+  pitching?: boolean;
   /** A cart's owner's colour (their avatar's; never who they are). */
   color?: number };
 

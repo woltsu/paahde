@@ -26,7 +26,7 @@ import { partKind, setData, type ItemData } from '../shared/items.ts';
 import { CART_UPGRADES, WRENCH } from '../shared/crafting.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
 import { arrivalBikeSpot, brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
-import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCamp, isCart, towedPose, unfoldError } from '../shared/cart.ts';
+import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCamp, isCart, towedPose, UNFOLD_S, unfoldError } from '../shared/cart.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import type { PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
@@ -386,7 +386,17 @@ export class VehicleServer {
     if (why) return why === 'hitched' ? TEXT.notice.unhitchFirst : TEXT.notice.tooSteep;
     this.db.openVehicle(c.id, true);
     this.update(c.id, { open: true });
+    this.pitch(c.id);
     return true;
+  }
+
+  /** Cart `id`'s canopy is being put up (drawn over UNFOLD_S): it shades and is solid once that's done
+   *  (shared/cart.ts canopyUp). */
+  private pitch(id: number) {
+    this.update(id, { pitching: true });
+    setTimeout(() => {
+      if (vehicles.some((v) => v.id === id && v.pitching)) this.update(id, { pitching: undefined });
+    }, UNFOLD_S * 1000);
   }
 
   /** Cart `c` packed (to be hitched), or why not (packBlocked). */
@@ -415,6 +425,7 @@ export class VehicleServer {
     });
     if (!ok) return TEXT.notice.missingMaterials;
     this.refresh(box);
+    if (level === 1 && c.open) this.pitch(c.id);
     return level;
   }
 

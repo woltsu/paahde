@@ -31,15 +31,25 @@ export const TARP_WIND = uniform(4);
 const CANVAS = 0xa88a66, HEM = 0x6b543e, PATCH_LIGHT = 0xc6b190, PATCH_DARK = 0x7f6145;
 const POLE = 0x2e2824, RUST = 0x5a3524, CAP = 0x46403a, ROPE = 0x6b5843, STAKE = 0x3d342c;
 
-let canvasMat: THREE.MeshStandardNodeMaterial | null = null;
+/** A cart's canopy (style 'canopy'): one clean khaki canvas sewn from even panels, a bound hem, neat corner patches
+ *  with a grommet at each tie (src/world/carts.ts). */
+const CANOPY = 0x9c8c5c, CANOPY_SEAM = 0x7e7049, CANOPY_HEM = 0x564a30, CANOPY_PATCH = 0x8a7b4f, GROMMET = 0xb9b2a0;
+
+const canvasMats: Partial<Record<CanvasStyle, THREE.MeshStandardNodeMaterial>> = {};
 let rigMat: THREE.MeshStandardNodeMaterial | null = null;
 let ropeMat: THREE.MeshStandardNodeMaterial | null = null;
 
-/** The canvas material: the waves in the vertex shader, the hem darker, the underside lit a little through the cloth. */
-function canvasMaterial() {
-  if (canvasMat) return canvasMat;
-  const m = new THREE.MeshStandardNodeMaterial({ color: CANVAS, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+/** How a canvas is painted: the hand-made tarp's patched cloth, or a cart canopy's clean sewn one. */
+export type CanvasStyle = 'tarp' | 'canopy';
+
+/** The canvas material: the waves in the vertex shader (times the `taut` attribute: none while it's still being put
+ *  up), the hem darker, the underside lit a little through the cloth. */
+function canvasMaterial(style: CanvasStyle = 'tarp') {
+  const had = canvasMats[style];
+  if (had) return had;
+  const m = new THREE.MeshStandardNodeMaterial({ color: style === 'canopy' ? CANOPY : CANVAS, roughness: 1, metalness: 0, side: THREE.DoubleSide });
   const seed = attribute('seed', 'float') as F;
+  const taut = attribute('taut', 'float') as F;
   const tu = attribute('tanU', 'vec3') as V3, tv = attribute('tanV', 'vec3') as V3;
   const nrm = attribute('normal', 'vec3') as V3;
   // How free a point is: 0 where it's tied (a corner), ~1 mid-way between them.
@@ -57,7 +67,7 @@ function canvasMaterial() {
     const w3 = cos(across.mul(0.9).add(t.mul(0.6)).add(seed.mul(0.6))).mul(0.3);
     // The billow: the walls breathe in and out with the gusts.
     const bulge = min(v.mul(0.006), 0.1).mul(sin(time.mul(0.7).add(seed)));
-    return free(q).mul(amp.mul(w1.add(w2).add(w3)).add(bulge));
+    return free(q).mul(amp.mul(w1.add(w2).add(w3)).add(bulge)).mul(taut);
   });
   m.positionNode = Fn(() => {
     const q = uv(), p = positionLocal;
@@ -71,11 +81,30 @@ function canvasMaterial() {
     normalLocal.assign(dv.cross(du).normalize());
     return p.add(nrm.mul(h));
   })();
-  // The cloth: stitched from three widths (seams across v), a hem round the edge, the corners doubled where the lines
-  // pull, two patches sewn on (a bleached offcut, a darker bit of sack), their stitching darker.
   const q = uv();
   const edge = min(min(q.x, q.y), min(q.x.oneMinus(), q.y.oneMinus()));
   const corner = min(q, vec2(1).sub(q));
+  if (style === 'canopy') {
+    // Sewn from four even panels (straight seams across v, a fainter one down the middle), a bound hem round the edge, a
+    // square reinforcement doubled over each corner with a metal grommet in it where the line ties on.
+    const panel = abs(q.y.mul(4).sub(q.y.mul(4).add(0.5).floor())).div(4); // distance to the nearest quarter line
+    const mid = abs(q.x.sub(0.5));
+    let c: V3 = color(CANOPY) as unknown as V3;
+    const cornerBox = max(corner.x, corner.y);
+    c = mix(c, color(CANOPY_PATCH) as unknown as V3, step(cornerBox, 0.075));
+    c = mix(c, color(CANOPY_SEAM) as unknown as V3, max(step(panel, 0.0035), step(mid, 0.0025).mul(0.6)));
+    c = mix(c, color(CANOPY_HEM) as unknown as V3, smoothstep(0.016, 0.022, edge).oneMinus());
+    const g = corner.sub(vec2(0.034)).length();
+    c = mix(c, color(GROMMET) as unknown as V3, step(g, 0.016).mul(step(0.008, g)));
+    c = mix(c, color(0x2a241a) as unknown as V3, step(g, 0.008));
+    m.colorNode = c;
+    const under = faceDirection.mul(-0.5).add(0.5);
+    m.emissiveNode = (sunColor as unknown as V3).mul(c).mul(under.mul(0.1).add(0.015)).mul(max(float(1).sub(nightLevel), 0));
+    canvasMats[style] = m;
+    return m;
+  }
+  // The cloth: stitched from three widths (seams across v), a hem round the edge, the corners doubled where the lines
+  // pull, two patches sewn on (a bleached offcut, a darker bit of sack), their stitching darker.
   const seam = min(abs(q.y.sub(0.35)), abs(q.y.sub(0.67)));
   const patch = (x0: number, x1: number, y0: number, y1: number) => {
     const d = min(min(q.x.sub(x0), float(x1).sub(q.x)), min(q.y.sub(y0), float(y1).sub(q.y)));
@@ -91,7 +120,7 @@ function canvasMaterial() {
   // Underneath, the sun glows through the cloth (stronger by day, none at night); on top a touch of it.
   const under = faceDirection.mul(-0.5).add(0.5);
   m.emissiveNode = (sunColor as unknown as V3).mul(c).mul(under.mul(0.1).add(0.015)).mul(max(float(1).sub(nightLevel), 0));
-  canvasMat = m;
+  canvasMats[style] = m;
   return m;
 }
 
@@ -102,10 +131,13 @@ function ropeMaterial() {
   return (ropeMat ??= new THREE.MeshStandardNodeMaterial({ color: ROPE, roughness: 1, metalness: 0 }));
 }
 
-/** The canvas grid, relative to `o`: positions, uvs, the tangents along u and v (for the wind's normal), a seed. */
-function canvasGeometry(r: TarpRig, o: Vec, seed: number): THREE.BufferGeometry {
+/** Fill a canvas grid's positions (relative to `o`) and its tangents along u and v (for the wind's normal) from rig `r`;
+ *  its normals after. */
+function fillCanvas(g: THREE.BufferGeometry, r: TarpRig, o: Vec) {
   const n = N + 1;
-  const pos = new Float32Array(n * n * 3), uvs = new Float32Array(n * n * 2), tu = new Float32Array(n * n * 3), tv = new Float32Array(n * n * 3);
+  const pos = (g.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+  const tu = (g.getAttribute('tanU') as THREE.BufferAttribute).array as Float32Array;
+  const tv = (g.getAttribute('tanV') as THREE.BufferAttribute).array as Float32Array;
   const a: Vec = { x: 0, y: 0, z: 0 }, b: Vec = { x: 0, y: 0, z: 0 }, c: Vec = { x: 0, y: 0, z: 0 };
   const d = 1e-3;
   for (let j = 0; j < n; j++) {
@@ -113,7 +145,6 @@ function canvasGeometry(r: TarpRig, o: Vec, seed: number): THREE.BufferGeometry 
       const u = i / N, v = j / N, k = j * n + i;
       canvasAt(r, u, v, a);
       pos.set([a.x - o.x, a.y - o.y, a.z - o.z], k * 3);
-      uvs.set([u, v], k * 2);
       // d(position)/du and /dv, per unit of u and v.
       canvasAt(r, Math.min(1, u + d), v, b);
       canvasAt(r, Math.max(0, u - d), v, c);
@@ -125,6 +156,16 @@ function canvasGeometry(r: TarpRig, o: Vec, seed: number): THREE.BufferGeometry 
       tv.set([(b.x - c.x) / sv, (b.y - c.y) / sv, (b.z - c.z) / sv], k * 3);
     }
   }
+  for (const name of ['position', 'tanU', 'tanV']) g.getAttribute(name).needsUpdate = true;
+  g.computeVertexNormals();
+}
+
+/** The canvas grid, relative to `o`: positions, uvs, the tangents along u and v (for the wind's normal), a seed, and
+ *  how taut it is (1: the wind's full billow). */
+function canvasGeometry(r: TarpRig, o: Vec, seed: number): THREE.BufferGeometry {
+  const n = N + 1;
+  const uvs = new Float32Array(n * n * 2);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) uvs.set([i / N, j / N], (j * n + i) * 2);
   // Wound so the front face looks up (v before u). Each cell is split along the square's diagonals (pole to pole, low
   // corner to low corner), the saddle's lines of symmetry, so it bends evenly either side.
   const idx: number[] = [];
@@ -136,13 +177,14 @@ function canvasGeometry(r: TarpRig, o: Vec, seed: number): THREE.BufferGeometry 
     }
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * n * 3), 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-  g.setAttribute('tanU', new THREE.BufferAttribute(tu, 3));
-  g.setAttribute('tanV', new THREE.BufferAttribute(tv, 3));
+  g.setAttribute('tanU', new THREE.BufferAttribute(new Float32Array(n * n * 3), 3));
+  g.setAttribute('tanV', new THREE.BufferAttribute(new Float32Array(n * n * 3), 3));
   g.setAttribute('seed', new THREE.BufferAttribute(new Float32Array(n * n).fill(seed), 1));
+  g.setAttribute('taut', new THREE.BufferAttribute(new Float32Array(n * n).fill(1), 1));
   g.setIndex(idx);
-  g.computeVertexNormals();
+  fillCanvas(g, r, o);
   // The waves lift it: room for them in the bounds (culling, shadows).
   g.computeBoundingSphere();
   g.boundingSphere!.radius += 0.3;
@@ -219,4 +261,76 @@ export function rigModel(r: TarpRig, o: Vec, id = 0): THREE.Group {
     grp.add(lines);
   }
   return grp;
+}
+
+const ropeGeo = new THREE.CylinderGeometry(0.011, 0.011, 1, 3, 1, true).translate(0, 0.5, 0);
+const UP = new THREE.Vector3(0, 1, 0);
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+
+/** A cart's canopy (shared/cart.ts canopyRig), drawn so it can be put up: the canvas (the canopy's clean style) refilled
+ *  from whatever rig it has at the moment, its lines from each tie to a stake hanging slack until it's pulled taut, the
+ *  stakes where the finished rig has them. `final` is the rig it ends as (the stakes'); `id` varies its waves. */
+export class CanopyModel {
+  readonly group = new THREE.Group();
+  private canvas: THREE.Mesh;
+  private ropes: THREE.Mesh[] = [];
+  private o: Vec;
+
+  constructor(final: TarpRig, o: Vec, id = 0) {
+    this.o = o;
+    this.group.position.set(o.x, o.y, o.z);
+    this.canvas = new THREE.Mesh(canvasGeometry(final, o, (id * 2.399) % (2 * Math.PI)), canvasMaterial('canopy'));
+    this.canvas.name = 'canopy_canvas';
+    this.canvas.castShadow = this.canvas.receiveShadow = true;
+    this.canvas.frustumCulled = false; // (it moves while it's put up: its bounds are the finished one's)
+    const stakes: THREE.BufferGeometry[] = [];
+    for (const gy of final.guys) {
+      const dx = gy.stake.x - gy.from.x, dz = gy.stake.z - gy.from.z, l = Math.hypot(dx, dz) || 1;
+      const top = { x: gy.stake.x + (dx / l) * 0.08, y: gy.stake.y + 0.24, z: gy.stake.z + (dz / l) * 0.08 };
+      stakes.push(rod({ ...gy.stake, y: gy.stake.y - 0.1 }, top, o, 0.016, 0.022, 4, STAKE));
+      for (let k = 0; k < 2; k++) {
+        const m = new THREE.Mesh(ropeGeo, ropeMaterial());
+        m.receiveShadow = true;
+        this.ropes.push(m);
+      }
+    }
+    const body = new THREE.Mesh(mergeGeometries(stakes.map((g) => (g.deleteAttribute('uv'), g))), rigMaterial());
+    body.castShadow = body.receiveShadow = true;
+    this.group.add(this.canvas, body, ...this.ropes);
+    this.set(final, final, 1);
+  }
+
+  /** The canvas as rig `r` has it, `taut` 0 (being put up: no billow, the lines slack) .. 1 (up); the lines run from
+   *  `r`'s ties to `final`'s stakes. */
+  set(r: TarpRig, final: TarpRig, taut: number) {
+    const g = this.canvas.geometry;
+    fillCanvas(g, r, this.o);
+    const t = g.getAttribute('taut') as THREE.BufferAttribute;
+    (t.array as Float32Array).fill(taut);
+    t.needsUpdate = true;
+    const o = this.o;
+    const seg = (m: THREE.Mesh, a: Vec, b: Vec) => {
+      tmpA.set(a.x - o.x, a.y - o.y, a.z - o.z);
+      tmpB.set(b.x - a.x, b.y - a.y, b.z - a.z);
+      const len = tmpB.length();
+      m.position.copy(tmpA);
+      if (len > 1e-6) m.quaternion.setFromUnitVectors(UP, tmpB.multiplyScalar(1 / len));
+      m.scale.set(1, Math.max(len, 1e-3), 1);
+    };
+    final.guys.forEach((gy, i) => {
+      const from = r.guys[i]?.from ?? gy.from;
+      // Two lengths meeting at the middle, which hangs (slack) towards the sand.
+      const mid = { x: (from.x + gy.stake.x) / 2, y: (from.y + gy.stake.y) / 2, z: (from.z + gy.stake.z) / 2 };
+      mid.y = Math.max(gy.stake.y + 0.03, mid.y - (1 - taut) * 0.9);
+      seg(this.ropes[i * 2], from, mid);
+      seg(this.ropes[i * 2 + 1], mid, gy.stake);
+    });
+  }
+
+  dispose() {
+    this.group.traverse((o) => {
+      const g = (o as THREE.Mesh).geometry;
+      if (g && g !== ropeGeo) g.dispose();
+    });
+  }
 }

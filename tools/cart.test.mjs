@@ -101,8 +101,23 @@ test('unfolded at level 1, its canopy shades a point under it at noon, and the s
   const px = v.x - d.x * t, pz = v.z - d.z * t;
   setVehicles([{ ...v, open: false }]);
   assert.ok(inSun(px, py, pz, 0.5), 'in the sun while it is packed');
+  setVehicles([{ ...v, pitching: true }]);
+  assert.ok(inSun(px, py, pz, 0.5), 'no shade while it is still being put up');
   setVehicles([v]);
   assert.ok(!inSun(px, py, pz, 0.5), 'in its shade unfolded');
+  // It covers the unfolded camp (the deck and both benches with their leaves out, 3.76 × 2.2 m) and a person working at
+  // either bench's middle, and clears a standing head on the deck (PLAYER_HEIGHT 1.8 over the deck's 0.88) by 15 cm.
+  for (let lx = -1.88; lx <= 1.881; lx += 0.1) {
+    for (let lz = -1.0; lz <= 1.001; lz += 0.1) {
+      const p = cartToWorld(v, lx, lz), y = canvasYAt(r, p.x, p.z);
+      assert.ok(y === y, `covered at (${lx.toFixed(2)}, ${lz.toFixed(2)})`);
+      if (Math.abs(lx) <= 0.68) assert.ok(y - v.y > 0.88 + 1.8 + 0.15, `head room on the deck at (${lx}, ${lz}): ${y - v.y}`);
+    }
+  }
+  for (const lx of [-2.3, 2.3]) for (const lz of [-0.5, 0, 0.5]) {
+    const p = cartToWorld(v, lx, lz), y = canvasYAt(r, p.x, p.z);
+    assert.ok(y - v.y > 1.9, `over a person beside the bench at (${lx}, ${lz})`);
+  }
   // Dropped onto the canvas beside the poles, over a low corner's side: it lands on it.
   const at = cartToWorld(v, 1.2, 0), c = canvasYAt(r, at.x, at.z);
   assert.ok(c > v.y + 1.9, `the canvas is over a head there (${c - v.y})`);
@@ -337,7 +352,7 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
   const cart0 = me.vehicle(cartId);
   assert.equal(cart0.open, false, 'it stands packed');
-  const side = cartToWorld(cart0, 1.9, 0);
+  const side = cartToWorld(cart0, 2.4, 0);
   await me.walkTo(side.x, side.z, 0.4);
   const count = (kind) => me.items('bag').reduce((n, it) => n + (it?.kind === kind ? it.n : 0), 0);
   /** Send `m` and wait for the bag or a notice: the notice's text, if one came. */
@@ -352,7 +367,7 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   // Someone else: not theirs to unfold or build on.
   const other = new Client(port, 'Stranger'); peers.push(other);
   await other.join();
-  const far = cartToWorld(cart0, -1.9, 0);
+  const far = cartToWorld(cart0, -2.4, 0);
   await other.walkTo(far.x, far.z, 0.4);
   assert.equal(await other.notice({ t: 'unfoldCart', id: cartId, open: true }), TEXT.notice.notYours);
   other.send({ t: 'debugGive', kind: 'wrench' });
@@ -423,7 +438,7 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   await until(() => !me.state.riding && me.vehicle(cartId).rider === undefined, 3000, 'parked');
   const cart1 = me.vehicle(cartId);
   assert.equal(cart1.open, false);
-  const by = cartToWorld(cart1, 1.9, 0);
+  const by = cartToWorld(cart1, 2.4, 0);
   await me.walkTo(by.x, by.z, 0.4);
   assert.equal(await me.notice({ t: 'unfoldCart', id: cartId, open: true }), TEXT.notice.unhitchFirst);
   // Let go at the tongue: it stays packed until it's unfolded.
@@ -445,23 +460,24 @@ test('unfolded at level 2, a parked cart\'s sides are a workbench (left) and a d
     const list = stations().filter((s) => s.cart === 7);
     assert.deepEqual(list.map((s) => s.kind).sort(), ['disassembly', 'workbench']);
     const bench = list.find((s) => s.kind === 'workbench'), table = list.find((s) => s.kind === 'disassembly');
-    const l = cartToWorld(v, -1.005, 0), r = cartToWorld(v, 1.005, 0);
+    const l = cartToWorld(v, -1.28, 0), r = cartToWorld(v, 1.28, 0);
     assert.ok(Math.hypot(bench.x - l.x, bench.z - l.z) < 1e-9 && Math.hypot(table.x - r.x, table.z - r.z) < 1e-9);
     assert.ok(Math.abs(table.y1 - (v.y + 0.88)) < 1e-9, 'flush with the deck');
     // Its session table, turned with the cart: a point along it is on it, one off its outer edge isn't.
     const t = tableById('cart7');
-    assert.ok(t && Math.abs(t.yaw - heading) < 1e-9 && Math.abs(t.w - 0.65) < 1e-9 && Math.abs(t.d - 2.16) < 1e-9);
-    const along = cartToWorld(v, 1.005, 0.95), off = cartToWorld(v, 1.45, 0.95);
+    assert.ok(t && Math.abs(t.yaw - heading) < 1e-9 && Math.abs(t.w - 1.2) < 1e-9 && Math.abs(t.d - 2.16) < 1e-9);
+    // (Its leaf slid out: on it out to 1.88 m from the middle.)
+    const along = cartToWorld(v, 1.8, 0.95), off = cartToWorld(v, 1.95, 0.95);
     assert.ok(onTable(t, along.x, along.z) && !onTable(t, off.x, off.z));
     // Looked at from either side, a bit along it: the crosshair finds that side (an oriented box, not the world's axes).
     for (const [sx, kind] of [[-1, 'workbench'], [1, 'disassembly']]) {
-      const at = cartToWorld(v, sx * 2.2, 0.6), aim = cartToWorld(v, sx * 1.0, 0.8);
+      const at = cartToWorld(v, sx * 2.6, 0.6), aim = cartToWorld(v, sx * 1.3, 0.8);
       const feet = { x: at.x, y: v.y, z: at.z };
       const yaw = Math.atan2(-(aim.x - at.x), -(aim.z - at.z));
       const pitch = Math.atan2(v.y + 0.7 - (v.y + 1.65), Math.hypot(aim.x - at.x, aim.z - at.z));
       assert.equal(stationTarget(feet, quantizeYaw(yaw), quantizePitch(pitch))?.kind, kind, `heading ${heading}: ${kind}`);
       // Looking past its end along the cart's length: no station.
-      const past = cartToWorld(v, sx * 1.0, 3.5);
+      const past = cartToWorld(v, sx * 1.3, 3.5);
       const yaw2 = Math.atan2(-(past.x - at.x), -(past.z - at.z));
       assert.equal(stationTarget(feet, quantizeYaw(yaw2), quantizePitch(pitch))?.kind, undefined, 'nothing past its end');
     }
@@ -529,8 +545,8 @@ test('the beginning with the pods\' kit: wrench, cart shade, cart workshop, a ta
   let side = 0;
   const go = async (lx, lz) => { const p = cartToWorld(cart0, lx, lz); await me.walkTo(p.x, p.z, 0.4); };
   const toSide = async (sx) => {
-    if (side && side !== sx) { await go(side * 2.4, -4.2); await go(sx * 2.4, -4.2); }
-    await go(sx * 1.9, 0.3);
+    if (side && side !== sx) { await go(side * 2.8, -4.2); await go(sx * 2.8, -4.2); }
+    await go(sx * 2.4, 0.3);
     side = sx;
   };
   // (The old benches stand west of the spawn: the cart's side facing them is the way there and back.)

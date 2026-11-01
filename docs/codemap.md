@@ -274,6 +274,10 @@ Everything built is shared, and anyone can take a building down.
   Your own cart unfolded at level ≥ 1 is where you wake after dying, ahead of a bedroll (`shared/cart.ts` `isCamp`,
   `campWakeSpot`; `VehicleServer.campOf`; server/world.ts `homeOf`/`clearToWake`; the respawn's `facing` turns the
   camera to it, `net.onFace`). Test `tools/cart-spawn.test.mjs`.
+  The bigger camp: the sides' leaves slide out (benches 1.2 m deep, camp 3.76 × 2.2 m), the poles rake out with
+  telescoping tops, the canopy is put up visibly (`shared/cart.ts` `canopyRising`, drawn by `src/world/tarps.ts`
+  `CanopyModel` in the canopy's own clean canvas style; it shades and is solid once `Vehicle.pitching` is cleared,
+  `canopyUp`), and level 2's work lamps light the benches dusk to dawn (`CartView.lamps`, borrowing `PoleLamps`' pool).
   Each cart wears its owner's colour, faded (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a
   torn rag knotted round its back left corner post, swinging in the wind (a small Verlet chain), and a worn painted
   stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar
@@ -297,7 +301,8 @@ Everything built is shared, and anyone can take a building down.
   sand round it at night: built with the wrench (scrap, wiring), one battery slot, powered like a beacon but only from
   dusk to dawn (shared/power.ts `LIGHT_POLE_W`, `poleDark`; server/power.ts puts it in `PowerState.lit`). Model made in
   code; the light is a pool of shadowless spot lights put in the scene at startup and handed to the lit poles nearest
-  the camera (src/world/lightPoles.ts `PoleLamps`, src/world/pooledLight.ts)
+  the camera (src/world/lightPoles.ts `PoleLamps`, src/world/pooledLight.ts; the carts' work lamps join the same pool
+  through `setLamps`, `shared/power.ts` `darkAt`)
 - Tarps (`tarp`, shared/placed.ts `TARP`) — shade you put up: a patched canvas diamond stretched tight between two
   leaning scavenged poles (5.0 and 5.5 m) at opposite corners, the other two corners pulled down to 1.5 m and staked, a
   taut saddle (3.2 m in the middle); made by hand (no wrench: shared/tables.ts HAND_TABLE, 3 cloth, 2 scrap), put down

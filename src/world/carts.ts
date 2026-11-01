@@ -7,20 +7,24 @@
 // under the tongue swings down when it's let go of the bike (no `hitched`), and the pieces of a level not reached
 // (shared/cart.ts CART_LEVEL_NODES) are hidden. Unfolded (Vehicle.open) its hinge nodes turn out over UNFOLD_S, each
 // level's on its own clock (FOLD: docs/cart.md's table), so a level raised while it's out unfolds its new pieces; from
-// level 1 it's levelled on its stabilisers and, once the poles are up, the canopy (shared/cart.ts canopyRig) is drawn
-// by src/world/tarps.ts, as the sim and the shade have it. Unfolding and packing are heard (src/cartSound.ts).
+// level 1 it's levelled on its stabilisers and the canopy is put up: rolled on the deck packed, hauled from the roll to
+// the raked poles' tips, then spread and pulled taut (shared/cart.ts canopyRising, src/world/tarps.ts CanopyModel),
+// ending as canopyRig, as the sim and the shade have it once it's up. At level 2 its work lamps, swung out over the
+// benches, light them from dusk to dawn (spots from the light poles' pool). Unfolding and packing are heard
+// (src/cartSound.ts).
 // Each cart wears its owner's colour (Vehicle.color), dyed down by the sun: a torn strip of cloth knotted round its
 // back left corner post that hangs and stirs in the wind (streaming back a little towed), and a worn hand-painted stripe
 // down the box's lid. (From a way off, your own is on the locator bar.)
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
+import { CANOPY_ROLL, CART_BENCH_X, CART_DECK_Y, CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, canopyRising, cartToWorld, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
 import { hangCart, newHang, turned, type Hang } from '../../shared/cartHang.ts';
 import { biome } from '../../shared/biomes.ts';
 import { cartSound } from '../cartSound';
 import { windDir } from './env.ts';
 import { TyreTrack } from '../footprints.ts';
-import { rigModel } from './tarps.ts';
+import type { Lamp } from './lightPoles.ts';
+import { CanopyModel } from './tarps.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { heightAt } from '../../shared/terrain.ts';
 import { parked, type Vehicle } from '../../shared/vehicles.ts';
@@ -58,18 +62,40 @@ const NO_COLOR = 0xb8a88a;
 const DUST = new THREE.Color(0xa69a86);
 
 const DEG = Math.PI / 180;
-/** Each hinge node unfolded (docs/cart.md "As built"): its level, the share [from, to] of that level's unfolding it
- *  moves in, and where it goes (a rotation about x or z from its rest pose, rad, or `legs`' slide down, m). */
-const FOLD: { name: string; level: number; from: number; to: number; rx?: number; rz?: number; dy?: number }[] = [
+type Fold = { name: string; level: number; from: number; to: number; rx?: number; rz?: number;
+  /** A turn from the rest pose as a quaternion (x, y, z, w), or a slide (x, y, z, m), in the parent's frame. */
+  q?: [number, number, number, number]; d?: [number, number, number] };
+/** Each hinge node unfolded (docs/cart.md "The model's contract", printed by tools/blender/cart.py): its level, the share
+ *  [from, to] of that level's unfolding it moves in, and where it goes from its rest pose (a turn about x or z, rad; a
+ *  turn as a quaternion; a slide, m). Level 1: the stabilisers down, the poles swung up and raked out, their top
+ *  sections run out, then the canopy hauled up and spread (CANOPY_*). Level 2: the sides down, their leaves slid out,
+ *  the trestles down, the work lamps swung out over the benches. */
+const FOLD: Fold[] = [
   { name: 'lid', level: 0, from: 0, to: 0.5, rx: -100 * DEG },
-  { name: 'legs', level: 1, from: 0, to: 0.4, dy: -0.46 },
-  { name: 'pole_a', level: 1, from: 0.35, to: 1, rx: -90 * DEG },
-  { name: 'pole_b', level: 1, from: 0.35, to: 1, rx: 90 * DEG },
-  { name: 'side_l', level: 2, from: 0, to: 0.6, rz: 90 * DEG },
-  { name: 'side_r', level: 2, from: 0, to: 0.6, rz: -90 * DEG },
-  { name: 'leg_l', level: 2, from: 0.5, to: 1, rz: -90 * DEG },
-  { name: 'leg_r', level: 2, from: 0.5, to: 1, rz: 90 * DEG },
+  { name: 'legs', level: 1, from: 0, to: 0.35, d: [0, -0.46, 0] },
+  { name: 'pole_a', level: 1, from: 0.25, to: 0.65, q: [-0.82143, -0.22266, 0, 0.52504] },
+  { name: 'pole_b', level: 1, from: 0.25, to: 0.65, q: [0.82143, -0.22266, 0, 0.52504] },
+  { name: 'pole_a_top', level: 1, from: 0.5, to: 0.8, d: [0, 0, 1.3649] },
+  { name: 'pole_b_top', level: 1, from: 0.5, to: 0.8, d: [0, 0, -1.3649] },
+  { name: 'side_l', level: 2, from: 0, to: 0.45, rz: 90 * DEG },
+  { name: 'side_r', level: 2, from: 0, to: 0.45, rz: -90 * DEG },
+  { name: 'leaf_l', level: 2, from: 0.4, to: 0.7, d: [0.02, 0.55, 0] },
+  { name: 'leaf_r', level: 2, from: 0.4, to: 0.7, d: [-0.02, 0.55, 0] },
+  { name: 'leg_l', level: 2, from: 0.65, to: 0.95, rz: -90 * DEG },
+  { name: 'leg_r', level: 2, from: 0.65, to: 0.95, rz: 90 * DEG },
+  { name: 'lamp_a', level: 2, from: 0.5, to: 0.9, q: [-0.57567, -0.01238, 0, 0.81759] },
+  { name: 'lamp_b', level: 2, from: 0.5, to: 0.9, q: [0.57567, -0.01238, 0, 0.81759] },
 ];
+/** The canopy on the level-1 clock: hauled up from its roll to the poles' tips, then spread out and pulled tight. */
+const CANOPY_HOIST = [0.6, 0.85], CANOPY_SPREAD = [0.8, 1];
+/** The work lamps (level 2, unfolded, dusk to dawn: shared/power.ts darkAt): warm spots from their bulbs down onto the
+ *  benches' middles, borrowing the light poles' pool (src/world/lightPoles.ts). */
+const WORK_LAMP = { color: 0xffc27a, intensity: 6, angle: 0.85, penumbra: 0.55, distance: 7, decay: 1.3 };
+/** Switching on, a lamp stutters (its brightness each FLICKER_STEP s) before it holds. */
+const FLICKER = [0, 0.7, 0.05, 0, 0.9, 0.3, 1, 0.6, 1, 1], FLICKER_STEP = 0.07;
+const BULB_LIT = new THREE.Color(0xffc985).multiplyScalar(5), BULB_DARK = new THREE.Color(0x000000);
+const ROLL = 0x9c8c5c, STRAP = 0x3a332d;
+const IDENTITY = new THREE.Quaternion();
 const ease = (t: number, a = 0, b = 1) => {
   const u = Math.min(1, Math.max(0, (t - a) / (b - a)));
   return u * u * (3 - 2 * u);
@@ -93,8 +119,11 @@ type Shown = {
   slopeX: number; slopeZ: number;
   /** Each level's unfolding, 0 packed .. 1 out; what it's heading for (undefined: not seen yet). */
   fold: number[]; want: number[] | undefined;
-  nodes: { n: THREE.Object3D; f: (typeof FOLD)[number]; y0: number }[];
-  canopy: THREE.Group | null; canopyKey: string;
+  nodes: { n: THREE.Object3D; f: Fold; p0: THREE.Vector3; q: THREE.Quaternion | null }[];
+  /** The canopy drawn (put up or being put up), the key of the pose it was made for, the canvas rolled on the deck. */
+  canopy: CanopyModel | null; canopyKey: string; roll: THREE.Group;
+  /** The work lamps: each one's bulb node and its own glowing material, and how long they've been on (s, -1 off). */
+  bulbs: { at: THREE.Object3D; mat: THREE.MeshStandardNodeMaterial; side: number }[]; lampS: number;
   /** Towed: the two wheels' tyre tracks (left, right). */
   tracks: [TyreTrack, TyreTrack];
   /** The owner's colour: the rag's dye and the lid's paint (its own materials), and the colour now. */
@@ -366,6 +395,27 @@ function paintLid(model: THREE.Object3D, paint: THREE.Material, rand: () => numb
 }
 
 const tmpSlope = { gx: 0, gz: 0 };
+const tmpTipA = new THREE.Vector3(), tmpTipB = new THREE.Vector3();
+
+const rollMat = new THREE.MeshStandardNodeMaterial({ color: ROLL, roughness: 1, metalness: 0 });
+const strapMat = new THREE.MeshStandardNodeMaterial({ color: STRAP, roughness: 0.8, metalness: 0.2 });
+/** The canopy rolled up across the deck behind the box (shared/cart.ts CANOPY_ROLL), two straps round it, in the cart's
+ *  frame. */
+function canopyRoll(): THREE.Group {
+  const r = CANOPY_ROLL, g = new THREE.Group();
+  const roll = new THREE.Mesh(new THREE.CylinderGeometry(r.r, r.r, r.half * 2, 10), rollMat);
+  roll.rotation.z = Math.PI / 2;
+  roll.castShadow = roll.receiveShadow = true;
+  g.add(roll);
+  for (const x of [-0.25, 0.25]) {
+    const strap = new THREE.Mesh(new THREE.CylinderGeometry(r.r + 0.006, r.r + 0.006, 0.04, 10), strapMat);
+    strap.rotation.z = Math.PI / 2;
+    strap.position.x = x;
+    g.add(strap);
+  }
+  g.position.set(0, r.y, r.z);
+  return g;
+}
 
 export class CartView {
   private group = new THREE.Group();
@@ -376,10 +426,15 @@ export class CartView {
     loadCart();
   }
 
+  /** The work lamps lit this frame (src/world/lightPoles.ts takes the nearest into its pool). */
+  lamps: Lamp[] = [];
+
   /** Every frame: the carts in `list` near `me`, parked or towed by one of `towers` (us first, then the others), their
-   *  rags in a wind of `wind` m/s (shared/power.ts windSpeed) blowing the way env.ts windDir has it. */
-  update(dt: number, list: readonly Vehicle[], towers: readonly Tower[], me: { x: number; z: number }, wind = 4) {
+   *  rags in a wind of `wind` m/s (shared/power.ts windSpeed) blowing the way env.ts windDir has it; `dark`: dusk to
+   *  dawn, the work lamps lit. */
+  update(dt: number, list: readonly Vehicle[], towers: readonly Tower[], me: { x: number; z: number }, wind = 4, dark = false) {
     const seen = new Set<number>();
+    this.lamps = [];
     for (const v of list) {
       if (!isCart(v)) continue;
       const t = towers.find((o) => o.tow === v.id);
@@ -406,6 +461,7 @@ export class CartView {
         this.place(s, pose);
       }
       this.pieces(s, v, dt, !!t);
+      this.workLamps(s, v, dt, !!t, dark);
       this.rag(s, v, dt, wind, !!t, Math.hypot(pose.x - me.x, pose.z - me.z) < RAG_NEAR);
     }
     for (const [id, s] of this.shown) {
@@ -415,6 +471,7 @@ export class CartView {
       for (const r of s.rags) r.geo.dispose();
       s.model?.traverse((o) => o.userData.own && (o as THREE.Mesh).geometry.dispose());
       s.cloth.dispose();
+      for (const b of s.bulbs) b.mat.dispose();
       s.paint.dispose();
       this.shown.delete(id);
     }
@@ -433,8 +490,11 @@ export class CartView {
     const rand = dice(id * 2654435761);
     const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0,
       coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang(), slopeX: 0, slopeZ: 0,
-      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '', tracks: [new TyreTrack(), new TyreTrack()],
+      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '', roll: canopyRoll(),
+      bulbs: [], lampS: -1, tracks: [new TyreTrack(), new TyreTrack()],
       cloth, paint, color: -1, rags: RAGS.map((r) => newRag(r, rand)), wave: rand() * 50, was: null, vel: new THREE.Vector3() };
+    s.roll.visible = false;
+    tilt.add(s.roll);
     // The rag knotted round the corner post, in the cart's frame (the model's: it sits in `tilt` unmoved).
     const knot = new THREE.Mesh(knotGeo, cloth);
     knot.castShadow = true;
@@ -461,7 +521,21 @@ export class CartView {
       }
       s.nodes = FOLD.flatMap((f) => {
         const n = m.getObjectByName(f.name);
-        return n ? [{ n, f, y0: n.position.y }] : [];
+        return n ? [{ n, f, p0: n.position.clone(), q: f.q ? new THREE.Quaternion(...f.q) : null }] : [];
+      });
+      // The work lamps' bulbs: each its own material, glowing while it's lit.
+      s.bulbs = (['lamp_a', 'lamp_b'] as const).flatMap((name, i) => {
+        const lamp = m.getObjectByName(name), at = m.getObjectByName(`${name}_bulb`);
+        if (!lamp || !at) return [];
+        const mat = new THREE.MeshStandardNodeMaterial({ color: 0xf2e2b8, roughness: 0.3, metalness: 0, emissive: BULB_DARK });
+        lamp.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh && (mesh.material as THREE.Material).name === 'Bulb') {
+            mesh.material = mat;
+            mesh.castShadow = false;
+          }
+        });
+        return [{ at, mat, side: i ? 1 : -1 }];
       });
       s.level = -1;
       paintLid(m, paint, dice(id * 40503 + 7));
@@ -482,8 +556,8 @@ export class CartView {
 
   private dropCanopy(s: Shown) {
     if (!s.canopy) return;
-    this.group.remove(s.canopy);
-    s.canopy.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+    this.group.remove(s.canopy.group);
+    s.canopy.dispose();
     s.canopy = null;
     s.canopyKey = '';
   }
@@ -536,30 +610,83 @@ export class CartView {
       const d = want[l] - s.fold[l];
       s.fold[l] += Math.sign(d) * Math.min(Math.abs(d), dt / UNFOLD_S);
     }
-    for (const { n, f, y0 } of s.nodes) {
+    for (const { n, f, p0, q } of s.nodes) {
       const t = ease(s.fold[f.level], f.from, f.to);
       if (f.rx !== undefined) n.rotation.x = f.rx * t;
       if (f.rz !== undefined) n.rotation.z = f.rz * t;
-      if (f.dy !== undefined) n.position.y = y0 + f.dy * t;
+      if (q) n.quaternion.slerpQuaternions(IDENTITY, q, t);
+      if (f.d) n.position.set(p0.x + f.d[0] * t, p0.y + f.d[1] * t, p0.z + f.d[2] * t);
     }
     if (!towed) {
       const lift = 1 - ease(s.fold[1], 0, 0.4);
       s.tilt.rotation.x = lift * s.slopeX;
       s.tilt.rotation.z = lift * s.slopeZ;
     }
-    // The canopy, once its poles are up.
-    const key = v.open && level >= 1 && s.fold[1] >= 1 ? `${v.x},${v.y},${v.z},${v.heading}` : '';
-    if (key !== s.canopyKey) {
-      this.dropCanopy(s);
-      s.canopyKey = key;
-      if (key) this.group.add((s.canopy = rigModel(canopyRig(v), { x: v.x, y: v.y, z: v.z }, v.id)));
-    }
+    this.canopy(s, v, level, towed);
     if (s.model && s.level !== level) {
       s.level = level;
       for (const [name, at] of Object.entries(CART_LEVEL_NODES)) {
         const n = s.model.getObjectByName(name);
         if (n) n.visible = level >= at;
       }
+    }
+  }
+
+  /** The canopy (level 1, parked): rolled on the deck while it's packed; unfolding, once the poles are up its corners are
+   *  hauled from the roll's ends to their tips, then its low corners spread out to their stakes and it's pulled taut
+   *  (its lines tighten, the billow comes in); packing, the same backwards. Where it's up it's canopyRig(v), as the sim
+   *  and the shade have it. */
+  private canopy(s: Shown, v: Vehicle, level: number, towed: boolean) {
+    const u = s.fold[1];
+    const hoist = ease(u, CANOPY_HOIST[0], CANOPY_HOIST[1]), spread = ease(u, CANOPY_SPREAD[0], CANOPY_SPREAD[1]);
+    const out = level >= 1 && !towed && parked(v) && u > CANOPY_HOIST[0] && !!s.model;
+    s.roll.visible = level >= 1 && !out;
+    const key = out ? `${v.x},${v.y},${v.z},${v.heading}` : '';
+    if (key !== s.canopyKey) {
+      this.dropCanopy(s);
+      s.canopyKey = key;
+      if (key) {
+        s.canopy = new CanopyModel(canopyRig(v), { x: v.x, y: v.y, z: v.z }, v.id);
+        this.group.add(s.canopy.group);
+        s.canopy.group.userData.done = false;
+      }
+    }
+    if (!s.canopy) return;
+    const done = u >= 1;
+    if (done && s.canopy.group.userData.done) return;
+    s.canopy.group.userData.done = done;
+    const final = canopyRig(v);
+    if (done) {
+      s.canopy.set(final, final, 1);
+      return;
+    }
+    const tip = (name: string, out: THREE.Vector3) => {
+      const n = s.model!.getObjectByName(name);
+      if (!n) return null;
+      n.updateWorldMatrix(true, false);
+      n.getWorldPosition(out);
+      return { x: out.x, y: out.y, z: out.z };
+    };
+    const a = tip('pole_a_tip', tmpTipA), b = tip('pole_b_tip', tmpTipB);
+    if (!a || !b) return;
+    s.canopy.set(canopyRising(v, a, b, hoist, spread), final, spread);
+  }
+
+  /** The work lamps: out with the level-2 pieces, lit from dusk to dawn while it's a workshop (unfolded, parked), stuttering
+   *  on; each lit one goes on the list the light pool takes its spots from (`lamps`). */
+  private workLamps(s: Shown, v: Vehicle, dt: number, towed: boolean, dark: boolean) {
+    const on = dark && !towed && parked(v) && !!v.open && (v.level ?? 0) >= 2 && s.fold[2] >= 1 && s.bulbs.length > 0;
+    s.lampS = on ? Math.max(0, s.lampS) + dt : -1;
+    const step = Math.floor(s.lampS / FLICKER_STEP);
+    const k = !on ? 0 : step < FLICKER.length ? FLICKER[step] : 0.97 + 0.03 * Math.sin(s.lampS * 23) * Math.sin(s.lampS * 7.3);
+    for (const b of s.bulbs) {
+      b.mat.emissive.copy(k > 0 ? BULB_LIT : BULB_DARK).multiplyScalar(k);
+      if (k <= 0) continue;
+      b.at.getWorldPosition(tmpTipA);
+      const bench = cartToWorld(v, b.side * CART_BENCH_X, 0);
+      const w = WORK_LAMP;
+      this.lamps.push({ x: tmpTipA.x, y: tmpTipA.y - 0.05, z: tmpTipA.z, tx: bench.x, ty: v.y + CART_DECK_Y, tz: bench.z,
+        intensity: w.intensity * k, angle: w.angle, penumbra: w.penumbra, distance: w.distance, decay: w.decay, color: w.color });
     }
   }
 

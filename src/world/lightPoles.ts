@@ -76,10 +76,16 @@ function lampAt(p: { x: number; y: number; z: number; rot: number }, out: THREE.
   return out.set(p.x + LAMP.x * c + LAMP.z * s, p.y + LAMP.y, p.z - LAMP.x * s + LAMP.z * c);
 }
 
-/** The pool of floodlights, handed to the lit poles nearest the camera. */
+/** Another lamp that borrows the pool (a cart's work lamp, src/world/carts.ts): where it is, where it's aimed, how
+ *  bright (its own flicker in it), its cone and reach. */
+export type Lamp = { x: number; y: number; z: number; tx: number; ty: number; tz: number; intensity: number; angle: number;
+  penumbra: number; distance: number; decay: number; color: number };
+
+/** The pool of floodlights, handed to the lit poles (and other lamps: `setLamps`) nearest the camera. */
 export class PoleLamps {
   private lights: THREE.SpotLight[] = [];
   private lit: { x: number; y: number; z: number; rot: number }[] = [];
+  private lamps: readonly Lamp[] = [];
   private at = new THREE.Vector3();
 
   /** Puts the pool in the scene: call at startup, before the first render. */
@@ -98,9 +104,22 @@ export class PoleLamps {
     this.lit = lit;
   }
 
-  /** Every frame: the pool to the lit poles nearest `eye`. */
+  /** The other lamps lit now (every frame they move or flicker). */
+  setLamps(lamps: readonly Lamp[]) {
+    this.lamps = lamps;
+  }
+
+  /** Every frame: the pool to the lit poles and lamps nearest `eye`. */
   update(eye: THREE.Vector3) {
-    const near = this.lit
+    const f = FLOOD;
+    const near = [
+      ...this.lit.map((p) => {
+        lampAt(p, this.at);
+        const { x, y, z } = this.at;
+        return { x, y, z, tx: x, ty: y - 10, tz: z, intensity: f.intensity, angle: f.angle, penumbra: f.penumbra, distance: f.distance, decay: f.decay, color: f.color } as Lamp;
+      }),
+      ...this.lamps,
+    ]
       .map((p) => ({ p, d: Math.hypot(p.x - eye.x, p.z - eye.z) }))
       .filter((n) => n.d < RANGE)
       .sort((a, b) => a.d - b.d)
@@ -111,10 +130,15 @@ export class PoleLamps {
         light.intensity = 0;
         return;
       }
-      lampAt(n.p, this.at);
-      light.position.copy(this.at);
-      light.target.position.set(this.at.x, this.at.y - 10, this.at.z);
-      light.intensity = FLOOD.intensity * Math.min(1, (RANGE - n.d) / FADE);
+      const p = n.p;
+      light.position.set(p.x, p.y, p.z);
+      light.target.position.set(p.tx, p.ty, p.tz);
+      light.angle = p.angle;
+      light.penumbra = p.penumbra;
+      light.distance = p.distance;
+      light.decay = p.decay;
+      light.color.setHex(p.color);
+      light.intensity = p.intensity * Math.min(1, (RANGE - n.d) / FADE);
     });
   }
 }

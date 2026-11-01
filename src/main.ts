@@ -104,7 +104,7 @@ import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
 import { openBoxes, TOWER_REACH_SPOT } from '../shared/storage.ts';
 import { climbingOn, DECK_STEP, GRAB_REACH, SPOT_ITEMS, SPOTS, spotNear, TOWER, towersNear } from '../shared/towers.ts';
-import { windSpeed } from '../shared/power.ts';
+import { darkAt, windSpeed } from '../shared/power.ts';
 import { Chat } from './chat';
 import { nameGate } from './name';
 import { prologue } from './prologue';
@@ -658,7 +658,7 @@ renderer.setAnimationLoop((time) => {
       const b = vehicleView.ball(c.hitched);
       if (b) towers.push({ id: -c.id, tow: c.id, x: c.x, y: c.y, z: c.z, heading: b.heading, hitch: c.heading, at: b.at, pitch: b.pitch });
     }
-    cartView.update(frameDt, vehicles, towers, focus, windSpeed(net.worldTime(), stormAt(net.storms, focus.x, focus.z, net.serverTime())));
+    cartView.update(frameDt, vehicles, towers, focus, windSpeed(net.worldTime(), stormAt(net.storms, focus.x, focus.z, net.serverTime())), darkAt(sky.day.tod));
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);
@@ -742,7 +742,7 @@ renderer.setAnimationLoop((time) => {
   tickEchoBus();
   if (L.things) {
     placedView.update(frameDt, net.worldTime(), (x, z) => stormAt(net.storms, x, z, net.serverTime()), survival.fillingWell);
-    placedView.updateLamps(orbit.camera.position);
+    placedView.updateLamps(orbit.camera.position, cartView.lamps);
   }
   const ear = orbit.camera.position;
   wellSound.update(L.things ? placedView.nearestWell(ear, 30) : null, ear, survival.fillingWell !== null);

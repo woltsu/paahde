@@ -17,6 +17,21 @@ What we built, why, and what's left. Dated sessions newest first, then undated t
   its capsules, not under its canopy, facing it); a stranger by it → their own spawn; packed → bedroll; unfolded under a
   tarp (no free spot) → bedroll.
 
+## 2026-11-01 — The cart's camp, bigger; its canopy put up; work lamps
+
+- **Why:** played, the unfolded cart felt cramped, the canopy popped in, looked like the hand-made tarp's patched rag,
+  and standing on the deck put your head through it; dismantling at night was in the dark.
+- **Bigger:** each side's leaf slides out of it once it's down (benches 1.2 m deep, camp 3.76 × 2.2 m, ~1.4× the
+  footprint); the trestles moved under the leaves. Packed it's the same size. Stations, capsules (two per bench), the
+  tilt check and the table all follow (`CART_BENCH_*`).
+- **Canopy:** the poles rake out ~30° past the deck's ends with telescoping tops (tips 3.66 m), so the canvas covers the
+  whole camp and a person working beside either bench, and clears a head on the deck. Put up visibly: rolled on the
+  deck packed, hauled up to the tips, spread and pulled taut (lines tighten, the billow comes in); packing reverses it.
+  The sim's canvas and shade count once it's up (`Vehicle.pitching`, cleared by the server after 1.5 s). Its own clean
+  khaki style: even panel seams, a bound hem, corner patches with grommets.
+- **Work lamps:** level 2 swings out a caged bulb on a bent arm from each pole over its bench, lit dusk to dawn
+  (`darkAt`), stuttering on, through the light poles' spot pool.
+
 ## 2026-11-01 — The cart, phase 3: the workshop; the benches out of the build menu
 
 - **Why:** the cart replaces the wrench-built benches and chest (docs/cart.md): your camp goes where you go.

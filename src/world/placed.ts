@@ -29,7 +29,7 @@ import { TARP_WIND, tarpModel } from './tarps.ts';
 import { inShelter } from '../../shared/shelters.ts';
 import { SPIGOT, WELL } from '../../shared/wells.ts';
 import { BeaconBeams, beaconModel, LENS, lensColor } from './beacons.ts';
-import { lightPoleModel, POLE_LENS, PoleLamps, poleLensColor } from './lightPoles.ts';
+import { lightPoleModel, POLE_LENS, PoleLamps, poleLensColor, type Lamp } from './lightPoles.ts';
 import { applyTier } from '../tierLook.ts';
 import { cells } from '../../shared/power.ts';
 
@@ -276,8 +276,10 @@ export class PlacedView {
     this.lamps.set(poles);
   }
 
-  /** Every frame: the light poles' floodlights to the lit ones nearest the camera at `eye`. */
-  updateLamps(eye: THREE.Vector3) {
+  /** Every frame: the light poles' floodlights (and `others`, the carts' work lamps lit now: src/world/carts.ts) to the
+   *  lit ones nearest the camera at `eye`. */
+  updateLamps(eye: THREE.Vector3, others: readonly Lamp[] = []) {
+    this.lamps.setLamps(others);
     this.lamps.update(eye);
   }
 

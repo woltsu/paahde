@@ -209,7 +209,9 @@ export const LIGHT_POLE_W = 20;
 const DUSK = 0.05;
 
 /** Is it dark enough for the light poles at shared clock `worldMs`? */
-export const poleDark = (worldMs: number) => sunElevation(timeOfDayAt(worldMs)) < DUSK;
+export const poleDark = (worldMs: number) => darkAt(timeOfDayAt(worldMs));
+/** Is it dark enough for the light poles at time of day `tod` (the carts' work lamps, src/world/carts.ts, too)? */
+export const darkAt = (tod: number) => sunElevation(tod) < DUSK;
 
 /** What the server sends: each windmill's output (W), each store's (a station's, a beacon's) charge per slot (kWh) and
  *  intake (W), the beacons and light poles lit and the wells running (shared/wells.ts). */

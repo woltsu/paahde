@@ -119,8 +119,10 @@ Pieces of a level not reached are hidden by code. Stylised scrap, `docs/look.md`
 `tools/blender/stationkit.py`.
 
 As built (`tools/blender/cart.py`, whose header has the details): exported **packed**, every node's rotation identity,
-so code unfolds a node by setting the rotation (for `legs`, the position) below, times t ∈ [0, 1]. Pivots in cart
-coordinates (y up, metres); all nodes are children of the root `cart` except the nested ones.
+so code unfolds a node by setting the rotation below times t ∈ [0, 1] (a quaternion slerped from identity), or for a
+slide its position plus the offset times t. Pivots in cart coordinates (y up, metres); all nodes are children of the
+root `cart` except the nested ones. The quaternions and slides are printed by every run of the script
+(`unfold <node>: ...`) and copied into `src/world/carts.ts` `FOLD`.
 
 | Node | Pivot (x, y, z) | Unfolded | |
 |---|---|---|---|
@@ -129,17 +131,23 @@ coordinates (y up, metres); all nodes are children of the root `cart` except the
 | `tongue` | (0, 0.79, −1.1) | — | A-frame; child empty `coupler` at (0, 0.54, −2.40) |
 | `stand` (in `tongue`) | (0, 0.50, −2.0) | `rotation.x = +90°` | packed lying back under the tongue; down, its foot on the ground |
 | `lid` | (0, 1.32, −0.76) | `rotation.x = −100°` | hinged on the box's front edge (tongue side), opens from the rear |
-| `pole_a` | (−0.56, 0.93, −0.98) | `rotation.x = −90°` | front left; tip empty `pole_a_tip` (−0.56, 0.93, 0.82) → (−0.56, 2.73, −0.98) |
-| `pole_b` | (0.56, 0.93, 0.98) | `rotation.x = +90°` | rear right; tip empty `pole_b_tip` (0.56, 0.93, −0.82) → (0.56, 2.73, 0.98) |
+| `pole_a` | (−0.56, 0.93, −0.98) | quaternion (−0.82143, −0.22266, 0, 0.52504) | front left, packed lying back along the bed; swung up raked ~30° out forward and left; the work lamp's clamp on it |
+| `pole_a_top` (in `pole_a`) | as `pole_a` | `position.z += 1.3649` (a slide) | its top section run out; tip empty `pole_a_tip` (−0.56, 0.93, 0.82) → (−1.30, 3.66, −2.40) |
+| `lamp_a` (in `pole_a`) | (−0.56, 1.005, 0.52) | quaternion (−0.57567, −0.01238, 0, 0.81759) | the work lamp's bent arm, packed along the pole on a lug, swung out over the workbench; bulb empty `lamp_a_bulb` → (−1.22, 2.10, −0.40) |
+| `pole_b`, `pole_b_top`, `lamp_b` | (0.56, 0.93, 0.98), (0.56, 1.005, −0.52) | quaternion (0.82143, −0.22266, 0, 0.52504); `position.z −= 1.3649`; quaternion (0.57567, −0.01238, 0, 0.81759) | rear right, the mirror: tip `pole_b_tip` → (1.30, 3.66, 2.40), its lamp over the dismantling table, `lamp_b_bulb` → (1.22, 2.10, 0.40) |
 | `side_l` | (−0.68, 0.88, 0) | `rotation.z = +90°` | workbench; folds out level with the deck |
-| `leg_l` (in `side_l`) | (−0.73, 1.48, 0) | `rotation.z = −90°` (relative to `side_l`) | trestle, packed flat on the wall's outside |
-| `side_r` | (0.68, 0.88, 0) | `rotation.z = −90°` | dismantling table |
-| `leg_r` (in `side_r`) | (0.73, 1.48, 0) | `rotation.z = +90°` (relative to `side_r`) | |
+| `leaf_l` (in `side_l`) | (−0.715, 1.23, 0) | `position += (0.02, 0.55, 0)` (a slide, `side_l`'s frame) | the leaf nested under the side's top slides out of its outer edge and up flush |
+| `leg_l` (in `leaf_l`) | (−0.75, 1.46, 0) | `rotation.z = −90°` (relative to `leaf_l`) | trestle under the leaf's outer edge, packed flat on the wall's outside |
+| `side_r`, `leaf_r`, `leg_r` | (0.68, 0.88, 0), (0.715, 1.23, 0), (0.75, 1.46, 0) | `rotation.z = −90°`; `position += (−0.02, 0.55, 0)`; `rotation.z = +90°` | dismantling table, its leaf with the hazard stripes and the bolt tray |
 | `legs` | (0, 0, 0) | `position.y = −0.46` (a slide) | four stabilisers at (±0.50, z ±1.145), feet down to the ground |
 
-Unfolded, both bench tops are at y 0.88 (flush with the deck), |x| 0.68 .. 1.33 (0.65 m deep), z −1.08 .. 1.08, their
-trestles' feet on the ground at |x| ≈ 1.30, z ±0.98. The workbench's tools sit near its outer edge, the table's middle
-is clear. Packed, the sides are the cart's walls (top 1.53), so hiding them below level 2 leaves the bed open-sided.
+The bulbs' material is `Bulb`: code gives each cart its own, glowing while its lamps are lit.
+
+Unfolded, both bench tops are at y 0.88 (flush with the deck), |x| 0.68 .. 1.88 (1.2 m deep: the side's 0.65 and its
+leaf's 0.55), z −1.08 .. 1.08, their trestles' feet on the ground at |x| ≈ 1.83, z ±0.98: the camp is 3.76 × 2.2 m.
+The workbench's tools sit in the middle of its depth, the table's middle is clear. Packed, the sides are the cart's
+walls (top 1.53), so hiding them below level 2 leaves the bed open-sided; packed it is the same size as before
+(1.67 m wide over everything).
 
 ## As built (phase 1, November 2026)
 
@@ -298,3 +306,45 @@ centre) was inside the rear tyre (its back is 1.05 m behind), with no tow ball d
   making the wrench, both levels, a tarp and a bedroll, the console and power box refused on the packed cart, then
   stripped step by step on the unfolded one (packing refused with each on it), wiring and a battery out, a bearing
   hammered at the cart's bench, crafting refused once packed, and the old three taken down into their materials.
+
+## As built: a bigger camp, the canopy put up, work lamps (November 2026)
+
+From play: the unfolded cart was cramped, the canopy popped in and looked like the hand tarp's patched rag, standing on
+the deck put your head through it (phase 2's note), and the workshop was dark at night.
+
+- **Bigger (the model's contract above):** each side's **leaf** (`leaf_l`, `leaf_r`), nested under the side's top
+  packed, slides 0.55 m out of its outer edge and 2 cm up flush once the side is down; the trestle hangs under the
+  leaf's edge now. Benches 1.2 m deep, |x| 0.68 .. 1.88: the camp is 3.76 × 2.2 m (was 2.66 × 2.2, 1.41× the
+  footprint). Packed it's the same (1.67 m wide). `shared/cart.ts`: `CART_BENCH_X` 1.28, `CART_BENCH_HX` 0.6 (so the
+  stations, `tableById`'s table at 1.2 × 2.16 and the machine on its middle follow), each bench two capsules side by
+  side (r 0.3), the tilt check's footprint |x| 1.88 (`OPEN_HX`).
+- **Canopy:** the poles swing up raked ~30° out past the deck's ends (a quaternion turn each), their top sections
+  (`pole_a_top`, `pole_b_top`) slide out 1.36 m: tips at (∓1.30, 3.66, ∓2.40). `canopyRig`: high corners 6 cm under
+  them (3.60), low corners at (∓3.8, 2.4, ±0.7) (front right, rear left), sag 0.07, a line from every corner to a stake
+  (the low ones 1.2 m further out, the tips' 1.6 m beyond them). It covers the whole camp and a person working at either
+  bench's middle (|x| 2.3, over 2.6 m there), and over the deck it's at least 2.83 m, so a head clears it standing on
+  the deck (tested). The tarp's lowest is 2.4 m: no head boxes needed.
+- **Put up visibly (src/world/carts.ts, on the level-1 clock):** stabilisers 0–0.35, poles 0.25–0.65, tops 0.5–0.8; the
+  canvas, rolled and strapped across the deck behind the box while packed (`CANOPY_ROLL`, also while towed), is hauled
+  from the roll's ends to the drawn tips (0.6–0.85: up first, then out, a sagging furled strip), then spread (0.8–1):
+  its low corners travel out to their stakes, its lines go from slack (hanging to the sand) to taut, the billow comes in
+  (a `taut` attribute in the canvas shader, 1 for tarps). `shared/cart.ts` `canopyRising` is that rig (drawn only); at
+  the end it is `canopyRig`. Packing runs it backwards. `src/world/tarps.ts` `CanopyModel` refills the canvas grid in
+  place while it moves.
+- **Sim and shade:** `canopyUp(v)`: the canvas is solid and shades only once it's up. The server sets `Vehicle.pitching`
+  on unfolding (or on reaching level 1 unfolded) and clears it `UNFOLD_S` later (`VehicleServer.pitch`; never stored),
+  so server and clients agree from the vehicles list, no clocks.
+- **Its look:** a canvas style of its own (`CanvasStyle` 'canopy'): one khaki colour (0x9c8c5c, between the teal box
+  and the rust), four even panels with straight seams and a fainter middle one, a dark bound hem, a square
+  reinforcement at each corner with a metal grommet where the line ties. The hand tarp keeps its patched look.
+- **Work lamps (level 2):** `lamp_a`, `lamp_b`: a caged bulb under a teal dish on a bent arm, clamped to each pole
+  (folded along it packed, swung out over its bench, 0.5–0.9 of the level-2 clock), bulbs 1.2 m over the benches. Lit
+  while the cart is a workshop (parked, unfolded, level 2, fully out) and it's dusk to dawn (`shared/power.ts`
+  `darkAt`, the light poles' rule; no power needed): its bulbs glow (bloom) and stutter on over ~0.7 s, and each puts
+  a warm shadowless spot down onto its bench's middle through the light poles' pool (`CartView.lamps` →
+  `PlacedView.updateLamps` → `PoleLamps.setLamps`: the nearest 4 of poles and lamps get the slots; no new lights).
+- **Tests:** the canopy covers the camp, clears a head on the deck, shades nothing while `pitching`; the benches at the
+  new size at four headings; the lab walks moved out past the leaves. Checked in headless Chrome: the unfold at level 2
+  in frames, from ~6 and ~8 m, under the canopy, a person beside the table, packing, and at night with a machine on
+  the table.
+- **Note:** the shadowless spots light the sand through the benches (as the light poles do through anything).
