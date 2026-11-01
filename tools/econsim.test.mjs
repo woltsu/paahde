@@ -8,7 +8,7 @@ import { SCRAP_REWARD } from '../shared/tables.ts';
 function finalReceiverFixture() {
   const sim = new Sim('sim0000', 0);
   sim.chest = [
-    { id: 100, kind: 'workbench', n: 1 }, { id: 101, kind: 'dismantle_bench', n: 1 },
+    { id: 100, kind: 'workbench', n: 1 }, { id: 101, kind: 'dismantle_bench', n: 1 }, { id: 105, kind: 'cart1', n: 1 }, { id: 106, kind: 'cart2', n: 1 },
     { id: 102, kind: 'receiver_colossus', n: 1, parts: ['uranium', 'servo_heart', 'relay_basic'] },
     { id: 103, kind: 'receiver_worm', n: 1, parts: ['uranium', 'hive_core', 'queen_eye', null] },
   ];

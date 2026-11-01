@@ -33,9 +33,10 @@ import { CORPSE_S, World, type Poi, type Source, type Thing } from './world.ts';
  *  (made by hand) and with it the dismantling bench, without which carried machines aren't taken apart (the pod's console
  *  and power box hold the first wiring), then the workbench (put up at home), without which nothing is repaired or
  *  crafted, the chest and the bedroll (commits from before these were built skip them, and with the bunker standing the
- *  chest, the bedroll and the bench are its: OPEN_GOALS). */
+ *  chest, the bedroll and the bench are its: OPEN_GOALS). Since the cart (docs/cart.md) the benches are its level 2
+ *  and the chest its box: the wrench, then the cart's levels 1 and 2 (CART_GOALS) in their place. */
 const GOALS = [
-  'wrench', 'dismantle_bench', 'workbench', 'canteen', 'bedroll', 'scrap_mace', 'backpack', 'laser_pistol', 'motorcycle', 'storage_chest', 'spyglass', 'shield', 'laser_rifle', 'storm_detector', 'jammer', 'wristpad',
+  'wrench', 'cart1', 'cart2', 'dismantle_bench', 'workbench', 'canteen', 'bedroll', 'scrap_mace', 'backpack', 'laser_pistol', 'motorcycle', 'storage_chest', 'spyglass', 'shield', 'laser_rifle', 'storm_detector', 'jammer', 'wristpad',
   'grinder', 'receiver_colossus', 'boss:colossus', 'receiver_queen', 'boss:queen', 'receiver_carrier', 'boss:carrier', 'receiver_worm', 'boss:worm',
   'windmill', 'battery_station', 'well',
 ] as const;
@@ -49,8 +50,20 @@ const QUALITY_MILESTONES = ['laser_rifle', 'motorcycle', 'backpack', 'canteen'];
 const SMITHED: Partial<Record<PartId, string>> = { gear: 'gear_scrap', bearing: 'bearing_scrap', valve: 'valve_scrap', heatsink: 'heatsink_scrap' };
 
 // (This file also runs against older commits (cli.ts --base): what they may not have yet is looked up, not imported.)
-/** The buildings put up with the wrench (shared/crafting.ts), none before there were. */
-const BUILDS: Record<string, Recipe> = (crafting as { BUILDS?: Record<string, Recipe> }).BUILDS ?? {};
+/** The cart's levels raised with the wrench (shared/crafting.ts CART_UPGRADES), none before there were. */
+const CART_UPGRADES: Record<number, Recipe> = (crafting as { CART_UPGRADES?: Record<number, Recipe> }).CART_UPGRADES ?? {};
+/** The goals for the cart's levels 1 and 2, and whether its workshop is where things are repaired, crafted and taken
+ *  apart (docs/cart.md phase 3: the workbench, dismantling bench and chest are no longer built; before, the cart had
+ *  levels but the benches were still put up). */
+const CART_SHADE = 'cart1', CART_WORKSHOP = 'cart2';
+const CART_BENCHES = !!CART_UPGRADES[2] && !('workbench' in ((crafting as { BUILDS?: Record<string, Recipe> }).BUILDS ?? {}));
+const CART_GOALS = [CART_SHADE, CART_WORKSHOP];
+/** The buildings put up with the wrench (shared/crafting.ts), none before there were; with the cart's benches, its
+ *  levels too, as if built (a pseudo item each at home once raised). */
+const BUILDS: Record<string, Recipe> = {
+  ...((crafting as { BUILDS?: Record<string, Recipe> }).BUILDS ?? {}),
+  ...(CART_BENCHES ? { [CART_SHADE]: { ...CART_UPGRADES[1], makes: CART_SHADE }, [CART_WORKSHOP]: { ...CART_UPGRADES[2], makes: CART_WORKSHOP } } : {}),
+};
 const WRENCH = 'wrench';
 /** The scrap mace (shared/mace.ts), made by hand; none before there was (HAND). */
 const MACE = 'scrap_mace';
@@ -62,7 +75,8 @@ const BUILT_WORKBENCH = WORKBENCH in BUILDS;
 /** The dismantling bench, the chest and the bedroll: built (made) at home, unless the bunker stands (home.ts BUNKER). */
 const TABLE = 'dismantle_bench';
 const BUNKER_HAS: string[] = [TABLE, 'storage_chest', 'bedroll'];
-const OPEN_GOALS = GOALS.filter((g) => (g !== WORKBENCH || BUILT_WORKBENCH) && !(BUNKER && BUNKER_HAS.includes(g)));
+const OPEN_GOALS = GOALS.filter((g) => (g !== WORKBENCH || BUILT_WORKBENCH) && !(BUNKER && BUNKER_HAS.includes(g))
+  && (CART_BENCHES ? ![TABLE, WORKBENCH, 'storage_chest'].includes(g) : !CART_GOALS.includes(g)));
 /** The items a recipe uses up from the chest (indexes; shared/crafting.ts), gear never among them. */
 const pickFrom: (items: Item[], r: Recipe) => number[] | null = (crafting as { pickFrom?: typeof crafting.pickFrom }).pickFrom
   ?? ((items, r) => crafting.pickIngredients(items.map((it) => (it.parts ? null : it)), r));
@@ -182,10 +196,12 @@ export class Sim {
   }
   /** A workbench stands at home: repairs and its recipes can be done. */
   private get workbench(): boolean {
+    if (CART_BENCHES) return this.gearOf(CART_WORKSHOP).length > 0;
     return !BUILT_WORKBENCH || this.gearOf(WORKBENCH).length > 0;
   }
   /** A dismantling bench stands at home (or the bunker's table): carried machines can be taken apart. */
   private get table(): boolean {
+    if (CART_BENCHES) return this.gearOf(CART_WORKSHOP).length > 0;
     return BUNKER || this.gearOf(TABLE).length > 0;
   }
   private best(kind: string): Item | null {
@@ -914,6 +930,8 @@ export class Sim {
     const r = RECIPES[id] ?? HAND[id] ?? BUILDS[id];
     // A building goes up with the wrench (src/placing.ts); the workbench's recipes need one standing.
     if (BUILDS[id] && !this.gearOf(WRENCH).length) return false;
+    // (The cart's levels go up one at a time.)
+    if (id === CART_WORKSHOP && !this.gearOf(CART_SHADE).length) return false;
     if (RECIPES[id] && !this.workbench) return false;
     // Earlier goals' share first; then which items it takes, and how gear made is fitted, is the game's (shared/crafting.ts).
     for (const ing of r.needs) {
@@ -992,7 +1010,7 @@ export class Sim {
     }
     if (bagShape(this.equip).rows >= backpackRows(3)) m.full_backpack ??= this.t;
     // The wrench and what's put up (or laid out) at home: the start of a game without the bunker.
-    for (const k of [WRENCH, ...BUNKER_HAS, WORKBENCH]) if (this.gearOf(k).length) m[`made:${k}`] ??= this.t;
+    for (const k of [WRENCH, ...BUNKER_HAS, WORKBENCH, ...CART_GOALS]) if (this.gearOf(k).length) m[`made:${k}`] ??= this.t;
   }
 
   /** Call every boss whose receiver works, if there's a rifle to fight it with. */
