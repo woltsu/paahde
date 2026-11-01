@@ -162,6 +162,10 @@ centre) was inside the rear tyre (its back is 1.05 m behind), with no tow ball d
   object's position is then the ball minus the turned coupler, so the coupler is on the ball by construction. Purely
   drawn: the server never needs it, and the axle's horizontal place stays within cm of `towedPose`.
 - A towed cart is drawn however far its bike is (no bike without its cart at the view distance's edge).
+- Its two wheels lay tyre tracks as the bike does (`src/footprints.ts` `TyreTrack`, shared with `src/bike.ts`): from
+  under each drawn wheel's hub, broken while that wheel is off the sand (flying, more than 5 cm up) or on the mudflat.
+  The tyre pool holds 4096 strips (was 1024), so three tracks still last the 90 s fade at a cruise; a print sends only
+  its own slots to the GPU. On a curve they run inside the bike's, as a trailer's do.
 - Checked in headless Chrome, own and a remote bot's cart, towing, hard turns, reversing to the 100° limit, a
   wheelie, a crest launch: the coupler-to-ball distance stayed under 1e-13 m every frame.
 

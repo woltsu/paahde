@@ -12,8 +12,10 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
-import { hangCart, newHang, type Hang } from '../../shared/cartHang.ts';
+import { hangCart, newHang, turned, type Hang } from '../../shared/cartHang.ts';
+import { biome } from '../../shared/biomes.ts';
 import { cartSound } from '../cartSound';
+import { TyreTrack } from '../footprints.ts';
 import { rigModel } from './tarps.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { heightAt } from '../../shared/terrain.ts';
@@ -68,6 +70,8 @@ type Shown = {
   fold: number[]; want: number[] | undefined;
   nodes: { n: THREE.Object3D; f: (typeof FOLD)[number]; y0: number }[];
   canopy: THREE.Group | null; canopyKey: string;
+  /** Towed: the two wheels' tyre tracks (left, right). */
+  tracks: [TyreTrack, TyreTrack];
 };
 
 let template: Promise<THREE.Object3D> | undefined;
@@ -176,6 +180,7 @@ export class CartView {
       if (t) this.tow(s, t, dt);
       else if (pose !== s.last) {
         s.hang.ay = NaN;
+        for (const tr of s.tracks) tr.break();
         this.place(s, pose);
       }
       this.pieces(s, v, dt, !!t);
@@ -196,7 +201,7 @@ export class CartView {
     this.group.add(obj);
     const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0,
       coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang(), slopeX: 0, slopeZ: 0,
-      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '' };
+      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '', tracks: [new TyreTrack(), new TyreTrack()] };
     loadCart().then((t) => {
       const m = t.clone(true);
       m.traverse((o) => {
@@ -263,6 +268,13 @@ export class CartView {
     s.tilt.rotation.x = g.phi;
     s.tilt.rotation.z = g.roll;
     this.roll(s, { x: g.axle.x, y: g.axle.y - CART_WHEEL_R, z: g.axle.z, heading: g.psi });
+    // Tyre tracks, as the bike's (src/bike.ts): from under each wheel's hub while it's on the sand.
+    for (let i = 0; i < 2; i++) {
+      const c = turned({ x: (i ? 1 : -1) * CART_HALF_TRACK, y: CART_WHEEL_R, z: 0 }, g.psi, g.phi, g.roll);
+      const x = g.x + c.x, z = g.z + c.z;
+      if (g.y + c.y - CART_WHEEL_R > heightAt(x, z) + 0.05 || biome('mudflat', x, z) > 0.5) s.tracks[i].break();
+      else s.tracks[i].to(x, z);
+    }
   }
 
   /** The stand and the level's pieces: unfolding, each level's pieces out while it's open and reached (a change heard,

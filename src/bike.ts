@@ -11,7 +11,7 @@ import { biome } from '../shared/biomes.ts';
 import { HITCH_BACK, HITCH_Y } from '../shared/cart.ts';
 import { slopeAt } from '../shared/sim.ts';
 import { heightAt } from '../shared/terrain.ts';
-import { END_FADE, TRACK_WRAP, tyreprints } from './footprints.ts';
+import { TyreTrack } from './footprints.ts';
 import { tyreDust } from './tyreDust.ts';
 import { bikeLandSound } from './bikeLandSound.ts';
 import type { RidePose } from './players.ts';
@@ -31,7 +31,6 @@ const WHEELBASE = 1.36;
 const STEER_AXIS = new THREE.Vector3(0, 0.9135, 0.4067);
 const MAX_LEAN = 0.6;
 const MAX_STEER = 0.5;
-const TRACK_STEP = 0.3; // metres per tyre-track strip (short, so turns curve smoothly)
 const WHEELIE = 0.45; // rad the nose comes up, about the rear tyre's contact
 const WHEELIE_TOW = 0.2; // …towing the cart (shared/sim.ts: no hop then either)
 /** The tow ball (shared/cart.ts HITCH_BACK, HITCH_Y) in the bike's frame: the towed cart's coupler is pinned to it
@@ -99,10 +98,7 @@ export class Bike {
   private wheelie = 0;
   private lean = 0;
   private steer = 0;
-  // Where the tyre track last ended, and the path distance there (keys the tread pattern).
-  private trackX = NaN;
-  private trackZ = NaN;
-  private trackS = 0;
+  private track = new TyreTrack(); // the rear tyre's
   private forward = NaN;
   private accel = 0;
   private grounded = true;
@@ -216,35 +212,14 @@ export class Bike {
 
     // Tyre track and dust on the sand.
     if (!p.grounded || p.y > heightAt(p.x, p.z) + 0.05) {
-      this.trackX = NaN; // airborne: the track breaks, and starts afresh where it lands
+      this.track.break(); // airborne: the track breaks, and starts afresh where it lands
       return;
     }
     this.dust(p, fx, fz, hs, dt, landed);
     const rx = p.x - fx * WHEELBASE * 0.5, rz = p.z - fz * WHEELBASE * 0.5;
     // The dried mud of a lake bed is too hard to take a print: the track breaks there.
-    if (biome('mudflat', rx, rz) > 0.5) this.trackX = NaN;
-    else this.trackTo(rx, rz);
-  }
-
-  /** Extend the tyre track to the rear wheel at (x, z): a strip from where it last ended, once it is long enough. */
-  private trackTo(x: number, z: number) {
-    if (Number.isNaN(this.trackX)) {
-      this.trackX = x;
-      this.trackZ = z;
-      return;
-    }
-    const dx = x - this.trackX, dz = z - this.trackZ;
-    const len = Math.hypot(dx, dz);
-    if (len < TRACK_STEP) return;
-    if (len < 3) {
-      const mx = this.trackX + dx / 2, mz = this.trackZ + dz / 2;
-      // Stretched so each end fade overlaps the neighbouring strip's, and the joins blend.
-      const strip = len / (1 - END_FADE);
-      tyreprints.add(mx, heightAt(mx, mz), mz, Math.atan2(-dx, -dz), 1, strip, this.trackS + len / 2, strip);
-      this.trackS = (this.trackS + len) % TRACK_WRAP;
-    } // else a teleport or snapshot jump: start afresh
-    this.trackX = x;
-    this.trackZ = z;
+    if (biome('mudflat', rx, rz) > 0.5) this.track.break();
+    else this.track.to(rx, rz);
   }
 
   /** The headlight: on once it is dark (the sun a couple of degrees under), with a quick ramp so it doesn't pop. */

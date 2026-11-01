@@ -21,7 +21,7 @@ type F = Node<'float'>;
 type V2 = Node<'vec2'>;
 type V3 = Node<'vec3'>;
 
-const MAX = 1024;
+const MAX = 1024; // prints per pool (tyre tracks: TYRE_MAX)
 const LIFE = 90; // seconds until a print has fully faded
 const CHUNK_M = EDIT_CHUNK * EDIT_CELL;
 const ERASE_DY = 0.03; // ground moved more than this under a print → erase it
@@ -143,15 +143,16 @@ type Kind = 'plain' | 'soft' | 'boot' | 'tyre';
 
 class Footprints {
   readonly mesh: THREE.InstancedMesh;
-  private spawn = new Float32Array(MAX).fill(-1e6);
+  private max: number;
+  private spawn: Float32Array;
   // Where each print sits (ground height at placement), to erase it if the ground changes.
-  private px = new Float32Array(MAX);
-  private py = new Float32Array(MAX).fill(NaN);
-  private pz = new Float32Array(MAX);
+  private px: Float32Array;
+  private py: Float32Array;
+  private pz: Float32Array;
   private dirty = new Set<string>();
   private spawnAttr: THREE.InstancedBufferAttribute;
   // Per print: facing yaw and two shader values (boots: foot side, unused; tyres: path distance, strip length).
-  private pose = new Float32Array(MAX * 3).fill(1);
+  private pose: Float32Array;
   private poseAttr: THREE.InstancedBufferAttribute;
   private next = 0;
   private m = new THREE.Matrix4();
@@ -167,7 +168,13 @@ class Footprints {
    * `geo` lies flat (normal +Y), front towards -Z. `boot` draws a boot sole on it (uv-based); `soft` feathers its sides (uv.x) and fades its ends (uv.y) linearly
    * over END_FADE, so strips overlapping by that much blend into one seamless line.
    */
-  constructor(geo: THREE.BufferGeometry, kind: Kind = 'plain') {
+  constructor(geo: THREE.BufferGeometry, kind: Kind = 'plain', max = MAX) {
+    this.max = max;
+    this.spawn = new Float32Array(max).fill(-1e6);
+    this.px = new Float32Array(max);
+    this.py = new Float32Array(max).fill(NaN);
+    this.pz = new Float32Array(max);
+    this.pose = new Float32Array(max * 3).fill(1);
     this.spawnAttr = new THREE.InstancedBufferAttribute(this.spawn, 1);
     this.poseAttr = new THREE.InstancedBufferAttribute(this.pose, 3);
     const age = time.sub(instancedBufferAttribute(this.spawnAttr, 'float'));
@@ -192,10 +199,10 @@ class Footprints {
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = -2;
     mat.polygonOffsetUnits = -2;
-    this.mesh = new THREE.InstancedMesh(geo, mat, MAX);
+    this.mesh = new THREE.InstancedMesh(geo, mat, max);
     this.mesh.frustumCulled = false;
     this.m.makeScale(0, 0, 0);
-    for (let i = 0; i < MAX; i++) this.mesh.setMatrixAt(i, this.m);
+    for (let i = 0; i < max; i++) this.mesh.setMatrixAt(i, this.m);
     this.mesh.renderOrder = 1;
 
     // Edits fire per vertex; collect the touched chunks and check prints once per batch.
@@ -209,7 +216,7 @@ class Footprints {
 
   private eraseDisturbed() {
     let changed = false;
-    for (let i = 0; i < MAX; i++) {
+    for (let i = 0; i < this.max; i++) {
       const y = this.py[i];
       if (Number.isNaN(y)) continue;
       const x = this.px[i], z = this.pz[i];
@@ -221,7 +228,9 @@ class Footprints {
       changed = true;
     }
     this.dirty.clear();
-    if (changed) this.mesh.instanceMatrix.needsUpdate = true;
+    if (!changed) return;
+    this.mesh.instanceMatrix.clearUpdateRanges(); // (the whole buffer goes up)
+    this.mesh.instanceMatrix.needsUpdate = true;
   }
 
   /**
@@ -231,7 +240,7 @@ class Footprints {
    */
   add(x: number, y: number, z: number, facing: number, size = 1, length = size, side = 1, extra = 0) {
     const i = this.next;
-    this.next = (this.next + 1) % MAX;
+    this.next = (this.next + 1) % this.max;
     normalAt(x, z, this.n);
     this.nv.set(this.n.x, this.n.y, this.n.z);
     this.q.setFromUnitVectors(this.up, this.nv);
@@ -241,22 +250,62 @@ class Footprints {
     this.s.set(size, 1, length);
     this.m.compose(this.p, this.q, this.s);
     this.mesh.setMatrixAt(i, this.m);
-    this.mesh.instanceMatrix.needsUpdate = true;
     this.spawn[i] = time.value;
     this.pose[i * 3] = facing;
     this.pose[i * 3 + 1] = side;
     this.pose[i * 3 + 2] = extra;
-    this.poseAttr.needsUpdate = true;
     this.px[i] = x;
     this.py[i] = y;
     this.pz[i] = z;
-    this.spawnAttr.needsUpdate = true;
+    // Only the print's own slots go up to the GPU (the big tyre pool would otherwise send all of it every strip).
+    for (const [a, n] of [[this.mesh.instanceMatrix, 16], [this.poseAttr, 3], [this.spawnAttr, 1]] as const) {
+      a.addUpdateRange(i * n, n);
+      a.needsUpdate = true;
+    }
+  }
+}
+
+/** Metres per tyre-track strip (short, so turns curve smoothly). */
+const TRACK_STEP = 0.3;
+
+/** One wheel's track in `tyreprints`: call `to()` with the wheel's contact point each frame it is on the sand, `break()`
+ *  when it isn't (in the air, on hard ground); strips go down from where it last ended once they're long enough. */
+export class TyreTrack {
+  private x = NaN;
+  private z = NaN;
+  private s = 0; // path distance (keys the tread pattern)
+
+  break() {
+    this.x = NaN;
+  }
+
+  to(x: number, z: number) {
+    if (Number.isNaN(this.x)) {
+      this.x = x;
+      this.z = z;
+      return;
+    }
+    const dx = x - this.x, dz = z - this.z;
+    const len = Math.hypot(dx, dz);
+    if (len < TRACK_STEP) return;
+    if (len < 3) {
+      const mx = this.x + dx / 2, mz = this.z + dz / 2;
+      // Stretched so each end fade overlaps the neighbouring strip's, and the joins blend.
+      const strip = len / (1 - END_FADE);
+      tyreprints.add(mx, heightAt(mx, mz), mz, Math.atan2(-dx, -dz), 1, strip, this.s + len / 2, strip);
+      this.s = (this.s + len) % TRACK_WRAP;
+    } // else a teleport or snapshot jump: start afresh
+    this.x = x;
+    this.z = z;
   }
 }
 
 // Boot prints: a plane the size of a sole, the shape drawn in the shader. Toe towards -Z.
 export const footprints = new Footprints(new THREE.PlaneGeometry(BOOT_W, BOOT_L).rotateX(-Math.PI / 2), 'boot');
-// The bike's tyre track: knobby strips laid end to end along the path (see `add`), the tread drawn in the shader.
-export const tyreprints = new Footprints(new THREE.PlaneGeometry(TYRE_W, 1).rotateX(-Math.PI / 2), 'tyre');
+// Tyre tracks (the bike's, a towed cart's two wheels: `TyreTrack`): knobby strips laid end to end along the path (see
+// `add`), the tread drawn in the shader. A bike towing lays three tracks, so this pool is bigger: about 400 m of
+// towing at 0.3 m a strip before the oldest go, i.e. the whole 90 s fade at an easy cruise.
+const TYRE_MAX = 4096;
+export const tyreprints = new Footprints(new THREE.PlaneGeometry(TYRE_W, 1).rotateX(-Math.PI / 2), 'tyre', TYRE_MAX);
 // A unit strip, stretched per segment over the distance slid since the last one (plus the end-fade overlap).
 export const streaks = new Footprints(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), 'soft');
