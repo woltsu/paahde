@@ -514,8 +514,9 @@ export class Net {
     this.send({ t: 'throw', slot, n, x: r(x), y: r(y), z: r(z), dx: r(dx), dy: r(dy), dz: r(dz) });
   }
 
-  /** A blow of the scrap mace in hand landing at (x, y, z) (shared/mace.ts), on walker `g`'s weak point `i` (-1: its body). */
-  swing(x: number, y: number, z: number, on?: { g: number; i: number }) {
+  /** A blow of the scrap mace in hand landing at (x, y, z) (shared/mace.ts), on walker `g`'s weak point `i` (-1: its body),
+   *  or on nest spiderling `n` (shared/nest.ts). */
+  swing(x: number, y: number, z: number, on?: { g: number; i: number } | { n: number }) {
     const r = (n: number) => Math.round(n * 100) / 100;
     this.send({ t: 'swing', x: r(x), y: r(y), z: r(z), ...on });
   }

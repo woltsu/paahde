@@ -105,3 +105,20 @@ test('the solar farms have no crawlers, only the nest', () => {
   const m = g.msg(3000, p.id, p.x, p.z);
   assert.equal(m.n.length, NEST_N * NEST_STRIDE, "the nest rides in 'bots'");
 });
+
+test('one blow of the scrap mace kills one in reach, none from further off', () => {
+  const n = new NestServer(), v = vel(), clock = { now: 1000 };
+  const p = { id: 1, x: farm.x + 300, y: farm.y, z: farm.z, safe: false };
+  run(n, v, p, clock, 1);
+  const ps = nestPerches(farm), [a, b] = n.all[0].lings;
+  assert.equal(n.smash({ x: ps[a.perch].x + 20, y: farm.y, z: ps[a.perch].z }, a.id, 6.2, clock.now).hit, false, 'on its mirror, from afar');
+  assert.equal(a.st, SP_PERCH);
+  n.shoot(ps[b.perch].x, ps[b.perch].y, ps[b.perch].z, b.id, clock.now, 'pistol'); // knocked down to the sand
+  b.x = farm.x + 120;
+  b.z = farm.z;
+  const at = { x: b.x + 2, y: farm.y, z: b.z };
+  assert.equal(n.smash({ x: b.x + 12, y: farm.y, z: b.z }, b.id, 6.2, clock.now).hit, false, 'too far off');
+  const r = n.smash(at, b.id, 6.2, clock.now);
+  assert.ok(r.hit && r.kill, 'one blow');
+  assert.equal(b.st, SP_DIE);
+});

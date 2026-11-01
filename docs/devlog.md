@@ -2673,7 +2673,16 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   glow and shift a foot now and then.
 - **Tests:** tools/nest.test.mjs (perches on the inner mirrors, the same every time; none wake for someone keeping off;
   walking in brings most down and they bite; a rifle shot kills, the pistol takes two and the first knocks it off; a
-  farm left and come back to keeps the survivors; no crawlers at a farm, the nest rides in 'bots').
+  farm left and come back to keeps the survivors; no crawlers at a farm, the nest rides in 'bots'; one mace blow kills
+  one in reach).
+- **The mace** hits them too: the swing's fan of rays tests the nest as well (src/mace.ts, the nearest wins), the server
+  checks the reach against where it really is (`NestServer.smash`, swing `n`); one blow kills (`NEST_DAMAGE.mace`), so
+  one hanging low under a mirror can be knocked off it.
+- **Economy simulator:** the stocked farms are places now (tools/econsim/world.ts: 6 stashes each, refilled at the
+  farm furthest short) and the nest a new way of meeting (`farm` in shared/enemies.ts Meet): 18–30 spiderlings one after
+  another on arrival, back after PACK_BACK_S. Each one's odds are high (rifle 98.5%, pistol 95%, mace 94%), but the
+  risk of going is losing any of them (win^n, tools/econsim/sim.ts `loseAll`), so a farm waits for a quality rifle and
+  a shield.
 
 ## Radio towers
 

@@ -1087,10 +1087,16 @@ function onSwing(p: Player, m: Extract<ClientMsg, { t: 'swing' }>) {
   if (Math.hypot(m.x - s.x, m.y - (s.y + EYE_HEIGHT), m.z - s.z) > MACE_REACH + SHOT_FROM) return;
   p.firedAt = now;
   const by = { id: p.id, x: s.x, y: s.y, z: s.z, safe: Date.now() - p.heat.diedAt < BOT_GRACE_MS };
-  const r = m.g === undefined ? { hit: false, kill: null } : guardians.smash(by, m.g, m.i, MACE_REACH + MACE_SLACK, now);
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  const swing: ServerMsg = { t: 'swing', by: p.id, x: r2(m.x), y: r2(m.y), z: r2(m.z), ...(m.g !== undefined ? { hit: true as const } : {}) };
+  const swing: ServerMsg = { t: 'swing', by: p.id, x: r2(m.x), y: r2(m.y), z: r2(m.z), ...(m.g !== undefined || m.n !== undefined ? { hit: true as const } : {}) };
   for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, swing);
+  if (m.n !== undefined) {
+    // A nest's spiderling (shared/nest.ts): one blow.
+    const k = guardians.nests.smash(by, m.n, MACE_REACH + MACE_SLACK, now).kill;
+    if (k) dropNestSpoils(k);
+    return;
+  }
+  const r = m.g === undefined ? { hit: false, kill: null } : guardians.smash(by, m.g, m.i, MACE_REACH + MACE_SLACK, now);
   if (r.kill) dropSpoils(r.kill);
 }
 

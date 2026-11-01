@@ -125,8 +125,13 @@ export type RunResult = {
   bossTries: number;
 };
 
-/** A site's pack is back this long after you've left it (the longest `backS` of the site meets, shared/enemies.ts). */
-const SITE_BACK_S = Math.max(0, ...Object.values(ENEMIES).flatMap((e) => e.meet.map((m) => (m.at === 'site' ? m.backS ?? 0 : 0))));
+/** A site's pack (or a farm's nest) is back this long after you've left it (the longest `backS` of the site and farm
+ *  meets, shared/enemies.ts). */
+const SITE_BACK_S = Math.max(0, ...Object.values(ENEMIES).flatMap((e) => e.meet.map((m) => (m.at === 'site' || (m.at as string) === 'farm' ? (m as { backS?: number }).backS ?? 0 : 0))));
+/** The kinds met at the solar farms: the whole lot of them at once (shared/enemies.ts `farm` meets). */
+const AT_FARM = new Set((Object.keys(ENEMIES) as EnemyKind[]).filter((k) => ENEMIES[k].meet.some((m) => (m.at as string) === 'farm')));
+/** How many of `kind` come at once, on average. */
+const many = (kind: EnemyKind) => (ENEMIES[kind].n[0] + ENEMIES[kind].n[1]) / 2;
 
 /** The enemies met on the move: each kind with its roaming meet (shared/enemies.ts). */
 const ROAMING = (Object.keys(ENEMIES) as EnemyKind[]).flatMap((kind) =>
@@ -504,6 +509,7 @@ export class Sim {
   /** The fights waiting at `p` on arrival (shared/enemies.ts site meets), each with its odds: a site's crawlers (unless
    *  you were there lately), its drones by night, a guardian maybe. */
   private arrival(p: Poi): [EnemyKind, number][] {
+    if (p.farm) return p.packBackAt > this.t ? [] : [...AT_FARM].map((k): [EnemyKind, number] => [k, 1]);
     const s = p.site;
     if (!s) return [];
     const out: [EnemyKind, number][] = [];
@@ -621,8 +627,13 @@ export class Sim {
       const o = this.odds(kind);
       return (1 - o.win) * o.death;
     };
+    // A farm's nest is a long run of fights: losing any one of them is the loss.
+    const loseAll = (kind: EnemyKind) => {
+      const o = this.odds(kind);
+      return (1 - o.win ** many(kind)) * o.death;
+    };
     let r = 0;
-    for (const [kind, odds] of this.arrival(p)) r += odds * lose(kind);
+    for (const [kind, odds] of this.arrival(p)) r += odds * (AT_FARM.has(kind) ? loseAll(kind) : lose(kind));
     for (const { kind, m } of ROAMING) if (this.roamsHere(m.where, p.x, p.z) && (!m.night || this.night())) r += (1 - Math.exp(-m.perMin * 4)) * lose(kind);
     if (p.hunt) r += lose(p.hunt);
     return r * (this.carried('shield') ? 0.5 : 1);
@@ -633,7 +644,7 @@ export class Sim {
     let v = 0, work = 0;
     for (const [kind, odds] of this.arrival(p)) {
       v += odds * this.spoilsValue(kind);
-      work += odds * this.odds(kind).seconds;
+      work += odds * this.odds(kind).seconds * (AT_FARM.has(kind) ? many(kind) : 1);
     }
     if (p.hunt) {
       // A hunting spot: the wait for one to come, and the fight.

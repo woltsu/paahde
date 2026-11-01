@@ -364,6 +364,7 @@ zaps.setCamera(orbit.camera);
 const thrower = new Thrower(scene, orbit, net, scrap);
 thrower.piece = () => viewmodel.scrapPiece(); // the piece in flight is the one drawn in the hand
 const mace = new Mace(orbit, net, guardianFx.guardians);
+mace.nest = guardianFx.nest;
 mace.onSwung = (by) => (by === net.id ? me : remotes.get(by))?.swing(); // the stroke on the avatar
 if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { rifle, zaps });
 net.onSpawn = () => placedView.setSpawn(net.spawn?.id ?? null);

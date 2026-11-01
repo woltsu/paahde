@@ -3,7 +3,7 @@
 `tools/econsim` plays the game's loot economy many times over, fast, so a change to the loot tables, the crash-site
 layout or the drops shows up as a change in how quickly a player gets on: the first canteen, the rifle, each boss.
 It's not a bot in the real game. It's a greedy solo agent moving between points of interest on the game's own
-deterministic layout (crash sites, scrap piles, wrecks, shelters, caches, finds), with the game's own rules for what's
+deterministic layout (crash sites, scrap piles, wrecks, shelters, solar farms, caches, finds), with the game's own rules for what's
 there and what it's worth. Its absolute times are optimistic (it never gets lost or wastes a trip). What it's good at
 is **comparison**: the same 200 worlds with the same dice before and after a commit.
 
@@ -64,6 +64,7 @@ boss milestones (the win comes ~20% sooner, the uranium wait halves).
 From the game's code, so changes there show:
 
 - the layout: `coreCrashSites`/`machinesAt` (levels, outposts, machine kinds), `scrapPieces` (scrap and cloth), `wrecksNear`, `sheltersNear`,
+  the stocked solar farms (`stockedFarms`, known from the start: the tower shows from 5.8 km) with their `SOLAR_STASHES`,
   the crashed pods players arrive in (`podSites`, `POD_LOOT`: known from the start, one place; older commits: the crashed
   ship), home by them; carried machines lying there (the pod's console and power box) are worth what they hold; what's in
   `POD_LOOT.once` (the pods' scrap) isn't laid out again once taken
@@ -89,6 +90,9 @@ From the game's code, so changes there show:
     near a mud flat (`shared/biomes.ts`);
   - hunted: the agent may go and wait where harvesters or guardians roam when what they leave is worth it (a few hunting
     spots per world, the nearest stretches of that ground);
+  - at a solar farm when you get there: its nest of spiderlings, all of them (`n`) one after another, back 5 min after
+    you leave; the odds are each one's, so the risk of going is that of losing any one of them (with a quality rifle
+    and a shield it's worth it, with the pistol or the mace not yet);
   - called: the bosses.
 
   The odds are rough on purpose and lean towards the player, more so with the rifle; tune them there. A new enemy (or a

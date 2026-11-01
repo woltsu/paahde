@@ -2,7 +2,8 @@
 // (src/viewmodel.ts MaceSwing, from `playerHands.swingAt`) and the blow lands MACE_STRIKE_MS after the press, where you
 // look then: tested against the walkers as drawn (src/world/guardians.ts raycast, rays fanned across the width of the
 // stroke and down to a crawler at your feet) and the sand, within MACE_REACH of the eye. A crawler struck loses the lens
-// nearest the blow at once (shattered here, the server agreeing or not); a guardian's leg only clangs. The server
+// nearest the blow at once (shattered here, the server agreeing or not); a guardian's leg only clangs. A solar farm
+// nest's spiderling (src/world/brood.ts ray) is killed by one blow. The server
 // checks it (server/world.ts onSwing) and shows the blow to everyone near ('swing'): a clank on metal, a thump on sand.
 import * as THREE from 'three/webgpu';
 import type { FirstPersonCamera } from './camera';
@@ -14,6 +15,7 @@ import { rumble } from './gamepad';
 import { tyreDust } from './tyreDust';
 import { zaps } from './world/zaps';
 import type { Guardians } from './world/guardians';
+import type { Brood } from './world/brood';
 import { groundAt } from './ground.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_STRIKE_MS } from '../shared/mace.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
@@ -40,6 +42,8 @@ export class Mace {
   private swishAt = 0;
   /** Someone's swing seen (their id: ours too), for their avatar's stroke (src/models/scavenger.ts swing). */
   onSwung: ((by: number) => void) | null = null;
+  /** The solar farms' nests' spiderlings (src/guardians.ts), to hit. */
+  nest: Brood | null = null;
 
   constructor(view: FirstPersonCamera, net: Net, guardians: Guardians) {
     this.view = view;
@@ -75,15 +79,31 @@ export class Mace {
   private strike() {
     _o.copy(this.view.eye);
     this.view.camera.getWorldQuaternion(_q);
-    // The nearest walker along any of the fan's rays.
+    // The nearest walker or nest spiderling along any of the fan's rays.
     let hit: ReturnType<Guardians['raycast']> = null;
+    let ling: { index: number; dist: number } | null = null;
     for (const [yaw, pitch] of FAN) {
       _d.set(0, 0, -1).applyQuaternion(_rq.setFromEuler(_r.set(pitch, yaw, 0))).applyQuaternion(_q);
-      const h = this.guardians.raycast(_o, _d, hit?.dist ?? MACE_REACH);
-      if (h) hit = h;
-      if (hit && yaw === 0 && pitch === 0) break; // straight ahead wins
+      const near = Math.min(hit?.dist ?? MACE_REACH, ling?.dist ?? MACE_REACH);
+      const h = this.guardians.raycast(_o, _d, near);
+      if (h) (hit = h), (ling = null);
+      const l = this.nest?.ray(_o, _d, Math.min(near, h?.dist ?? MACE_REACH)) ?? null;
+      if (l) {
+        ling = l;
+        hit = null;
+        _e.copy(_o).addScaledVector(_d, l.dist);
+      }
+      if ((hit || ling) && yaw === 0 && pitch === 0) break; // straight ahead wins
     }
     const ear = this.view.camera.position;
+    if (ling) {
+      // Its shell caves in: a clank and sparks (the server's word kills it).
+      rifleSound.clank(_e, ear);
+      zaps.burst(_e.x, _e.y, _e.z, -_d.x, 0.5, -_d.z, 12);
+      rumble(0.8, 0.5, 120);
+      this.net.swing(_e.x, _e.y, _e.z, { n: ling.index });
+      return;
+    }
     if (hit) {
       const i = hit.index >= 0 ? hit.index : this.guardians.smashPoint(hit.walker, hit.point);
       if (i >= 0) this.guardians.breakLocal(hit.walker, i);

@@ -1,7 +1,7 @@
 // A solar farm's nest (shared/solarfarms.ts): the brood queen's spiderlings (shared/queen.ts SP_*), dozens of them,
 // clinging to the heliostats' mirrors near the tower, on the face or hanging under it. Come near and they drop off the
 // mirrors in a wave, the ones by those waking the next, and hunt you as the queen's brood does (server/brood.ts). Small:
-// a rifle shot kills one, the pistol takes two (NEST_HP, NEST_DAMAGE); no weak points. Get in among the nest's mirrors
+// a rifle shot or a blow of the scrap mace kills one, the pistol takes two (NEST_HP, NEST_DAMAGE); no weak points. Get in among the nest's mirrors
 // and the whole nest comes down, in a wave out from you. Simulated by server/nests.ts,
 // drawn by src/world/brood.ts like the queen's.
 //
@@ -13,9 +13,9 @@ import { AIMED, BROKEN, farmLayout, FIELD, HELIO, STOWED, type SolarFarm } from 
 /** Spiderlings per nest (one per perch), and how far out the mirrors they cling to stand (m from the tower). */
 export const NEST_N = 30;
 export const NEST_R = FIELD.r0 + FIELD.dr * 3 + 1;
-/** Hit points, and a hit's damage by gun: one rifle shot, two of the pistol. */
+/** Hit points, and a hit's damage by weapon: one rifle shot or blow of the scrap mace, two of the pistol. */
 export const NEST_HP = 2;
-export const NEST_DAMAGE = { rifle: 2, pistol: 1 } as const;
+export const NEST_DAMAGE = { rifle: 2, pistol: 1, mace: 2 } as const;
 /** Someone out in the open within WAKE_R (m) of a perch wakes it (after WAKE_MS, random up to); one awake wakes those
  *  within CHAIN_R of it CHAIN_MS (random up to) later. */
 export const WAKE_R = 48, WAKE_MS = 900, CHAIN_R = 24, CHAIN_MS = 1400;

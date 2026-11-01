@@ -143,9 +143,10 @@ export type ClientMsg =
   // the client's count of its throws, echoed in the 'toss' so it can tie its own flying junk to the server's.
   | { t: 'throw'; slot: number; n: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }
   // A blow of the scrap mace in hand (shared/mace.ts) landing at (x, y, z) (or swung through the air to there). `g`/`i`:
-  // the client found it landed on walker g, breaking weak point i (-1: just its body). The server checks the mace, the
+  // the client found it landed on walker g, breaking weak point i (-1: just its body); `n`: on a solar farm nest's
+  // spiderling n (shared/nest.ts). The server checks the mace, the
   // rate and the reach, breaks the point and shows the blow to everyone near ('swing').
-  | { t: 'swing'; x: number; y: number; z: number; g?: number; i?: number }
+  | { t: 'swing'; x: number; y: number; z: number; g?: number; i?: number; n?: number }
   // Debug menu: repaired gear of every kind, every part of `tier` (0 Scrap .. 3 Space-grade; for testing).
   | { t: 'debugGear'; tier?: number }
   // Debug menu: `n` of any item `kind` into the bag; gear comes with every part of `tier` (0 Scrap .. 3 Space-grade), or

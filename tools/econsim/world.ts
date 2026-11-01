@@ -26,6 +26,14 @@ const podsMod = (await import('../../shared/pods.ts' as string).catch(() => null
 const shipMod = podsMod ? null : (await import('../../shared/ship.ts' as string).catch(() => null)) as { SHIP_AT: Arrival['at']; shipSites: Arrival['sites'] } | null;
 const ARRIVE: Arrival = podsMod ? { at: podsMod.ARRIVAL, sites: podsMod.podSites } : shipMod ? { at: shipMod.SHIP_AT, sites: shipMod.shipSites } : { at: null, sites: () => [] };
 const rolls = lootRoll as unknown as Record<string, (rand: Rand) => unknown>;
+// The solar farms (shared/solarfarms.ts), their stashes (SOLAR_STASHES) and their nests (shared/enemies.ts `farm` meets),
+// in commits that have them.
+type Farm = { id: number; x: number; z: number };
+const solarMod = (await import('../../shared/solarfarms.ts' as string).catch(() => null)) as
+  { stockedFarms?: () => Farm[]; solarLootSpot: (f: Farm, rand: Rand) => unknown } | null;
+const solarStash = rolls.solarStash as ((rand: Rand) => Drop) | undefined;
+const SOLAR = (tables as Record<string, unknown>).SOLAR_STASHES as { perFarm: number } | undefined;
+const FARMS: Farm[] = solarMod?.stockedFarms && solarStash && SOLAR ? solarMod.stockedFarms() : [];
 const arriveFind = (rolls.podFind ?? rolls.shipFind) as (rand: Rand) => Drop;
 const arriveFindSpot = (rolls.podFindSpot ?? rolls.shipFindSpot) as (rand: Rand) => unknown;
 const ARRIVE_LOOT = ((tables as Record<string, unknown>).POD_LOOT ?? (tables as Record<string, unknown>).SHIP_LOOT ?? { n: 0 }) as { n: number; once?: string[] };
@@ -47,7 +55,7 @@ export type Machine = { kind: JunkKind; seed: number; level: LootLevel; carry: b
 
 export type Poi = {
   id: number;
-  type: 'pile' | 'site' | 'wreck' | 'shelter' | 'loot' | 'corpse' | 'jet';
+  type: 'pile' | 'site' | 'wreck' | 'shelter' | 'loot' | 'corpse' | 'jet' | 'farm';
   x: number; z: number;
   /** How dangerous the ground is (shared/crashsites.ts siteLevel). */
   zone: SiteLevel;
@@ -61,6 +69,8 @@ export type Poi = {
   things: Thing[];
   /** A crash site: the site, and when its pack (if any) is back. */
   site?: CrashSite;
+  /** A solar farm: its pack is its nest. */
+  farm?: Farm;
   packBackAt: number;
   /** A corpse pack or a jet's wreck goes after this. */
   expires: number;
@@ -68,7 +78,7 @@ export type Poi = {
   hunt?: EnemyKind;
 };
 
-type Pending = { at: number; what: 'find' | 'cache' | 'stash' | 'pod'; kind: string };
+type Pending = { at: number; what: 'find' | 'cache' | 'stash' | 'pod' | 'solar'; kind: string };
 
 export class World {
   readonly pois: Poi[] = [];
@@ -77,6 +87,7 @@ export class World {
   private sites: CrashSite[];
   private piles = nearPiles();
   private shelters: Poi[] = [];
+  private farms: Poi[] = [];
   /** The crashed pods players arrive in (shared/pods.ts), as one place: their starter machines and what lies about it. */
   private pods: Poi | null = null;
   private mudCache = new Map<string, boolean>();
@@ -117,6 +128,13 @@ export class World {
         shelterLootSpot(s, this.rand); // (the server rolls a spot too: keep the stream in step with it)
         p.things.push(this.thing(shelterStash(this.rand), 'stash'));
       }
+    }
+    for (const f of FARMS) {
+      const p = this.poi('farm', f.x, f.z);
+      p.farm = f;
+      p.known = true; // (the tower stands out from 5.8 km)
+      this.farms.push(p);
+      for (let i = 0; i < SOLAR!.perFarm; i++) this.spawnSolar(p);
     }
     if (ARRIVE.at) {
       const p = (this.pods = this.poi('wreck', ARRIVE.at.x, ARRIVE.at.z));
@@ -191,6 +209,12 @@ export class World {
     this.pods!.things.push(this.thing(d, 'pod'));
   }
 
+  /** A stash at farm p (server/loot.ts rolls the spot, then what's in it). */
+  private spawnSolar(p: Poi) {
+    solarMod!.solarLootSpot(p.farm!, this.rand);
+    p.things.push(this.thing(solarStash!(this.rand), 'solar stash'));
+  }
+
   private spawnCache() {
     const { x, z } = cacheSpot(this.rand);
     this.poi('loot', x, z).things.push(this.thing(cacheContents(this.rand), 'cache'));
@@ -211,6 +235,7 @@ export class World {
     if (t.src === 'find' || t.src === 'rare find') this.pending.push({ at: now + FIND_BACK, what: 'find', kind: t.src === 'rare find' ? 'rare' : t.kind });
     else if (t.src === 'cache') this.pending.push({ at: now + CACHE_BACK, what: 'cache', kind: '' });
     else if (t.src === 'stash') this.pending.push({ at: now + FIND_BACK, what: 'stash', kind: '' });
+    else if (t.src === 'solar stash') this.pending.push({ at: now + FIND_BACK, what: 'solar', kind: '' });
     // What lies about the pods once per world (POD_LOOT.once: all of it) isn't laid out again.
     else if (t.src === 'pod' && !ARRIVE_LOOT.once?.includes(t.kind)) this.pending.push({ at: now + FIND_BACK, what: 'pod', kind: t.kind });
   }
@@ -223,6 +248,8 @@ export class World {
       if (q.what === 'find') this.spawnFind(q.kind);
       else if (q.what === 'cache') this.spawnCache();
       else if (q.what === 'pod') this.spawnPod(q.kind);
+      // The farm furthest short of its stashes (shared/lootRoll.ts solarStashSpot).
+      else if (q.what === 'solar') this.spawnSolar(this.farms.reduce((a, b) => (b.things.length < a.things.length ? b : a)));
       else {
         // The shelter furthest short of its stashes (shared/lootRoll.ts stashSpot, by counts).
         const s = this.shelters.reduce((a, b) => (b.things.length < a.things.length ? b : a));

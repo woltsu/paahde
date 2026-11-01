@@ -11,7 +11,7 @@ import type { Pusher } from '../shared/knockback.ts';
 import {
   CHAIN_MS, CHAIN_R, NEST_DAMAGE, NEST_HP, NEST_N, NEST_R, NEST_SPEED, nestPerches, WAKE_MS, WAKE_R, WAVE_MS, type Perch,
 } from '../shared/nest.ts';
-import { DIE_MS, SP_DIE, SP_DROP, SP_PERCH } from '../shared/queen.ts';
+import { DIE_MS, SP_BODY_Y, SP_DIE, SP_DROP, SP_PERCH } from '../shared/queen.ts';
 import { solarFarmsNear, type SolarFarm } from '../shared/solarfarms.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { huntLings, setLing, type Hunt, type Ling } from './brood.ts';
@@ -29,6 +29,10 @@ const HIT_R = 4;
 const DRAW_DELAY = 250;
 /** How they hunt (server/brood.ts Hunt): a little less keen than the queen's, more of them. */
 const SIGHT = 130, SHARE = 10, TURN = 8, GAP = 1.5, TURNS = 650, WIDE = 10, BODY_R = 0.5;
+
+/** What a hit did: landed, and killed one (where, for its drops). */
+export type Strike = { hit: boolean; kill: { x: number; z: number } | null };
+const MISS: Strike = { hit: false, kill: null };
 
 /** Its perch (shared/nest.ts nestPerches), when it should wake (0 not yet), and whether it died on the perch (it falls). */
 type NestLing = Ling & { hp: number; perch: number; wakeAt: number; fell: boolean };
@@ -121,30 +125,52 @@ export class NestServer {
     }
   }
 
-  /** A shot from (x, y, z) ending at (ex, ey, ez), aimed at spiderling `id`: plausible, it takes the gun's damage
-   *  (NEST_DAMAGE) and dies at none left; hit on its perch and alive, it drops at once. Killed: where, for its drops. On its perch, it falls
-   *  off as it dies. */
-  shoot(ex: number, ey: number, ez: number, id: unknown, now: number, gun: Pusher): { hit: boolean; kill: { x: number; z: number } | null } {
-    const miss = { hit: false, kill: null };
-    if (typeof id !== 'number') return miss;
+  /** A shot ending at (ex, ey, ez), aimed at spiderling `id`: plausible (ending near it), it takes the gun's damage
+   *  (NEST_DAMAGE). Killed: where, for its drops. */
+  shoot(ex: number, ey: number, ez: number, id: unknown, now: number, gun: Pusher): Strike {
+    const f = this.find(id);
+    if (!f) return MISS;
+    const [x, y, z] = f.at;
+    if (Math.hypot(ex - x, ez - z) > HIT_R || Math.abs(ey - y) > 7) return MISS;
+    return this.strike(f.n, f.l, gun === 'rifle' ? NEST_DAMAGE.rifle : NEST_DAMAGE.pistol, now);
+  }
+
+  /** A blow of the scrap mace by someone at `by` (feet) on spiderling `id`: in reach (`reach` m of their eye, its
+   *  body as it is: one up on its mirror is out of reach), it takes the mace's damage (NEST_DAMAGE). */
+  smash(by: { x: number; y: number; z: number }, id: unknown, reach: number, now: number): Strike {
+    const f = this.find(id);
+    if (!f) return MISS;
+    const [x, y, z] = f.at;
+    if (Math.hypot(x - by.x, y + SP_BODY_Y - (by.y + 1.6), z - by.z) > reach) return MISS;
+    return this.strike(f.n, f.l, NEST_DAMAGE.mace, now);
+  }
+
+  /** Live spiderling `id`, its nest and where it is (its perch, or its feet on the sand). */
+  private find(id: unknown): { n: Nest; l: NestLing; at: [number, number, number] } | null {
+    if (typeof id !== 'number') return null;
     for (const n of this.nests.values()) {
       const l = n.lings.find((o) => o.id === id && o.st !== SP_DIE);
       if (!l) continue;
       const q = l.st === SP_PERCH ? n.perches[l.perch] : null;
-      const x = q ? q.x : l.x, z = q ? q.z : l.z, y = q ? q.y : heightAt(l.x, l.z);
-      if (Math.hypot(ex - x, ez - z) > HIT_R || Math.abs(ey - y) > 7) return miss;
-      l.hp -= gun === 'rifle' ? NEST_DAMAGE.rifle : NEST_DAMAGE.pistol;
-      if (l.hp > 0) {
-        if (q) this.drop(n, l, now);
-        return { hit: true, kill: null };
-      }
-      l.biteAt = 0;
-      // Shot off its perch, it falls where it would have dropped and curls up there.
-      if (q) [l.x, l.z, l.fell] = [q.lx, q.lz, true];
-      setLing(l, SP_DIE, now);
-      return { hit: true, kill: { x: l.x, z: l.z } };
+      return { n, l, at: q ? [q.x, q.y - SP_BODY_Y, q.z] : [l.x, heightAt(l.x, l.z), l.z] };
     }
-    return miss;
+    return null;
+  }
+
+  /** `dmg` off l: none left, it dies (on its perch, it falls off as it curls up); hit on its perch and still alive, it
+   *  drops at once. */
+  private strike(n: Nest, l: NestLing, dmg: number, now: number): Strike {
+    l.hp -= dmg;
+    const q = l.st === SP_PERCH ? n.perches[l.perch] : null;
+    if (l.hp > 0) {
+      if (q) this.drop(n, l, now);
+      return { hit: true, kill: null };
+    }
+    l.biteAt = 0;
+    // Off its perch, it falls where it would have dropped and curls up there.
+    if (q) [l.x, l.z, l.fell] = [q.lx, q.lz, true];
+    setLing(l, SP_DIE, now);
+    return { hit: true, kill: { x: l.x, z: l.z } };
   }
 
   /** The 'bots' `n` for someone at (x, z) (shared/nest.ts NEST_STRIDE). */

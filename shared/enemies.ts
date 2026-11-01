@@ -31,9 +31,12 @@ export type Fight = {
  *  - `roam`: comes to you about `perMin` times a minute while you're out `where`: `open` (past the start's keep-out round the origin),
  *    `guardianGround` (site level 2), `mudflat` (near a mud flat, shared/biomes.ts), `overhead` (anywhere outdoors);
  *    only by night if `night`; `hunt`: worth going there to wait for one;
+ *  - `farm`: at the solar farms (shared/solarfarms.ts) when you get there, all `n` of them one after another, back `backS`
+ *    after you've left;
  *  - `call`: only when you call it (the bosses' receivers, shared/bosses.ts). */
 export type Meet =
   | { at: 'site'; levels: LootLevel[]; odds?: number; spread?: number; night?: boolean; backS?: number }
+  | { at: 'farm'; backS?: number }
   | { at: 'roam'; where: 'open' | 'guardianGround' | 'mudflat' | 'overhead'; perMin: number; night?: boolean; hunt?: boolean }
   | { at: 'call' };
 
@@ -118,13 +121,14 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     drops: (rand) => harvesterDrops(rand),
     mass: 2e6,
   },
-  // The solar farms' nests (shared/nest.ts): NEST_N spiderlings each, clinging to the mirrors by the tower, dropping on
-  // whoever comes near; one rifle shot or two of the pistol. Not played by the economy simulator (the farms are further
-  // out than it goes): `meet` is empty.
+  // The solar farms' nests (shared/nest.ts): NEST_N (30) spiderlings each, clinging to the mirrors by the tower, most of
+  // them on you by the time you're in among them (server/nests.ts); the ones killed are back PACK_BACK_S after everyone
+  // has left. One rifle shot or blow of the mace, two of the pistol. The odds are each one's: the whole nest is a long
+  // run of them, and losing any one of them (a spring you didn't dodge) is the fight lost. Bare-handed you run.
   spiderling: {
-    n: [10, 30],
-    meet: [],
-    fight: { seconds: odds(30, 90, 70, 60), win: odds(0, 0.6, 0.85, 0.3), death: odds(0.6, 0.3, 0.12, 0.45), quality: 0.2 },
+    n: [18, 30],
+    meet: [{ at: 'farm', backS: PACK_BACK_S }],
+    fight: { seconds: odds(2, 6, 4, 5), win: odds(0, 0.95, 0.985, 0.94), death: odds(0.5, 0.6, 0.6, 0.6), quality: 0.25 },
     drops: (rand) => spiderlingDrops(rand),
     mass: 8,
   },
