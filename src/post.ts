@@ -6,7 +6,7 @@ import { graphics } from './graphics.ts';
 import {
   Fn, abs, atan, cos, dot, exp, float, length, max, mix, mx_noise_float, pass, pow, renderOutput, saturate,
   smoothstep, step, uniform, uv, vec2, vec3, vec4, fract, sin, perspectiveDepthToViewZ, If, normalize, sqrt, min, log, rtt,
-  select, acesFilmicToneMapping, agxToneMapping, textureSize,
+  select, acesFilmicToneMapping, agxToneMapping, textureSize, floor,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -354,6 +354,8 @@ export class Post {
     // nearest the axis; the billows turn with it, curl in along spiral arms and climb its wall. Huge on screen and dear per
     // pixel, so it's marched at VX_RES resolution into its own target (and not at all with no vortex out): optical depth,
     // its lit and seen weights (as the dust's below) and where it starts; the dust pass adds it in.
+    // Its target's texel size (set as it's drawn): the march's jitter is laid out on its pixels, and the dust pass blurs it.
+    const vxTexel = uniform(new THREE.Vector2(1, 1));
     const vortexVol = Fn(() => {
       const p = uv();
       const ndc = vec4(p.x.mul(2).sub(1), float(1).sub(p.y.mul(2)), 1, 1);
@@ -361,7 +363,10 @@ export class Post {
       const dv = normalize(v.xyz.div(v.w));
       const dir = normalize(camWorld.mul(vec4(dv, 0)).xyz).toVar();
       const tScene = viewZ.div(dv.z).toVar();
-      const jitter = fract(sin(dot(p.mul(vec2(911.3, 577.7)), vec2(12.9898, 78.233))).mul(43758.5453)).toVar();
+      // Interleaved gradient noise, not a white-noise hash: 24 steps over a kilometre leave each pixel's sum off by its
+      // jitter, and white noise clumps that into blotches (snow) the blur below can't smooth; this spreads it evenly.
+      const px = floor(p.div(vxTexel));
+      const jitter = fract(fract(dot(px, vec2(0.06711056, 0.00583715))).mul(52.9829189)).toVar();
       const tau = float(0).toVar();
       const lit = float(0).toVar();
       const seen = float(0).toVar();
@@ -442,6 +447,8 @@ export class Post {
         const scale = Math.min(VX_RES, Math.sqrt(VX_PIXELS / Math.max(1, size.x * size.y)));
         if (Math.abs(scale - vortexTex.getResolutionScale()) > 0.01) vortexTex.setResolutionScale(scale);
         draw(frame);
+        const rt = vortexTex.renderTarget;
+        if (rt) vxTexel.value.set(1 / Math.max(1, rt.width), 1 / Math.max(1, rt.height));
       };
     }
 
@@ -564,7 +571,13 @@ export class Post {
       });
       // The sand vortex: marched at reduced resolution in its own pass (vortexTex, below), added in here.
       If(vortex.w.greaterThan(0), () => {
-        const vt = vortexTex.sample(uv());
+        // A 3×3 tent over its texels (each tap bilinear): the march's leftover grain, smoothed out.
+        const vt = vec4(0).toVar();
+        for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+          vt.addAssign(vortexTex.sample(uv().add(vxTexel.mul(vec2(i, j)))).mul(((2 - Math.abs(i)) * (2 - Math.abs(j))) / 16));
+        }
+        // (Not where it starts: an average with the misses' far-off start would push the haze in front of it back.)
+        vt.w.assign(vortexTex.sample(uv()).w);
         const vt0 = vt.x.max(0);
         lit.addAssign(vt.y.max(0).mul(exp(tau.mul(-STORM_K))));
         seen.addAssign(vt.z.max(0).mul(exp(tau.mul(-STORM_K))));
