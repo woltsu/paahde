@@ -43,8 +43,10 @@ export const PISTOL_RANGE = 100;
 export const BLASTER = 'blaster';
 export const BLASTER_COOLDOWN_MS = 1400;
 export const BLASTER_RANGE = 160;
-/** The burst's reach (m) around where the beam stopped. */
+/** The burst's reach (m) around where the beam stopped. Within BLAST_CORE of its reach a thing takes the gun's whole
+ *  damage (blastDamage), out to the rim one hit: a spiderling or a drone at the rim lives, a guardian's weak point cracks. */
 export const BLAST_R = 4.5;
+export const BLAST_CORE = 0.5;
 
 /**
  * The graviton pistol: the end of everything. Never found out there (no loot table holds it: the lab and the debug menu
@@ -76,6 +78,11 @@ export const GUNS: Record<string, Gun> = {
 export function bites(gun: Gun, armor: number, weak: boolean): boolean {
   return weak || gun.pierce >= armor;
 }
+
+/** What `gun`'s burst does to something `d` m from where its beam stopped (within gun.blast): the whole of its damage
+ *  in the core (BLAST_CORE), one hit out to the rim. The server's (server/world.ts onFire); the plate takes none of it
+ *  (only weak points and thin-skinned things are hurt). */
+export const blastDamage = (gun: Gun, d: number) => (d <= (gun.blast ?? 0) * BLAST_CORE ? gun.damage : 1);
 
 /** Kills whatever it bites outright (the graviton pistol): every weak point, every hit point at once. */
 export const kills = (gun: Gun) => gun.damage >= OVERKILL;

@@ -2,7 +2,8 @@
 // effects back to server/index.ts. In memory only: a restart sends them all away.
 import { allPoints, BOSS_KINDS, BOSS_SEND_R, BOSSES, MINION, REGROW_MS, type BossKind, type BossSnap } from '../shared/bosses.ts';
 import type { DeathCause, ServerMsg } from '../shared/protocol.ts';
-import { RANGE } from '../shared/rifle.ts';
+import { bites, type Gun, kills } from '../shared/rifle.ts';
+import { ENEMIES } from '../shared/enemies.ts';
 import { indoors } from '../shared/shelters.ts';
 import { carrier } from './carrier.ts';
 import { colossus } from './colossus.ts';
@@ -136,23 +137,28 @@ export class BossServer {
       && (b.foes.get(p.id) ?? 0) > now && Math.hypot(p.x - b.x, p.z - b.z) < BOSS_SEND_R));
   }
 
-  /** Player `by` shot from (x, y, z) to (ex, ey, ez) and says it broke weak point `i` of boss `id`. Plausible (alive,
-   *  that point whole, in range, the shot ending near it): broken until it regrows, a hit off its health, and it's
-   *  angry with the shooter. The last hit kills it. */
-  shoot(by: BossPlayer, x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, i: unknown, now: number, out: BossOut): { hit: boolean; kill: BossKill | null; boss?: Boss } {
+  /** Player `by` shot `gun` (shared/rifle.ts GUNS) from (x, y, z) to (ex, ey, ez) and says it broke weak point `i` of
+   *  boss `id` (-1: struck its hull; MINION + n: its minion n). Plausible (alive, that point whole, in range, the shot
+   *  ending near it): broken until it regrows, a hit off its health, and it's angry with the shooter. The last hit kills
+   *  it. The hull's plate turns every gun but the graviton pistol (shared/rifle.ts bites), which kills it outright
+   *  wherever it lands. `seen`: the shot ended at it (harm or not). */
+  shoot(by: BossPlayer, x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, i: unknown, now: number, out: BossOut, gun: Gun): { hit: boolean; kill: BossKill | null; boss?: Boss; seen?: boolean } {
     const miss = { hit: false, kill: null };
     const b = this.bosses.find((o) => o.id === id);
-    if (!b || b.deadAt >= 0 || !Number.isInteger(i) || (i as number) < 0) return miss;
-    if ((i as number) >= MINION) {
-      if (Math.hypot(ex - x, ey - y, ez - z) > RANGE + 5) return miss;
-      return { hit: BRAINS[b.kind].hitMinion?.(b, (i as number) - MINION, ex, ey, ez, now, out) ?? false, kill: null };
+    if (!b || b.deadAt >= 0 || !Number.isInteger(i) || (i as number) < -1) return miss;
+    if (Math.hypot(ex - x, ey - y, ez - z) > gun.range + 5) return miss;
+    if ((i as number) >= MINION) return { hit: BRAINS[b.kind].hitMinion?.(b, (i as number) - MINION, ex, ey, ez, now, out) ?? false, kill: null };
+    const hull = i === -1;
+    if (!hull && ((i as number) >= BOSSES[b.kind].points || b.broken & (1 << (i as number)))) return miss;
+    if (!BRAINS[b.kind].near(b, ex, ey, ez)) return miss;
+    if (!bites(gun, ENEMIES[b.kind].armor, !hull)) return { ...miss, seen: true };
+    if (kills(gun)) b.hp = 0;
+    else if (hull) b.hp--;
+    else {
+      b.broken |= 1 << (i as number);
+      b.regrow[i as number] = now + REGROW_MS;
+      b.hp--;
     }
-    if ((i as number) >= BOSSES[b.kind].points) return miss;
-    if (b.broken & (1 << (i as number))) return miss;
-    if (Math.hypot(ex - x, ey - y, ez - z) > RANGE + 5 || !BRAINS[b.kind].near(b, ex, ey, ez)) return miss;
-    b.broken |= 1 << (i as number);
-    b.regrow[i as number] = now + REGROW_MS;
-    b.hp--;
     if (!by.safe) {
       b.angry = by.id;
       b.angryUntil = now + 30_000;

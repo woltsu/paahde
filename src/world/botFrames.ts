@@ -9,14 +9,14 @@ type BotsMsg = Extract<ServerMsg, { t: 'bots' }>;
 export { BOT_DELAY_MS };
 /** How long (ms) past the latest message they're drawn carrying on before they stop. */
 const EXTRAP_MS = 250;
-export const G_STRIDE = 13;
+export const G_STRIDE = 14;
 export const D_STRIDE = 12;
 
 /** gun: -1 idle, 0 aiming at (ax, ay, az), 1 charging. broken: weak points shot (bit mask, shared/rifle.ts); dead: 0
- *  alive, else seconds since it died. */
+ *  alive, else seconds since it died; cracked: weak points hit but still whole (a guardian's take GUARDIAN_POINT_HP). */
 export type GuardianFrame = {
   id: number; kind: Kind; legs: 3 | 4; x: number; z: number; yaw: number; hunt: number; ax: number; ay: number; az: number; gun: number;
-  broken: number; dead: number;
+  broken: number; dead: number; cracked: number;
   /** Guardians: where the server has its feet, (x, y, z, s of swing left) per leg as of the frame's time; null for
    *  crawlers (their gait is the client's own). */
   feet: number[] | null;
@@ -77,7 +77,7 @@ export function guardiansAt(msgs: readonly BotsMsg[], time: number): GuardianFra
       ax: p[k + 10] >= 0 ? p[k + 7] + (g[j + 7] - p[k + 7]) * t : g[j + 7],
       ay: p[k + 10] >= 0 ? p[k + 8] + (g[j + 8] - p[k + 8]) * t : g[j + 8],
       az: p[k + 10] >= 0 ? p[k + 9] + (g[j + 9] - p[k + 9]) * t : g[j + 9],
-      gun: g[j + 10], broken: g[j + 11], dead: g[j + 12],
+      gun: g[j + 10], broken: g[j + 11], dead: g[j + 12], cracked: g[j + 13],
       feet: fa.get(g[j]) ?? fb.get(g[j]) ?? null,
     });
   }

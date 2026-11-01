@@ -19,6 +19,8 @@ import { crashSitesNear } from '../shared/crashsites.ts';
 import { biome } from '../shared/biomes.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import { seized, type Storm } from '../shared/storm.ts';
+import { bites, type Gun, kills } from '../shared/rifle.ts';
+import { ENEMIES } from '../shared/enemies.ts';
 
 /** Time between one harvester setting off and the next being sent (ms); the first comes sooner. With no one out near
  *  a mud flat, it looks again after RETRY_MS. */
@@ -50,6 +52,8 @@ const FURROW_R_M = 2.4;
  *  length (local z: from in front of the maw, give or take). */
 const CORE_SLACK = 0.9;
 const SHOT_FROM_Z = 12;
+/** A hull hit (the graviton pistol's) counts ending this far (m) beyond its footprint and hull top. */
+const HULL_SLACK = 3;
 /** Steering at whoever it charges: the route ahead is redrawn every STEER_MS, in STEER_STEP m steps turning on a
  *  radius of at least TURN_R m, for up to STEER_LEN m (straight on once it's within REACHED m of them), then wandering
  *  on for STEER_ON m; the new route has to be at least STEER_MIN m long, or it keeps the old one. */
@@ -257,17 +261,51 @@ export class HarvesterServer {
     }
   }
 
-  /** A rifle shot from (x, z) ending at (ex, ey, ez) that the client says hit core `ci` of harvester `id`: it counts if
-   *  it was fired from in front and ended at that core. True if it hit a live core; `kill` once the last one goes. */
-  shoot(x: number, z: number, ex: number, ey: number, ez: number, id: unknown, ci: unknown, now: number): { hit: boolean; kill: HarvesterKill | null } {
+  /** A shot of `gun` (shared/rifle.ts GUNS) from (x, z) ending at (ex, ey, ez) that the client says hit core `ci` of
+   *  harvester `id` (-1: its hull): a core hit counts if it was fired from in front and ended at that core, and takes
+   *  the gun's damage. The hull's plate turns every gun but the graviton pistol (shared/rifle.ts bites), which kills it
+   *  outright wherever it ends on it (as it does through a core). True if it did harm; `kill` once the last core goes;
+   *  `seen`: the shot ended on it (harm or not). */
+  shoot(x: number, z: number, ex: number, ey: number, ez: number, id: unknown, ci: unknown, now: number, gun: Gun): { hit: boolean; kill: HarvesterKill | null; seen?: boolean } {
+    const miss = { hit: false, kill: null };
     const h = this.harvesters.find((o) => o.id === id);
-    if (!h || h.down || !harvesterAt(h, now, _p)) return { hit: false, kill: null };
-    if (!Number.isInteger(ci) || (ci as number) < 0 || (ci as number) >= CORES.length) return { hit: false, kill: null };
+    if (!h || h.down || !harvesterAt(h, now, _p)) return miss;
+    if (ci === -1) {
+      if (!onHull(ex, ey, ez)) return miss;
+      if (!bites(gun, ENEMIES.harvester.armor, false)) return { ...miss, seen: true };
+      return { ...this.hurt(h, -1, kills(gun) ? CORE_HP : gun.damage, now), seen: true };
+    }
+    if (!Number.isInteger(ci) || (ci as number) < 0 || (ci as number) >= CORES.length) return miss;
     const i = ci as number, c = CORES[i];
-    if (h.cores[i] >= CORE_HP || toLocal(_p, x, z, _l).z < SHOT_FROM_Z) return { hit: false, kill: null };
+    if (h.cores[i] >= CORE_HP || toLocal(_p, x, z, _l).z < SHOT_FROM_Z) return miss;
     toWorld(_p, c.x, c.y, c.z, _w);
-    if (Math.hypot(ex - _w.x, ey - _w.y, ez - _w.z) > CORE_HALF * 1.8 + CORE_SLACK) return { hit: false, kill: null };
-    h.cores[i]++;
+    if (Math.hypot(ex - _w.x, ey - _w.y, ez - _w.z) > CORE_HALF * 1.8 + CORE_SLACK) return miss;
+    return kills(gun) ? this.hurt(h, -1, CORE_HP, now) : this.hurt(h, i, gun.damage, now);
+  }
+
+  /** A blaster's burst at (x, y, z): every live core within `r` m (of its face) of a live harvester takes `dmg(d)`; its
+   *  plate takes nothing. `skip`, `skipCore`: the core the beam struck itself. Returns the kills, and whether it hurt any core. */
+  burst(x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number, skip = -1, skipCore = -1): { hit: boolean; kills: HarvesterKill[] } {
+    const out = { hit: false, kills: [] as HarvesterKill[] };
+    for (const h of this.harvesters) {
+      if (h.down || !harvesterAt(h, now, _p) || Math.hypot(_p.x - x, _p.z - z) > BOW + r) continue;
+      for (let i = 0; i < CORES.length && !h.down; i++) {
+        if (h.cores[i] >= CORE_HP || (h.id === skip && i === skipCore)) continue;
+        const c = CORES[i];
+        toWorld(_p, c.x, c.y, c.z, _w);
+        const d = Math.max(0, Math.hypot(_w.x - x, _w.y - y, _w.z - z) - CORE_HALF);
+        if (d > r) continue;
+        const res = this.hurt(h, i, dmg(d), now);
+        out.hit = true;
+        if (res.kill) out.kills.push(res.kill);
+      }
+    }
+    return out;
+  }
+
+  /** Core `i` of `h` (at pose _p) takes `dmg` hits (-1: every core at once); the last core out kills it. */
+  private hurt(h: Harvester, i: number, dmg: number, now: number): { hit: boolean; kill: HarvesterKill | null } {
+    for (let k = 0; k < h.cores.length; k++) if (i === -1 || k === i) h.cores[k] = Math.min(CORE_HP, h.cores[k] + dmg);
     this.changed = true;
     if (h.cores.some((n) => n < CORE_HP)) return { hit: true, kill: null };
     h.down = { at: Math.round(now) };
@@ -286,4 +324,10 @@ export class HarvesterServer {
   msg(): ServerMsg {
     return { t: 'harvesters', harvesters: this.harvesters };
   }
+}
+
+/** Does (x, y, z) lie on the hull of the harvester at pose _p (its footprint and height, give or take HULL_SLACK)? */
+function onHull(x: number, y: number, z: number): boolean {
+  const l = toLocal(_p, x, z, _l), up = y - _p.y;
+  return Math.abs(l.x) <= HALF_W + HULL_SLACK && l.z >= STERN - HULL_SLACK && l.z <= BOW + HULL_SLACK && up >= -HULL_SLACK && up <= HULL_TOP + HULL_SLACK;
 }

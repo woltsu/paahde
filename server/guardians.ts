@@ -18,7 +18,7 @@ import {
   ALERT_R, BITE_DAMAGE, BITE_MS, BLAST_R, BOT_DELAY_MS, BODY_H, BOLT_R, BOLT_RANGE, BOLT_SPEED, CHARGE_MS, CRAWLER, CRAWLER_CALM_MS,
   CRAWLER_CHASE_MS, CRUSH_SLACK, LUNGE_DASH, LUNGE_HIT_R, LUNGE_NONE, LUNGE_OVER, LUNGE_REST, LUNGE_REST_MS, LUNGE_SPEED,
   LUNGE_WIND, LUNGE_WIND_MS, FIRE_MS, FIRE_R, footTop, GUARDIAN, GUN_DEPRESS, gunPivot, KINDS, type Kind, lineOfSight,
-  MUZZLE, NIGHT_SUN, REST_R, restSpot, SETTLE, STEP_DIST, STEP_MAX, STEP_MIN,
+  ANKLE, FEMUR, MUZZLE, NIGHT_SUN, REST_R, restSpot, SOCKETS, TIBIA, SETTLE, STEP_DIST, STEP_MAX, STEP_MIN,
 } from '../shared/guardians.ts';
 import {
   BLAST_R as MISSILE_BLAST_R, FIRST_MS, flightTime, LEAD, MISSILE_MIN_R, MISSILE_MS, MISSILE_R, type MissilePath, SCATTER, SHOOTERS,
@@ -26,7 +26,8 @@ import {
 } from '../shared/missiles.ts';
 import { nearStorm, seized, type Storm } from '../shared/storm.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
-import { allBroken, RANGE, shotPasses, weakPoints, WRECK_S } from '../shared/rifle.ts';
+import { allBroken, bites, GUARDIAN_POINT_HP, type Gun, kills, shotPasses, weakPoints, WRECK_S } from '../shared/rifle.ts';
+import { ENEMIES } from '../shared/enemies.ts';
 import { sunElevation } from '../shared/sun.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { type BotPlayer, type Kill, open, r2, r3, rand, SEND_R, SITE_LEAVE_R, SITE_NEAR_R, sitesNear, wrap } from './bots.ts';
@@ -101,8 +102,9 @@ type Guardian = {
   aiming: boolean; ax: number; ay: number; az: number; chargeAt: number; firedAt: number;
   /** Last missile launched when. */
   missileAt: number;
-  /** Weak points (shared/rifle.ts): how many, which are shot (bit mask); died when (-1 alive). */
-  points: number; broken: number; deadAt: number;
+  /** Weak points (shared/rifle.ts): how many, which are shot (bit mask), hits each has taken (a guardian's take
+   *  GUARDIAN_POINT_HP: one hit cracks it); died when (-1 alive). */
+  points: number; broken: number; hits: number[]; deadAt: number;
   /** Guardians' feet (crawlers' are only drawn, src/world/guardians.ts); yaw last tick; standing still for (s). */
   feet: Foot[] | null; lastYaw: number; still: number;
   /** Crawlers: which way round what's in its way (server/pack.ts); the lunge (LUNGE_*) since when, springing along
@@ -176,7 +178,7 @@ export class GuardianServer {
       id: this.nextWalker++, kind, legs, x, z, yaw: rand(-Math.PI, Math.PI), speed: 0, home,
       tx: home.x, tz: home.z, guardUntil: 0, prey: -1, huntAt: 0, px: 0, pz: 0, knownAt: 0, calmUntil: 0, shotUntil: 0, bitAt: 0,
       aiming: false, ax: 0, ay: 0, az: 0, chargeAt: -1, firedAt: 0, missileAt: 0,
-      points: weakPoints(kind, legs).length, broken: 0, deadAt: -1, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
+      points: weakPoints(kind, legs).length, broken: 0, hits: weakPoints(kind, legs).map(() => 0), deadAt: -1, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
       lunge: LUNGE_NONE, lungeAt: 0, lx: 0, lz: 0, left: 0, trail: [], kx: 0, kz: 0,
     };
     g.lastYaw = g.yaw;
@@ -798,22 +800,99 @@ export class GuardianServer {
   }
 
   /**
-   * Player `by` (feet position) shot from (x, y, z) to (ex, ey, ez) and says it broke weak point `i` of walker `gid`
-   * (-1: hit its body). Plausible (alive, the point whole, in range, the shot passing and ending at that walker): broken,
-   * and the walker (crawlers: the whole pack) comes for the shooter; a body hit does no harm but angers it the same.
-   * Returns whether it broke a point, and the kill if that was the last one.
+   * Player `by` (feet position) shot `gun` (shared/rifle.ts GUNS) from (x, y, z) to (ex, ey, ez) and says it hit weak
+   * point `i` of walker `gid` (-1: its body). Plausible (alive, the point whole, in range, the shot passing and ending at
+   * that walker): the point takes the gun's damage (a guardian's cracks at the first hit and breaks at
+   * GUARDIAN_POINT_HP; a crawler's at one), and the walker (crawlers: the whole pack) comes for the shooter. The body's
+   * plate turns every gun but the graviton pistol (shared/rifle.ts bites): a body hit does no harm but angers it the
+   * same. Returns whether it did harm, the kill if that was the last point, and whether the shot was seen to end at it
+   * (`seen`: a body hit too).
    */
-  shoot(by: BotPlayer, x: number, y: number, z: number, ex: number, ey: number, ez: number, gid: unknown, i: unknown, now: number, push: Pusher): { hit: boolean; kill: Kill | null } {
+  shoot(by: BotPlayer, x: number, y: number, z: number, ex: number, ey: number, ez: number, gid: unknown, i: unknown, now: number, gun: Gun): { hit: boolean; kill: Kill | null; seen?: boolean } {
     const miss = { hit: false, kill: null };
     const g = this.target(gid, i);
     if (!g) return miss;
     const sc = KINDS[g.kind].scale;
     // Passing and ending near the body's centre.
-    if (Math.hypot(ex - x, ey - y, ez - z) > RANGE + 5
+    if (Math.hypot(ex - x, ey - y, ez - z) > gun.range + 5
       || !shotPasses(x, y, z, ex, ey, ez, g.x, heightAt(g.x, g.z) + BODY_H * sc, g.z, SHOT_SLACK * sc + 2)) return miss;
     // Knocked along the beam.
-    this.knock(g, ex - x, ez - z, push, now);
-    return this.strike(g, by, i as number, now);
+    this.knock(g, ex - x, ez - z, gun.push, now);
+    return { ...this.strike(g, by, i as number, this.damage(g, gun, i === -1), now), seen: true };
+  }
+
+  /** What a hit of `gun` on `g` (on its body: `hull`) takes off a weak point: nothing where the plate turns it, and every
+   *  point at once from a gun that kills outright (shared/rifle.ts kills). */
+  private damage(g: Guardian, gun: Gun, hull: boolean): number {
+    if (!bites(gun, ENEMIES[KINDS[g.kind].name].armor, !hull)) return 0;
+    return kills(gun) ? Infinity : gun.damage;
+  }
+
+  /**
+   * A blaster's burst (shared/rifle.ts BLASTER, gun.blast) at (x, y, z) by player `by`: every whole weak point of a live
+   * walker within `r` m takes `dmg(d)` (d: its distance from the burst; the plate around it takes nothing), and the
+   * crawlers within it are thrown away from it. `skip`: the walker the beam itself struck (its hit counted already).
+   * The weak points are where the server reckons them (pointAt). Returns the kills, and whether it did any harm.
+   */
+  burst(by: BotPlayer, x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number, skip = -1): { hit: boolean; kills: Kill[] } {
+    const out: { hit: boolean; kills: Kill[] } = { hit: false, kills: [] };
+    for (const g of this.guardians) {
+      if (g.deadAt >= 0 || g.id === skip) continue;
+      const sc = KINDS[g.kind].scale;
+      // Nothing of it within reach (the legs splay REST_R + a step out).
+      if (Math.hypot(g.x - x, g.z - z) > (REST_R + STEP_DIST + FEMUR) * sc + r) continue;
+      if (g.kind === CRAWLER && Math.hypot(g.x - x, heightAt(g.x, g.z) + BODY_H * sc - y, g.z - z) < r) this.knock(g, g.x - x, g.z - z, 'blaster', now);
+      for (let i = 0; i < g.points && g.deadAt < 0; i++) {
+        if (g.broken & (1 << i)) continue;
+        const p = this.pointAt(g, i, _pt), d = Math.hypot(p.x - x, p.y - y, p.z - z);
+        if (d > r) continue;
+        const res = this.strike(g, by, i, dmg(d), now);
+        out.hit ||= res.hit;
+        if (res.kill) out.kills.push(res.kill);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Where weak point `i` of `g` is, as the server reckons it (into `out`). Only the client draws the legs (two-bone IK,
+   * src/world/guardians.ts pose), so this redoes that IK from what the server has: the body BODY_H over its feet's
+   * average height (level: the drawn one tilts to the plane of its feet and dips on a spring), each hip socket turned
+   * with the yaw, the ankle over the server's foot (a swinging foot is taken at where it lands), the knee bent up and out
+   * the same way; a knee's lens is put at the knee itself (its offset down the shin is under a metre). The belly's and
+   * the crawlers' flank points are in the body's frame, untilted (a crawler's body rides BODY_H over the sand). Good to
+   * a metre or two: well inside a burst.
+   */
+  pointAt(g: Guardian, i: number, out: { x: number; y: number; z: number }) {
+    const sc = KINDS[g.kind].scale, wp = weakPoints(g.kind, g.legs)[i];
+    const ground = g.feet?.length ? g.feet.reduce((a, f) => a + f.y, 0) / g.feet.length : heightAt(g.x, g.z);
+    const by = ground + BODY_H * sc, c = Math.cos(g.yaw), s = Math.sin(g.yaw);
+    if (wp.on !== 'tibia' || !g.feet) {
+      const lx = wp.x * sc, lz = wp.z * sc;
+      out.x = g.x + lx * c + lz * s;
+      out.y = by + wp.y * sc;
+      out.z = g.z - lx * s + lz * c;
+      return out;
+    }
+    const f = g.feet[wp.leg], [sx, sz] = SOCKETS[g.legs][wp.leg];
+    const hx = g.x + (sx * c + sz * s) * sc, hz = g.z + (-sx * s + sz * c) * sc;
+    const ax = f.x - hx, ay = f.y + ANKLE * sc - by, az = f.z - hz;
+    const F = FEMUR * sc, L = TIBIA * sc, raw = Math.hypot(ax, ay, az) || 1;
+    const len = Math.min(F + L - 0.01 * sc, Math.max(Math.abs(L - F) + 0.1 * sc, raw));
+    const vx = ax / raw, vy = ay / raw, vz = az / raw;
+    // The pole: up, leaning out from the body towards the foot.
+    const dl = Math.hypot(f.x - g.x, f.z - g.z) || 1;
+    let px = ((f.x - g.x) / dl) * 0.35, py = 1, pz = ((f.z - g.z) / dl) * 0.35;
+    const k = px * vx + py * vy + pz * vz;
+    px -= vx * k;
+    py -= vy * k;
+    pz -= vz * k;
+    const pl = Math.hypot(px, py, pz) || 1;
+    const along = (F * F - L * L + len * len) / (2 * len), up = Math.sqrt(Math.max(0, F * F - along * along));
+    out.x = hx + vx * along + (px / pl) * up;
+    out.y = by + vy * along + (py / pl) * up;
+    out.z = hz + vz * along + (pz / pl) * up;
+    return out;
   }
 
   /**
@@ -825,7 +904,7 @@ export class GuardianServer {
     const g = this.target(gid, i);
     if (!g || (g.kind === GUARDIAN && i !== -1) || Math.hypot(g.x - by.x, g.z - by.z) > reach + KINDS[g.kind].scale * 3.6) return { hit: false, kill: null };
     this.knock(g, g.x - by.x, g.z - by.z, 'mace', now);
-    return this.strike(g, by, i as number, now);
+    return this.strike(g, by, i as number, i === -1 ? 0 : 1, now);
   }
 
   /** Walker `g` hit along (dx, dz) by `push` (shared/knockback.ts): knocked back by its weight; a crawler knocked hard
@@ -860,11 +939,19 @@ export class GuardianServer {
     return g;
   }
 
-  /** Weak point `i` of `g` broken by player `by` (-1: just its body hit): a kill if it was the last. */
-  private strike(g: Guardian, by: BotPlayer, i: number, now: number): { hit: boolean; kill: Kill | null } {
-    const body = i === -1;
-    if (!body) g.broken |= 1 << i;
-    if (!body && allBroken(g.broken, g.points)) {
+  /** Weak point `i` of `g` hit by player `by` for `dmg` (-1: its body, every point at once if `dmg` > 0; 0: no harm,
+   *  it only angers it): broken once it has taken its hits (GUARDIAN_POINT_HP for a guardian's, one for a crawler's),
+   *  a kill if it was the last. */
+  private strike(g: Guardian, by: BotPlayer, i: number, dmg: number, now: number): { hit: boolean; kill: Kill | null } {
+    const hp = g.kind === GUARDIAN ? GUARDIAN_POINT_HP : 1;
+    if (dmg > 0) {
+      for (let k = 0; k < g.points; k++) {
+        if ((i !== -1 && k !== i) || g.broken & (1 << k)) continue;
+        g.hits[k] = Math.min(hp, g.hits[k] + dmg);
+        if (g.hits[k] >= hp) g.broken |= 1 << k;
+      }
+    }
+    if (allBroken(g.broken, g.points)) {
       // Killing one sets the rest of the pack on you too.
       if (open(by)) this.rouse(g, by, now);
       g.deadAt = now;
@@ -881,7 +968,7 @@ export class GuardianServer {
       this.hunt(g, by, now);
       this.rouse(g, by, now);
     }
-    return { hit: !body, kill: null };
+    return { hit: dmg > 0, kill: null };
   }
 
   /** Wrecks cleared away after a while; killed guardians replaced, at a site far from where they fell. */
@@ -912,15 +999,15 @@ export class GuardianServer {
       g.push(o.id, o.kind, o.legs, r2(o.x), r2(o.z), r3(o.yaw), o.prey < 0 ? 0 : o.prey === id ? 2 : 1,
         o.aiming ? r2(o.ax) : 0, o.aiming ? r2(o.ay) : 0, o.aiming ? r2(o.az) : 0,
         o.kind === CRAWLER ? o.lunge : o.chargeAt >= 0 ? 1 : o.aiming ? 0 : -1,
-        o.broken, o.deadAt < 0 ? 0 : Math.round((time - o.deadAt) / 100) / 10 + 0.01);
+        o.broken, o.deadAt < 0 ? 0 : Math.round((time - o.deadAt) / 100) / 10 + 0.01, cracked(o));
     }
     const n = this.nests.msg(x, z);
     return { t: 'bots', time, g, d: this.drones.msg(time, id, x, z), f, ...(n.length ? { n } : {}) };
   }
 
   // The drones, for server/world.ts.
-  shootDrone(x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, now: number, by: number, push: Pusher): boolean {
-    return this.drones.shoot(x, y, z, ex, ey, ez, id, now, by, push);
+  shootDrone(x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, now: number, by: number, gun: Gun): boolean {
+    return this.drones.shoot(x, y, z, ex, ey, ez, id, now, by, gun);
   }
   droneAt(id: number) {
     return this.drones.at(id);
@@ -931,6 +1018,15 @@ export class GuardianServer {
   crashes(): Kill[] {
     return this.drones.crashes();
   }
+}
+
+const _pt = { x: 0, y: 0, z: 0 };
+
+/** The weak points of `g` hit but still whole (bit i: point i): a guardian's cracked ones, blinking (src/world/guardians.ts). */
+function cracked(g: Guardian): number {
+  let m = 0;
+  for (let i = 0; i < g.points; i++) if (g.hits[i] > 0 && !(g.broken & (1 << i))) m |= 1 << i;
+  return m;
 }
 
 /** Where a crawler's spring (trail: t ms, x, z, ...) had it at time t (its ends before and after). */

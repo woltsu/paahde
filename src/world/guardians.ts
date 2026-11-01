@@ -40,7 +40,7 @@ import {
   ANKLE, BODY_H, CRAWLER, FEMUR, LUNGE_DASH, LUNGE_WIND, LUNGE_WIND_MS, footTop, GUN_DEPRESS, GUN_MOUNT, GUN_PIVOT, KINDS, MUZZLE, REST_R, SETTLE, SOCKETS, STEP_DIST, STEP_MAX, STEP_MIN, TIBIA,
 } from '../../shared/guardians.ts';
 import { heightAt, normalAt } from '../../shared/terrain.ts';
-import { HIT_PAD, weakPoints, WRECK_S, WRECK_SINK, type WeakPoint } from '../../shared/rifle.ts';
+import { GUARDIAN_POINT_HP, HIT_PAD, kills, weakPoints, WRECK_S, WRECK_SINK, type Gun, type WeakPoint } from '../../shared/rifle.ts';
 import type { GuardianFrame } from './botFrames.ts';
 import { zaps } from './zaps.ts';
 
@@ -80,8 +80,11 @@ const lensGeo = new THREE.SphereGeometry(1, 16, 12);
 const rimGeo = new THREE.TorusGeometry(1.02, 0.22, 6, 16);
 const lensMat = new THREE.MeshStandardNodeMaterial({ color: 0x500000, roughness: 0.2, metalness: 0.1, emissive: 0xff0800, emissiveIntensity: 2.4 });
 const brokenMat = new THREE.MeshStandardNodeMaterial({ color: 0x140c0a, roughness: 0.9, metalness: 0.3 });
+/** A guardian's weak point hit once (GUARDIAN_POINT_HP: the next breaks it): it blinks, sputtering like the harvester's
+ *  hit cores (src/world/harvesters.ts). */
+const crackedMat = new THREE.MeshStandardNodeMaterial({ color: 0x500000, roughness: 0.35, metalness: 0.1, emissive: 0xff0800, emissiveIntensity: 2.4 });
 const rimMat = new THREE.MeshStandardNodeMaterial({ color: 0x2a2624, roughness: 0.5, metalness: 0.8 });
-type Target = { wp: WeakPoint; lens: THREE.Mesh; group: THREE.Group; broken: boolean; smoke: number };
+type Target = { wp: WeakPoint; lens: THREE.Mesh; group: THREE.Group; broken: boolean; cracked: boolean; smoke: number };
 
 type Part = 'body3' | 'body4' | 'hip' | 'femur' | 'tibia' | 'foot' | 'turret' | 'gun';
 const NODES: Record<Part, string> = {
@@ -314,6 +317,9 @@ class Walker {
   /** Broken weak points as drawn (server mask, plus local shots not confirmed yet: bit → when). */
   private shown = 0;
   private predicted = new Map<number, number>();
+  /** Cracked weak points as drawn, the same way (server mask plus our own unconfirmed hits). */
+  private crackShown = 0;
+  private crackPredicted = new Map<number, number>();
   private flinch = 0;
   private flinchX = 0;
   private flinchZ = 0;
@@ -376,11 +382,12 @@ class Walker {
       if (wp.on === 'body') rim.rotation.y = Math.PI / 2;
       else rim.rotation.x = Math.PI / 2;
       (wp.on === 'tibia' ? this.legs[wp.leg].tibia : this.body).add(group);
-      this.targets.push({ wp, lens, group, broken: false, smoke: Math.random() });
+      this.targets.push({ wp, lens, group, broken: false, cracked: false, smoke: Math.random() });
     }
     if (this.noShadows) this.root.traverse((o) => (o.castShadow = false));
     scene.add(this.root);
     this.setBroken(f.broken, true);
+    this.syncCracked(f.cracked);
   }
 
   /** Weak point `i` shot here and now (the server hears of it; if it never agrees, the lens comes back). */
@@ -389,13 +396,49 @@ class Walker {
     this.setBroken(this.shown | (1 << i), false);
   }
 
+  /** Our shot of `gun` struck weak point `i` (-1: the body) here and now: as the server will have it (server/guardians.ts
+   *  strike), a gun that kills outright breaks every point, the body's plate turns the rest; a guardian's point cracks
+   *  at the first hit (blinking) and breaks at GUARDIAN_POINT_HP, a crawler's at one. */
+  hitLocal(i: number, gun: Gun) {
+    if (kills(gun)) {
+      this.targets.forEach((t, k) => t.broken || this.breakLocal(k));
+      return;
+    }
+    const t = this.targets[i];
+    if (!t || t.broken) return;
+    const hp = this.kind === CRAWLER ? 1 : GUARDIAN_POINT_HP;
+    if ((t.cracked ? 1 : 0) + gun.damage >= hp) return this.breakLocal(i);
+    this.crackPredicted.set(i, performance.now());
+    this.setCracked(this.crackShown | (1 << i));
+  }
+
+  /** Show cracked weak points by mask (whole ones only: a broken one is dark). */
+  private setCracked(mask: number) {
+    this.targets.forEach((t, i) => {
+      t.cracked = (mask & (1 << i)) !== 0;
+      if (!t.broken) t.lens.material = t.cracked ? crackedMat : lensMat;
+    });
+    this.crackShown = mask;
+  }
+
+  /** Server's cracked mask plus our unconfirmed cracks (dropped after a second and a half if it never agrees). */
+  private syncCracked(server: number) {
+    let mask = server;
+    const now = performance.now();
+    for (const [i, at] of this.crackPredicted) {
+      if (server & (1 << i) || this.shown & (1 << i) || now - at > 1500) this.crackPredicted.delete(i);
+      else mask |= 1 << i;
+    }
+    if (mask !== this.crackShown) this.setCracked(mask);
+  }
+
   /** Show weak points by mask; newly broken ones shatter (unless `quiet`: already broken when it came into view). */
   private setBroken(mask: number, quiet: boolean) {
     this.targets.forEach((t, i) => {
       const b = (mask & (1 << i)) !== 0;
       if (b === t.broken) return;
       t.broken = b;
-      t.lens.material = b ? brokenMat : lensMat;
+      t.lens.material = b ? brokenMat : t.cracked ? crackedMat : lensMat;
       t.lens.scale.setScalar(b ? 0.7 : 1);
       if (!b || quiet) return;
       t.group.getWorldPosition(_w);
@@ -504,6 +547,7 @@ class Walker {
   update(f: GuardianFrame, dt: number) {
     if (dt <= 0) return;
     this.syncBroken(f.broken);
+    this.syncCracked(f.cracked);
     this.smoulder(dt);
     if (f.dead > 0) return this.die(f, dt);
     // Velocity from the interpolated track, smoothed (the server sends 10 Hz).
@@ -876,7 +920,10 @@ export class Guardians {
       w.update(f, dt);
     }
     // Weak points breathe, all together.
-    lensMat.emissiveIntensity = 2.2 + 0.9 * Math.sin(performance.now() / 260);
+    const now = performance.now();
+    lensMat.emissiveIntensity = 2.2 + 0.9 * Math.sin(now / 260);
+    // Cracked ones blink: a quick sputter that keeps dropping out.
+    crackedMat.emissiveIntensity = 2.4 * Math.max(0.05, 0.5 + 0.5 * Math.sin(now * 0.031) + 0.25 * Math.sin(now * 0.083));
     for (const [id, w] of this.walkers) {
       if (seen.has(id)) continue;
       w.dispose();
@@ -914,6 +961,12 @@ export class Guardians {
   /** Weak point `i` of walker `id` shot by us: shatter it now. */
   breakLocal(id: number, i: number) {
     this.walkers.get(id)?.breakLocal(i);
+  }
+
+  /** Walker `id` struck by our shot of `gun` on weak point `i` (-1: its body): crack or shatter it now, as the server
+   *  will (Walker.hitLocal). */
+  hitLocal(id: number, i: number, gun: Gun) {
+    this.walkers.get(id)?.hitLocal(i, gun);
   }
 
   /** Guardian `id` fired: its gun recoils; its muzzle (world) into `out`, or null if it isn't drawn. */

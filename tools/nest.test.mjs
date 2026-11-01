@@ -9,6 +9,7 @@ import { ORIGIN } from '../shared/origin.ts';
 import { SP_DIE, SP_DROP, SP_PERCH } from '../shared/queen.ts';
 import { HELIO, solarFarmsNear } from '../shared/solarfarms.ts';
 import { GuardianServer } from '../server/guardians.ts';
+import { GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
 import { LEAVE_R, NestServer } from '../server/nests.ts';
 import { Tracks } from '../server/tracks.ts';
 
@@ -70,17 +71,17 @@ test('a rifle shot kills one off its mirror; the pistol takes two, the first kno
   run(n, v, p, clock, 1);
   const ps = nestPerches(farm), [a, b] = n.all[0].lings;
   const qa = ps[a.perch], qb = ps[b.perch];
-  assert.deepEqual(n.shoot(qa.x + 20, qa.y, qa.z, a.id, clock.now, 'rifle').hit, false, 'a shot ending far off misses');
-  const r = n.shoot(qa.x, qa.y, qa.z, a.id, clock.now, 'rifle');
+  assert.deepEqual(n.shoot(qa.x + 20, qa.y, qa.z, a.id, clock.now, GUNS[RIFLE]).hit, false, 'a shot ending far off misses');
+  const r = n.shoot(qa.x, qa.y, qa.z, a.id, clock.now, GUNS[RIFLE]);
   assert.ok(r.hit && r.kill, 'one rifle shot');
   assert.equal(a.st, SP_DIE);
   assert.ok(n.msg(p.x, p.z).some((_, i, s) => i % NEST_STRIDE === 0 && s[i] === a.id && s[i + 6] === a.perch), 'falls off its mirror as it dies');
-  const r1 = n.shoot(qb.x, qb.y, qb.z, b.id, clock.now, 'pistol');
+  const r1 = n.shoot(qb.x, qb.y, qb.z, b.id, clock.now, GUNS[PISTOL]);
   assert.ok(r1.hit && !r1.kill, 'the first pistol shot does not kill it');
   assert.equal(b.st, SP_DROP, 'but knocks it off its mirror');
-  const r2 = n.shoot(b.x, farm.y + 0.5, b.z, b.id, clock.now + 100, 'pistol');
+  const r2 = n.shoot(b.x, farm.y + 0.5, b.z, b.id, clock.now + 100, GUNS[PISTOL]);
   assert.ok(r2.hit && r2.kill, 'the second does');
-  assert.equal(n.shoot(qa.x, qa.y, qa.z, a.id, clock.now, 'rifle').hit, false, 'a dead one takes no more');
+  assert.equal(n.shoot(qa.x, qa.y, qa.z, a.id, clock.now, GUNS[RIFLE]).hit, false, 'a dead one takes no more');
 });
 
 test('a nest left and come back to keeps who was alive', () => {
@@ -88,7 +89,7 @@ test('a nest left and come back to keeps who was alive', () => {
   const p = { id: 1, x: farm.x + 300, y: farm.y, z: farm.z, safe: false };
   run(n, v, p, clock, 1);
   const [a, b, c] = n.all[0].lings, ps = nestPerches(farm);
-  for (const l of [a, b, c]) n.shoot(ps[l.perch].x, ps[l.perch].y, ps[l.perch].z, l.id, clock.now, 'rifle');
+  for (const l of [a, b, c]) n.shoot(ps[l.perch].x, ps[l.perch].y, ps[l.perch].z, l.id, clock.now, GUNS[RIFLE]);
   p.x = farm.x + LEAVE_R + 50;
   run(n, v, p, clock, 1);
   assert.equal(n.all.length, 0, 'gone with everyone away');
@@ -113,7 +114,7 @@ test('one blow of the scrap mace kills one in reach, none from further off', () 
   const ps = nestPerches(farm), [a, b] = n.all[0].lings;
   assert.equal(n.smash({ x: ps[a.perch].x + 20, y: farm.y, z: ps[a.perch].z }, a.id, 6.2, clock.now).hit, false, 'on its mirror, from afar');
   assert.equal(a.st, SP_PERCH);
-  n.shoot(ps[b.perch].x, ps[b.perch].y, ps[b.perch].z, b.id, clock.now, 'pistol'); // knocked down to the sand
+  n.shoot(ps[b.perch].x, ps[b.perch].y, ps[b.perch].z, b.id, clock.now, GUNS[PISTOL]); // knocked down to the sand
   b.x = farm.x + 120;
   b.z = farm.z;
   const at = { x: b.x + 2, y: farm.y, z: b.z };

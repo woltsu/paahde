@@ -5,9 +5,9 @@
 // sets off the lot (WAVE_MS); awake, they hunt as the queen's
 // brood does (server/brood.ts), and with nobody to go for mill about under the mirrors by the tower. Ticked by
 // server/guardians.ts (their bites are its `bitten`), sent in its 'bots' (`n`).
-import { PACK_BACK_S } from '../shared/enemies.ts';
 import { BITE_DAMAGE } from '../shared/guardians.ts';
-import type { Pusher } from '../shared/knockback.ts';
+import { bites, type Gun, kills } from '../shared/rifle.ts';
+import { ENEMIES, PACK_BACK_S } from '../shared/enemies.ts';
 import {
   CHAIN_MS, CHAIN_R, NEST_DAMAGE, NEST_HP, NEST_N, NEST_R, NEST_SPEED, nestPerches, WAKE_MS, WAKE_R, WAVE_MS, type Perch,
 } from '../shared/nest.ts';
@@ -125,14 +125,34 @@ export class NestServer {
     }
   }
 
-  /** A shot ending at (ex, ey, ez), aimed at spiderling `id`: plausible (ending near it), it takes the gun's damage
-   *  (NEST_DAMAGE). Killed: where, for its drops. */
-  shoot(ex: number, ey: number, ez: number, id: unknown, now: number, gun: Pusher): Strike {
+  /** A shot of `gun` (shared/rifle.ts GUNS) ending at (ex, ey, ez), aimed at spiderling `id`: plausible (ending near
+   *  it), it takes the gun's damage (nestDamage). Killed: where, for its drops. */
+  shoot(ex: number, ey: number, ez: number, id: unknown, now: number, gun: Gun): Strike {
     const f = this.find(id);
     if (!f) return MISS;
     const [x, y, z] = f.at;
     if (Math.hypot(ex - x, ez - z) > HIT_R || Math.abs(ey - y) > 7) return MISS;
-    return this.strike(f.n, f.l, gun === 'rifle' ? NEST_DAMAGE.rifle : NEST_DAMAGE.pistol, now);
+    return this.strike(f.n, f.l, nestDamage(gun), now);
+  }
+
+  /** A blaster's burst at (x, y, z): every live spiderling within `r` m (of its body) takes `dmg(d)` (NEST_DAMAGE's
+   *  units). `skip`: the one the beam struck itself. Returns the kills, and how many it hurt. */
+  burst(x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number, skip = -1): { n: number; kills: { x: number; z: number }[] } {
+    const out = { n: 0, kills: [] as { x: number; z: number }[] };
+    for (const n of this.nests.values()) {
+      if (Math.hypot(n.farm.x - x, n.farm.z - z) > NEST_R + LEAVE_R) continue;
+      for (const l of n.lings) {
+        if (l.st === SP_DIE || l.id === skip) continue;
+        const q = l.st === SP_PERCH ? n.perches[l.perch] : null;
+        const [lx, ly, lz] = q ? [q.x, q.y - SP_BODY_Y, q.z] : [l.x, heightAt(l.x, l.z), l.z];
+        const d = Math.hypot(lx - x, ly + SP_BODY_Y - y, lz - z);
+        if (d > r) continue;
+        const s = this.strike(n, l, dmg(d), now);
+        out.n++;
+        if (s.kill) out.kills.push(s.kill);
+      }
+    }
+    return out;
   }
 
   /** A blow of the scrap mace by someone at `by` (feet) on spiderling `id`: in reach (`reach` m of their eye, its
@@ -186,4 +206,11 @@ export class NestServer {
     }
     return out;
   }
+}
+
+/** A hit of `gun` on a spiderling, in NEST_HP: its own weapon's (NEST_DAMAGE), else the gun's; all of it from a gun that
+ *  kills outright. */
+export function nestDamage(gun: Gun): number {
+  if (!bites(gun, ENEMIES.spiderling.armor, false)) return 0;
+  return kills(gun) ? NEST_HP : ((NEST_DAMAGE as Record<string, number>)[gun.push] ?? gun.damage);
 }

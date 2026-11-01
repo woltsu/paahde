@@ -17,7 +17,8 @@ import {
 } from '../shared/guardians.ts';
 import { frontOut, nearStorm, type Storm } from '../shared/storm.ts';
 import { CORE_R, vortexCentre, vortexEnvelope, type Vortex } from '../shared/vortex.ts';
-import { DRONE_HIT, DRONE_HP, DRONE_WRECK_S, RANGE, shotPasses } from '../shared/rifle.ts';
+import { bites, DRONE_HIT, DRONE_HP, DRONE_WRECK_S, type Gun, kills, shotPasses } from '../shared/rifle.ts';
+import { ENEMIES } from '../shared/enemies.ts';
 import { sunElevation } from '../shared/sun.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { towersNear } from '../shared/towers.ts';
@@ -357,17 +358,33 @@ export class DroneServer {
   }
 
   /**
-   * Player `by` shot from (x, y, z) to (ex, ey, ez) and says it hit drone `id`: plausible (flying, in range, the shot
-   * passing and ending near it), it takes the hit; the last one brings it down. Returns whether it counted.
+   * Player `by` shot `gun` (shared/rifle.ts GUNS) from (x, y, z) to (ex, ey, ez) and says it hit drone `id`: plausible
+   * (flying, in range, the shot passing and ending near it), it takes the gun's damage (its thin skin lets every gun
+   * bite); DRONE_HP brings it down. Returns whether it counted.
    */
-  shoot(x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, now: number, by = -1, push: Pusher = 'rifle'): boolean {
+  shoot(x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, now: number, by: number, gun: Gun): boolean {
     const d = this.drones.find((o) => o.id === id);
     if (!d || d.downAt >= 0) return false;
     const dx = ex - x, dz = ez - z, len = Math.hypot(dx, ey - y, dz);
     // The client draws it 250 ms in the past, and it moves up to CHASE_SPEED: slack for that.
-    if (len > RANGE + 5 || !shotPasses(x, y, z, ex, ey, ez, d.x, d.y, d.z, DRONE_HIT + 2)) return false;
-    this.hurt(d, dx / len, dz / len, now, by, push, (ey - y) / len);
+    if (len > gun.range + 5 || !shotPasses(x, y, z, ex, ey, ez, d.x, d.y, d.z, DRONE_HIT + 2)) return false;
+    this.hurt(d, dx / len, dz / len, now, by, gun.push, (ey - y) / len, damage(gun));
     return true;
+  }
+
+  /** A blaster's burst at (x, y, z) by player `by`: every flying drone within `r` m (of its centre, less DRONE_HIT: its
+   *  span) takes `dmg(d)` and is thrown away from it. `skip`: the drone the beam struck itself. Returns those it hurt. */
+  burst(x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number, by: number, skip = -1): number {
+    let n = 0;
+    for (const d of this.drones) {
+      if (d.downAt >= 0 || d.id === skip) continue;
+      const dist = Math.max(0, Math.hypot(d.x - x, d.y - y, d.z - z) - DRONE_HIT);
+      if (dist > r) continue;
+      const len = Math.hypot(d.x - x, d.y - y, d.z - z) || 1;
+      this.hurt(d, (d.x - x) / len, (d.z - z) / len, now, by, 'blaster', (d.y - y) / len, dmg(dist));
+      n++;
+    }
+    return n;
   }
 
   /** The first flying drone within `r` m of (x, y, z), or -1 (thrown scrap, server/throws.ts). */
@@ -399,13 +416,14 @@ export class DroneServer {
     d.vy = -JAM_SINK;
   }
 
-  /** Drone `d` takes a hit along unit (dx, dy, dz) from player `by`, knocked by `push`; the last one brings it down. */
-  private hurt(d: Drone, dx: number, dz: number, now: number, by: number, push: Pusher, dy = 0) {
+  /** Drone `d` takes a hit of `dmg` along unit (dx, dy, dz) from player `by`, knocked by `push`; DRONE_HP brings it down. */
+  private hurt(d: Drone, dx: number, dz: number, now: number, by: number, push: Pusher, dy = 0, dmg = 1) {
     const v = knockSpeed(push, 'drone');
     d.kx += dx * v;
     d.ky += dy * v;
     d.kz += dz * v;
-    if (++d.hurt < DRONE_HP) {
+    d.hurt = Math.min(DRONE_HP, d.hurt + dmg);
+    if (d.hurt < DRONE_HP) {
       // Hit from anywhere: it comes for where the shooter is now.
       if (by >= 0 && !d.leaving) {
         d.hunt = by;
@@ -499,4 +517,10 @@ export class DroneServer {
     }
     return d;
   }
+}
+
+/** What a hit of `gun` takes off a drone (DRONE_HP): its thin hull lets any gun bite (shared/rifle.ts bites). */
+function damage(gun: Gun): number {
+  if (!bites(gun, ENEMIES.drone.armor, false)) return 0;
+  return kills(gun) ? DRONE_HP : gun.damage;
 }

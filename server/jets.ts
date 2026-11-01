@@ -7,7 +7,8 @@ import { DIVE_STEP, JET_NOSE, jetDive, JET_ALT_MAX, JET_ALT_MIN, JET_HIT, JET_HP
 import { duneFloor } from '../shared/dunes.ts';
 import { baseHeight, WORLD_SEED } from '../shared/terrain.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
-import { shotPasses } from '../shared/rifle.ts';
+import { bites, type Gun, kills, shotPasses } from '../shared/rifle.ts';
+import { ENEMIES } from '../shared/enemies.ts';
 
 /** Time between one flight's start and the next (ms). */
 const GAP_MIN_MS = 8 * 60_000;
@@ -109,15 +110,36 @@ export class JetServer {
     this.changed = true;
   }
 
-  /** A rifle shot from (x, y, z) to (ex, ey, ez) at server time `now` that the client says hit jet `id`: true if it
-   *  passed near where that jet was lately (the last hit brings it down). */
-  shoot(x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, now: number): boolean {
+  /** A shot of `gun` (shared/rifle.ts GUNS) from (x, y, z) to (ex, ey, ez) at server time `now` that the client says
+   *  hit jet `id`: true if it passed near where that jet was lately. It takes the gun's damage (its thin skin lets any
+   *  gun bite); JET_HP brings it down. */
+  shoot(x: number, y: number, z: number, ex: number, ey: number, ez: number, id: unknown, now: number, gun: Gun): boolean {
     const j = this.jets.find((o) => o.id === id);
     if (!j || j.down) return false;
     if (!LAG_MS.some((lag) => jetAt(j, now - lag, _p) && shotPasses(x, y, z, ex, ey, ez, _p.x, _p.y, _p.z, JET_HIT[j.kind]))) return false;
-    this.changed = true;
-    if (++j.hurt >= JET_HP) this.bringDown(j, now);
+    this.hurt(j, !bites(gun, ENEMIES.jet.armor, false) ? 0 : kills(gun) ? JET_HP : gun.damage, now);
     return true;
+  }
+
+  /** A blaster's burst at (x, y, z): a flying jet within `r` m of its hull (JET_HIT: half its span) takes `dmg(d)`.
+   *  `skip`: the jet the beam struck itself. Returns how many it hurt. */
+  burst(x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number, skip = -1): number {
+    let n = 0;
+    for (const j of this.jets) {
+      if (j.down || j.id === skip || !jetAt(j, now, _p)) continue;
+      const d = Math.max(0, Math.hypot(_p.x - x, _p.y - y, _p.z - z) - JET_HIT[j.kind]);
+      if (d > r) continue;
+      this.hurt(j, dmg(d), now);
+      n++;
+    }
+    return n;
+  }
+
+  private hurt(j: Jet, dmg: number, now: number) {
+    if (dmg <= 0) return;
+    this.changed = true;
+    j.hurt = Math.min(JET_HP, j.hurt + dmg);
+    if (j.hurt >= JET_HP) this.bringDown(j, now);
   }
 
   /** Where flying jet `id` was `ago` ms back (the jammer's client sees it on its guess of the server clock), or null. */

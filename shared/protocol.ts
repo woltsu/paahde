@@ -123,12 +123,14 @@ export type ClientMsg =
   // a fixed-wing drone past you in about 15 s, a harvester crawling past (shared/harvester.ts), or a boss
   // (shared/bosses.ts) near you.
   | { t: 'summon'; what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind }
-  // A laser rifle or pistol shot (shared/rifle.ts) from (x, y, z) to where it stopped, (ex, ey, ez). `g`/`i`: the client
-  // found it hit weak point i of walker g (i -1: just its body, which angers it); `d`: it hit drone d; `j`: fixed-wing
-  // drone j (shared/jets.ts); `h`/`hi`: intake core hi of harvester h (shared/harvester.ts);
-  // `b`/`bi`: weak point bi of boss b (shared/bosses.ts); `n`: a solar farm nest's spiderling n (shared/nest.ts). The server checks
-  // the gun is in hand, its reach, the rate and that the shot was aimed at that walker, breaks the point, and shows the
-  // shot to everyone near ('zap').
+  // A shot of the gun in hand (shared/rifle.ts GUNS) from (x, y, z) to where it stopped, (ex, ey, ez). `g`/`i`: the client
+  // found it hit weak point i of walker g (i -1: just its body); `d`: it hit drone d; `j`: fixed-wing
+  // drone j (shared/jets.ts); `h`/`hi`: intake core hi of harvester h (shared/harvester.ts; hi -1: its hull);
+  // `b`/`bi`: weak point bi of boss b (shared/bosses.ts; bi -1: its hull); `n`: a solar farm nest's spiderling n
+  // (shared/nest.ts). A hull's plate turns every gun but the graviton pistol (shared/rifle.ts bites): a hull hit only
+  // angers, or with that gun kills. The server checks the gun is in hand, its reach, the rate and that the shot ended at
+  // what it claims, deals the gun's damage (the blaster's burst too, round the end point), and shows the shot to everyone
+  // near ('zap').
   // Holding the jammer (shared/jammer.ts) on jet or drone `id` from the eye (x, y, z) along (dx, dy, dz), about every
   // JAM_SEND_MS while the use button is down; the server adds up the lock and brings the target down at JAM_MS.
   | { t: 'jam'; kind: 'jet' | 'drone'; id: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }
@@ -362,10 +364,11 @@ export type ServerMsg =
   // whenever the list changes (a new one, a change of pace, a core shot out, its death).
   | { t: 'harvesters'; harvesters: Harvester[] }
   // Guardians and night drones (shared/guardians.ts) within reach, about 10 times a second, at server time `time`.
-  // g: [id, kind, legs, x, z, yaw, hunt, ax, ay, az, gun, broken, dead] per walker (kind: shared/guardians.ts KINDS
+  // g: [id, kind, legs, x, z, yaw, hunt, ax, ay, az, gun, broken, dead, cracked] per walker (kind: shared/guardians.ts KINDS
   // index; (ax, ay, az) where its cannon aims; gun -1 idle, 0 aiming, 1 charging; a crawler's gun is its lunge,
   // shared/guardians.ts LUNGE_*; broken: bit i set once weak point i
-  // is shot (shared/rifle.ts); dead: 0 alive, else seconds since it died + 0.01);
+  // is shot (shared/rifle.ts); dead: 0 alive, else seconds since it died + 0.01; cracked: bit i set while weak point i
+  // is hit but whole (a guardian's take GUARDIAN_POINT_HP hits: it blinks));
   // d: [id, x, y, z, yaw, dx, dy, dz, lock, hurt, down, jammed] per drone ((dx, dy, dz) the searchlight's unit direction;
   // hurt: rifle hits taken (shared/rifle.ts DRONE_HP); down: 0 flying, else seconds since it was shot down + 0.01;
   // jammed: 1 brought down by a jammer (shared/jammer.ts), sinking gently instead of falling).

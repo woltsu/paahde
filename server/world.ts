@@ -23,13 +23,13 @@ import { boxSize, OWN_BOXES } from '../shared/storage.ts';
 import { cartTableId, crashTaken, isTableId, tableId } from '../shared/crash.ts';
 import { BEDROLL, CHEST, placed, TABLE } from '../shared/placed.ts';
 import { canyonFloorNear } from '../shared/canyons.ts';
-import { indoors, overShelter, shelterAt, sheltersNear } from '../shared/shelters.ts';
+import { indoors, overShelter, shelterAt, shelterSolid, sheltersNear } from '../shared/shelters.ts';
 import { FIELD, solarFarmsNear } from '../shared/solarfarms.ts';
 import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
-import { GRAVITON, GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { blastDamage, GRAVITON, GUNS, type Gun, RIFLE } from '../shared/rifle.ts';
 import { inCone, JAM_BLEED, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { THROW_MS, THROWABLE } from '../shared/throw.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_SLACK } from '../shared/mace.ts';
@@ -69,7 +69,7 @@ import { jetImpact, type Jet } from '../shared/jets.ts';
 import { jetCrashList } from '../shared/jetcrash.ts';
 import { HarvesterServer, type Furrow, type HarvesterKill } from './harvesters.ts';
 import { BossServer, type BossKill, type BossOut } from './bosses.ts';
-import { GuardianServer, SEND_R as BOT_SEND_R, TICK_HZ as BOT_HZ, type Kill } from './guardians.ts';
+import { type BotPlayer, GuardianServer, SEND_R as BOT_SEND_R, TICK_HZ as BOT_HZ, type Kill } from './guardians.ts';
 import { CrashServer } from './crash.ts';
 import { LAB } from '../shared/lab.ts';
 import { ThrowServer, type TossEvent } from './throws.ts';
@@ -454,7 +454,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   const p: Player = {
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,
-    heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, heardAt: performance.now(), hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: 0, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
+    heat: newHeat(row?.heat, row?.sips, bottleSips(items.slots(browserId, 'bag'))), choke: 0, gassed: 0, health: HEALTH_MAX, ws, heardAt: performance.now(), hands: 0, slot: -1, aim: false, down: null, shieldUntil: 0, firedAt: -Infinity, chatAt: 0, traceAt: -Infinity, backlogAt: -Infinity, name: named.name, ready: false, savedAt: Date.now(), jam: null,
     levelWanted: typeof spawn === 'string' ? (levelByKey(spawn)?.id ?? null) : null, movedAt: -Infinity,
   };
   // Their first minutes in the desert are eased (shared/water.ts arrivalEase): from waking by the pod after the
@@ -1004,18 +1004,21 @@ function boltPush(p: Player, events: { msg: ServerMsg }[], t: 'boom' | 'blast', 
 
 /** A shot may start this far (m) from the eye: the third-person camera backs off up to 4.5 m along the view ray. */
 const SHOT_FROM = 6;
-/** A rifle or pistol shot (shared/rifle.ts): the gun in hand and charged, within its reach, from the shooter's eye.
+/** A blaster's beam ending this high (m) over the sand still bursts there: on a low wall, a wreck or scrap. */
+const BURST_UP = 6;
+/** A shot of any gun (shared/rifle.ts GUNS): the gun in hand and charged, within its reach, from the shooter's eye.
  *  Shown to everyone near. */
 function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   const now = performance.now();
   // Where nothing hunts (shared/levels.ts), a shot hits no walker, drone, jet, harvester or boss: they are the desert's.
-  if (!levelOf(p).enemies) m = { t: 'fire', x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez };
+  const hunted = levelOf(p).enemies;
+  if (!hunted) m = { t: 'fire', x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez };
   const nums = [m.x, m.y, m.z, m.ex, m.ey, m.ez];
   if (!nums.every((v) => typeof v === 'number' && Number.isFinite(v))) return;
   const held = p.slot < 0 ? undefined : items.slots(p.browserId, 'bag')[p.slot];
   const kind = held?.kind;
   const gun = kind ? GUNS[kind] : undefined;
-  if (p.down || !gun || !repaired(held)) return;
+  if (p.down || !kind || !gun || !repaired(held)) return;
   // A little slack for network jitter bunching two clicks together.
   if (now - p.firedAt < gunCooldown(gun.cooldown, quality(held)) * 0.8) return;
   if (Math.hypot(m.ex - m.x, m.ey - m.y, m.ez - m.z) > gun.range + 5) return;
@@ -1024,36 +1027,62 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   if (Math.hypot(m.x - s.x, m.y - (s.y + EYE_HEIGHT), m.z - s.z) > SHOT_FROM) return;
   const wall = Date.now();
   const by = { id: p.id, x: s.x, y: s.y, z: s.z, safe: wall - p.heat.diedAt < BOT_GRACE_MS };
+  // What the beam struck, by the client's claim (shared/protocol.ts 'fire'), as the server checks it; each takes the
+  // gun's damage through its armour (shared/rifle.ts bites).
+  let hit = false, seen = false;
   if (m.b !== undefined) {
     const out: BossOut = { kills: [], craters: [], events: [] };
-    const r = bosses.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.b, m.bi, now, out);
-    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
-    for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
+    const r = bosses.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.b, m.bi ?? -1, now, out, gun);
     bossOut(out);
     if (r.boss?.called) db.setSetting(calledKey(r.boss.kind), r.kill ? 0 : BOSSES[r.boss.kind].hp - r.boss.hp + 1);
     if (r.kill) dropBossSpoils(r.kill);
-    return;
-  }
-  if (m.n !== undefined) {
-    const r = guardians.nests.shoot(m.ex, m.ey, m.ez, m.n, now, kind === PISTOL ? 'pistol' : 'rifle');
-    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
-    for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
+    (hit = r.hit), (seen = !!r.seen);
+  } else if (m.n !== undefined) {
+    const r = guardians.nests.shoot(m.ex, m.ey, m.ez, m.n, now, gun);
     if (r.kill) dropNestSpoils(r.kill);
-    return;
-  }
-  if (m.h !== undefined) {
-    const r = harvesters.shoot(m.x, m.z, m.ex, m.ey, m.ez, m.h, m.hi, now);
-    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
-    for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
+    hit = r.hit;
+  } else if (m.h !== undefined) {
+    const r = harvesters.shoot(m.x, m.z, m.ex, m.ey, m.ez, m.h, m.hi, now, gun);
     if (r.kill) dropHarvesterSpoils(r.kill);
-    return;
+    (hit = r.hit), (seen = !!r.seen);
+  } else if (m.j !== undefined) hit = jets.shoot(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.j, now, gun);
+  else if (m.d !== undefined) hit = guardians.shootDrone(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.d, now, p.id, gun);
+  else if (m.g !== undefined) {
+    const r = guardians.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.g, m.i, now, gun);
+    if (r.kill) dropSpoils(r.kill);
+    (hit = r.hit), (seen = !!r.seen);
   }
-  const r = m.j !== undefined ? { hit: jets.shoot(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.j, now), kill: null }
-    : m.d !== undefined ? { hit: guardians.shootDrone(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.d, now, p.id, kind === PISTOL ? 'pistol' : 'rifle'), kill: null }
-    : m.g === undefined ? { hit: false, kill: null } : guardians.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.g, m.i, now, kind === PISTOL ? 'pistol' : 'rifle');
-  const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
+  // The blaster's beam bursts where it stopped: on what it struck, or on the sand, rock or a shelter's wall there.
+  if (gun.blast && hunted && (hit || seen || stopsOnGround(m.ex, m.ey, m.ez))) hit = burst(by, gun, m) || hit;
+  const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
   for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
-  if (r.kill) dropSpoils(r.kill);
+}
+
+/** Could a beam end at (x, y, z) on something solid of the desert: the sand or rock (within BURST_UP over heightAt:
+ *  low walls, wrecks and scrap sit on it), or in a shelter? */
+function stopsOnGround(x: number, y: number, z: number): boolean {
+  return y <= heightAt(x, z) + BURST_UP || shelterSolid(x, y, z) !== null;
+}
+
+/**
+ * A blaster's burst (shared/rifle.ts BLASTER) where shot `m` stopped: everything damageable within gun.blast of it takes
+ * blastDamage: drones, jets, the nests' spiderlings, the harvesters' cores and the walkers' weak points (where the
+ * server reckons them, server/guardians.ts pointAt); hulls of plate take none of it, the bosses (their weak points are
+ * only where the client draws them) and players none at all. The thing the beam struck itself already took its hit
+ * (a jet, a spiderling, a harvester's core: skipped; a walker's point or a drone it broke or downed is gone). Kills drop
+ * as from a shot. Returns whether it hurt anything.
+ */
+function burst(by: BotPlayer, gun: Gun, m: Extract<ClientMsg, { t: 'fire' }>): boolean {
+  const now = performance.now(), r = gun.blast ?? 0, { ex, ey, ez } = m, dmg = (d: number) => blastDamage(gun, d);
+  const walkers = guardians.burst(by, ex, ey, ez, r, dmg, now);
+  for (const k of walkers.kills) dropSpoils(k);
+  const drones = guardians.drones.burst(ex, ey, ez, r, dmg, now, by.id);
+  const jetsHurt = jets.burst(ex, ey, ez, r, dmg, now, m.j ?? -1);
+  const lings = guardians.nests.burst(ex, ey, ez, r, dmg, now, m.n ?? -1);
+  for (const k of lings.kills) dropNestSpoils(k);
+  const cores = harvesters.burst(ex, ey, ez, r, dmg, now, m.h ?? -1, m.hi ?? -1);
+  for (const k of cores.kills) dropHarvesterSpoils(k);
+  return walkers.hit || drones > 0 || jetsHurt > 0 || lings.n > 0 || cores.hit;
 }
 
 /** The jammer held on a jet or drone (shared/jammer.ts): with the jammer in hand and the target in the cone from the

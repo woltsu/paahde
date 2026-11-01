@@ -386,7 +386,7 @@ export class Rifle {
       if (drone) this.drones.knock(drone.drone, this.gun, _d.x, _d.y, _d.z); // knocked along the beam (shared/knockback.ts)
     } else if (hit) {
       zaps.burst(_e.x, _e.y, _e.z, hit.normal.x, hit.normal.y, hit.normal.z, hit.index >= 0 ? 6 : 16);
-      if (hit.index >= 0) this.guardians.breakLocal(hit.walker, hit.index);
+      this.guardians.hitLocal(hit.walker, hit.index, GUNS[feel.kind]); // cracks or shatters a weak point, as the server will
       this.guardians.knock(hit.walker, this.gun, _d.x, _d.z);
       rifleSound.impact(hit.index >= 0 ? 'glass' : 'metal', _e, _o);
     } else if (ground && !onFlat() && shelterSolid(_e.x, _e.y, _e.z) === true) {
@@ -400,7 +400,7 @@ export class Rifle {
     }
     const key = boss ? `b${boss.boss}` : nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
     if (key) kills.hit(key);
-    this.net.fire(_o.x, _o.y, _o.z, _e.x, _e.y, _e.z, boss ? (boss.index >= 0 ? { b: boss.boss, bi: boss.index } : undefined) : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
+    this.net.fire(_o.x, _o.y, _o.z, _e.x, _e.y, _e.z, boss ? { b: boss.boss, bi: boss.index } : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
     // Recoil: the muzzle climbs (some of it stays: pull it back down), kicks a little sideways; less held to the eye.
     const ads = playerHands.aim;
     const climb = feel.climb * (1.25 - 0.45 * ads) * (0.85 + Math.random() * 0.3);
