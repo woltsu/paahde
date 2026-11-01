@@ -293,7 +293,8 @@ export const HOME_BIKE = { fitted: ['motor'] as PartId[] };
  *  console and power box (COMPONENT_LOOT), carried machines whose coils are the first wiring and whose battery is the
  *  first bike's. The order: wrench, the cart's levels, those two taken apart on its table, the bike (its bearing hammered
  *  out at its workbench). `once`: what lies there once per world, never laid out again when taken: all of it (nothing at
- *  spawn comes back; the scrap piles further out are where more is). `n` and `contents` (the kit's shares, as odds) are
+ *  spawn comes back; the scrap piles further out are where more is), as the world's one cart is built once: whoever comes
+ *  later finds it built (its workbench, its table) and wakes by it, and makes their own wrench from the scrap piles. `n` and `contents` (the kit's shares, as odds) are
  *  for whoever doesn't count what's lying (the economy simulator). */
 const POD_KIT = { scrap: 22, cloth: 9, pod_console: 1, pod_powerbox: 1 };
 export const POD_LOOT = {

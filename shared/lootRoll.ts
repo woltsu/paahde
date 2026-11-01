@@ -187,9 +187,10 @@ export function arrivalBikeSpot(pod: number, taken: { x: number; z: number }[]):
   return last && { ...last, heading: 0.6 };
 }
 
-/** Where a player's cart stands (shared/cart.ts, server/vehicles.ts arriveCart): by their pod as their bike does
- *  (arrivalBikeSpot, clear of `taken`: the vehicles and placed things there now, the bike laid out just before among
- *  them); with no pods (the dev lab), round where you start, behind you, ARRIVAL_BIKE_GAP from everything taken. */
+/** Where the world's cart stands (shared/cart.ts, server/vehicles.ts settleCart: pod 0, the first) or, before there was
+ *  one cart, a player's: by the pod as an arrival's bike lay (arrivalBikeSpot, clear of `taken`: the vehicles and placed
+ *  things there now, the home quad among them); with no pods (the dev lab), round where you start, behind you,
+ *  ARRIVAL_BIKE_GAP from everything taken. */
 export function cartSpot(pod: number, taken: { x: number; z: number }[]): { x: number; z: number; heading: number } {
   const at = arrivalBikeSpot(pod, taken);
   if (at) return at;

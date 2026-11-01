@@ -12,9 +12,9 @@
 // ending as canopyRig, as the sim and the shade have it once it's up. At level 2 its work lamps, swung out over the
 // benches, light them from dusk to dawn (spots from the light poles' pool). Unfolding and packing are heard
 // (src/cartSound.ts).
-// Each cart wears its owner's colour (Vehicle.color), dyed down by the sun: a torn strip of cloth knotted round its
-// back left corner post that hangs and stirs in the wind (streaming back a little towed), and a worn hand-painted stripe
-// down the box's lid. (From a way off, your own is on the locator bar.)
+// The world's one cart (it's everyone's) flies a rust-red rag dyed down by the sun: a torn strip of cloth knotted round
+// its back left corner post that hangs and stirs in the wind (streaming back a little towed), and a worn hand-painted
+// stripe of the same down the box's lid. (From a way off, it's on everyone's locator bar.)
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CANOPY_ROLL, CART_BENCH_X, CART_DECK_Y, CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, canopyRising, cartToWorld, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
@@ -56,9 +56,11 @@ const RAG_BACK = 1.2, FOOT = { y: 0.5, z: 1.228 }, RAG_FLOOR = 0.06;
 const RAG_DRAG = 0.65, RAG_AIR = 15;
 /** Moved within this distance (m): further off it's a speck. */
 const RAG_NEAR = 70;
-/** The colour while the server hasn't said whose it is (an older server): undyed cloth. */
+/** Undyed cloth, until the rag's dye is set. */
 const NO_COLOR = 0xb8a88a;
-/** Sun-bleached and dusty: the owner's colour dyed down, towards this dust. */
+/** The rag's dye and the lid stripe's paint: rust red, against the teal box and the khaki canopy. */
+const RAG_COLOR = 0xb4472a;
+/** Sun-bleached and dusty: the dye faded, towards this dust. */
 const DUST = new THREE.Color(0xa69a86);
 
 const DEG = Math.PI / 180;
@@ -126,7 +128,7 @@ type Shown = {
   bulbs: { at: THREE.Object3D; mat: THREE.MeshStandardNodeMaterial; side: number }[]; lampS: number;
   /** Towed: the two wheels' tyre tracks (left, right). */
   tracks: [TyreTrack, TyreTrack];
-  /** The owner's colour: the rag's dye and the lid's paint (its own materials), and the colour now. */
+  /** The rag's dye and the lid's paint (its own materials), and the colour now. */
   cloth: THREE.MeshStandardNodeMaterial; paint: THREE.MeshStandardNodeMaterial; color: number;
   /** The rag's ends (each its own geometry, moved each frame), a phase for its flutter, and where the cart was and how
    *  fast it went (world, for the air through the rag and its jolts). */
@@ -690,10 +692,10 @@ export class CartView {
     }
   }
 
-  /** The owner's colour, sun-faded, and the rag (near): stirring in the wind parked, streaming back a little towed,
+  /** The rag's colour, sun-faded, and the rag (near): stirring in the wind parked, streaming back a little towed,
    *  shaken by the bumps. */
   private rag(s: Shown, v: Vehicle, dt: number, wind: number, towed: boolean, near: boolean) {
-    const color = v.color ?? NO_COLOR;
+    const color = RAG_COLOR;
     if (color !== s.color) {
       s.color = color;
       faded(color, 0.5, 0.26, s.cloth.color);

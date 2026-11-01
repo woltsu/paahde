@@ -1,7 +1,7 @@
 // The build menu (the right mouse with the wrench in hand, src/placing.ts): every building (shared/crafting.ts BUILDS: not the
 // workbench, dismantling table or chest any more, the cart has those; the
 // bosses' trophies once they're won, shared/trophies.ts) with what it takes of the base materials and what the bag has. Picking one puts its preview on the crosshair to put
-// up; picking it again puts the wrench back to just a wrench. By your own parked cart it offers the cart's next level
+// up; picking it again puts the wrench back to just a wrench. By the parked cart it offers the cart's next level
 // first (shared/crafting.ts CART_UPGRADES): picking that raises it there and then. The mouse is freed like the inventory
 // (ui.inventoryOpen).
 import { BUILDS, CART_UPGRADES, countMatching, type Recipe } from '../shared/crafting.ts';
@@ -70,7 +70,7 @@ export class BuildMenu {
   }
 
   /** Open it over the game: `bag` for what there is, `chosen` the building picked now (or null), `pick` called with
-   *  the one clicked (null: the chosen one again, to put it away). `cart`: our own cart in reach, its next level to
+   *  the one clicked (null: the chosen one again, to put it away). `cart`: the cart in reach, its next level to
    *  raise it to and what to do when that's picked. */
   open(bag: Slots, chosen: string | null, pick: (kind: string | null) => void, cart?: { level: number; raise: () => void }) {
     const p = this.panel;

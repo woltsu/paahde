@@ -1,7 +1,7 @@
-// Waking up by your cart (docs/cart.md "Spawn", server/world.ts homeOf, shared/cart.ts campWakeSpot): your own cart,
-// unfolded and built (level ≥ 1), is where you come back after dying, on the sand beside it, clear of its capsules and
-// under no canvas, facing it. Packed, or at level 0, or with no free spot by it, it's your bedroll, else your pod as
-// before; someone else's cart is never your spawn. In a real lab world.
+// Waking up by the cart (docs/cart.md "Spawn", server/world.ts homeOf, shared/cart.ts campWakeSpot): the world's cart,
+// unfolded and built (level ≥ 1), is where everyone comes back after dying, on the sand beside it, clear of its capsules
+// and under no canvas, facing it, ahead of a bedroll. Packed, or at level 0, or with no free spot by it, it's your
+// bedroll, else your pod as before. In a real lab world.
 // Run with: node --test tools/cart-spawn.test.mjs
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
@@ -139,11 +139,11 @@ test('campWakeSpot: the first free spot round it, out past the unfolded footprin
   }
 });
 
-test('your own unfolded, built cart is where you wake: level 0 or packed it\'s the bedroll, under a tarp with no free spot too; never someone else\'s', { timeout: 240_000 }, async (t) => {
+test('the unfolded, built cart is where everyone wakes: level 0 or packed it\'s the bedroll, under a tarp with no free spot too', { timeout: 240_000 }, async (t) => {
   const { port, peers, output } = await lab(t);
   const me = new Client(port, 'Camper'); peers.push(me);
   await me.join();
-  const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
+  const cartId = me.vehicles.list.find((v) => v.kind === 'cart').id;
   const cart0 = me.vehicle(cartId);
   assert.equal(cart0.level, 0);
 
@@ -184,12 +184,13 @@ test('your own unfolded, built cart is where you wake: level 0 or packed it\'s t
   besideCart(s, me.vehicle(cartId));
   assert.ok(Math.abs(wrap(me.woke.facing - s.facing)) < 1e-3, 'the camera told to face it');
 
-  // Someone else's unfolded cart is never their spawn: they come back at their own pod (the lab's start).
+  // It's everyone's camp: someone who came later, who never touched it, wakes beside it too.
   const other = new Client(port, 'Neighbour'); peers.push(other);
   await other.join();
-  await other.walkTo(by.x, by.z, 0.5);
+  const away2 = { x: LAB_SPAWN.x - Math.sin(away) * 6, z: LAB_SPAWN.z - Math.cos(away) * 6 };
+  await other.walkTo(away2.x, away2.z, 0.5);
   const os = await other.dieAndWake();
-  assert.ok(Math.hypot(os.x - LAB_SPAWN.x, os.z - LAB_SPAWN.z) < 1.5, `they woke at ${os.x.toFixed(1)}, ${os.z.toFixed(1)}, not by our cart`);
+  besideCart(os, me.vehicle(cartId));
 
   // Packed: the bedroll again.
   assert.equal(await me.answer({ t: 'unfoldCart', id: cartId, open: false }), undefined);

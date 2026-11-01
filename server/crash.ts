@@ -462,13 +462,23 @@ export class CrashServer {
     });
   }
 
-  private freeBench(id: string) {
+  /** The machine on table `id` taken off it whole (its kind; the parts already taken were given out), the table free;
+   *  null if there's none. At the world's start, before anyone is in (server/vehicles.ts oneCart: a cart that goes gives
+   *  its machine back): nobody is told. */
+  takeBench(id: string): string | null {
+    const job = this.benches.get(id);
+    if (!job) return null;
+    this.freeBench(id, false);
+    return job.kind;
+  }
+
+  private freeBench(id: string, tell = true) {
     this.benches.delete(id);
     this.sessions.delete(id);
     this.db.tx(() => {
       this.db.clearBench(id);
       this.db.clearProgress(id);
     });
-    this.broadcast(this.benchMessage(id));
+    if (tell) this.broadcast(this.benchMessage(id));
   }
 }

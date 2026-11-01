@@ -232,6 +232,12 @@ export class LootServer {
     this.lay({ kind, parts, data }, x + rand(-spread, spread), z + rand(-spread, spread));
   }
 
+  /** A whole item (gear with its parts, anything with its own state) left on the sand at (x, z), kept like a dropped
+   *  one (server/vehicles.ts oneCart: what didn't fit in the world's cart). */
+  dropItem(x: number, z: number, item: { kind: string; parts?: (string | null)[]; data?: ItemData }) {
+    this.lay(item, x, z);
+  }
+
   /** An item lying on the sand at (x, z) from now on, kept like a dropped one (`dropped`) until someone takes it. */
   private lay(item: { kind: string; parts?: (string | null)[]; data?: ItemData }, x: number, z: number) {
     const l: Loot = { id: this.nextId++, kind: item.kind, ...ownOf(item), x, z, src: 'drop' };

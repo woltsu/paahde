@@ -319,8 +319,9 @@ export function openDb(path: string) {
   const deleteWire = db.prepare('DELETE FROM wires WHERE id = ?');
   // Vehicles (shared/vehicles.ts, server/vehicles.ts): where each stands and whether it's been repaired (stood up). Its
   // item is in box `veh<id>`, its cargo in `cargo<id>` (items). src: 'home' (the first one, by the crashed pod),
-  // 'arrival' (another new player's, by their pod), 'find' (lying at a crash site), 'old' (a motorcycle item from
-  // before vehicles), 'debug' (the debug menu's).
+  // 'arrival' (another new player's bike or cart, by their pod, from before the quad and the one cart), 'world' (the
+  // world's cart, server/vehicles.ts settleCart), 'find' (lying at a crash site), 'old' (a motorcycle item from before
+  // vehicles), 'debug' (the debug menu's).
   db.exec(`CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, z REAL NOT NULL,
     heading REAL NOT NULL, up INTEGER NOT NULL, src TEXT NOT NULL)`);
@@ -340,6 +341,7 @@ export function openDb(path: string) {
   const moveVehicle = db.prepare('UPDATE vehicles SET x = ?, y = ?, z = ?, heading = ? WHERE id = ?');
   const standVehicle = db.prepare('UPDATE vehicles SET up = 1 WHERE id = ?');
   const ownVehicle = db.prepare('UPDATE vehicles SET owner = ? WHERE id = ?');
+  const deleteVehicle = db.prepare('DELETE FROM vehicles WHERE id = ?');
   const allBeds = db.prepare('SELECT id, stage, growth FROM beds');
   const upsertBed = db.prepare('INSERT OR REPLACE INTO beds (id, stage, growth) VALUES (?, ?, ?)');
   const deleteBed = db.prepare('DELETE FROM beds WHERE id = ?');
@@ -511,8 +513,10 @@ export function openDb(path: string) {
       Number(insertVehicle.run(kind, x, y, z, heading, up ? 1 : 0, src).lastInsertRowid),
     moveVehicle: (id: number, x: number, y: number, z: number, heading: number) => moveVehicle.run(x, y, z, heading, id),
     standVehicle: (id: number) => standVehicle.run(id),
-    /** Vehicle `id` is player `owner`'s (browser ID) from now on. */
-    ownVehicle: (id: number, owner: string) => ownVehicle.run(owner, id),
+    /** Vehicle `id` is player `owner`'s (browser ID) from now on, or nobody's (null). */
+    ownVehicle: (id: number, owner: string | null) => ownVehicle.run(owner, id),
+    /** Vehicle `id`'s row gone (its boxes are emptied by the caller). */
+    deleteVehicle: (id: number) => deleteVehicle.run(id),
     /**
      * v12, once (call inside a transaction): the motorcycle stopped being an item. Takes every motorcycle out of the
      * boxes (the equipment's old Vehicle slot too; the Armor slot after it moves up into its place) and returns them

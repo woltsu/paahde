@@ -71,17 +71,20 @@ const tmpSlope = { gx: 0, gz: 0 };
 /** Locator ids for vehicles: players are positive, home -1, wrecks count down from -100, packs from -1e9. */
 const LOCATE_ID = -500_000_000;
 
-/** Your own vehicles (`mine`: their ids) standing in the world, for the locator bar, in your `color`: bikes, and carts
- *  as a cart. Not one being ridden or towed: where it stood is no use then; nor a cart parked linked to a bike of yours (the bike
- *  marks them both). */
+/** Your own bikes (`mine`: their ids) standing in the world, for the locator bar, in your `color`. Not one being
+ *  ridden: where it stood is no use then. */
 export function ownVehicleTargets(mine: ReadonlySet<number>, color: number): LocatorTarget[] {
   if (!mine.size) return [];
-  return vehicles.flatMap((v) => {
-    if (!mine.has(v.id) || !parked(v)) return [];
-    const cart = v.kind === 'cart';
-    if (cart && v.hitched !== undefined && mine.has(v.hitched)) return [];
-    return [{ id: LOCATE_ID - v.id, color, x: v.x, y: v.y + 1, z: v.z, shape: cart ? 'cart' as const : 'bike' as const }];
-  });
+  return vehicles.flatMap((v) => (!mine.has(v.id) || !parked(v) || v.kind === 'cart' ? []
+    : [{ id: LOCATE_ID - v.id, color, x: v.x, y: v.y + 1, z: v.z, shape: 'bike' as const }]));
+}
+
+/** The world's cart is on everyone's locator bar (shared/cart.ts: it's everyone's), in a neutral colour. Not while it's
+ *  towed (nor parked linked to a bike of yours, `mine`: the bike marks them both). */
+const CART_MARK = 0xd8cdb4;
+export function cartTargets(mine: ReadonlySet<number>): LocatorTarget[] {
+  return vehicles.flatMap((v) => (v.kind !== 'cart' || !parked(v) || (v.hitched !== undefined && mine.has(v.hitched)) ? []
+    : [{ id: LOCATE_ID - v.id, color: CART_MARK, x: v.x, y: v.y + 1, z: v.z, shape: 'cart' as const }]));
 }
 
 export class VehicleView {

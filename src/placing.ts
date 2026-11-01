@@ -76,8 +76,8 @@ export class Placer {
       return { prompt: null, target: null };
     }
     if (wrench && aimed) {
-      // Our own parked cart in reach, below its highest level: its next level first (shared/cart.ts).
-      const cart = vehicles.find((v) => isCart(v) && parked(v) && this.net.myVehicles.has(v.id) && inReach(feet, v) && (v.level ?? 0) < CART_MAX_LEVEL);
+      // The parked cart in reach (anyone's), below its highest level: its next level first (shared/cart.ts).
+      const cart = vehicles.find((v) => isCart(v) && parked(v) && inReach(feet, v) && (v.level ?? 0) < CART_MAX_LEVEL);
       this.menu.open(bag, this.chosen, (k) => (this.chosen = k), cart && { level: (cart.level ?? 0) + 1, raise: () => this.net.upgradeCart(cart.id) });
     }
 

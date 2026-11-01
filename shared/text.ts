@@ -102,7 +102,7 @@ const en = {
     ai_control: 'AI control system',
   },
   bosses: { worm: 'Worm', carrier: 'Carrier', colossus: 'Colossus', queen: 'Queen' },
-  /** The cart's levels (shared/cart.ts), as the build menu offers the next one by your own cart (src/buildMenu.ts). */
+  /** The cart's levels (shared/cart.ts), as the build menu offers the next one by the cart (src/buildMenu.ts). */
   cartLevels: ['Cart', 'Cart shade', 'Cart workshop'],
   /** Equipment slots (shared/gear.ts EQUIP_SLOTS). */
   equip: { back: 'Back', wrist: 'Wrist', belt: 'Belt', armor: 'Armor' },
@@ -178,9 +178,9 @@ const en = {
     climb: 'Climb',
     stepOff: 'Step off',
     letGo: 'Let go',
-    /** Your own cart's tongue, hitched to a bike (shared/cart.ts): F lets it go. */
+    /** The cart's tongue, hitched to a bike or quad (shared/cart.ts): F lets it go. */
     unhitch: 'Unhitch',
-    /** Your own cart let go of the bike, looking at it: its level's pieces out, or folded away again. */
+    /** The cart let go of the bike, looking at it: its level's pieces out, or folded away again. */
     unfold: 'Unfold',
     pack: 'Pack',
     /** The beginning's pod, its panel lit (docs/levels/tutorial.md). */
@@ -253,7 +253,7 @@ const en = {
     getOffFirst: 'Get off first',
     /** A cart linked to a bike doesn't unfold (shared/cart.ts). */
     unhitchFirst: 'Unhitch it first',
-    /** Your cart is at its highest level already. */
+    /** The cart is at its highest level already. */
     fullyBuilt: 'Fully built',
     /** Someone else is on (or getting on) that vehicle. */
     someoneOnIt: 'Someone is on it',
@@ -678,7 +678,7 @@ const en = {
     wrench: (k: HintKeys) => `With the wrench on the hotbar, press ${k.aim} to build.`,
     part: () => 'Parts repair gear at the workbench.',
     broken: () => "It's broken. You can repair it at a workbench.",
-    machine: () => "Take it apart on your cart's workshop table.",
+    machine: () => "Take it apart on the cart's workshop table.",
     inventory: (k: HintKeys) => `Press ${k.inventory} for the inventory.`,
   } as Record<string, (k: HintKeys) => string>,
 
@@ -725,7 +725,7 @@ const en = {
     machine: "This thing's full of good parts. Let's crack it open.",
     machineCarry: "It's too fiddly to strip out here. I'll haul it home.",
     /** The first machine in the bag to take apart: it wants a table, the cart's workshop (raised with the wrench). */
-    machineBench: "I can't take this apart by hand. My cart could do with a proper table.",
+    machineBench: "I can't take this apart by hand. That cart could do with a proper table.",
     /** The first thing said in a world, on arriving at the pod. */
     start: "I'd better find a way to build a shelter.",
     /** The beginning (docs/levels/tutorial.md), once each, as you go. */

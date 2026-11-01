@@ -122,6 +122,9 @@ vehicleSrv.packBlocked = (id) => (crash.busyTable(cartTableId(id)) ? TEXT.notice
 const wiring = new WireServer(db, items); // after the placed list: it drops wires to things gone
 const garden = new GardenServer(db);
 const loot = new LootServer(db);
+// The world's one cart (docs/cart.md): by the first pod in a new world; a world from when every player had one keeps one,
+// the others' boxes and the machines on their tables merged into it (once). Before anyone is in.
+vehicleSrv.settleCart((id) => crash.takeBench(cartTableId(id)), (x, z, item) => loot.dropItem(x, z, item));
 const corpses = new CorpseServer(db, items, (msg) => {
   const json = JSON.stringify(msg);
   for (const p of players.values()) if (p.ws.readyState === p.ws.OPEN) sendJson(p.ws, json);
@@ -444,13 +447,6 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   // Whatever of a level's own is in the bag outside it goes (a crash mid-level, a level left some other way).
   if (state.level !== TUTORIAL) stripLevelItems(browserId, level(TUTORIAL).key);
   grantKits(items, db, browserId);
-  // And their cart (shared/cart.ts), once: a new player's from the start, an existing player's on this join.
-  const cart = vehicleSrv.arriveCart(browserId, podOf(browserId));
-  if (cart !== null) {
-    sendShared(vehicleBox(cart));
-    sendShared(cargoBox(cart));
-  }
-  vehicleSrv.recolor(browserId, color); // (their carts in their colour, before the list goes out)
   const p: Player = {
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,
@@ -657,31 +653,31 @@ function onMount(p: Player, id: unknown) {
 }
 
 /** After a step (`before`: the state it started from): off the bike (the bike key): it's parked where they got off
- *  (and the cart they tow behind it). Still on it, towing nothing: backing it up to their own cart hitches it. */
+ *  (and the cart they tow behind it). Still on it, towing nothing: backing it up to the cart hitches it. */
 function offBike(p: Player, before: PlayerState) {
   if (before.pillion && !p.state.pillion) vehicleSrv.unboard(p.id); // off the back of a quad (the bike key)
   if (before.bike && !p.state.bike) vehicleSrv.release(p.id, before.riding ? p.state : undefined);
   else if (p.state.riding && !p.state.tow) {
-    const towing = vehicleSrv.tryHitch(p.id, p.browserId, p.state);
+    const towing = vehicleSrv.tryHitch(p.id, p.state);
     if (towing) p.state = towing; // the client takes it with the next snapshot (src/net.ts reconcile)
   }
 }
 
-/** On foot at their cart's tongue: F lets it go from the bike (server/vehicles.ts unhitch). */
+/** On foot at the cart's tongue: F lets it go from the bike or quad (server/vehicles.ts unhitch). */
 function onUnhitch(p: Player, id: unknown) {
   if (p.down || !p.ready) return;
-  const r = vehicleSrv.unhitch(p.browserId, p.state, id);
+  const r = vehicleSrv.unhitch(p.state, id);
   if (r !== true) send(p.ws, { t: 'notice', text: r });
 }
 
-/** Their own parked cart unfolded or packed, the cart key looking at it (server/vehicles.ts unfold). */
+/** The parked cart unfolded or packed, the cart key looking at it (server/vehicles.ts unfold). */
 function onUnfoldCart(p: Player, id: unknown, open: unknown) {
   if (p.down || !p.ready) return;
-  const r = vehicleSrv.unfold(p.browserId, p.state, id, open);
+  const r = vehicleSrv.unfold(p.state, id, open);
   if (r !== true) send(p.ws, { t: 'notice', text: r });
 }
 
-/** Their own parked cart a level up with the wrench, from the build menu (server/vehicles.ts upgrade). */
+/** The parked cart a level up with the wrench, from the build menu (server/vehicles.ts upgrade). */
 function onUpgradeCart(p: Player, id: unknown) {
   if (p.down || !p.ready) return;
   const r = vehicleSrv.upgrade(p.browserId, p.state, id);
@@ -830,12 +826,12 @@ function onStomped(p: Player, g: number) {
   if (!p.down && p.ready && guardians.stomp(g, { id: p.id, x: s.x, y: s.y, z: s.z, safe: Date.now() - p.heat.diedAt < BOT_GRACE_MS }, performance.now())) hurt(p, 'guardian', KILL);
 }
 
-/** Where `p` comes back after dying (docs/cart.md "Spawn"): beside their own cart if it's their camp (parked, unfolded,
- *  level ≥ 1: shared/cart.ts isCamp) and there's a free spot by it (campWakeSpot), facing it; else at their spawn point,
+/** Where `p` comes back after dying (docs/cart.md "Spawn"): beside the world's cart if it's the camp (parked, unfolded,
+ *  level ≥ 1: shared/cart.ts isCamp; everyone's) and there's a free spot by it (campWakeSpot), facing it; else at their spawn point,
  *  a bedroll (anyone's, server/placed.ts spawnOf), if they have one and it's still down; else beside the hatch of the
  *  pod they first came down in (podOf). The camp beats the bedroll: unfolding it is making camp. */
 function homeOf(p: Player): { x: number; y?: number; z: number; facing?: number } {
-  const camp = vehicleSrv.campOf(p.browserId);
+  const camp = vehicleSrv.camp();
   const by = camp && campWakeSpot(camp, (x, z) => clearToWake(x, z, camp.y));
   if (by) return { ...by, y: heightAt(by.x, by.z) };
   const b = placedThings.spawnOf(p.browserId);
@@ -868,7 +864,7 @@ function onSpawnToggle(p: Player, id: unknown) {
   sendSpawn(p);
 }
 
-/** Back by their cart, at their bedroll or their pod, cooled down, with a full canteen. */
+/** Back by the cart, at their bedroll or their pod, cooled down, with a full canteen. */
 function respawn(p: Player) {
   p.down = null;
   p.inputs.clear();

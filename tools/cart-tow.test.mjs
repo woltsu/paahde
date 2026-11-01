@@ -9,7 +9,7 @@ import { hangCart, newHang, turned } from '../shared/cartHang.ts';
 import { BACK, bikeCruise, DT, FORWARD, JUMP, LEFT, quantizeYaw, RIGHT, spawnState, step } from '../shared/sim.ts';
 import { heightAt } from '../shared/terrain.ts';
 
-const bike = (tow, x = 3000, z = 3000, h = 0.4) => ({ ...spawnState(x, z), riding: true, bike: 4, heading: h, tow, hitch: h });
+const bike = (tow, x = 3000, z = 3000, h = 0.4, quad = false) => ({ ...spawnState(x, z), riding: true, bike: 4, heading: h, tow, hitch: h, ...(quad ? { quad: true } : {}) });
 
 test('towing slows the bike a little: it levels off 10–15% slower', () => {
   for (const q of [0, 1, 2, 3]) {
@@ -40,6 +40,21 @@ test('no hop while towing: holding and letting go of Space stays on the ground',
   };
   assert.equal(hop(0), true, 'it hops without the cart');
   assert.equal(hop(7), false, 'not with it');
+});
+
+test('the quad tows the same way: the same slowdown, no hop, the cart following its tow ball, deterministically', () => {
+  const go = (tow, quad) => {
+    let s = bike(tow, 3000, 3000, 0.4, quad);
+    for (let t = 0; t < 900; t++) s = step(s, FORWARD | (t % 200 < 60 ? LEFT : t % 200 > 140 ? RIGHT : 0) | (t > 700 && t < 760 ? JUMP : 0), quantizeYaw(s.heading));
+    return s;
+  };
+  const q = go(7, true), b = go(7, false), free = go(0, true);
+  assert.equal(q.quad, true, 'still a quad');
+  assert.deepEqual(go(7, true), q, 'bit for bit the same');
+  // The quad rides as the bike does (shared/sim.ts stepBike): towing it is the bike's towing.
+  for (const k of ['x', 'z', 'heading', 'hitch']) assert.ok(Math.abs(q[k] - b[k]) < 1e-9, `${k}: quad ${q[k]} vs bike ${b[k]}`);
+  assert.ok(Math.hypot(q.x - 3000, q.z - 3000) < Math.hypot(free.x - 3000, free.z - 3000) * 0.95, 'slowed by the cart');
+  assert.notEqual(q.hitch, 0.4, 'the cart swung after it');
 });
 
 /** The tow ball of the bike in state `s` (drawn along its nose, unleaning): src/bike.ts HITCH in its tilted frame. */

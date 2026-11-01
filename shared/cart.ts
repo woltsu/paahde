@@ -1,7 +1,7 @@
-// The cart (docs/cart.md): a two-wheeled scrap trailer every player has, towed behind their bike, a vehicle kind
-// (shared/vehicles.ts, GEAR.cart) with no part slots. Its level (docs/cart.md "Levels") is its item's own state
-// (ItemData.level, in its box veh<id>); its box is its cargo grid cargo<id> (chest size), shared by everyone, opened with
-// F on the parked cart anywhere but its tongue. Only its owner tows it.
+// The cart (docs/cart.md): a two-wheeled scrap trailer, one per world and everyone's, towed behind anyone's bike or quad,
+// a vehicle kind (shared/vehicles.ts, GEAR.cart) with no part slots. Its level (docs/cart.md "Levels") is its item's own
+// state (ItemData.level, in its box veh<id>); its box is its cargo grid cargo<id> (chest size), opened with F on the
+// parked cart anywhere but its tongue.
 //
 // Towing is in shared/sim.ts (deterministic): PlayerState.tow is the cart being towed (0 none) and PlayerState.hitch
 // its heading. Everything else about where it is comes from those and the bike's pose, here: the hitch point H is
@@ -10,7 +10,7 @@
 // built in src/world/carts.ts): origin on the ground under the axle's middle, forward -z, the coupler TOW_LENGTH ahead.
 //
 // Parked, a cart is solid (setCarts: capsules for the bed and its box, the fold-out sides; shared/capsules.ts), and
-// its owner unfolds it where the sand is level enough (unfoldError): its level's pieces out, the cart levelled on its
+// anyone unfolds it where the sand is level enough (unfoldError): its level's pieces out, the cart levelled on its
 // stabilisers at its own height (v.y). From level 1 it puts up a canopy between its poles' tips (canopyRig), a tarp
 // rig (shared/tarp.ts), so its shade, the solid canvas and the billow are the tarp's. Both come from the vehicles list
 // only (setVehicles calls setCarts), so the server and every client have the same.
@@ -35,7 +35,7 @@ export const HITCH_Y = 0.54;
 export const COUPLER_Y = 0.54;
 /** The most the cart may swing off the bike's line (rad, ~100°): no jackknife past it. */
 export const HITCH_MAX = (100 * Math.PI) / 180;
-/** Backing up: the bike's hitch point this close to your own parked cart's coupler (m) hitches it… */
+/** Backing up: the bike's hitch point this close to a parked cart's coupler (m) hitches it… */
 export const HITCH_REACH = 0.8;
 /** …going backwards at least this fast (m/s; standing still beside it, as after getting on, doesn't)… */
 export const HITCH_MIN_BACK = 0.3;
@@ -180,7 +180,7 @@ export function cartToWorld(v: Pose, lx: number, lz: number): XZ {
   return { x: v.x + lx * c + lz * s, z: v.z - lx * s + lz * c };
 }
 
-/** Why cart `v` (parked, its owner by it: server/vehicles.ts unfold) can't unfold, or null: not while it's linked to a
+/** Why cart `v` (parked, someone by it: server/vehicles.ts unfold) can't unfold, or null: not while it's linked to a
  *  bike, nor on sand rising more than CART_TILT across its unfolded footprint. */
 export function unfoldError(v: Vehicle, ground: (x: number, z: number) => number = heightAt): 'hitched' | 'steep' | null {
   if (v.hitched !== undefined) return 'hitched';
@@ -341,8 +341,8 @@ function hit(o: number[], d: number[], lo: number[], hi: number[]): number | nul
 
 // ---- Waking up by it (docs/cart.md "Spawn") -----------------------------------------------------------------------------
 
-/** Is cart `v` its owner's camp: parked, unfolded and built (level ≥ 1, upgraded with the wrench at least once)? Then its
- *  owner wakes up beside it after dying (server/world.ts homeOf), ahead of a bedroll or the pod. */
+/** Is cart `v` the world's camp: parked, unfolded and built (level ≥ 1, upgraded with the wrench at least once)? Then
+ *  everyone wakes up beside it after dying (server/world.ts homeOf), ahead of a bedroll or the pod. */
 export const isCamp = (v: Vehicle) => isCart(v) && parked(v) && !!v.open && (v.level ?? 0) >= 1;
 
 /** Clear of the unfolded footprint (its benches' outer edges, the bed's ends) by this much (m): a body's radius and a
@@ -352,7 +352,7 @@ const WAKE_GAP = 0.75;
 const WAKE_SIDE_Z = 0.7;
 
 /**
- * Where cart `v`'s owner wakes up beside it: the first of a few spots round it (cart space, from the unfolded footprint,
+ * Where someone wakes up beside cart `v`: the first of a few spots round it (cart space, from the unfolded footprint,
  * so they follow its size) that `free` takes (the server's: on sand, not a rock, not in anything's capsules, not under
  * the canopy's canvas), facing the cart; or null if none is (then the bedroll or the pod). By the tongue either side
  * first (where you'd walk up to it), then beside the benches, then behind it.

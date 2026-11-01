@@ -1,5 +1,6 @@
 // Vehicles: things standing in the world that are repaired and ridden where they are, never carried (shared/gear.ts
-// `vehicle`): the quad and the motorcycle, and the cart towed behind either (shared/cart.ts, docs/cart.md). One quad
+// `vehicle`): the quad and the motorcycle, and the world's one cart, towed behind either by anyone (shared/cart.ts,
+// docs/cart.md). One quad
 // lies broken by the crashed pods (shared/tables.ts HOME_BIKE; older worlds also have a motorcycle by each player's pod)
 // and a few motorcycles out at the crash sites (FINDS.motorcycle); F on a quad someone rides gets on its back as a
 // passenger (`passenger`, shared/sim.ts PlayerState.pillion); F on a broken one opens its part slots next to the bag (its
@@ -17,16 +18,14 @@ import type { PlayerState } from './sim.ts';
  *  convention as PlayerState.heading: forward is (-sin, -cos)), `up` once repaired (standing on its wheels; broken
  *  ones lie on their side), the parts fitted in it (its tier and look) and `rider`: the public id of whoever is
  *  getting on or riding it (it isn't drawn here then: the rider's state is the bike), or towing it (a cart: the rider's
- *  PlayerState.tow is it, its pose shared/cart.ts towedPose). A cart's own: `hitched`, the bike (vehicle id) it's linked
- *  to (towed, or parked behind it), `open` (unfolded: docs/cart.md, its owner's Unfold / Pack) and `level` (its item's
- *  ItemData.level). */
+ *  PlayerState.tow is it, its pose shared/cart.ts towedPose). A cart's own: `hitched`, the bike or quad (vehicle id) it's
+ *  linked to (towed, or parked behind it), `open` (unfolded: docs/cart.md, anyone's Unfold / Pack) and `level` (its
+ *  item's ItemData.level). */
 export type Vehicle = { id: number; kind: string; x: number; y: number; z: number; heading: number; up: boolean;
   parts: (string | null)[]; rider?: number; hitched?: number; open?: boolean; level?: number;
   /** A cart just unfolded (or raised to level 1 unfolded): its canopy is still being put up (shared/cart.ts canopyUp),
    *  for UNFOLD_S. Never stored. */
   pitching?: boolean;
-  /** A cart's owner's colour (their avatar's; never who they are). */
-  color?: number;
   /** A quad's passenger: the public id of whoever rides on its back (only while someone rides it). */
   passenger?: number };
 

@@ -1,10 +1,12 @@
 // The cart (shared/cart.ts, docs/cart.md phase 1): towing is in the shared sim and deterministic (the server's step and
-// the client's replay from the state it is sent agree); in a real world, your own cart stands by you, backing the bike up
-// to it hitches it, getting off parks both still linked, getting back on tows it again, F at its tongue on foot lets it
-// go, its box keeps what's in it wherever it went, and nobody else can tow it or let it go. Phase 2: parked it's solid;
-// unfolded at level 1 its canopy shades and holds you up like a tarp's; its owner unfolds and packs it (the cart key),
-// not while it's linked to a bike, and backing up to it unfolded packs and hitches it; the wrench raises its level from
-// the bag's materials, only its owner's, never past 2. Phase 3: unfolded at level 2 its sides are a workbench and a
+// the client's replay from the state it is sent agree); in a real world, its one cart (nobody's) stands by the spawn,
+// backing the bike up to it hitches it, getting off parks both still linked, getting back on tows it again (whoever gets
+// on), F at its tongue on foot lets it go (anyone), its box keeps what's in it wherever it went; a second player backs
+// the quad up to it and tows it, a passenger on the back changes nothing. A world from when every player had a cart is
+// left with one: the highest level, its box holding all the others' and the machines on their tables, nothing lost.
+// Phase 2: parked it's solid; unfolded at level 1 its canopy shades and holds you up like a tarp's; anyone unfolds and
+// packs it (the cart key), not while it's linked to a bike, and backing up to it unfolded packs and hitches it; the
+// wrench raises its level from the bag's materials, anyone's, never past 2. Phase 3: unfolded at level 2 its sides are a workbench and a
 // dismantling table (at any heading), packing is refused with a machine on the table, the wrench no longer builds the
 // benches or the chest (old ones still work and come down into their materials), and the pods' kit pays for the
 // beginning: wrench, the cart's two levels, a tarp and a bedroll, then the pod's machines taken apart on the cart.
@@ -222,19 +224,19 @@ async function lab(t, seed) {
   return { port, peers, output: () => output };
 }
 
-test('a cart of your own: hitch by backing up, park and remount still linked, unhitch at the tongue, the box rides along, nobody else tows it', { timeout: 120_000 }, async (t) => {
+test('the world\'s one cart: hitch by backing up, park and remount still linked, unhitch at the tongue, the box rides along, anyone tows it', { timeout: 120_000 }, async (t) => {
   const { port, peers, output } = await lab(t);
   const me = new Client(port, 'Hauler', 0x2a9d8f); peers.push(me);
   await me.join();
 
-  // Our cart stands near, ours (and only told as ours: no owners in the list).
+  // One cart stands near, nobody's: not told as ours, no owners or colour in the list.
   const carts = me.vehicles.list.filter((v) => v.kind === 'cart');
-  const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
-  assert.ok(cartId, 'a cart of our own');
+  assert.equal(carts.length, 1, 'one cart in the world');
+  const cartId = carts[0].id;
+  assert.ok(!me.vehicles.mine.includes(cartId), 'nobody\'s');
   assert.ok(!JSON.stringify(me.vehicles).includes('owner'), 'no owners sent');
-  assert.equal(me.vehicle(cartId).color, 0x2a9d8f, 'in our colour');
+  assert.equal(me.vehicle(cartId).color, undefined, 'no owner\'s colour');
   const cart0 = me.vehicle(cartId);
-  assert.equal(carts.length, 1);
   assert.equal(cart0.level, 0);
   assert.equal(cart0.hitched, undefined);
   const box = `cargo${cartId}`;
@@ -310,46 +312,46 @@ test('a cart of your own: hitch by backing up, park and remount still linked, un
   assert.ok(Math.abs(me.state.hitch - cart1.heading) < 1e-3);
   await getOff();
 
-  // Someone else: it isn't theirs to let go, or to tow.
+  // Someone else joins: still the one cart, nobody's, and no second one laid out for them.
   const other = new Client(port, 'Stranger'); peers.push(other);
   await other.join();
-  assert.ok(!other.vehicles.mine.includes(cartId), 'not theirs');
-  assert.equal(other.vehicle(cartId).color, 0x2a9d8f, 'they see it in our colour');
+  assert.ok(!other.vehicles.mine.includes(cartId), 'not theirs either');
+  assert.deepEqual(other.vehicles.list.filter((v) => v.kind === 'cart').map((v) => v.id), [cartId], 'still one cart');
   assert.ok(!JSON.stringify(other.vehicles).includes(me.browserId), 'never our browser ID');
-  assert.equal(other.vehicles.list.find((v) => v.kind === 'cart' && v.id !== cartId)?.color, other.welcomeColor, 'theirs in theirs');
-  await other.walkTo(cart1.x + 1.2, cart1.z + 1.2, 0.5);
-  assert.equal(await other.notice({ t: 'unhitch', id: cartId }), TEXT.notice.notYours);
-  assert.equal(other.vehicle(cartId).hitched, bikeId);
 
-  // Ours: let go at the tongue, on foot.
-  await me.walkTo(couplerOf(cart1).x + 0.6, couplerOf(cart1).z, 0.4);
-  me.send({ t: 'unhitch', id: cartId });
-  await until(() => me.vehicle(cartId).hitched === undefined, 3000, 'unhitched');
-  me.send({ t: 'mount', id: bikeId }); // (in reach of the bike still)
-  await until(() => me.state.riding, 3000, 'on the bike');
-  assert.equal(me.state.tow, 0, 'getting on doesn\'t take it along');
-  await getOff();
-
-  // They get on our bike and back it up to our cart: it stays put.
+  // They get on our bike, the cart linked to it: they tow it.
   const b = me.vehicle(bikeId);
   await other.walkTo(b.x + Math.cos(b.heading) * 1.5, b.z - Math.sin(b.heading) * 1.5, 0.5);
   other.send({ t: 'mount', id: bikeId });
-  await until(() => other.state.riding, 3000, 'they got on');
-  for (let i = 0; i < 90; i++) {
-    const s = other.state, vf = -s.vx * Math.sin(s.heading) - s.vz * Math.cos(s.heading);
-    await other.input(vf > -1.2 ? BACK : 0, s.heading);
-  }
-  assert.equal(other.state.tow, 0, 'not towed by someone else');
-  assert.equal(other.vehicle(cartId).rider, undefined);
-  assert.equal(other.vehicle(cartId).hitched, undefined);
+  await until(() => other.state.riding && other.state.tow === cartId, 3000, 'they tow it');
+  for (let i = 0; i < 60; i++) await other.input(FORWARD, other.state.heading);
+  await other.input(0, other.state.heading);
+  await other.input(BIKE, other.state.heading);
+  await other.input(0, other.state.heading);
+  await until(() => !other.state.riding && other.vehicle(cartId).rider === undefined, 3000, 'they parked');
+  const cart2 = other.vehicle(cartId);
+  assert.equal(cart2.hitched, bikeId, 'still linked');
+  assert.ok(Math.hypot(cart2.x - cart1.x, cart2.z - cart1.z) > 2, 'they took it along');
+
+  // They let it go at the tongue, on foot.
+  await other.walkTo(couplerOf(cart2).x + 0.6, couplerOf(cart2).z, 0.4);
+  other.send({ t: 'unhitch', id: cartId });
+  await until(() => other.vehicle(cartId).hitched === undefined, 3000, 'unhitched by them');
+  const b2 = me.vehicle(bikeId);
+  await me.walkTo(b2.x + Math.cos(b2.heading) * 1.5, b2.z - Math.sin(b2.heading) * 1.5, 0.5);
+  me.send({ t: 'mount', id: bikeId });
+  await until(() => me.state.riding, 3000, 'on the bike');
+  assert.equal(me.state.tow, 0, 'getting on doesn\'t take it along');
+  await getOff();
+  assert.equal(me.items(box)[0]?.kind, kind, 'the box kept it all along');
   assert.equal(me.ws.readyState, WebSocket.OPEN, output());
 });
 
-test('unfold and pack (owner only, not while linked), backing up to it unfolded packs and hitches it, the wrench raises its level from the bag', { timeout: 120_000 }, async (t) => {
+test('unfold and pack (anyone, not while linked), backing up to it unfolded packs and hitches it, the wrench raises its level from the bag', { timeout: 120_000 }, async (t) => {
   const { port, peers, output } = await lab(t);
-  const me = new Client(port, 'Owner'); peers.push(me);
+  const me = new Client(port, 'Builder'); peers.push(me);
   await me.join();
-  const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
+  const cartId = me.vehicles.list.find((v) => v.kind === 'cart').id;
   const cart0 = me.vehicle(cartId);
   assert.equal(cart0.open, false, 'it stands packed');
   const side = cartToWorld(cart0, 2.4, 0);
@@ -364,16 +366,15 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
     return me.messages.slice(n).find((x) => x.t === 'notice')?.text;
   };
 
-  // Someone else: not theirs to unfold or build on.
-  const other = new Client(port, 'Stranger'); peers.push(other);
+  // Someone else unfolds it and packs it again: it's anyone's.
+  const other = new Client(port, 'Neighbour'); peers.push(other);
   await other.join();
   const far = cartToWorld(cart0, -2.4, 0);
   await other.walkTo(far.x, far.z, 0.4);
-  assert.equal(await other.notice({ t: 'unfoldCart', id: cartId, open: true }), TEXT.notice.notYours);
-  other.send({ t: 'debugGive', kind: 'wrench' });
-  await sleep(200);
-  assert.equal(await other.notice({ t: 'upgradeCart', id: cartId }), TEXT.notice.notYours);
-  assert.equal(other.vehicle(cartId).open, false);
+  other.send({ t: 'unfoldCart', id: cartId, open: true });
+  await until(() => other.vehicle(cartId).open === true, 3000, 'unfolded by them');
+  other.send({ t: 'unfoldCart', id: cartId, open: false });
+  await until(() => other.vehicle(cartId).open === false, 3000, 'packed by them');
 
   // Upgrades: everything but the wrench out of the lab's full bag into the cart's box first (the materials too:
   // refused), then the materials given.
@@ -405,6 +406,9 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   await answer({ t: 'debugGive', kind: 'scrap', n: 40 });
   assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.fullyBuilt, 'no level 3');
   assert.equal(count('scrap'), 40, 'nothing spent');
+  other.send({ t: 'debugGive', kind: 'wrench' });
+  await sleep(200);
+  assert.equal(await other.notice({ t: 'upgradeCart', id: cartId }), TEXT.notice.fullyBuilt, 'built for them too');
 
   // Unfold, pack, unfold again.
   me.send({ t: 'unfoldCart', id: cartId, open: true });
@@ -448,6 +452,129 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   assert.equal(me.vehicle(cartId).open, false, 'unhitching leaves it packed');
   me.send({ t: 'unfoldCart', id: cartId, open: true });
   await until(() => me.vehicle(cartId).open === true, 3000, 'unfolded after unhitching');
+  assert.equal(me.ws.readyState, WebSocket.OPEN, output());
+});
+
+// ---- One cart per world: anyone's vehicle, the migration -----------------------------------------------------------------
+
+test('a second player backs the quad up to the cart and tows it; a passenger changes nothing; whoever rides the quad next tows it', { timeout: 120_000 }, async (t) => {
+  const { port, peers, output } = await lab(t);
+  const first = new Client(port, 'First'); peers.push(first);
+  await first.join();
+  const cartId = first.vehicles.list.find((v) => v.kind === 'cart').id;
+  const me = new Client(port, 'Second'); peers.push(me);
+  await me.join();
+  const cart0 = me.vehicle(cartId);
+
+  // A working quad 3 m ahead of a spot whose hitch point is 1 m ahead of the coupler, facing away from the cart.
+  const c = cart0.heading, fx = -Math.sin(c), fz = -Math.cos(c), cp = couplerOf(cart0);
+  await me.walkTo(cp.x + fx * (HITCH_BACK + 1 - 3), cp.z + fz * (HITCH_BACK + 1 - 3), 0.15);
+  for (let i = 0; i < 10; i++) await me.input(0, c);
+  const n0 = me.vehicles.list.length;
+  me.send({ t: 'debugBike', working: true, quad: true });
+  await until(() => me.vehicles.list.length === n0 + 1, 3000, 'a quad');
+  const quadId = me.vehicles.list.at(-1).id;
+  assert.equal(me.vehicle(quadId).kind, 'quad');
+  me.send({ t: 'mount', id: quadId });
+  await until(() => me.state.riding && me.state.quad, 3000, 'on the quad');
+  for (let i = 0; i < 400 && me.state.tow !== cartId; i++) {
+    const s = me.state, vf = -s.vx * Math.sin(s.heading) - s.vz * Math.cos(s.heading);
+    await me.input(vf > -1.2 ? BACK : 0, s.heading);
+  }
+  assert.equal(me.state.tow, cartId, 'the quad hitched it by backing up');
+  await until(() => me.vehicle(cartId).hitched === quadId && me.vehicle(cartId).rider === me.id, 3000, 'linked to the quad, towed');
+  for (let i = 0; i < 20; i++) await me.input(0, me.state.heading);
+
+  // The first player climbs on the back: still towing.
+  const q = me.state;
+  await first.walkTo(q.x + Math.cos(q.heading) * 1.7, q.z - Math.sin(q.heading) * 1.7, 0.4);
+  first.send({ t: 'mount', id: quadId });
+  await until(() => first.state.pillion === me.id, 3000, 'a passenger');
+  for (let i = 0; i < 90; i++) await me.input(FORWARD, me.state.heading);
+  assert.equal(me.state.tow, cartId, 'still towing with a passenger');
+  assert.ok(Math.hypot(towedPose(me.state).x - cart0.x, towedPose(me.state).z - cart0.z) > 3, 'it came along');
+
+  // Off: the cart parked behind the quad, its coupler on the quad's ball; the passenger put down.
+  await me.input(0, me.state.heading);
+  await me.input(BIKE, me.state.heading);
+  await me.input(0, me.state.heading);
+  await until(() => !me.state.riding && !first.state.pillion && me.vehicle(cartId).rider === undefined, 3000, 'parked');
+  const quad1 = me.vehicle(quadId), cart1 = me.vehicle(cartId);
+  assert.equal(cart1.hitched, quadId, 'still linked to the quad');
+  const ball = hitchPoint(quad1.x, quad1.z, quad1.heading), cpl = couplerOf(cart1);
+  assert.ok(Math.hypot(ball.x - cpl.x, ball.z - cpl.z) < 0.03, 'its coupler on the quad\'s ball');
+
+  // The first player gets on the quad: they tow it now.
+  await first.walkTo(quad1.x + Math.cos(quad1.heading) * 1.7, quad1.z - Math.sin(quad1.heading) * 1.7, 0.5);
+  first.send({ t: 'mount', id: quadId });
+  await until(() => first.state.riding && first.state.tow === cartId, 3000, 'the first player tows it');
+  assert.ok(Math.abs(first.state.hitch - cart1.heading) < 1e-3);
+  assert.equal(me.ws.readyState, WebSocket.OPEN, output());
+});
+
+/** Three carts from when every player had one, by the lab's spawn: A (the oldest, level 1, cloth and wiring in its box,
+ *  the pod's console on its table), B (level 2, some scrap), C (level 2, its box full: cloth stacks and a wiring stack
+ *  two short), C a player's. */
+const OLD_CARTS = { a: { x: 14, z: 6, level: 1 }, b: { x: 14, z: 14, level: 2 }, c: { x: 6, z: 12, level: 2 } };
+const OWNER = randomUUID();
+const withOldCarts = (path) => {
+  const db = openDb(path);
+  let item = 1_000_000;
+  const ids = {};
+  for (const [k, o] of Object.entries(OLD_CARTS)) {
+    const x = LAB_SPAWN.x + o.x, z = LAB_SPAWN.z + o.z;
+    const id = db.insertVehicle('cart', x, heightAt(x, z), z, 0, true, 'arrival');
+    ids[k] = id;
+    db.ownVehicle(id, k === 'c' ? OWNER : randomUUID());
+    db.saveBoxes([{ owner: '', box: `veh${id}`, slots: [{ id: item++, kind: 'cart', n: 1, parts: [], data: { level: o.level } }] }]);
+  }
+  const box = (k, list) => db.saveBoxes([{ owner: '', box: `cargo${ids[k]}`, slots: list.map(([kind, n]) => ({ id: item++, kind, n })) }]);
+  box('a', [['cloth', 20], ['wiring', 5]]);
+  box('b', [['scrap', 10]]);
+  box('c', [...Array.from({ length: 79 }, () => ['cloth', 20]), ['wiring', 18]]);
+  db.saveBench(`cart${ids.a}`, 'pod_console', 7);
+  db.close();
+};
+
+test('a world from when every player had a cart keeps one (the highest level, the fullest box), everything of the others in it or on the sand by it', { timeout: 60_000 }, async (t) => {
+  const { port, peers, output } = await lab(t, withOldCarts);
+  const me = new Client(port, 'Survivor');
+  me.browserId = OWNER; // (the kept cart's owner once: it's nobody's now)
+  peers.push(me);
+  await me.join();
+  const carts = me.vehicles.list.filter((v) => v.kind === 'cart');
+  assert.equal(carts.length, 1, 'one cart left');
+  const kept = carts[0];
+  assert.ok(Math.hypot(kept.x - (LAB_SPAWN.x + OLD_CARTS.c.x), kept.z - (LAB_SPAWN.z + OLD_CARTS.c.z)) < 0.01, 'C: level 2 and the fullest box, where it stood');
+  assert.equal(kept.level, 2, 'its level kept');
+  assert.ok(!me.vehicles.mine.includes(kept.id), 'nobody\'s');
+  // Its box: what it had, the wiring topped up from A's.
+  await until(() => me.items(`cargo${kept.id}`), 3000, 'its box');
+  const slots = me.items(`cargo${kept.id}`);
+  const inBox = (kind) => slots.reduce((n, it) => n + (it?.kind === kind ? it.n : 0), 0);
+  assert.equal(inBox('cloth'), 79 * 20);
+  assert.equal(inBox('wiring'), 20, 'topped up');
+  // The rest on the sand behind it, every item: A's cloth and wiring, the console off A's table, B's scrap.
+  const loot = new Map();
+  for (const m of me.messages) if (m.t === 'loot') {
+    if (m.reset) loot.clear();
+    for (const l of m.add) loot.set(l.id, l);
+    for (const id of m.remove) loot.delete(id);
+  }
+  const near = [...loot.values()].filter((l) => Math.hypot(l.x - kept.x, l.z - kept.z) < 6);
+  const lying = (kind) => near.filter((l) => l.kind === kind).length;
+  assert.deepEqual({ cloth: lying('cloth'), wiring: lying('wiring'), pod_console: lying('pod_console'), scrap: lying('scrap') },
+    { cloth: 20, wiring: 3, pod_console: 1, scrap: 10 }, 'nothing lost');
+  for (const l of near) {
+    const back = (l.x - kept.x) * Math.sin(kept.heading) + (l.z - kept.z) * Math.cos(kept.heading);
+    assert.ok(back > 2, 'behind it, clear of it');
+  }
+  // A's table is free (its machine came back whole), and nothing of A's or B's is left to open.
+  assert.ok(!me.messages.some((m) => m.t === 'bench' && m.job), 'no machine on any table');
+  const gone = me.messages.filter((m) => m.t === 'items' && /^(veh|cargo)\d+$/.test(m.box))
+    .filter((m) => !me.vehicles.list.some((v) => v.id === Number(m.box.replace(/\D/g, ''))));
+  assert.deepEqual(gone, [], 'no boxes of the carts gone');
+  assert.match(output(), /one cart: kept cart \d+/);
   assert.equal(me.ws.readyState, WebSocket.OPEN, output());
 });
 
@@ -528,7 +655,7 @@ test('the beginning with the pods\' kit: wrench, cart shade, cart workshop, a ta
   const { port, peers, output } = await lab(t, withOldBenches);
   const me = new Client(port, 'Newcomer'); peers.push(me);
   await me.join();
-  const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
+  const cartId = me.vehicles.list.find((v) => v.kind === 'cart').id;
   const cart0 = me.vehicle(cartId);
   const count = (kind) => me.items('bag').reduce((n, it) => n + (it?.kind === kind ? it.n : 0), 0);
   const has = (pred) => me.items('bag').some((it) => it && pred(it.kind));

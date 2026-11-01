@@ -71,10 +71,10 @@ export type ClientMsg =
   // (shared/sim.ts). Answered with 'vehicles', or a 'notice'.
   | { t: 'repairVehicle'; id: number }
   | { t: 'mount'; id: number }
-  // Let your own cart `id` go from the bike it's linked to (shared/cart.ts): on foot, at its tongue. Answered with
+  // Let the cart `id` go from the bike or quad it's linked to (shared/cart.ts): on foot, at its tongue. Answered with
   // 'vehicles', or a 'notice'. (Hitching has no message: backing the bike up to it does, server/vehicles.ts tryHitch.)
   | { t: 'unhitch'; id: number }
-  // Your own parked cart `id` (in reach, on foot): unfold it (`open`; not while it's linked to a bike) or pack it, the
+  // The parked cart `id` (anyone's; in reach, on foot): unfold it (`open`; not while it's linked to a bike) or pack it, the
   // cart key looking at it; or raise it a level with the wrench in the bag (the build menu; shared/crafting.ts
   // CART_UPGRADES, its materials from the bag). Answered with 'vehicles' (and the bag), or a 'notice'.
   | { t: 'unfoldCart'; id: number; open: boolean }
@@ -342,13 +342,13 @@ export type ServerMsg =
   // maxSips: what the water bottle in your bag holds (shared/gear.ts bottleSips), 0 without one.
   | { t: 'water'; heat: number; sips: number; maxSips: number; rising: boolean; temp: number; shade: boolean }
   // You died: you lie where you fell as a ragdoll for DOWN_MS (shared/ragdoll.ts; your input is ignored), then
-  // 'respawn' says the server has moved you beside your cart, to your bedroll or your pod (the next snapshot snaps you there) with no heat and a
+  // 'respawn' says the server has moved you beside the cart, to your bedroll or your pod (the next snapshot snaps you there) with no heat and a
   // full canteen; a 'water' follows. For the death screen. push: the blast's launch velocity for the body (m/s).
   // 'heat': heatstroke; 'guardian': one walked over you; 'laser': a guardian's cannon got you; 'missile': one called
   // down by a drone's searchlight landed on you (shared/missiles.ts); 'crawler': bitten once too often.
   /** `bolt`: the guardian's bolt ('shot' id) that killed, which the client draws reaching you before you fall. */
   | { t: 'died'; cause: DeathCause; push?: [number, number, number]; bolt?: number }
-  /** `facing`: woken by your cart (docs/cart.md "Spawn"), the way to face it (PlayerState.facing): the camera turns there. */
+  /** `facing`: woken by the cart (docs/cart.md "Spawn"), the way to face it (PlayerState.facing): the camera turns there. */
   | { t: 'respawn'; facing?: number }
   // You are somewhere else now: in level `level` (shared/levels.ts), standing as `state`. A teleport (src/net.ts drops
   // its prediction); the client switches the stage (src/levels/stage.ts) behind a fade.

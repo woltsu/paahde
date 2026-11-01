@@ -6,7 +6,8 @@
 // wake up after dying, shared/placed.ts), else the crashed pods (shared/pods.ts). Salvage
 // wrecks lying within a few hundred metres (src/world/wrecks.ts) get a diamond, and the packs the dead left
 // (src/world/corpses.ts) a little flag in the rag's colour, however far, and your own bikes (src/world/vehicles.ts) two
-// wheels under a bar in your colour, however far, and your own cart a box on one wheel with its tongue, the same way.
+// wheels under a bar in your colour, however far, and the world's cart (everyone's) a box on one wheel with its tongue,
+// the same way, in a neutral colour.
 import type * as THREE from 'three/webgpu';
 import { LAB_SPAWN } from '../shared/lab.ts';
 import { heightAt } from '../shared/terrain.ts';

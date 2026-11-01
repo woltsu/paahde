@@ -11,25 +11,23 @@
 // server/world.ts carries them with it), unboard() takes them off (getting off, or the rider getting off, dying or
 // leaving).
 //
-// Carts (shared/cart.ts, docs/cart.md): one per player, standing by their pod (arriveCart(), once, a grant: existing
-// players get theirs on their next join), theirs from the start. Backing the bike you ride slowly up to your own parked
-// cart's coupler hitches it (tryHitch(), each tick: the state is set as mount() sets it, the client reconciles). It stays
-// linked to that bike (`hitched`): getting off parks both, the cart behind (release()); getting back on tows it again
-// (mount()); F on its tongue on foot lets it go (unhitch()). Someone else getting on the bike it's linked to lets it go
-// too: only its owner tows it. Its box cargo<id> rides along. Its owner unfolds it, on foot looking at it, with the cart
-// key (unfold(): not linked to a bike, on sand level enough, shared/cart.ts unfoldError) and packs it with the same;
-// backing the bike up to it unfolded packs and hitches it in one go (tryHitch). Packing (and so that hitch) is
-// refused while `packBlocked` says so (phase 3's benches). Its owner raises its level with the wrench from the build menu (upgrade():
-// shared/crafting.ts CART_UPGRADES, ItemData.level on its item in veh<id>).
-// Each cart carries its owner's colour (`color`, from their player row: right while they're offline, and set again on
-// every join, recolor()), so it's told apart by the pods.
+// The cart (shared/cart.ts, docs/cart.md): one per world, nobody's, standing by the first crashed pod from the world's
+// first start (settleCart(); a world from when every player had one keeps one of theirs, the others' boxes merged into
+// it: oneCart()). Backing any bike or quad you ride slowly up to its parked coupler hitches it (tryHitch(), each tick:
+// the state is set as mount() sets it, the client reconciles). It stays linked to that vehicle (`hitched`): getting off
+// parks both, the cart behind (release()); whoever gets on it next tows it again (mount()); F on its tongue on foot lets
+// it go (unhitch()). Its box cargo<id> rides along. Anyone unfolds it, on foot looking at it, with the cart key
+// (unfold(): not linked, on sand level enough, shared/cart.ts unfoldError) and packs it with the same; backing up to it
+// unfolded packs and hitches it in one go (tryHitch). Packing (and so that hitch) is refused while `packBlocked` says so
+// (a machine on its table). Anyone raises its level with the wrench from the build menu (upgrade(): shared/crafting.ts
+// CART_UPGRADES, ItemData.level on its item in veh<id>). Unfolded and built, it's where everyone wakes (camp()).
 import { cargoBox, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bikeLevel, GEAR, isVehicle, partsOf, repaired, RIDDEN, scrapParts } from '../shared/gear.ts';
-import { partKind, setData, type ItemData } from '../shared/items.ts';
+import { addUpTo, CHEST_COLS, CHEST_ROWS, findSpot as gridSpot, gridShape, makeItem, partKind, setData, type Item, type ItemData } from '../shared/items.ts';
 import { CART_UPGRADES, WRENCH } from '../shared/crafting.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
 import { brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
-import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCamp, isCart, towedPose, UNFOLD_S, unfoldError } from '../shared/cart.ts';
+import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, cartToWorld, hitchHeading, isCamp, isCart, towedPose, UNFOLD_S, unfoldError } from '../shared/cart.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import { carried, type PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
@@ -49,8 +47,8 @@ const REACH_SLACK = 1.5;
 const FIND_RESPAWN_MS = 3 * 60_000;
 /** The world's DB setting that says the motorcycle items were made vehicles (v12, migrate()). */
 const MIGRATED = 'vehicles';
-/** A player's grant that says their cart has been laid out by their pod (arriveCart()). */
-const CART_GRANT = 'cart';
+/** The world's DB setting that says its carts from when every player had one are down to one (oneCart()). */
+const ONE_CART = 'one_cart';
 const KIND = 'motorcycle';
 /** The one by the pods. */
 const HOME = 'quad';
@@ -81,14 +79,8 @@ export class VehicleServer {
       ...(isCart(r) ? { open: r.open, ...(r.hitched !== null && rows.some((b) => b.id === r.hitched) ? { hitched: r.hitched } : {}) } : {}) })));
     for (const r of rows) {
       this.src.set(r.id, r.src);
-      if (r.owner) this.owner.set(r.id, r.owner);
+      if (r.owner && !isCart(r)) this.owner.set(r.id, r.owner); // (the cart is nobody's)
     }
-    // A cart's owner's colour (a public one: the owner's browser ID never goes out).
-    setVehicles(vehicles.map((v) => {
-      const o = isCart(v) ? this.owner.get(v.id) : undefined;
-      const color = o === undefined ? undefined : db.getPlayer(o)?.color;
-      return color === undefined ? v : { ...v, color };
-    }));
     setVehicles(vehicles.map((v) => this.withParts(v)));
     db.tx(() => {
       if (!vehicles.some((v) => v.kind === HOME && this.src.get(v.id) === 'home')) this.spawnHome();
@@ -139,19 +131,81 @@ export class VehicleServer {
   }
 
   /**
-   * Player `browserId` (any join) has a cart standing by their pod `pod`, theirs, level 0 and its box empty: laid out
-   * once (a grant), so a new player's is there from the start and an existing player's comes on their next join. In the
-   * lab, by its spawn (shared/lootRoll.ts cartSpot). Returns the new one's id, if one was laid out.
+   * At the world's start, before anyone is in (server/world.ts, once the crash tables and the loot are up): its carts
+   * from when every player had one are down to one (oneCart(), once), and a world without one gets its cart, level 0
+   * and its box empty, by the first crashed pod (in the lab, by its spawn: shared/lootRoll.ts cartSpot).
+   * `takeMachine(id)` takes the machine off cart `id`'s table (its kind, or null); `drop` leaves an item on the sand.
    */
-  arriveCart(browserId: string, pod: number): number | null {
-    if (this.db.hasGrant(browserId, CART_GRANT)) return null;
-    return this.db.tx(() => {
-      this.db.markGrant(browserId, CART_GRANT);
-      const at = cartSpot(pod, [...vehicles, ...placed]);
-      const v = this.add(at.x, at.z, at.heading, [], true, 'arrival', undefined, undefined, CART);
-      this.own(v.id, browserId);
-      return v.id;
+  settleCart(takeMachine: (id: number) => string | null, drop: (x: number, z: number, item: Item) => void) {
+    if (this.db.getSetting(ONE_CART) === undefined) this.oneCart(takeMachine, drop);
+    if (!vehicles.some(isCart)) {
+      this.db.tx(() => {
+        const at = cartSpot(0, [...vehicles, ...placed]);
+        this.add(at.x, at.z, at.heading, [], true, 'world', undefined, undefined, CART);
+      });
+    }
+    this.changed = false;
+  }
+
+  /**
+   * Once per world (settings 'one_cart'): every player had a cart; now the world has one. The one kept is the highest
+   * level, then the one with the most in its box, then the oldest; it stays where it stands, nobody's. Every other
+   * cart's box goes into its box (stacks topped up first), the machine on its table too, whole again (as
+   * server/bunkerGone.ts gives back the bunker table's: the parts already taken were given out); what doesn't fit lies
+   * on the sand behind it, an item at a time, as dropped loot. Then the others are deleted (nothing tows them: nobody's
+   * in yet), their levels gone with them.
+   */
+  private oneCart(takeMachine: (id: number) => string | null, drop: (x: number, z: number, item: Item) => void) {
+    const log: string[] = [];
+    this.db.tx(() => {
+      const carts = vehicles.filter(isCart);
+      const held = (c: Vehicle) => this.items.slots('', cargoBox(c.id)).filter(Boolean).length;
+      const keep = [...carts].sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || held(b) - held(a) || a.id - b.id)[0];
+      if (keep) {
+        this.db.ownVehicle(keep.id, null);
+        const loose: Item[] = [];
+        for (const c of carts) {
+          if (c.id === keep.id) continue;
+          const box = cargoBox(c.id), slots = this.items.slots('', box);
+          const stacks = slots.filter((it): it is Item => !!it);
+          loose.push(...stacks);
+          this.items.change('', [box], () => slots.fill(null));
+          const machine = takeMachine(c.id);
+          if (machine) this.items.change('', [], (newId) => loose.push(makeItem(newId(), { kind: machine })));
+          this.items.unstow(vehicleBox(c.id));
+          this.db.deleteVehicle(c.id);
+          this.src.delete(c.id);
+          log.push(`cart ${c.id} (level ${c.level ?? 0}: ${stacks.length} stacks${machine ? `, the ${machine} on its table` : ''});`);
+        }
+        const into = this.items.slots('', cargoBox(keep.id)), shape = gridShape(CHEST_COLS, CHEST_ROWS);
+        let dropped = 0;
+        const out = (it: Item) => drop(...this.behind(keep, dropped++), it);
+        this.items.change('', [cargoBox(keep.id)], (newId) => {
+          for (const it of loose) {
+            // Plain stacks top up what's there; anything of its own (parts, data) goes in whole.
+            if (!it.parts && !it.data) {
+              for (let k = addUpTo(into, it.kind, it.n, newId, shape); k < it.n; k++) out(makeItem(newId(), { kind: it.kind }));
+              continue;
+            }
+            const spot = gridSpot(into, shape, it.kind, !!it.r);
+            if (spot) into[spot.i] = makeItem(it.id, { ...it, r: spot.r });
+            else out(it);
+          }
+        });
+        if (log.length) log.unshift(`kept cart ${keep.id} (level ${keep.level ?? 0}); merged into it:`);
+        if (dropped) log.push(`${dropped} things that didn't fit on the sand behind it`);
+        this.set(vehicles.filter((v) => !isCart(v) || v.id === keep.id));
+      }
+      this.db.setSetting(ONE_CART, 1);
     });
+    if (log.length) console.log(`one cart: ${log.join(' ')}`);
+  }
+
+  /** The `k`th spot behind cart `c` (its tongue ahead) for what doesn't fit in its box: rows across, clear of its
+   *  unfolded benches and canopy lines. */
+  private behind(c: Vehicle, k: number): [number, number] {
+    const p = cartToWorld(c, ((k % 7) - 3) * 0.45, 2.4 + Math.floor(k / 7) * 0.45);
+    return [p.x, p.z];
   }
 
   /** Debug menu: a motorcycle (a `quad`) at `x`, `z` facing `heading`, broken (parts as found) or `working` (stood up
@@ -247,17 +301,10 @@ export class VehicleServer {
     this.changed = true;
   }
 
-  /** Player `browserId`'s colour is `color` (every join): their carts are painted it. */
-  recolor(browserId: string, color: number) {
-    if (vehicles.some((v) => isCart(v) && v.color !== color && this.owner.get(v.id) === browserId)) {
-      this.set(vehicles.map((v) => (isCart(v) && this.owner.get(v.id) === browserId ? { ...v, color } : v)));
-    }
-  }
-
-  /** Player `browserId`'s camp: their own cart, parked, unfolded and built (shared/cart.ts isCamp), or undefined. They
-   *  wake up beside it (server/world.ts homeOf). */
-  campOf(browserId: string): Vehicle | undefined {
-    return vehicles.find((v) => isCamp(v) && this.owner.get(v.id) === browserId);
+  /** The world's camp: its cart, parked, unfolded and built (shared/cart.ts isCamp), or undefined. Everyone wakes up
+   *  beside it (server/world.ts homeOf). */
+  camp(): Vehicle | undefined {
+    return vehicles.find(isCamp);
   }
 
   /** Player `browserId`'s vehicles' ids. */
@@ -296,11 +343,10 @@ export class VehicleServer {
     if (!v.up || !bike) return TEXT.notice.broken;
     this.update(v.id, { rider });
     if (!this.owner.has(v.id)) this.own(v.id, browserId);
-    // A cart linked to it: towed again if it's theirs; someone else's is let go where it stands.
+    // The cart linked to it: whoever rides it tows it.
     const cart = this.cartOn(v.id);
-    const tow = cart && parked(cart) && this.owner.get(cart.id) === browserId ? cart : undefined;
+    const tow = cart && parked(cart) ? cart : undefined;
     if (tow) this.update(tow.id, { rider });
-    else if (cart) this.hitch(cart.id, undefined);
     return {
       ...s, x: v.x, y: v.y, z: v.z, vx: 0, vy: 0, vz: 0, sliding: false, crouching: false,
       riding: true, heading: v.heading, bike, nose: 0, noseSpin: 0, tow: tow?.id ?? 0, hitch: tow?.heading ?? 0,
@@ -334,28 +380,28 @@ export class VehicleServer {
     return this.ridden(rider)?.passenger;
   }
 
-  /** The cart linked to bike `bike` (vehicle id), if any. */
+  /** The cart linked to bike or quad `bike` (vehicle id), if any. */
   private cartOn(bike: number): Vehicle | undefined {
     return vehicles.find((c) => isCart(c) && c.hitched === bike);
   }
 
-  /** Cart `id` linked to bike `bike` from now on (undefined: to none). */
+  /** Cart `id` linked to bike or quad `bike` from now on (undefined: to none). */
   private hitch(id: number, bike: number | undefined) {
     this.db.hitchVehicle(id, bike ?? null);
     this.update(id, { hitched: bike });
   }
 
   /**
-   * Each tick, for player `rider` (browser ID `browserId`) at `s` riding a bike that tows nothing: backing it slowly up
-   * to their own parked cart's coupler hitches it (shared/cart.ts backingUpTo; not one unfolded, nor one linked to a bike
+   * Each tick, for player `rider` at `s` riding a bike or quad that tows nothing: backing it slowly up to a parked
+   * cart's coupler hitches it (shared/cart.ts backingUpTo; one unfolded is packed first; not one linked to a vehicle
    * being ridden). Returns their state towing it (as mount() returns theirs riding), or null.
    */
-  tryHitch(rider: number, browserId: string, s: PlayerState): PlayerState | null {
+  tryHitch(rider: number, s: PlayerState): PlayerState | null {
     if (!s.riding || s.tow || !s.grounded) return null;
     const bike = this.ridden(rider);
     if (!bike || this.cartOn(bike.id)) return null;
     for (const c of vehicles) {
-      if (!isCart(c) || !parked(c) || this.owner.get(c.id) !== browserId || !backingUpTo(s, c)) continue;
+      if (!isCart(c) || !parked(c) || !backingUpTo(s, c)) continue;
       const linked = c.hitched === undefined ? undefined : vehicles.find((b) => b.id === c.hitched);
       if (linked && !parked(linked)) continue;
       const hitch = hitchHeading(s, c);
@@ -367,33 +413,31 @@ export class VehicleServer {
     return null;
   }
 
-  /** Player `browserId` at `s` (on foot) lets their cart `id` go from the bike it's linked to, F on its tongue. Returns
-   *  true, or why not. */
-  unhitch(browserId: string, s: PlayerState, id: unknown): true | string {
+  /** A player at `s` (on foot) lets cart `id` go from the vehicle it's linked to, F on its tongue. Returns true, or why
+   *  not. */
+  unhitch(s: PlayerState, id: unknown): true | string {
     const c = vehicles.find((q) => q.id === id);
     if (!c || !isCart(c)) return TEXT.notice.alreadyGone;
-    if (this.owner.get(c.id) !== browserId) return TEXT.notice.notYours;
     if (s.riding || !parked(c)) return TEXT.notice.getOffFirst;
     if (!atTongue(s, c, REACH_SLACK)) return TEXT.notice.tooFar;
     if (c.hitched !== undefined) this.hitch(c.id, undefined);
     return true;
   }
 
-  /** Your own parked cart `id`, in reach of `s` on foot, or why not. */
-  private ownCart(browserId: string, s: PlayerState, id: unknown): Vehicle | string {
+  /** Parked cart `id`, in reach of `s` on foot, or why not. */
+  private cartBy(s: PlayerState, id: unknown): Vehicle | string {
     const c = vehicles.find((q) => q.id === id);
     if (!c || !isCart(c)) return TEXT.notice.alreadyGone;
-    if (this.owner.get(c.id) !== browserId) return TEXT.notice.notYours;
     if (s.riding || !parked(c)) return TEXT.notice.getOffFirst;
     if (!inReach(s, c, REACH_SLACK)) return TEXT.notice.tooFar;
     return c;
   }
 
-  /** Player `browserId` at `s` (on foot) unfolds (`open`) or packs their parked cart `id` (the cart key, looking at it).
-   *  Unfolding refuses while it's linked to a bike or on sand too uneven (shared/cart.ts unfoldError); packing while
+  /** A player at `s` (on foot) unfolds (`open`) or packs parked cart `id` (the cart key, looking at it). Unfolding
+   *  refuses while it's linked to a vehicle or on sand too uneven (shared/cart.ts unfoldError); packing while
    *  packBlocked says so. Returns true, or why not. */
-  unfold(browserId: string, s: PlayerState, id: unknown, open: unknown): true | string {
-    const c = this.ownCart(browserId, s, id);
+  unfold(s: PlayerState, id: unknown, open: unknown): true | string {
+    const c = this.cartBy(s, id);
     if (typeof c === 'string') return c;
     if (open !== true) return this.pack(c) ?? true;
     if (c.open) return true;
@@ -424,10 +468,10 @@ export class VehicleServer {
     return null;
   }
 
-  /** Player `browserId` at `s`, the wrench in their bag, raises their parked cart `id` a level (shared/crafting.ts
-   *  CART_UPGRADES), using up its materials from the bag. Returns the new level, or why not. */
+  /** Player `browserId` at `s`, the wrench in their bag, raises parked cart `id` a level (shared/crafting.ts
+   *  CART_UPGRADES), using up its materials from their bag. Returns the new level, or why not. */
   upgrade(browserId: string, s: PlayerState, id: unknown): number | string {
-    const c = this.ownCart(browserId, s, id);
+    const c = this.cartBy(s, id);
     if (typeof c === 'string') return c;
     if (!this.items.has(browserId, WRENCH)) return TEXT.notice.cantPlace;
     const box = vehicleBox(c.id);

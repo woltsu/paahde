@@ -96,7 +96,7 @@ import { junkSpec, SALVAGE } from '../shared/salvage.ts';
 import { bagShape, equipped, isBuilding, locatorRange, quality, repaired, spyglassZoom, stormWarnS } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { lootPrompt } from './world/loot';
-import { ownVehicleTargets } from './world/vehicles';
+import { cartTargets, ownVehicleTargets } from './world/vehicles';
 import { parked, vehicles, vehicleTarget, pillionTarget } from '../shared/vehicles.ts';
 import { cartTarget } from '../shared/cart.ts';
 import { WRENCH } from '../shared/crafting.ts';
@@ -410,7 +410,7 @@ function bagFull() {
   speech.event('bagFull', undefined);
 }
 const placer = new Placer(net, placedView, buildMenu);
-// The cart key (the rotate key, R / d-pad ←, free when nothing's being put down): our own cart in view unfolds or packs.
+// The cart key (the rotate key, R / d-pad ←, free when nothing's being put down): the cart in view (anyone's) unfolds or packs.
 let cartKey = false;
 addEventListener('keydown', (e) => {
   if (!ui.inventoryOpen && !e.repeat && !e.ctrlKey && !e.metaKey && isBound('rotate', e.code)) cartKey = true;
@@ -729,7 +729,7 @@ renderer.setAnimationLoop((time) => {
   locator.bedroll = net.spawn;
   telescope.bedroll = net.spawn;
   survival.toolsDown = storm.toolsDown;
-  locator.update(orbit.camera, orbit.viewYaw, orbit.pitch + orbit.freePitch, focus, [...others.filter((o) => Math.hypot(o.x - focus.x, o.z - focus.z) < range), ...(L.things ? [...wrecks.targets(focus.x, focus.z), ...corpseTargets(), ...ownVehicleTargets(net.myVehicles, net.color)] : [])]);
+  locator.update(orbit.camera, orbit.viewYaw, orbit.pitch + orbit.freePitch, focus, [...others.filter((o) => Math.hypot(o.x - focus.x, o.z - focus.z) < range), ...(L.things ? [...wrecks.targets(focus.x, focus.z), ...corpseTargets(), ...ownVehicleTargets(net.myVehicles, net.color), ...cartTargets(net.myVehicles)] : [])]);
   // The clock and the wind go on in any level; a stage updates only while it is the one we are in (during the fade the
   // drawn one isn't: the desert mustn't stream terrain round the datacenter's x, z, nor the other way round).
   sky.tickClock(frameDt, net.worldTime());
@@ -806,15 +806,16 @@ renderer.setAnimationLoop((time) => {
     }) : null;
   const ridePrompt = backOf ? TEXT.prompt.getOn : !vehicle ? null : !vehicle.v.up ? TEXT.prompt.repair(itemLabel(vehicle.v.kind))
     : vehicle.rear ? TEXT.prompt.open(TEXT.boxes.cargo) : TEXT.prompt.getOn;
-  // A cart (shared/cart.ts): F on our own's tongue, linked to a bike, lets it go; anywhere else on it opens its box.
+  // The cart (shared/cart.ts, anyone's): F on its tongue, linked to a bike or quad, lets it go; anywhere else on it opens
+  // its box.
   const cart = here && !net.down && !onBike && !station && !building && !vehicle
     ? cartTarget(net.me, orbit.yaw, orbit.pitch, vehicles) : null;
-  const unhitch = !!cart && cart.tongue && cart.v.hitched !== undefined && net.myVehicles.has(cart.v.id);
+  const unhitch = !!cart && cart.tongue && cart.v.hitched !== undefined;
   const cartPrompt = !cart ? null : unhitch ? TEXT.prompt.unhitch : net.boxes[cargoBox(cart.v.id)] ? TEXT.prompt.open(itemLabel(cart.v.kind)) : null;
-  // Our own cart, let go of the bike: the cart key unfolds it, or packs it again (server/vehicles.ts unfold). Not with
+  // The cart, let go of the bike: the cart key unfolds it, or packs it again (server/vehicles.ts unfold). Not with
   // something in hand that the same key turns (a placeable, the wrench).
   const heldKind = (net.boxes.bag ?? [])[survival.slot]?.kind;
-  const folding = !!cart && cart.v.hitched === undefined && net.myVehicles.has(cart.v.id) && !(heldKind && (isPlaceable(heldKind) || heldKind === WRENCH));
+  const folding = !!cart && cart.v.hitched === undefined && !(heldKind && (isPlaceable(heldKind) || heldKind === WRENCH));
   const foldPrompt = folding ? `${kbd('rotate')}${cart!.v.open ? TEXT.prompt.pack : TEXT.prompt.unfold}` : null;
   if (cartKey && folding) net.unfoldCart(cart!.v.id, !cart!.v.open);
   cartKey = false;

@@ -51,7 +51,7 @@ export const BUILDS: Record<string, Recipe> = Object.fromEntries([
   ...Object.keys(TROPHY_PLACEABLES).map((id) => [id, { makes: id, needs: [] }]),
 ]);
 /** The cart's next levels (shared/tables.ts CART_TABLE): level → what raising it to that level takes, with the wrench
- *  by your own cart (src/buildMenu.ts, server/vehicles.ts upgrade). `makes` is the cart. */
+ *  by the cart (src/buildMenu.ts, server/vehicles.ts upgrade). `makes` is the cart. */
 export const CART_UPGRADES: Record<number, Recipe> = Object.fromEntries(
   Object.entries(CART_TABLE).map(([level, needs]) => [Number(level), { makes: 'cart', needs: needs.map(ingredient) }]),
 );
