@@ -1,4 +1,6 @@
 // Debug menu: with `debug` in the URL (?debug), F3 (or `) toggles a small panel; without it the keys do nothing. Opening it frees the mouse so the controls can be clicked.
+// The panel is collapsible sections (Time, Spawn, Weather, Give, Travel, Camera & look, Player & world; which are open is
+// remembered per browser) and scrolls when taller than the screen. "Working bike" / "Broken bike" (Spawn) put a motorcycle 3 m in front of you.
 // Time of day: a slider that holds the sky at that time (local view only), or, with "Apply to all players",
 // moves the shared server clock for everyone, production included. "Sandstorm here" summons one on you
 // (for everyone, after the usual warning); "Local sandstorm" sends one at you from just upwind at once, seen only by you;
@@ -38,72 +40,110 @@ export class DebugMenu {
     goLevel: (key: string) => void = () => {}) {
     const style = document.createElement('style');
     style.textContent = `
-#debugMenu { position: fixed; top: 48px; right: 12px; width: 230px; padding: 10px 12px; display: none;
-  font: 12px var(--mono); color: #ffe9cc; background: rgba(20, 10, 5, 0.82); border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(255, 240, 220, 0.18); z-index: 10; }
-#debugMenu h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; opacity: .7; }
+#debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh - 60px); overflow-y: auto;
+  overscroll-behavior: contain; padding: 8px 10px 10px; display: none; box-sizing: border-box;
+  font: 12px var(--mono); color: #ffe9cc; background: rgba(20, 10, 5, 0.86); border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(255, 240, 220, 0.18); z-index: 10; scrollbar-width: thin; scrollbar-color: rgba(255, 233, 204, 0.3) transparent; }
+#debugMenu h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .6;
+  display: flex; justify-content: space-between; }
+#debugMenu details { border-top: 1px solid rgba(255, 240, 220, 0.12); padding: 5px 0 6px; }
+#debugMenu summary { cursor: pointer; list-style: none; font-weight: bold; letter-spacing: .04em; opacity: .85;
+  display: flex; justify-content: space-between; user-select: none; }
+#debugMenu summary::-webkit-details-marker { display: none; }
+#debugMenu summary::after { content: '+'; opacity: .5; }
+#debugMenu details[open] > summary::after { content: '−'; }
+#debugMenu summary:hover { opacity: 1; }
+#debugMenu .sub { margin-top: 7px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; opacity: .5; }
 #debugMenu input[type=range] { width: 100%; }
 #debugMenu label input[type=range] { flex: 1; width: auto; }
-#debugMenu select { font: inherit; color: inherit; background: rgba(255, 233, 204, 0.12); border: 0; border-radius: 4px; }
-#debugMenu .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#debugMenu select { font: inherit; color: inherit; background: rgba(255, 233, 204, 0.12); border: 0; border-radius: 4px; padding: 2px 3px; }
+#debugMenu .row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; align-items: center; }
+#debugMenu .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px; }
 #debugMenu button { font: inherit; color: inherit; background: rgba(255, 233, 204, 0.12); border: 0; border-radius: 4px;
   padding: 3px 7px; cursor: pointer; }
+#debugMenu .grid button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #debugMenu button:hover { background: rgba(255, 233, 204, 0.25); }
+#debugMenu button:active { background: rgba(255, 233, 204, 0.4); }
+#debugMenu button.go { background: rgba(255, 190, 110, 0.28); }
+#debugMenu button.go:hover { background: rgba(255, 190, 110, 0.45); }
 #debugMenu #dbgItem { flex: 1; min-width: 0; }
 #debugMenu input:not([type]), #debugMenu input[type=number] { font: inherit; color: inherit; background: rgba(255, 233, 204, 0.12); border: 0; border-radius: 4px; padding: 3px 5px; }
-#debugMenu label { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+#debugMenu label { display: flex; gap: 6px; align-items: center; margin-top: 5px; }
 body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenchAB) { visibility: hidden !important; }`;
     document.head.append(style);
 
+    const tiers = ['Scrap', 'Basic', 'Quality', 'Space'];
     const p = this.panel;
     p.id = 'debugMenu';
-    p.innerHTML = `<h4>Debug · F3</h4>
-<div>Time of day <b id="dbgTime"></b></div>
+    p.innerHTML = `<h4><span>Debug</span><span>F3</span></h4>
+<details data-sec="time" open><summary>Time <b id="dbgTime"></b></summary>
 <input id="dbgTod" type="range" min="0" max="1439" step="1">
+<div class="row" id="dbgPresets"></div>
 <label><input id="dbgLive" type="checkbox"> Follow shared clock</label>
-<label><input id="dbgShare" type="checkbox"> Apply to all players (server)</label>
-<div class="row"></div>
-<div class="row"><button id="dbgStorm" title="A sandstorm on you, for everyone, after the 20 s warning">Sandstorm here</button>
-<button id="dbgLocalStorm" title="A sandstorm rolling in from upwind right now, only you see it (no heat)">Local sandstorm</button>
+<label><input id="dbgShare" type="checkbox"> Apply to all players (server)</label></details>
+<details data-sec="spawn" open><summary>Spawn</summary>
+<div class="sub">Motorcycle</div>
+<div class="grid"><button id="dbgBikeWorking" class="go" title="A working motorcycle 3 m in front of you, Scrap parts, yours once you ride it (for everyone)">Working bike</button>
+<button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken bike</button></div>
+<div class="sub">Enemies</div>
+<div class="grid"><button id="dbgGuardian" title="The nearest guardian, brought 90 m from you (for everyone)">Guardian</button>
+<button id="dbgDrone" title="A searchlight drone over you for a minute, even by day (for everyone)">Drone</button>
+<button id="dbgJet" title="A jet flying over you in about 15 s (for everyone; the drone and the flying wing take turns)">Jet</button>
+<button id="dbgHarvester" title="A harvester crawling past 50 m away in about a minute (for everyone)">Harvester</button>
+<button id="dbgCrawlers" title="A pack of six crawlers 30 m off, coming for you (for everyone)">Crawlers</button></div>
+<div class="sub">Bosses</div>
+<div class="grid">${BOSS_KINDS.map((k) => `<button data-boss="${k}" title="The ${k} boss near you for ten minutes (for everyone)">${BOSSES[k].label}</button>`).join('')}</div></details>
+<details data-sec="weather"><summary>Weather</summary>
+<div class="grid"><button id="dbgStorm" title="A sandstorm on you, for everyone, after the 20 s warning">Sandstorm here</button>
+<button id="dbgLocalStorm" title="A sandstorm rolling in from upwind right now, only you see it (no heat)">Local storm</button>
 <button id="dbgFront" title="A mega-storm front rolling in over everyone, 30 s to the first player">Storm front</button>
 <button id="dbgGas" title="Poison gas creeping in over everyone, 30 s to the first player (by day too)">Poison gas</button>
-<button id="dbgVortex" title="One more sand vortex, short-lived, spun up 600 m upwind of you or the first clear spot round the pods (for everyone)">Sand vortex</button>
-<button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">Go to vortex</button>
-<button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">Go to solar farm</button></div>
-<div class="row"><button id="dbgGuardian" title="The nearest guardian, brought 90 m from you (for everyone)">Guardian here</button>
-<button id="dbgDrone" title="A searchlight drone over you for a minute, even by day (for everyone)">Drone here</button>
-<button id="dbgJet" title="A jet flying over you in about 15 s (for everyone; the drone and the flying wing take turns)">Jet here</button>
-<button id="dbgHarvester" title="A harvester crawling past 50 m away in about a minute (for everyone)">Harvester here</button>
-<button id="dbgCrawlers" title="A pack of six crawlers 30 m off, coming for you (for everyone)">Crawlers here</button></div>
-<div class="row">${BOSS_KINDS.map((k) => `<button data-boss="${k}" title="The ${k} boss near you for ten minutes (for everyone)">${BOSSES[k].label}</button>`).join('')}</div>
-<label>Tone <select id="dbgTone">${TONE_CURVES.map((c) => `<option>${c}</option>`).join('')}</select></label>
-<label id="dbgWhiteRow">White <input id="dbgWhite" type="range" min="1" max="8" step="0.25"> <b id="dbgWhiteVal"></b></label>
-<div class="row">Give gear ${['Scrap', 'Basic', 'Quality', 'Space'].map((n, i) => `<button data-gear="${i}" title="One of every piece of gear, repaired with ${n} parts (what doesn't fit is skipped)">${n}</button>`).join('')}</div>
-<div class="row">Give materials <button id="dbgMats" title="A full stack each of scrap, cloth and wiring, to build with">Scrap, cloth, wiring</button></div>
-<div class="row">Give item <input id="dbgItem" list="dbgItems" placeholder="search…" title="Any item, by name or id"></div>
+<button id="dbgVortex" title="One more sand vortex, short-lived, spun up 600 m upwind of you or the first clear spot round the pods (for everyone)">Sand vortex</button></div></details>
+<details data-sec="give"><summary>Give</summary>
+<div class="sub">Gear (all, repaired with)</div>
+<div class="grid">${tiers.map((n, i) => `<button data-gear="${i}" title="One of every piece of gear, repaired with ${n} parts (what doesn't fit is skipped)">${n}</button>`).join('')}</div>
+<div class="row"><button id="dbgMats" title="A full stack each of scrap, cloth and wiring, to build with">Materials: scrap, cloth, wiring</button></div>
+<div class="sub">Item</div>
+<div class="row"><input id="dbgItem" list="dbgItems" placeholder="search…" title="Any item, by name or id"></div>
 <datalist id="dbgItems">${Object.entries(ITEMS).filter(([k]) => !RETIRED.has(k) && !isBuilding(k)).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}</datalist>
 <div class="row"><input id="dbgItemN" type="number" min="1" value="1" style="width:4em" title="How many (stackable items)">
-<select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${['Scrap', 'Basic', 'Quality', 'Space'].map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
-<button id="dbgGive">Give</button></div>
-<div class="row">Go to level ${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
-<div class="row">Beginning beat ${BEATS.map((b, i) => `<button data-level="beginning:${i}" title="At the start of the beginning's ${b} beat, what comes before it open">${i}</button>`).join('')}</div>
-<div class="row">Motorcycle <button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken</button><button id="dbgBikeWorking" title="A working motorcycle 3 m in front of you, Scrap parts, yours once you ride it (for everyone)">Working</button></div>
-<div class="row">Test lab <button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div>
-<label title="No heat build-up for you (the meter drops to zero)"><input id="dbgNoHeat" type="checkbox"> Disable heat</label>
-<label title="No random sandstorms in this world (clears the ones blowing)"><input id="dbgNoWeather" type="checkbox"> Disable weather</label>
-<div class="row"><button id="dbgFly" title="Leave the body and fly the view (WASD, Space/Ctrl up and down, Shift fast, Alt slow, wheel sets speed)">Fly camera</button>
+<select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${tiers.map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
+<button id="dbgGive" class="go">Give</button></div></details>
+<details data-sec="travel"><summary>Travel</summary>
+<div class="grid"><button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">To vortex</button>
+<button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">To solar farm</button></div>
+<div class="sub">Level</div>
+<div class="grid">${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
+<div class="sub">Beginning beat</div>
+<div class="row">${BEATS.map((b, i) => `<button data-level="beginning:${i}" title="At the start of the beginning's ${b} beat, what comes before it open">${i}</button>`).join('')}</div></details>
+<details data-sec="camera"><summary>Camera & look</summary>
+<div class="row"><button id="dbgFly" class="go" title="Leave the body and fly the view (WASD, Space/Ctrl up and down, Shift fast, Alt slow, wheel sets speed)">Fly camera</button>
 <label style="margin-top:0"><input id="dbgClean" type="checkbox"> Hide HUD</label></div>
 <div id="dbgFlyOpts" style="display:none">
 <label>FOV <input id="dbgFov" type="range" min="15" max="100" step="1"> <b id="dbgFovVal"></b></label>
 <label>Smooth <input id="dbgSmooth" type="range" min="0" max="1" step="0.05"></label>
 <label>Bank <input id="dbgBank" type="range" min="0" max="1" step="0.05"></label></div>
-<div class="row"><button id="dbgHit"title="A killing blow (a guardian's laser): try the shield plate">Hit me</button></div>`;
+<label>Tone <select id="dbgTone">${TONE_CURVES.map((c) => `<option>${c}</option>`).join('')}</select></label>
+<label id="dbgWhiteRow">White <input id="dbgWhite" type="range" min="1" max="8" step="0.25"> <b id="dbgWhiteVal"></b></label></details>
+<details data-sec="cheats"><summary>Player & world</summary>
+<label title="No heat build-up for you (the meter drops to zero)"><input id="dbgNoHeat" type="checkbox"> Disable heat</label>
+<label title="No random sandstorms in this world (clears the ones blowing)"><input id="dbgNoWeather" type="checkbox"> Disable weather</label>
+<div class="row"><button id="dbgHit" title="A killing blow (a guardian's laser): try the shield plate">Hit me</button></div>
+<div class="sub">Test lab (?w=lab)</div>
+<div class="grid"><button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div></details>`;
+    // Which sections are open is remembered per browser.
+    for (const d of p.querySelectorAll<HTMLDetailsElement>('details[data-sec]')) {
+      const key = `debugMenu.${d.dataset.sec}`;
+      try { const v = localStorage.getItem(key); if (v !== null) d.open = v === '1'; } catch { /* no storage */ }
+      d.addEventListener('toggle', () => { try { localStorage.setItem(key, d.open ? '1' : '0'); } catch { /* no storage */ } });
+    }
+    p.addEventListener('wheel', (e) => e.stopPropagation()); // scrolling the panel is not the game's wheel
     document.body.append(p);
     const slider = p.querySelector<HTMLInputElement>('#dbgTod')!;
     const live = p.querySelector<HTMLInputElement>('#dbgLive')!;
     const share = p.querySelector<HTMLInputElement>('#dbgShare')!;
     const label = p.querySelector<HTMLElement>('#dbgTime')!;
-    const row = p.querySelector<HTMLElement>('.row')!;
+    const row = p.querySelector<HTMLElement>('#dbgPresets')!;
     p.querySelector('#dbgStorm')!.addEventListener('click', () => summonStorm());
     p.querySelector('#dbgFront')!.addEventListener('click', () => summonStorm(true));
     p.querySelector('#dbgGas')!.addEventListener('click', () => summonStorm('gas'));
