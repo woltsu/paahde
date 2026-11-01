@@ -2,7 +2,7 @@
 
 Design for the abandoned radio towers (November 2026). Here and there in the desert stands a huge, dead telecom tower.
 You see one from far off and ride to it. You climb it to the top, and you find it's missing parts. Fit them, give it
-power, and it starts **receiving a signal** that points somewhere worth going. Nothing tells you any of this: the tower
+power, and it comes alive: its lamp blinks and a radio starts **muttering** through the static. Nothing tells you any of this: the tower
 looks broken, the empty mounts look empty, and once it's alive it hums, blinks and crackles.
 
 ## The look
@@ -59,9 +59,7 @@ The ladder moves the player, so it's in the sim, deterministic:
   (`collideTowers`, capsules) so you don't walk off by accident; you can jump over it.
 - **The lattice:** the legs collide, the bracing doesn't (you pass between bays). No climbing the lattice itself, only
   the ladder.
-- **Falling:** today no fall hurts. A 120 m tower with no risk feels like scenery, so **a fall from high enough kills**
-  (new: landing faster than ~30 m/s goes through `die` in server/world.ts, with the ragdoll). The server sees the
-  landing; the sim stays as it is. Lower falls stay free as now.
+- **Falling:** no fall damage, as everywhere else (decided). Jumping off the top is a long way down and nothing more.
 - **Riding:** no bike on the ladder, nor up there.
 - **Netcode:** `climb` is in the snapshot for remote players (the climbing pose, hands on rungs: `docs/character.md`,
   every body). Schema version bump. Pose for your own view: hands on the rungs (`docs/viewmodel-hands.md`).
@@ -95,55 +93,53 @@ The slots are spread over the tower, so fixing it means climbing it:
   a load (`TOWER_W` in `shared/power.ts`, server/power.ts), like a beacon. No power, no signal.
 - Anyone can fix a tower or take its parts back out (everything is shared). Taking a part out kills the signal.
 
-## The signal
+## The signal (placeholder for now)
 
 A tower with every slot filled and power on is **alive**:
 
-- **Seen:** the red aviation lamp at the top blinks (day and night; at night from kilometres, everyone sees it). Its
-  big dish turns to face the signal.
-- **Heard:** the cabinet hums. Near it, and through a receiver or jammer in your hand anywhere within ~1 km of the
-  tower, a radio voice comes through the static: a short repeating transmission, half drowned in noise. No words to
-  read: a voice speaking, tones, an old beacon's call. The worse the fitted parts, the more static.
-- **Where it points:** each tower picks up one source somewhere out in the desert (seeded, 1.5–5 km from it, through
-  `shared/lootRoll.ts` so the econ simulator rolls the same). While the tower lives, every player's locator shows the
-  source as a new mark (radio waves), however far. The dish faces it too, so from the top you can just look.
-- **What's there:** something that was calling for help: an earlier crew's pod half buried in the sand, with a sealed
-  locker (a richer stash than the solar farms': `TOWER_SOURCE` in `shared/tables.ts`, uranium cells and space-tier
-  parts likely). Emptied, the transmission stops and the mark goes. The tower stays alive (the lamp keeps blinking) but
-  only static comes through.
-- Sources are new places in the world (`shared/towers.ts` places them, `server/towers.ts` keeps which are found and
-  looted), so the uranium cells the bosses' receivers need (`shared/bosses.ts`) come from fixing towers as well as from
-  the harvester. That ties the towers to the endgame without new rules.
+- **Seen:** the red aviation lamp at the top blinks (day and night; at night from kilometres, everyone sees it). The
+  big dish swings up and turns slowly, searching.
+- **Heard:** the cabinet hums, and a radio mutters through the static: voices you can't make out, a few words' worth
+  of babble, pauses, a tone now and then. Heard near the cabinet and on the decks, and through a receiver or jammer in
+  your hand within ~1 km of the tower. The worse the fitted parts, the more static over it. Synthesised (formant-filtered
+  noise bursts with a speech-like rhythm through a band-pass "radio" filter), levelled per `docs/audio.md`.
+- **Nothing more yet.** The signal doesn't point anywhere or lead to loot (decided: the muttering is enough for now).
+  Later it could carry something: a bearing to a place, a hint, the bosses.
+
+## Drones
+
+A couple of searchlight drones keep each tower (`server/drones.ts`): two circling the mast, there like a site's when
+someone comes within ~500 m of the tower. Shot down, they **stay down**: no refill (unlike a site's, `REFILL_MS`) while
+anyone is still near. Once everyone has left (beyond ~700 m), the tower's drones come back on the next visit. Kept in
+memory like the site drones; nothing saved. Climbing the ladder with drones about is the danger (you can't shoot while
+climbing).
 
 ## Code (following the solar farms' and buildings' patterns)
 
 - `shared/towers.ts`: placement (cells, high ground, pad), the shape (legs, decks, ladder, slot spots, dish bearing),
-  `towersNear`, `towerLadder`, `towerGround`, `collideTowers`, `withTowerPad`, the signal source per tower.
+  `towersNear`, `towerLadder`, `towerGround`, `collideTowers`, `withTowerPad`.
 - `shared/sim.ts`: `PlayerState.climb`, the ladder in `step()`, the decks via `shared/levels.ts`' desert ground.
 - `shared/gear.ts` `GEAR.tower`; `shared/boxes.ts` / `shared/storage.ts` box kind `twr`; `shared/power.ts` `TOWER_W`.
-- `server/towers.ts`: the slots' boxes, alive or not (power from `server/power.ts`), the sources' state, the fatal
-  fall. `shared/protocol.ts`: which towers are alive, their sources.
+- `server/towers.ts`: the slots' boxes, alive or not (power from `server/power.ts`). `shared/protocol.ts`: which
+  towers are alive. `server/drones.ts`: the towers' drones (no refill while anyone is near).
 - `src/world/towers.ts`: the lattice (instanced bays, one far silhouette mesh), dishes, panels, cabinet, the lamp (an
   emissive blink, no real light), the slack and fitted states. `src/towerSound.ts`: the wind in the lattice, the
-  cabinet's hum, the transmission (synthesised, `docs/audio.md` levels). The locator's radio mark in `src/locator.ts`.
+  cabinet's hum, the radio muttering (synthesised, `docs/audio.md` levels).
 - Model: `tools/blender/tower.py` for the dishes, panels, cabinet and ladder cage; the lattice made in code
   (repeated bays).
 - Text: none needed beyond the parts panel's existing labels. Maybe a speech line or two (`docs/speech.md`): the
-  first time under one ("Long way up."), when the voice first comes through.
+  first time under one ("Long way up."), when the muttering first comes through.
 - F3: "Go to radio tower", "Fix nearest tower".
-- Test: `tools/towers.test.mjs`: climb up and down, stand on the decks, jump off, the fatal fall; fit every slot, wire
-  it, the source shows; loot it, the transmission stops.
+- Test: `tools/towers.test.mjs`: climb up and down, stand on the decks, jump off; fit every slot, wire it, it's alive;
+  take a part out, it's dead; the drones stay down until everyone has left.
 
 ## Order
 
 1. The towers standing (placement, pad, model, distance view, sound in the lattice).
-2. Climbing and the decks; the fatal fall.
-3. The slots and fixing; power; the lamp and the dish coming alive.
-4. The signal: transmission, the locator mark, the sources and their lockers.
+2. Climbing and the decks.
+3. The slots and fixing; power; the lamp and the dish coming alive; the radio muttering.
+4. The drones.
 
-## Open
+## Later
 
-- Should a fall from a tower kill, or just hurt (there's no fall damage yet)?
-- One source per tower for ever, or a new one now and then while it stays alive?
-- Is the uranium link wanted (towers as the second way to the bosses), or should the lockers hold other things?
-- Do drones roost on the towers at night (lift off when you climb)?
+- What the signal carries (a place to go, a locker, a link to the bosses' uranium).
