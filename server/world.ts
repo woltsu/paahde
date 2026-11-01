@@ -268,6 +268,8 @@ wss.on('connection', (ws) => {
     if (msg.t === 'beaconColor' && p) return onBeaconColor(p, msg.id, msg.color);
     if (msg.t === 'mount' && p) return onMount(p, msg.id);
     if (msg.t === 'unhitch' && p) return onUnhitch(p, msg.id);
+    if (msg.t === 'unfoldCart' && p) return onUnfoldCart(p, msg.id, msg.open);
+    if (msg.t === 'upgradeCart' && p) return onUpgradeCart(p, msg.id);
     if (msg.t === 'repairVehicle' && p) return onRepairVehicle(p, msg.id);
     if (msg.t === 'wire' && p) return onWire(p, msg.slot, msg.a, msg.b);
     if (msg.t === 'craft' && p) return onCraft(p, msg.recipe);
@@ -665,6 +667,22 @@ function onUnhitch(p: Player, id: unknown) {
   if (p.down || !p.ready) return;
   const r = vehicleSrv.unhitch(p.browserId, p.state, id);
   if (r !== true) send(p.ws, { t: 'notice', text: r });
+}
+
+/** Their own parked cart unfolded or packed, the cart key looking at it (server/vehicles.ts unfold). */
+function onUnfoldCart(p: Player, id: unknown, open: unknown) {
+  if (p.down || !p.ready) return;
+  const r = vehicleSrv.unfold(p.browserId, p.state, id, open);
+  if (r !== true) send(p.ws, { t: 'notice', text: r });
+}
+
+/** Their own parked cart a level up with the wrench, from the build menu (server/vehicles.ts upgrade). */
+function onUpgradeCart(p: Player, id: unknown) {
+  if (p.down || !p.ready) return;
+  const r = vehicleSrv.upgrade(p.browserId, p.state, id);
+  if (typeof r === 'string') return send(p.ws, { t: 'notice', text: r });
+  sendBox(p, 'bag');
+  gearChanged(p.browserId);
 }
 
 /** What casts shade on players besides the world (shared/shade.ts): everyone standing (shorter crouched) or riding

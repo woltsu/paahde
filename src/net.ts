@@ -563,6 +563,17 @@ export class Net {
     if (this.connected) this.send({ t: 'unhitch', id });
   }
 
+  /** Unfold (`open`) or pack our parked cart `id` (shared/cart.ts); the server answers 'vehicles' or a 'notice'. */
+  unfoldCart(id: number, open: boolean) {
+    if (this.connected) this.send({ t: 'unfoldCart', id, open });
+  }
+
+  /** Raise our parked cart `id` a level with the wrench (shared/crafting.ts CART_UPGRADES); answered 'vehicles' and the
+   *  bag, or a 'notice'. */
+  upgradeCart(id: number) {
+    if (this.connected) this.send({ t: 'upgradeCart', id });
+  }
+
   tend(bed: number) {
     if (this.connected) this.send({ t: 'tend', bed });
   }

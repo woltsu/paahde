@@ -2,6 +2,26 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — The cart, phase 2: unfold, upgrades, the canopy
+
+- **Why:** the cart becomes the camp (docs/cart.md): it unfolds where you leave it, levels up with the wrench, and from
+  level 1 it's shade. The benches themselves are phase 3.
+- **Unfold / pack:** the owner, on foot looking at their own cart let go of the bike, presses the rotate key (R, the
+  d-pad's left: free there, the hint says "Unfold" / "Pack"); not while it's linked to a bike, nor where the sand rises
+  over 0.4 m across its unfolded footprint. Unhitching leaves it packed; backing the bike up to it unfolded packs and
+  hitches it in one go (a `packBlocked` hook refuses both, for phase 3's busy benches). A first try had Unfold / Pack as
+  buttons in the cart's panel, then the cart unfolding by itself on unhitching: a key at the cart, no panel, won.
+- **Upgrades:** the build menu, wrench in hand by your own cart, offers the next level first: 1 shade (cloth 3, scrap 4),
+  2 workshop (scrap 12, wiring 1), `shared/tables.ts CART_TABLE`, spent from the bag onto `ItemData.level`. Never back.
+- **Canopy:** `tarpRig` generalised: a rig is a frame of any heading and shape (`rigFrame`, its inverse in the rig), so
+  the cart's canopy (pole tip to pole tip, low corners 2 m out either side at 1.95 m) is a tarp rig, and the sim's solid
+  canvas, the shade (`tarpRigs()`), the camera boom and the billow all apply. It comes from the vehicles list
+  (`setVehicles` → `setCarts`), so the server and clients agree. Parked carts are solid now (capsules, with the benches
+  when unfolded at level 2).
+- **Drawing and sound:** each hinge node eases between packed and unfolded over 1.5 s on its level's own clock; the
+  cart levels out on its stabilisers; the canopy shows once the poles are up. `src/cartSound.ts`: creaks, clanks, a knock.
+- **Test:** `tools/cart.test.mjs` (canopy shade at noon, landing on its canvas, the solid side; in the lab: owner-only
+  unfold/upgrade, refused while linked, without materials, past level 2; backing up to it unfolded packs and hitches).
 ## 2026-11-01 — The cart hangs from the bike's tow ball, and towing is felt
 
 - **Why:** played, the cart stayed on the sand when the bike jumped and sometimes looked unattached. It was posed from

@@ -1,6 +1,6 @@
 // Vertical capsules: the collision of what's built (walls, posts, the things put up with the wrench), shared by server
 // physics and client prediction. The shelters (shared/shelters.ts) collide with theirs in their own frame; the things
-// put up on the sand or a shelter's floor (shared/placed.ts setPlaced) are kept here in a grid of cells, in world
+// put up on the sand or a shelter's floor (shared/placed.ts setPlaced) and the parked carts (shared/cart.ts) are kept here in a grid of cells, in world
 // coordinates (collideOutdoor, in sim.ts step()), with their footprints on the sand where it's never dug (overPlaced).
 //
 // Same determinism rules as shared/scrap.ts: + - * /, Math.sqrt, Math.abs, Math.min/max, Math.floor only.
@@ -88,10 +88,26 @@ const OUT_CELL = 16;
 const OUT_MARGIN = 1;
 const outKey = (ix: number, iz: number) => ix * 65536 + iz;
 
+/** The placed things' capsules, and the parked carts' (shared/cart.ts setCarts), world coordinates. */
+let placedCaps: Capsule[] = [];
+let cartCaps: Capsule[] = [];
+
 /** The placed things' capsules (world) and their footprints on the sand (shared/placed.ts setPlaced). */
 export function setPlacedCapsules(out: Capsule[], spots: number[][] = []) {
+  placedCaps = out;
+  outdoorSpots = spots;
+  grid();
+}
+
+/** The parked carts' capsules (world; shared/cart.ts setCarts, from the vehicles list). */
+export function setCartCapsules(out: Capsule[]) {
+  cartCaps = out;
+  grid();
+}
+
+function grid() {
   outdoor = new Map();
-  for (const c of out) {
+  for (const c of [...placedCaps, ...cartCaps]) {
     const reach = c.half + c.r + OUT_MARGIN;
     for (let iz = Math.floor((c.z - reach) / OUT_CELL); iz <= Math.floor((c.z + reach) / OUT_CELL); iz++) {
       for (let ix = Math.floor((c.x - reach) / OUT_CELL); ix <= Math.floor((c.x + reach) / OUT_CELL); ix++) {
@@ -102,7 +118,6 @@ export function setPlacedCapsules(out: Capsule[], spots: number[][] = []) {
       }
     }
   }
-  outdoorSpots = spots;
 }
 
 /** True over something put up on the sand (shared/placed.ts) + margin: no digging, it would undermine it. */

@@ -13,8 +13,7 @@ import { isBound } from './bindings';
 import { tools } from './input';
 import { comfort, COMFORT_RANGES } from './comfort';
 import { groundAt, onFlat, solidAt } from './ground.ts';
-import { placed, TARP, type Placed } from '../shared/placed.ts';
-import { canvasYAt, TARP_HALF, tarpRig, type TarpRig } from '../shared/tarp.ts';
+import { canvasYAt, tarpRigs } from '../shared/tarp.ts';
 import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, slopeAt } from '../shared/sim.ts';
 import { CROUCH_CYCLE } from './models/crouchGait';
 import { EYE_HEIGHT } from '../shared/dig.ts'; // the dig and pickup rays start here too
@@ -343,16 +342,12 @@ function blocked(x: number, y: number, z: number): boolean {
   }
   return false;
 }
-/** The tarps' rigs (shared/tarp.ts), per placed thing. */
-const rigs = new WeakMap<Placed, TarpRig>();
-/** Would the camera at (px, py, pz) be on the other side of a tarp's canvas from the eye at (ex, ey, ez), or in it? Under
- *  the canvas is one side, everything else (over it, or out past its edge) the other; the canvas's edge counts as canvas,
+/** Would the camera at (px, py, pz) be on the other side of a tarp's (or a cart canopy's: shared/tarp.ts tarpRigs)
+ *  canvas from the eye at (ex, ey, ez), or in it? Under the canvas is one side, everything else (over it, or out past its edge) the other; the canvas's edge counts as canvas,
  *  which only shortens the boom there. */
 function tarpBetween(ex: number, ey: number, ez: number, px: number, py: number, pz: number): boolean {
-  for (const p of placed) {
-    if (p.kind !== TARP || Math.abs(p.x - px) > TARP_HALF + 4 || Math.abs(p.z - pz) > TARP_HALF + 4) continue;
-    let r = rigs.get(p);
-    if (!r) rigs.set(p, (r = tarpRig(p.x, p.z, p.rot)));
+  for (const r of tarpRigs()) {
+    if (Math.abs(r.cx - px) > r.reach + 4 || Math.abs(r.cz - pz) > r.reach + 4) continue;
     const ce = canvasYAt(r, ex, ez), cp = canvasYAt(r, px, pz);
     const eyeUnder = ey < ce, camUnder = py < cp - WALL_CLEARANCE;
     if (eyeUnder !== camUnder || Math.abs(py - cp) < WALL_CLEARANCE) return true;

@@ -13,13 +13,18 @@
 // cart's coupler hitches it (tryHitch(), each tick: the state is set as mount() sets it, the client reconciles). It stays
 // linked to that bike (`hitched`): getting off parks both, the cart behind (release()); getting back on tows it again
 // (mount()); F on its tongue on foot lets it go (unhitch()). Someone else getting on the bike it's linked to lets it go
-// too: only its owner tows it. Its box cargo<id> rides along.
+// too: only its owner tows it. Its box cargo<id> rides along. Its owner unfolds it, on foot looking at it, with the cart
+// key (unfold(): not linked to a bike, on sand level enough, shared/cart.ts unfoldError) and packs it with the same;
+// backing the bike up to it unfolded packs and hitches it in one go (tryHitch). Packing (and so that hitch) is
+// refused while `packBlocked` says so (phase 3's benches). Its owner raises its level with the wrench from the build menu (upgrade():
+// shared/crafting.ts CART_UPGRADES, ItemData.level on its item in veh<id>).
 import { cargoBox, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bikeLevel, GEAR, isVehicle, partsOf, repaired, scrapParts } from '../shared/gear.ts';
-import { partKind, type ItemData } from '../shared/items.ts';
+import { partKind, setData, type ItemData } from '../shared/items.ts';
+import { CART_UPGRADES, WRENCH } from '../shared/crafting.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
 import { arrivalBikeSpot, brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
-import { atTongue, backingUpTo, CART, cartLevel, hitchHeading, isCart, towedPose } from '../shared/cart.ts';
+import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCart, towedPose, unfoldError } from '../shared/cart.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import type { PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
@@ -55,6 +60,9 @@ export class VehicleServer {
   private src = new Map<number, string>();
   /** Whose each is (browser ID), if anyone's. */
   private owner = new Map<number, string>();
+  /** Why cart `id` can't be packed now (a machine on its table, a dismantling job running: phase 3, docs/cart.md), or
+   *  null. */
+  packBlocked: (id: number) => string | null = () => null;
   /** When the finds stood up are replaced (ms since epoch). */
   private due: number[] = [];
   private sites = coreCrashSites();
@@ -311,11 +319,11 @@ export class VehicleServer {
     const bike = this.ridden(rider);
     if (!bike || this.cartOn(bike.id)) return null;
     for (const c of vehicles) {
-      if (!isCart(c) || !parked(c) || c.open || this.owner.get(c.id) !== browserId || !backingUpTo(s, c)) continue;
+      if (!isCart(c) || !parked(c) || this.owner.get(c.id) !== browserId || !backingUpTo(s, c)) continue;
       const linked = c.hitched === undefined ? undefined : vehicles.find((b) => b.id === c.hitched);
       if (linked && !parked(linked)) continue;
       const hitch = hitchHeading(s, c);
-      if (hitch === null) continue;
+      if (hitch === null || this.pack(c)) continue; // (packed first: refused while its benches are busy)
       this.hitch(c.id, bike.id);
       this.update(c.id, { rider });
       return { ...s, tow: c.id, hitch };
@@ -333,6 +341,60 @@ export class VehicleServer {
     if (!atTongue(s, c, REACH_SLACK)) return TEXT.notice.tooFar;
     if (c.hitched !== undefined) this.hitch(c.id, undefined);
     return true;
+  }
+
+  /** Your own parked cart `id`, in reach of `s` on foot, or why not. */
+  private ownCart(browserId: string, s: PlayerState, id: unknown): Vehicle | string {
+    const c = vehicles.find((q) => q.id === id);
+    if (!c || !isCart(c)) return TEXT.notice.alreadyGone;
+    if (this.owner.get(c.id) !== browserId) return TEXT.notice.notYours;
+    if (s.riding || !parked(c)) return TEXT.notice.getOffFirst;
+    if (!inReach(s, c, REACH_SLACK)) return TEXT.notice.tooFar;
+    return c;
+  }
+
+  /** Player `browserId` at `s` (on foot) unfolds (`open`) or packs their parked cart `id` (the cart key, looking at it).
+   *  Unfolding refuses while it's linked to a bike or on sand too uneven (shared/cart.ts unfoldError); packing while
+   *  packBlocked says so. Returns true, or why not. */
+  unfold(browserId: string, s: PlayerState, id: unknown, open: unknown): true | string {
+    const c = this.ownCart(browserId, s, id);
+    if (typeof c === 'string') return c;
+    if (open !== true) return this.pack(c) ?? true;
+    if (c.open) return true;
+    const why = unfoldError(c);
+    if (why) return why === 'hitched' ? TEXT.notice.unhitchFirst : TEXT.notice.tooSteep;
+    this.db.openVehicle(c.id, true);
+    this.update(c.id, { open: true });
+    return true;
+  }
+
+  /** Cart `c` packed (to be hitched), or why not (packBlocked). */
+  private pack(c: Vehicle): string | null {
+    if (!c.open) return null;
+    const why = this.packBlocked(c.id);
+    if (why) return why;
+    this.db.openVehicle(c.id, false);
+    this.update(c.id, { open: false });
+    return null;
+  }
+
+  /** Player `browserId` at `s`, the wrench in their bag, raises their parked cart `id` a level (shared/crafting.ts
+   *  CART_UPGRADES), using up its materials from the bag. Returns the new level, or why not. */
+  upgrade(browserId: string, s: PlayerState, id: unknown): number | string {
+    const c = this.ownCart(browserId, s, id);
+    if (typeof c === 'string') return c;
+    if (!this.items.has(browserId, WRENCH)) return TEXT.notice.cantPlace;
+    const box = vehicleBox(c.id);
+    const level = cartLevel(this.items.slots('', box)[0]) + 1;
+    if (level > CART_MAX_LEVEL || !CART_UPGRADES[level]) return TEXT.notice.fullyBuilt;
+    const ok = this.db.tx(() => {
+      if (!this.items.useUp(browserId, CART_UPGRADES[level])) return false;
+      this.items.edit('', box, 0, (it) => (setData(it, 'level', level), true));
+      return true;
+    });
+    if (!ok) return TEXT.notice.missingMaterials;
+    this.refresh(box);
+    return level;
   }
 
   /** The bike player `rider` is riding, if any. */

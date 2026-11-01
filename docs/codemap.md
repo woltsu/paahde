@@ -248,13 +248,18 @@ Everything built is shared, and anyone can take a building down.
   chest with anything in it can't be taken down (server/world.ts onUnplace)
 - Vehicles — `shared/vehicles.ts` (the list, reach, `vehicleTarget`), `server/vehicles.ts` (`vehicles` table: broken
   motorcycles by the pods and at the crash sites, repair, `mount`/`release`, `mine` per player), drawn by
-  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). The cart (docs/cart.md; phase 1: level 0, its box): a
+  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). The cart (docs/cart.md; phases 1–2): a
   vehicle kind (`GEAR.cart`, no part slots, its level `ItemData.level` in box `veh<id>`, its box `cargo<id>` chest size)
   — `shared/cart.ts` (dimensions, `TOW_LENGTH`/`HITCH_BACK`/`HITCH_MAX`, `towHitch` the towing step, `towedPose`,
   `couplerOf`, `backingUpTo`, `cartTarget`, `CART_LEVEL_NODES`); towing in `shared/sim.ts` (`PlayerState.tow`/`hitch`,
   `stepBike`), poses carry them (`shared/network.ts`); server: `arriveCart` (one per player by their pod, grant `cart`),
   `tryHitch` (backing up, each tick from server/world.ts offBike), `unhitch`, `Vehicle.hitched`/`open` (columns);
-  drawn by `src/world/carts.ts` (`public/models/cart.glb` or a stand-in with the same nodes). Test `tools/cart.test.mjs`
+  drawn by `src/world/carts.ts` (`public/models/cart.glb` or a stand-in with the same nodes). Phase 2: `unfold`
+  (message `unfoldCart`, the rotate key looking at your own unlinked cart, src/main.ts), `upgrade` (`upgradeCart`, the
+  wrench's build menu by your cart; `shared/tables.ts` `CART_TABLE`, `shared/crafting.ts` `CART_UPGRADES`), `tryHitch`
+  packs an open cart (hook `packBlocked`); `shared/cart.ts` `unfoldError` (tilt), `canopyRig` (a tarp rig: shade, solid
+  canvas, billow), `cartCapsules` (parked carts are solid), `setCarts` (from `setVehicles`), `cartToWorld`; the hinge
+  animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Test `tools/cart.test.mjs`
 - `shared/garden.ts` — plant beds (stages, look target), owned by `server/garden.ts`; beds and UV lamps are placed
   things that stand on a shelter's floor only (not crafted for now)
 - `shared/trophies.ts` — the bosses' trophies, buildings like the others (kinds `trophy_<boss>`, `TROPHY_PLACEABLES` in

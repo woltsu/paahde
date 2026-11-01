@@ -18,6 +18,9 @@
 // the middle (taut edges curve in), by SCALLOP. On the ground the square stands as a diamond: the poles along the
 // tarp's own a (X in its frame), the low corners along b (Z), TARP_HALF out from the centre.
 //
+// A cart's canopy (shared/cart.ts canopyRig) is a rig too, of another shape at any heading (rigFrame): every tarp
+// function here takes either, and its canvas joins the tarps' in the sim and the shade (setCanopyRigs, tarpRigs).
+//
 // Deterministic: + - * / and heightAt only.
 import { heightAt } from './terrain.ts';
 
@@ -48,8 +51,14 @@ export type Vec = { x: number; y: number; z: number };
 /** A tarp as it stands: its two poles (foot and top), the canvas's corners in its square's order ((−1, −1) pole,
  *  (1, −1) low, (−1, 1) low, (1, 1) pole: index (s > 0) + 2·(t > 0)), and the lines from a pole or corner to a stake. */
 export type TarpRig = { poles: { foot: Vec; top: Vec }[]; corners: Vec[]; guys: { from: Vec; stake: Vec }[];
-  /** Turned frame: world (x, z) = centre + a·(ax, az) + b·(bx, bz), a and b ∈ [−1, 1] (×TARP_HALF m). */
-  cx: number; cz: number; ax: number; az: number; bx: number; bz: number };
+  /** Its frame, any heading and shape: world (x, z) = centre + a·(ax, az) + b·(bx, bz), a and b ∈ [−1, 1]: (ax, az)
+   *  from the centre to a pole's corner, (bx, bz) to a low corner (a tarp's at right angles, both TARP_HALF long; a cart's
+   *  canopy, shared/cart.ts canopyRig, a parallelogram at the cart's heading). (iax, iaz) and (ibx, ibz) take a world
+   *  offset back to a and b (the frame's inverse). */
+  cx: number; cz: number; ax: number; az: number; bx: number; bz: number; iax: number; iaz: number; ibx: number; ibz: number;
+  /** How far it sags (m) mid-way between its corners; how far its corners reach from the centre (m, on either axis: the
+   *  sim's quick test). */
+  sag: number; reach: number };
 
 /** Turn `rot` (quarter turns) of a point in the tarp's frame, about its centre: world offset. Matches three.js's
  *  rotation.y = rot·π/2 and shared/placed.ts worldBoxes. */
@@ -60,6 +69,14 @@ function turn(rot: number, a: number, b: number): [number, number] {
     case 3: return [-b, a];
     default: return [a, b];
   }
+}
+
+/** A rig's frame from its centre and its a and b axes (world offsets to a pole's corner and a low corner: any heading,
+ *  b turned from a the way +X turns to +Z) and its sag: everything but its corners, poles and lines. + - * / only. */
+export function rigFrame(cx: number, cz: number, ax: number, az: number, bx: number, bz: number, sag = TARP_SAG) {
+  const det = ax * bz - bx * az;
+  const ra = Math.max(Math.abs(ax), Math.abs(az)), rb = Math.max(Math.abs(bx), Math.abs(bz));
+  return { cx, cz, ax, az, bx, bz, iax: bz / det, iaz: -bx / det, ibx: -az / det, ibz: ax / det, sag, reach: ra > rb ? ra : rb };
 }
 
 /** The rig of a tarp at (x, z) turned `rot`, in world coordinates. `ground`: the sand's height (flat for an icon). */
@@ -84,7 +101,7 @@ export function tarpRig(x: number, z: number, rot: number, ground: (x: number, z
     }
   }
   for (const [i, side] of [[1, -1], [2, 1]]) guys.push({ from: corners[i], stake: at(0, side * (1 + LOW_OUT / TARP_HALF), 0) });
-  return { poles, corners, guys, cx: x, cz: z, ax, az, bx, bz };
+  return { poles, corners, guys, ...rigFrame(x, z, ax, az, bx, bz) };
 }
 
 /** Where a tarp at (x, z) turned `rot` stands on the sand (world x, z): its centre, its poles' feet and its low corners. */
@@ -100,7 +117,7 @@ function surface(r: TarpRig, s: number, t: number): number {
   const [c00, c10, c01, c11] = r.corners;
   const u = (s + 1) / 2, v = (t + 1) / 2;
   const y = (c00.y * (1 - u) + c10.y * u) * (1 - v) + (c01.y * (1 - u) + c11.y * u) * v;
-  return y - TARP_SAG * (1 - s * s * t * t);
+  return y - r.sag * (1 - s * s * t * t);
 }
 
 /** A point of the canvas at (u, v) ∈ [0, 1]² of its square (u along s, v along t), without the wind. */
@@ -117,8 +134,8 @@ export function canvasAt(r: TarpRig, u: number, v: number, out: Vec = { x: 0, y:
 
 /** The canvas's height (without the wind) over world (x, z), or NaN outside it. */
 export function canvasYAt(r: TarpRig, x: number, z: number): number {
-  const h2 = TARP_HALF * TARP_HALF, dx = x - r.cx, dz = z - r.cz;
-  const a = (dx * r.ax + dz * r.az) / h2, b = (dx * r.bx + dz * r.bz) / h2;
+  const dx = x - r.cx, dz = z - r.cz;
+  const a = dx * r.iax + dz * r.iaz, b = dx * r.ibx + dz * r.ibz;
   const s = a - b, t = a + b;
   const as = s < 0 ? -s : s, at = t < 0 ? -t : t;
   if (as > 1 - SCALLOP * (1 - t * t) || at > 1 - SCALLOP * (1 - s * s)) return NaN;
@@ -167,22 +184,35 @@ export function tarpBoxes(): { x0: number; x1: number; y0: number; y1: number; z
 
 // The canvas is solid to the sim (shared/levels.ts desertLevel's ground and ceiling, so client prediction and the server
 // agree): feet that were on or over it stand on it; a head that was under it stops at it (a jump from underneath).
-// The rigs of every tarp standing, set by shared/placed.ts setPlaced; tested only within the tarp's square.
+// The rigs of every tarp standing, set by shared/placed.ts setPlaced, and of every cart's canopy put up (shared/cart.ts
+// setCarts, from the vehicles list: the same on server and client); tested only within the rig's reach.
+let placedRigs: TarpRig[] = [];
+let canopyRigs: TarpRig[] = [];
 let rigs: TarpRig[] = [];
 /** Feet this far under the canvas a tick ago still land on it; a head this far over it still bumps it (m). */
 const SKIN = 0.3;
 
 /** The tarps standing now (shared/placed.ts setPlaced). */
 export function setTarpRigs(list: TarpRig[]) {
-  rigs = list;
+  placedRigs = list;
+  rigs = [...placedRigs, ...canopyRigs];
 }
+
+/** The carts' canopies up now (shared/cart.ts setCarts). */
+export function setCanopyRigs(list: TarpRig[]) {
+  canopyRigs = list;
+  rigs = [...placedRigs, ...canopyRigs];
+}
+
+/** Every canvas up now: the tarps', then the carts' canopies (shared/shade.ts). */
+export const tarpRigs = (): readonly TarpRig[] => rigs;
 
 /** The canvas under (x, z) for feet that were at `prevY`: the highest it's at under them (they were on or over it), or
  *  -Infinity. */
 export function tarpGround(x: number, z: number, prevY: number): number {
   let best = -Infinity;
   for (const r of rigs) {
-    if (Math.abs(x - r.cx) > TARP_HALF || Math.abs(z - r.cz) > TARP_HALF) continue;
+    if (Math.abs(x - r.cx) > r.reach || Math.abs(z - r.cz) > r.reach) continue;
     const y = canvasYAt(r, x, z);
     if (y > best && prevY >= y - SKIN) best = y;
   }
@@ -194,7 +224,7 @@ export function tarpGround(x: number, z: number, prevY: number): number {
 export function tarpSlope(x: number, y: number, z: number, out: { gx: number; gz: number }): boolean {
   const d = 0.1;
   for (const r of rigs) {
-    if (Math.abs(x - r.cx) > TARP_HALF || Math.abs(z - r.cz) > TARP_HALF) continue;
+    if (Math.abs(x - r.cx) > r.reach || Math.abs(z - r.cz) > r.reach) continue;
     const c = canvasYAt(r, x, z);
     if (!(Math.abs(y - c) < 0.05)) continue;
     // Central differences, one-sided at the edge (NaN past it).
@@ -211,7 +241,7 @@ export function tarpSlope(x: number, y: number, z: number, out: { gx: number; gz
 export function tarpCeiling(x: number, z: number, prevY: number, height: number): number {
   let low = Infinity;
   for (const r of rigs) {
-    if (Math.abs(x - r.cx) > TARP_HALF || Math.abs(z - r.cz) > TARP_HALF) continue;
+    if (Math.abs(x - r.cx) > r.reach || Math.abs(z - r.cz) > r.reach) continue;
     const y = canvasYAt(r, x, z);
     if (prevY + height <= y + SKIN && y - height < low) low = y - height;
   }

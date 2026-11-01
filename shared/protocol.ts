@@ -74,6 +74,11 @@ export type ClientMsg =
   // Let your own cart `id` go from the bike it's linked to (shared/cart.ts): on foot, at its tongue. Answered with
   // 'vehicles', or a 'notice'. (Hitching has no message: backing the bike up to it does, server/vehicles.ts tryHitch.)
   | { t: 'unhitch'; id: number }
+  // Your own parked cart `id` (in reach, on foot): unfold it (`open`; not while it's linked to a bike) or pack it, the
+  // cart key looking at it; or raise it a level with the wrench in the bag (the build menu; shared/crafting.ts
+  // CART_UPGRADES, its materials from the bag). Answered with 'vehicles' (and the bag), or a 'notice'.
+  | { t: 'unfoldCart'; id: number; open: boolean }
+  | { t: 'upgradeCart'; id: number }
   // Craft a recipe at the workbench (shared/crafting.ts RECIPES id): reach checked, ingredients used up from
   // the bag, answered with 'items' (got: what was made) or a 'notice'.
   | { t: 'craft'; recipe: string }

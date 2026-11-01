@@ -173,8 +173,12 @@ function colour(g: THREE.BufferGeometry, hex?: number): THREE.BufferGeometry {
 /** A tarp at (x, y, z) turned `rot` (y: what shared/placed.ts placedY says it stands on), as a group placed there.
  *  `id` varies its waves; `flat` stands it on level ground at y (the icon). */
 export function tarpModel(x: number, y: number, z: number, rot: number, id = 0, flat = false): THREE.Group {
-  const o = { x, y, z };
-  const r = flat ? tarpRig(x, z, rot, () => y) : tarpRig(x, z, rot);
+  return rigModel(flat ? tarpRig(x, z, rot, () => y) : tarpRig(x, z, rot), { x, y, z }, id);
+}
+
+/** Any rig (a tarp's, a cart's canopy: shared/cart.ts canopyRig) as a group placed at `o`, the geometry relative to it:
+ *  the canvas, its poles (a canopy has none: the cart's are its model's) and its lines. `id` varies its waves. */
+export function rigModel(r: TarpRig, o: Vec, id = 0): THREE.Group {
   const canvas = new THREE.Mesh(canvasGeometry(r, o, (id * 2.399) % (2 * Math.PI)), canvasMaterial());
   canvas.name = 'tarp_canvas';
   canvas.castShadow = canvas.receiveShadow = true;
@@ -198,15 +202,21 @@ export function tarpModel(x: number, y: number, z: number, rot: number, id = 0, 
     const top = { x: gy.stake.x + (dx / l) * 0.08, y: gy.stake.y + 0.24, z: gy.stake.z + (dz / l) * 0.08 };
     rig.push(rod({ ...gy.stake, y: gy.stake.y - 0.1 }, top, o, 0.016, 0.022, 4, STAKE));
   }
-  const body = new THREE.Mesh(mergeGeometries(rig.map((g) => (g.deleteAttribute('uv'), g))), rigMaterial());
-  body.name = 'tarp_rig';
-  body.castShadow = body.receiveShadow = true;
-  const lines = new THREE.Mesh(mergeGeometries(ropes.map((g) => (g.deleteAttribute('uv'), g))), ropeMaterial());
-  lines.name = 'tarp_lines';
-  lines.castShadow = false;
-  lines.receiveShadow = true;
   const grp = new THREE.Group();
-  grp.position.set(x, y, z);
-  grp.add(canvas, body, lines);
+  grp.position.set(o.x, o.y, o.z);
+  grp.add(canvas);
+  if (rig.length) {
+    const body = new THREE.Mesh(mergeGeometries(rig.map((g) => (g.deleteAttribute('uv'), g))), rigMaterial());
+    body.name = 'tarp_rig';
+    body.castShadow = body.receiveShadow = true;
+    grp.add(body);
+  }
+  if (ropes.length) {
+    const lines = new THREE.Mesh(mergeGeometries(ropes.map((g) => (g.deleteAttribute('uv'), g))), ropeMaterial());
+    lines.name = 'tarp_lines';
+    lines.castShadow = false;
+    lines.receiveShadow = true;
+    grp.add(lines);
+  }
   return grp;
 }

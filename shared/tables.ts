@@ -91,6 +91,18 @@ export const BUILD_TABLE: Record<string, IngredientSpec[]> = {
   well: [SCRAP(12), WIRING(3)],
 };
 
+/** The cart's levels (shared/cart.ts, docs/cart.md), raised with the wrench by your own parked cart from the build menu
+ *  (shared/crafting.ts CART_UPGRADES, server/vehicles.ts upgrade): level → its base materials, used up as it goes on.
+ *  Never given back (the cart isn't taken down). */
+export const CART_TABLE: Record<number, IngredientSpec[]> = {
+  // Shade: a tarp's worth of canvas (HAND_TABLE.tarp) on two scrap poles that swing up off the bed, the corner
+  // stabilisers that let down to hold it still.
+  1: [CLOTH(3), SCRAP(4)],
+  // Workshop: the fold-out sides, a workbench on one and a dismantling table on the other (the two benches' scrap,
+  // BUILD_TABLE.workbench and .dismantle_bench, less the frame they share with the cart; the bench's lamp wired in).
+  2: [SCRAP(12), WIRING(1)],
+};
+
 // ---------------------------------------------------------------------------------------------------------------
 // Taking things apart (shared/parts.ts rollParts). Each yield rolls min..max of that part, each at a tier from
 // tierWeights. Keep the order of yields: the rolls go in order, so inserting one reshuffles everything after it.

@@ -5,11 +5,16 @@
 // the node contract in docs/cart.md; until it's there (or if it fails to load) a stand-in built here with the same
 // nodes and pivots, so swapping the glb in changes nothing else. The wheels spin with the ground covered, the stand
 // under the tongue swings down when it's let go of the bike (no `hitched`), and the pieces of a level not reached
-// (shared/cart.ts CART_LEVEL_NODES) are hidden.
+// (shared/cart.ts CART_LEVEL_NODES) are hidden. Unfolded (Vehicle.open) its hinge nodes turn out over UNFOLD_S, each
+// level's on its own clock (FOLD: docs/cart.md's table), so a level raised while it's out unfolds its new pieces; from
+// level 1 it's levelled on its stabilisers and, once the poles are up, the canopy (shared/cart.ts canopyRig) is drawn
+// by src/world/tarps.ts, as the sim and the shade have it. Unfolding and packing are heard (src/cartSound.ts).
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose } from '../../shared/cart.ts';
+import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
 import { hangCart, newHang, type Hang } from '../../shared/cartHang.ts';
+import { cartSound } from '../cartSound';
+import { rigModel } from './tarps.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { heightAt } from '../../shared/terrain.ts';
 import { parked, type Vehicle } from '../../shared/vehicles.ts';
@@ -25,6 +30,24 @@ const STAND_RATE = 4;
  *  was last drawn this long (s), then is hidden. */
 const HOLD_S = 0.6;
 
+const DEG = Math.PI / 180;
+/** Each hinge node unfolded (docs/cart.md "As built"): its level, the share [from, to] of that level's unfolding it
+ *  moves in, and where it goes (a rotation about x or z from its rest pose, rad, or `legs`' slide down, m). */
+const FOLD: { name: string; level: number; from: number; to: number; rx?: number; rz?: number; dy?: number }[] = [
+  { name: 'lid', level: 0, from: 0, to: 0.5, rx: -100 * DEG },
+  { name: 'legs', level: 1, from: 0, to: 0.4, dy: -0.46 },
+  { name: 'pole_a', level: 1, from: 0.35, to: 1, rx: -90 * DEG },
+  { name: 'pole_b', level: 1, from: 0.35, to: 1, rx: 90 * DEG },
+  { name: 'side_l', level: 2, from: 0, to: 0.6, rz: 90 * DEG },
+  { name: 'side_r', level: 2, from: 0, to: 0.6, rz: -90 * DEG },
+  { name: 'leg_l', level: 2, from: 0.5, to: 1, rz: -90 * DEG },
+  { name: 'leg_r', level: 2, from: 0.5, to: 1, rz: 90 * DEG },
+];
+const ease = (t: number, a = 0, b = 1) => {
+  const u = Math.min(1, Math.max(0, (t - a) / (b - a)));
+  return u * u * (3 - 2 * u);
+};
+
 /** Who's towing: an id, where they are and their bike's heading, and the cart's (PlayerState.hitch); `at`, the tow ball
  *  where their bike is drawn (src/bike.ts hitchAt) and `pitch`, the bike's drawn pitch, when it is drawn. */
 export type Tower = { id: number; tow: number; x: number; y: number; z: number; heading: number; hitch: number;
@@ -39,6 +62,12 @@ type Shown = {
   coupler: THREE.Vector3;
   /** Towed: how it hangs from the tow ball (reset while it isn't towed). */
   hang: Hang;
+  /** Parked: the sand's tilt under it along and across (rad), eased out as it's levelled on its stabilisers. */
+  slopeX: number; slopeZ: number;
+  /** Each level's unfolding, 0 packed .. 1 out; what it's heading for (undefined: not seen yet). */
+  fold: number[]; want: number[] | undefined;
+  nodes: { n: THREE.Object3D; f: (typeof FOLD)[number]; y0: number }[];
+  canopy: THREE.Group | null; canopyKey: string;
 };
 
 let template: Promise<THREE.Object3D> | undefined;
@@ -149,11 +178,12 @@ export class CartView {
         s.hang.ay = NaN;
         this.place(s, pose);
       }
-      this.pieces(s, v, dt);
+      this.pieces(s, v, dt, !!t);
     }
     for (const [id, s] of this.shown) {
       if (seen.has(id)) continue;
       this.group.remove(s.obj);
+      this.dropCanopy(s);
       this.shown.delete(id);
     }
   }
@@ -165,7 +195,8 @@ export class CartView {
     obj.add(tilt);
     this.group.add(obj);
     const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0,
-      coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang() };
+      coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang(), slopeX: 0, slopeZ: 0,
+      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '' };
     loadCart().then((t) => {
       const m = t.clone(true);
       m.traverse((o) => {
@@ -180,6 +211,10 @@ export class CartView {
         m.updateMatrixWorld(true);
         c.getWorldPosition(s.coupler);
       }
+      s.nodes = FOLD.flatMap((f) => {
+        const n = m.getObjectByName(f.name);
+        return n ? [{ n, f, y0: n.position.y }] : [];
+      });
       s.level = -1;
       tilt.add(m);
     }, () => {});
@@ -192,8 +227,16 @@ export class CartView {
     s.obj.position.set(p.x, p.y, p.z);
     s.obj.rotation.y = p.heading;
     const g = slopeAt(p.x, p.z, tmpSlope);
-    s.tilt.rotation.x = Math.atan(-g.gx * Math.sin(p.heading) - g.gz * Math.cos(p.heading));
-    s.tilt.rotation.z = Math.atan(g.gx * Math.cos(p.heading) - g.gz * Math.sin(p.heading));
+    s.slopeX = Math.atan(-g.gx * Math.sin(p.heading) - g.gz * Math.cos(p.heading));
+    s.slopeZ = Math.atan(g.gx * Math.cos(p.heading) - g.gz * Math.sin(p.heading));
+  }
+
+  private dropCanopy(s: Shown) {
+    if (!s.canopy) return;
+    this.group.remove(s.canopy);
+    s.canopy.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+    s.canopy = null;
+    s.canopyKey = '';
   }
 
   /** The wheels roll with the ground the axle covers along its heading. */
@@ -222,12 +265,39 @@ export class CartView {
     this.roll(s, { x: g.axle.x, y: g.axle.y - CART_WHEEL_R, z: g.axle.z, heading: g.psi });
   }
 
-  /** The stand and the level's pieces. */
-  private pieces(s: Shown, v: Vehicle, dt: number) {
-    const want = v.hitched !== undefined ? 0 : STAND_DOWN;
-    s.standAngle += (want - s.standAngle) * Math.min(1, dt * STAND_RATE);
+  /** The stand and the level's pieces: unfolding, each level's pieces out while it's open and reached (a change heard,
+   *  not on first sight); parked, levelled on its stabilisers as they come down; the canopy once the poles are up. */
+  private pieces(s: Shown, v: Vehicle, dt: number, towed: boolean) {
+    const down = v.hitched !== undefined ? 0 : STAND_DOWN;
+    s.standAngle += (down - s.standAngle) * Math.min(1, dt * STAND_RATE);
     if (s.stand) s.stand.rotation.x = s.standAngle;
     const level = v.level ?? 0;
+    const want = [0, 1, 2].map((l) => (v.open && level >= l ? 1 : 0));
+    if (s.want && want.some((w, l) => w !== s.want![l])) cartSound.play(v.x, v.z, !v.open);
+    if (!s.want) s.fold = [...want];
+    s.want = want;
+    for (let l = 0; l < 3; l++) {
+      const d = want[l] - s.fold[l];
+      s.fold[l] += Math.sign(d) * Math.min(Math.abs(d), dt / UNFOLD_S);
+    }
+    for (const { n, f, y0 } of s.nodes) {
+      const t = ease(s.fold[f.level], f.from, f.to);
+      if (f.rx !== undefined) n.rotation.x = f.rx * t;
+      if (f.rz !== undefined) n.rotation.z = f.rz * t;
+      if (f.dy !== undefined) n.position.y = y0 + f.dy * t;
+    }
+    if (!towed) {
+      const lift = 1 - ease(s.fold[1], 0, 0.4);
+      s.tilt.rotation.x = lift * s.slopeX;
+      s.tilt.rotation.z = lift * s.slopeZ;
+    }
+    // The canopy, once its poles are up.
+    const key = v.open && level >= 1 && s.fold[1] >= 1 ? `${v.x},${v.y},${v.z},${v.heading}` : '';
+    if (key !== s.canopyKey) {
+      this.dropCanopy(s);
+      s.canopyKey = key;
+      if (key) this.group.add((s.canopy = rigModel(canopyRig(v), { x: v.x, y: v.y, z: v.z }, v.id)));
+    }
     if (s.model && s.level !== level) {
       s.level = level;
       for (const [name, at] of Object.entries(CART_LEVEL_NODES)) {

@@ -1,7 +1,9 @@
 // The build menu (the right mouse with the wrench in hand, src/placing.ts): every building (shared/crafting.ts BUILDS; the
 // bosses' trophies once they're won, shared/trophies.ts) with what it takes of the base materials and what the bag has. Picking one puts its preview on the crosshair to put
-// up; picking it again puts the wrench back to just a wrench. The mouse is freed like the inventory (ui.inventoryOpen).
-import { BUILDS, countMatching } from '../shared/crafting.ts';
+// up; picking it again puts the wrench back to just a wrench. By your own parked cart it offers the cart's next level
+// first (shared/crafting.ts CART_UPGRADES): picking that raises it there and then. The mouse is freed like the inventory
+// (ui.inventoryOpen).
+import { BUILDS, CART_UPGRADES, countMatching, type Recipe } from '../shared/crafting.ts';
 import type { Slots } from '../shared/items.ts';
 import { ctl, isBound } from './bindings';
 import { ui } from './input';
@@ -66,8 +68,9 @@ export class BuildMenu {
   }
 
   /** Open it over the game: `bag` for what there is, `chosen` the building picked now (or null), `pick` called with
-   *  the one clicked (null: the chosen one again, to put it away). */
-  open(bag: Slots, chosen: string | null, pick: (kind: string | null) => void) {
+   *  the one clicked (null: the chosen one again, to put it away). `cart`: our own cart in reach, its next level to
+   *  raise it to and what to do when that's picked. */
+  open(bag: Slots, chosen: string | null, pick: (kind: string | null) => void, cart?: { level: number; raise: () => void }) {
     const p = this.panel;
     p.replaceChildren();
     const title = document.createElement('h3');
@@ -75,14 +78,30 @@ export class BuildMenu {
     const grid = document.createElement('div');
     grid.className = 'grid';
     p.append(title, grid);
-    for (const [kind, r] of Object.entries(BUILDS)) {
-      if (!this.available(kind) && kind !== chosen) continue;
+    const needsHtml = (r: Recipe) => {
       let ready = true;
-      const needs = r.needs.map((ing) => {
+      const html = r.needs.map((ing) => {
         const have = countMatching(bag, ing);
         ready &&= have >= ing.n;
         return `<span class="${have >= ing.n ? 'ok' : 'short'}">${ing.label} ${have}/${ing.n}</span>`;
       }).join('<br>');
+      return { ready, html };
+    };
+    const up = cart && CART_UPGRADES[cart.level];
+    if (cart && up) {
+      const { ready, html } = needsHtml(up);
+      const b = document.createElement('button');
+      b.disabled = !ready;
+      b.innerHTML = `<div class="ico">${itemIcon(up.makes)}</div><div class="name">${TEXT.cartLevels[cart.level]}</div><div class="need">${html}</div>`;
+      b.addEventListener('click', () => {
+        this.close();
+        cart.raise();
+      });
+      grid.append(b);
+    }
+    for (const [kind, r] of Object.entries(BUILDS)) {
+      if (!this.available(kind) && kind !== chosen) continue;
+      const { ready, html: needs } = needsHtml(r);
       const b = document.createElement('button');
       b.className = kind === chosen ? 'sel' : '';
       // The chosen one stays clickable, to put it away.

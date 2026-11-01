@@ -1,7 +1,10 @@
 // The cart (shared/cart.ts, docs/cart.md phase 1): towing is in the shared sim and deterministic (the server's step and
 // the client's replay from the state it is sent agree); in a real world, your own cart stands by you, backing the bike up
 // to it hitches it, getting off parks both still linked, getting back on tows it again, F at its tongue on foot lets it
-// go, its box keeps what's in it wherever it went, and nobody else can tow it or let it go.
+// go, its box keeps what's in it wherever it went, and nobody else can tow it or let it go. Phase 2: parked it's solid;
+// unfolded at level 1 its canopy shades and holds you up like a tarp's; its owner unfolds and packs it (the cart key),
+// not while it's linked to a bike, and backing up to it unfolded packs and hitches it; the wrench raises its level from
+// the bag's materials, only its owner's, never past 2.
 // Run with: node --test tools/cart.test.mjs
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
@@ -11,7 +14,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import WebSocket from 'ws';
-import { cartAxle, couplerOf, HITCH_BACK, HITCH_MAX, hitchPoint, TOW_LENGTH, towedPose } from '../shared/cart.ts';
+import { canopyRig, cartAxle, cartToWorld, couplerOf, HITCH_BACK, HITCH_MAX, hitchPoint, TOW_LENGTH, towedPose } from '../shared/cart.ts';
+import { CART_TABLE } from '../shared/tables.ts';
+import { inSun, sunDirection } from '../shared/shade.ts';
+import { canvasYAt } from '../shared/tarp.ts';
+import { heightAt } from '../shared/terrain.ts';
+import { setVehicles } from '../shared/vehicles.ts';
 import { PROTOCOL_VERSION } from '../shared/protocol.ts';
 import { BACK, BIKE, CROUCH, FORWARD, LEFT, quantizeYaw, RIGHT, spawnState, step } from '../shared/sim.ts';
 import { TEXT } from '../shared/text.ts';
@@ -71,6 +79,44 @@ test('the axle follows the hitch point at the tongue\'s length, never past the j
   assert.equal(off.hitch, s.hitch);
 });
 
+const cartAt = (x, z, heading, extra) => ({ id: 1, kind: 'cart', x, y: heightAt(x, z), z, heading, up: true, parts: [], level: 0, open: false, ...extra });
+
+test('unfolded at level 1, its canopy shades a point under it at noon, and the sim stands you on the canvas', () => {
+  const v = cartAt(3200, 3100, 0.7, { level: 1, open: true });
+  const r = canopyRig(v);
+  // A chest-high point whose ray to the noon sun passes through the canopy's middle.
+  const d = sunDirection(0.5), cy = canvasYAt(r, v.x, v.z), py = v.y + 1.2, t = (cy - py) / d.y;
+  const px = v.x - d.x * t, pz = v.z - d.z * t;
+  setVehicles([{ ...v, open: false }]);
+  assert.ok(inSun(px, py, pz, 0.5), 'in the sun while it is packed');
+  setVehicles([v]);
+  assert.ok(!inSun(px, py, pz, 0.5), 'in its shade unfolded');
+  // Dropped onto the canvas beside the poles, over a low corner's side: it lands on it.
+  const at = cartToWorld(v, 1.2, 0), c = canvasYAt(r, at.x, at.z);
+  assert.ok(c > v.y + 1.9, `the canvas is over a head there (${c - v.y})`);
+  let s = { ...spawnState(at.x, at.z, c + 0.6), grounded: false };
+  for (let i = 0; i < 60 && !s.grounded; i++) s = step(s, 0, quantizeYaw(0));
+  assert.ok(s.grounded && Math.abs(s.y - c) < 0.05, `landed on the canvas: ${s.y} vs ${c}`);
+  // Packed, the same drop goes through to the sand.
+  setVehicles([{ ...v, open: false }]);
+  s = { ...spawnState(at.x, at.z, c + 0.6), grounded: false };
+  for (let i = 0; i < 120 && !s.grounded; i++) s = step(s, 0, quantizeYaw(0));
+  assert.ok(s.y < v.y + 0.5, 'no canvas packed');
+  setVehicles([]);
+});
+
+test('a parked cart is solid: walking into its side stops at it', () => {
+  const v = cartAt(3300, 3100, 1.1);
+  setVehicles([v]);
+  const from = cartToWorld(v, -2.5, 0), to = cartToWorld(v, 2.5, 0);
+  const yaw = Math.atan2(-(to.x - from.x), -(to.z - from.z));
+  let s = spawnState(from.x, from.z);
+  for (let i = 0; i < 90; i++) s = step(s, FORWARD, quantizeYaw(yaw));
+  const lx = (s.x - v.x) * Math.cos(v.heading) - (s.z - v.z) * Math.sin(v.heading);
+  assert.ok(lx < -0.9, `stopped beside it (${lx})`);
+  setVehicles([]);
+});
+
 // ---- A real world (the lab) ------------------------------------------------------------------------------------------
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -122,7 +168,7 @@ class Client {
   }
 }
 
-test('a cart of your own: hitch by backing up, park and remount still linked, unhitch at the tongue, the box rides along, nobody else tows it', { timeout: 120_000 }, async (t) => {
+async function lab(t) {
   const dir = await mkdtemp(join(tmpdir(), 'paahde-cart-'));
   const child = fork(new URL('../server/world.ts', import.meta.url), {
     env: { ...process.env, WORLD_ID: 'lab', DADAJAM_LAB: '1', DB_PATH: join(dir, 'world.db'), TELEMETRY_PATH: join(dir, 'trace.jsonl') },
@@ -141,6 +187,11 @@ test('a cart of your own: hitch by backing up, park and remount still linked, un
     child.on('message', (m) => { if (m.t === 'port') { clearTimeout(timer); resolve(m.port); } });
     child.once('exit', (code) => { clearTimeout(timer); reject(new Error(`world exited ${code}: ${output}`)); });
   });
+  return { port, peers, output: () => output };
+}
+
+test('a cart of your own: hitch by backing up, park and remount still linked, unhitch at the tongue, the box rides along, nobody else tows it', { timeout: 120_000 }, async (t) => {
+  const { port, peers, output } = await lab(t);
   const me = new Client(port, 'Hauler'); peers.push(me);
   await me.join();
 
@@ -252,5 +303,110 @@ test('a cart of your own: hitch by backing up, park and remount still linked, un
   assert.equal(other.state.tow, 0, 'not towed by someone else');
   assert.equal(other.vehicle(cartId).rider, undefined);
   assert.equal(other.vehicle(cartId).hitched, undefined);
-  assert.equal(me.ws.readyState, WebSocket.OPEN, output);
+  assert.equal(me.ws.readyState, WebSocket.OPEN, output());
+});
+
+test('unfold and pack (owner only, not while linked), backing up to it unfolded packs and hitches it, the wrench raises its level from the bag', { timeout: 120_000 }, async (t) => {
+  const { port, peers, output } = await lab(t);
+  const me = new Client(port, 'Owner'); peers.push(me);
+  await me.join();
+  const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
+  const cart0 = me.vehicle(cartId);
+  assert.equal(cart0.open, false, 'it stands packed');
+  const side = cartToWorld(cart0, 1.9, 0);
+  await me.walkTo(side.x, side.z, 0.4);
+  const count = (kind) => me.items('bag').reduce((n, it) => n + (it?.kind === kind ? it.n : 0), 0);
+  /** Send `m` and wait for the bag or a notice: the notice's text, if one came. */
+  const answer = async (m) => {
+    const n = me.messages.length;
+    me.send(m);
+    await until(() => me.messages.slice(n).some((x) => (x.t === 'items' && x.box === 'bag') || x.t === 'notice'), 3000, `answer to ${m.t}`);
+    await sleep(80);
+    return me.messages.slice(n).find((x) => x.t === 'notice')?.text;
+  };
+
+  // Someone else: not theirs to unfold or build on.
+  const other = new Client(port, 'Stranger'); peers.push(other);
+  await other.join();
+  const far = cartToWorld(cart0, -1.9, 0);
+  await other.walkTo(far.x, far.z, 0.4);
+  assert.equal(await other.notice({ t: 'unfoldCart', id: cartId, open: true }), TEXT.notice.notYours);
+  other.send({ t: 'debugGive', kind: 'wrench' });
+  await sleep(200);
+  assert.equal(await other.notice({ t: 'upgradeCart', id: cartId }), TEXT.notice.notYours);
+  assert.equal(other.vehicle(cartId).open, false);
+
+  // Upgrades: everything but the wrench out of the lab's full bag into the cart's box first (the materials too:
+  // refused), then the materials given.
+  if (!count('wrench')) await answer({ t: 'debugGive', kind: 'wrench' });
+  const box = `cargo${cartId}`;
+  for (let k = 0; k < 60; k++) {
+    const fi = me.items('bag').findIndex((it) => it && it.kind !== 'wrench');
+    if (fi < 0) break;
+    const n = me.messages.length;
+    me.send({ t: 'move', from: 'bag', fi, to: box, ti: -1 });
+    await until(() => me.messages.slice(n).some((m) => m.t === 'items' && m.box === 'bag'), 3000, 'stowed');
+  }
+  for (const kind of ['cloth', 'scrap', 'wiring']) assert.equal(count(kind), 0, `no ${kind} left`);
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.missingMaterials);
+  assert.equal(me.vehicle(cartId).level, 0);
+  const need = (level, kind) => CART_TABLE[level].find((s) => s.kinds?.includes(kind))?.n ?? 0;
+  await answer({ t: 'debugGive', kind: 'cloth', n: need(1, 'cloth') + 1 });
+  await answer({ t: 'debugGive', kind: 'scrap', n: need(1, 'scrap') + need(2, 'scrap') });
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), undefined);
+  await until(() => me.vehicle(cartId).level === 1, 3000, 'level 1');
+  assert.equal(count('cloth'), 1, 'its cloth spent');
+  assert.equal(count('scrap'), need(2, 'scrap'), 'its scrap spent');
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.missingMaterials, 'level 2 wants wiring');
+  await answer({ t: 'debugGive', kind: 'wiring', n: need(2, 'wiring') });
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), undefined);
+  await until(() => me.vehicle(cartId).level === 2, 3000, 'level 2');
+  assert.equal(count('scrap') + count('wiring'), 0);
+  await answer({ t: 'debugGive', kind: 'scrap', n: 40 });
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.fullyBuilt, 'no level 3');
+  assert.equal(count('scrap'), 40, 'nothing spent');
+
+  // Unfold, pack, unfold again.
+  me.send({ t: 'unfoldCart', id: cartId, open: true });
+  await until(() => me.vehicle(cartId).open === true, 3000, 'unfolded');
+  me.send({ t: 'unfoldCart', id: cartId, open: false });
+  await until(() => me.vehicle(cartId).open === false, 3000, 'packed');
+  me.send({ t: 'unfoldCart', id: cartId, open: true });
+  await until(() => me.vehicle(cartId).open === true, 3000, 'unfolded again');
+
+  // A bike 3 m ahead of a spot whose hitch point is 1 m ahead of the coupler; back up: packed and hitched in one go.
+  const c = cart0.heading, fx = -Math.sin(c), fz = -Math.cos(c), cp = couplerOf(cart0);
+  await me.walkTo(cp.x + fx * (HITCH_BACK + 1 - 3), cp.z + fz * (HITCH_BACK + 1 - 3), 0.15);
+  for (let i = 0; i < 10; i++) await me.input(0, c);
+  const n0 = me.vehicles.list.length;
+  me.send({ t: 'debugBike', working: true });
+  await until(() => me.vehicles.list.length === n0 + 1, 3000, 'a bike');
+  const bikeId = me.vehicles.list.at(-1).id;
+  me.send({ t: 'mount', id: bikeId });
+  await until(() => me.state.riding, 3000, 'on the bike');
+  for (let i = 0; i < 400 && me.state.tow !== cartId; i++) {
+    const s = me.state, vf = -s.vx * Math.sin(s.heading) - s.vz * Math.cos(s.heading);
+    await me.input(vf > -1.2 ? BACK : 0, s.heading);
+  }
+  assert.equal(me.state.tow, cartId, 'hitched by backing up');
+  await until(() => me.vehicle(cartId).open === false && me.vehicle(cartId).hitched === bikeId, 3000, 'packed and linked');
+
+  // Off the bike, still linked: it stays packed and doesn't unfold.
+  await me.input(0, me.state.heading);
+  await me.input(BIKE, me.state.heading);
+  await me.input(0, me.state.heading);
+  await until(() => !me.state.riding && me.vehicle(cartId).rider === undefined, 3000, 'parked');
+  const cart1 = me.vehicle(cartId);
+  assert.equal(cart1.open, false);
+  const by = cartToWorld(cart1, 1.9, 0);
+  await me.walkTo(by.x, by.z, 0.4);
+  assert.equal(await me.notice({ t: 'unfoldCart', id: cartId, open: true }), TEXT.notice.unhitchFirst);
+  // Let go at the tongue: it stays packed until it's unfolded.
+  await me.walkTo(couplerOf(cart1).x + 0.6, couplerOf(cart1).z, 0.4);
+  me.send({ t: 'unhitch', id: cartId });
+  await until(() => me.vehicle(cartId).hitched === undefined, 3000, 'unhitched');
+  assert.equal(me.vehicle(cartId).open, false, 'unhitching leaves it packed');
+  me.send({ t: 'unfoldCart', id: cartId, open: true });
+  await until(() => me.vehicle(cartId).open === true, 3000, 'unfolded after unhitching');
+  assert.equal(me.ws.readyState, WebSocket.OPEN, output());
 });

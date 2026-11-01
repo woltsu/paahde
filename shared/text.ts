@@ -99,6 +99,8 @@ const en = {
     ai_control: 'AI control system',
   },
   bosses: { worm: 'Worm', carrier: 'Carrier', colossus: 'Colossus', queen: 'Queen' },
+  /** The cart's levels (shared/cart.ts), as the build menu offers the next one by your own cart (src/buildMenu.ts). */
+  cartLevels: ['Cart', 'Cart shade', 'Cart workshop'],
   /** Equipment slots (shared/gear.ts EQUIP_SLOTS). */
   equip: { back: 'Back', wrist: 'Wrist', belt: 'Belt', armor: 'Armor' },
   /** Boxes, as headings in the Tab overlay (shared/storage.ts boxLabel). */
@@ -169,6 +171,9 @@ const en = {
     getOn: 'Get on',
     /** Your own cart's tongue, hitched to a bike (shared/cart.ts): F lets it go. */
     unhitch: 'Unhitch',
+    /** Your own cart let go of the bike, looking at it: its level's pieces out, or folded away again. */
+    unfold: 'Unfold',
+    pack: 'Pack',
     /** The beginning's pod, its panel lit (docs/levels/tutorial.md). */
     getIn: 'Get in',
     plantSeeds: 'Plant seeds',
@@ -237,6 +242,10 @@ const en = {
     cantPackTighter: "Can't pack it any tighter",
     takeItOff: 'Take it off',
     getOffFirst: 'Get off first',
+    /** A cart linked to a bike doesn't unfold (shared/cart.ts). */
+    unhitchFirst: 'Unhitch it first',
+    /** Your cart is at its highest level already. */
+    fullyBuilt: 'Fully built',
     /** Someone else is on (or getting on) that vehicle. */
     someoneOnIt: 'Someone is on it',
     emptyItFirst: 'Empty it first',

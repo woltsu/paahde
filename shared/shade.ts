@@ -7,7 +7,8 @@
 // - the shelters' huts (shared/shelters.ts, as boxes) within HUT_DIST;
 // - crash-site wrecks and debris (their collision capsules, shared/crashsites.ts) within CRASH_DIST, and the crashed
 //   pods' (shared/pods.ts);
-// - tarps (shared/tarp.ts) within TARP_DIST: their canvas, as a coarse grid of triangles (tarpTris);
+// - tarps and the carts' canopies (shared/tarp.ts tarpRigs) within TARP_DIST: their canvas, as a coarse grid of
+//   triangles (tarpTris);
 // - the solar farms' mirrors (shared/solarfarms.ts) within MIRROR_DIST, two triangles each, and their towers within
 //   MAX_DIST, as prisms;
 // - `casters`: things that move, passed in by the caller: other players, their bikes, motorcycles lying on the sand;
@@ -27,8 +28,7 @@ import { S_HUT, sheltersNear, shelterHutRect } from './shelters.ts';
 import { podCasters } from './pods.ts';
 import { DECL, skyVector, sunHourAngle, type Vec3 } from './sun.ts';
 import { ROCK_H_MAX } from './rocks.ts';
-import { placed, TARP, type Placed } from './placed.ts';
-import { tarpRig, tarpTris, type Vec } from './tarp.ts';
+import { tarpRigs, tarpTris, type TarpRig, type Vec } from './tarp.ts';
 import { heightAt } from './terrain.ts';
 import { mirrorCorners, mirrorsNear, solarFarmsNear, TOWER, type Heliostat, type SolarFarm } from './solarfarms.ts';
 
@@ -179,12 +179,12 @@ function hutsNear(x: number, z: number): number[][] {
   });
 }
 
-/** A tarp's canvas as triangles (shared/tarp.ts tarpTris: a coarse grid of the drawn canvas), cached per placed thing
- *  (the list is replaced whole when it changes). */
-const tarpTriCache = new WeakMap<Placed, Vec[]>();
-function trisOf(p: Placed): Vec[] {
-  let t = tarpTriCache.get(p);
-  if (!t) tarpTriCache.set(p, (t = tarpTris(tarpRig(p.x, p.z, p.rot))));
+/** A canvas as triangles (shared/tarp.ts tarpTris: a coarse grid of the drawn canvas), cached per rig (the rigs are
+ *  made anew when the placed things or the vehicles change). */
+const tarpTriCache = new WeakMap<TarpRig, Vec[]>();
+function trisOf(r: TarpRig): Vec[] {
+  let t = tarpTriCache.get(r);
+  if (!t) tarpTriCache.set(r, (t = tarpTris(r)));
   return t;
 }
 
@@ -203,11 +203,12 @@ function hitsTri(ox: number, oy: number, oz: number, d: Vec3, a: Vec, b: Vec, c:
   return (e2x * qx + e2y * qy + e2z * qz) * inv > 0;
 }
 
-/** The tarps close enough to (x, z) to shade it, as triangles (three corners each, flattened). */
+/** The tarps and the carts' canopies (shared/tarp.ts tarpRigs) close enough to (x, z) to shade it, as triangles (three
+ *  corners each, flattened). */
 function tarpsNear(x: number, z: number): Vec[] {
   const out: Vec[] = [];
-  for (const p of placed) {
-    if (p.kind === TARP && Math.abs(p.x - x) < TARP_DIST && Math.abs(p.z - z) < TARP_DIST) out.push(...trisOf(p));
+  for (const r of tarpRigs()) {
+    if (Math.abs(r.cx - x) < TARP_DIST && Math.abs(r.cz - z) < TARP_DIST) out.push(...trisOf(r));
   }
   return out;
 }

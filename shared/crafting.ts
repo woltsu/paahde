@@ -15,7 +15,7 @@ import { fitsSlot, GEAR } from './gear.ts';
 import { addItem, HOTBAR, ITEMS, setPart, withData, type Part, type Shape, type Slots } from './items.ts';
 import { partOf } from './parts.ts';
 import { TIERS } from './salvage.ts';
-import { BUILD_TABLE, HAND_TABLE, RECIPE_TABLE, type IngredientSpec } from './tables.ts';
+import { BUILD_TABLE, CART_TABLE, HAND_TABLE, RECIPE_TABLE, type IngredientSpec } from './tables.ts';
 import { TROPHY_PLACEABLES } from './trophies.ts';
 
 export type Ingredient = { label: string; n: number; match: (kind: string) => boolean };
@@ -50,6 +50,12 @@ export const BUILDS: Record<string, Recipe> = Object.fromEntries([
   ...Object.entries(BUILD_TABLE).map(([id, needs]) => [id, { makes: id, needs: needs.map(ingredient) }]),
   ...Object.keys(TROPHY_PLACEABLES).map((id) => [id, { makes: id, needs: [] }]),
 ]);
+/** The cart's next levels (shared/tables.ts CART_TABLE): level → what raising it to that level takes, with the wrench
+ *  by your own cart (src/buildMenu.ts, server/vehicles.ts upgrade). `makes` is the cart. */
+export const CART_UPGRADES: Record<number, Recipe> = Object.fromEntries(
+  Object.entries(CART_TABLE).map(([level, needs]) => [Number(level), { makes: 'cart', needs: needs.map(ingredient) }]),
+);
+
 /** Put up with the wrench (never carried as an item). */
 export const isBuildable = (kind: string | undefined) => !!kind && kind in BUILDS;
 /** The tool that opens the build menu. */

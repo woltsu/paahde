@@ -6,13 +6,16 @@
 // The buildings (shared/crafting.ts BUILDS) are put up with the wrench: with it in hand the right mouse opens the build
 // menu (src/buildMenu.ts), and the building picked there is previewed the same way, out on the sand (or, for the work
 // stations and the chest, on the floor of the shelter you stand in: shared/placed.ts placeFloor), and goes up from the
-// base materials in the bag (red, too, when they're short). With the wrench, G takes a building down.
+// base materials in the bag (red, too, when they're short). With the wrench, G takes a building down. By your own parked
+// cart the menu also offers its next level (shared/cart.ts), raised as soon as it's picked.
 //
 // Looking at a beacon with nothing to put down, R gives its light the next colour (shared/placed.ts BEACON_COLORS).
 import { BUILDS, isBuildable, pickIngredients, WRENCH } from '../shared/crafting.ts';
 import { BEACON, BEACON_COLORS, isPlaceable, placeAim, placed, placedTarget, placedY, placeError, placeFloor, turnsOf, type Placed } from '../shared/placed.ts';
 import { EYE_HEIGHT, pitchFromQ } from '../shared/dig.ts';
 import { heightAt } from '../shared/terrain.ts';
+import { CART_MAX_LEVEL, isCart } from '../shared/cart.ts';
+import { inReach, parked, vehicles } from '../shared/vehicles.ts';
 import { yawFromQ } from '../shared/sim.ts';
 import { isBound, kbd } from './bindings';
 import { actionHeld, ui, useHeld } from './input';
@@ -72,7 +75,11 @@ export class Placer {
       this.view.preview(null, null, false);
       return { prompt: null, target: null };
     }
-    if (wrench && aimed) this.menu.open(bag, this.chosen, (k) => (this.chosen = k));
+    if (wrench && aimed) {
+      // Our own parked cart in reach, below its highest level: its next level first (shared/cart.ts).
+      const cart = vehicles.find((v) => isCart(v) && parked(v) && this.net.myVehicles.has(v.id) && inReach(feet, v) && (v.level ?? 0) < CART_MAX_LEVEL);
+      this.menu.open(bag, this.chosen, (k) => (this.chosen = k), cart && { level: (cart.level ?? 0) + 1, raise: () => this.net.upgradeCart(cart.id) });
+    }
 
     // Buildings come down with the wrench (all they took comes back), the rest is picked up by hand.
     const target = placedTarget(feet, yaw, pitch, placed);

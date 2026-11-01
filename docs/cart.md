@@ -32,10 +32,12 @@ a browser ID: never sent to other clients (each player is told which cart is `mi
 
 - **Hitched:** packed and following a bike. Nothing on it is usable.
 - **Parked, packed:** standing still. F opens its box.
-- **Unfolded:** standing still, its level's pieces out (canopy, benches). Unfold and Pack are buttons in the cart's
-  panel next to the bag (F on it), like the bike's Repair, owner only. Unfolding needs ground flat enough (a tilt check
-  like the tarp's) and refuses when hitched. Packing refuses while a machine is on its table or a dismantling job runs.
-  What's in the box rides along.
+- **Unfolded:** standing still, its level's pieces out (canopy, benches). Its owner, on foot looking at it, unfolds it
+  with the cart key (the rotate key: R, the d-pad's left; "R Unfold" / "R Pack" under the crosshair) and packs it with
+  the same key. Unfolding needs ground flat enough (a tilt check like the tarp's) and refuses while it's linked to a
+  bike. Unhitching leaves it packed. Packing refuses while a machine is on its table or a dismantling job runs.
+  Backing the bike up to it unfolded packs and hitches it in one go (refused, so not hitched, while packing is).
+  Getting off with it still linked keeps it packed. What's in the box rides along.
 
 ## Towing (netcode: `docs/netcode.md`)
 
@@ -51,9 +53,9 @@ The cart moves with a player, so towing is in `shared/sim.ts`, deterministic:
   still lifts a small wheelie but letting go doesn't hop; the bike still flies off a crest at speed, and the cart with it.
 - Drawn, the cart hangs from the bike's tow ball (`shared/cartHang.ts`): its coupler pinned to the ball where the bike
   is drawn (nose, wheelie, lean and all), pitched about it, falling and landing on its own (below, "As built: towing").
-- Hitching: ride the bike slowly backwards up to your own parked, packed cart's tongue; once the bike's rear is close
-  enough, the server hitches it (as `mount()` puts you on a bike: the server sets the state, the client reconciles).
-  No key, no text.
+- Hitching: ride the bike slowly backwards up to your own parked cart's tongue (unfolded, it packs first); once the
+  bike's rear is close enough, the server hitches it (as `mount()` puts you on a bike: the server sets the state, the
+  client reconciles). No key, no text.
 - The cart stays linked to the bike (`Vehicle.hitched`: the bike's vehicle id): get off and both park, the cart behind;
   get back on and you're towing again. Unhitch: on foot, F on the cart's tongue.
 - Remote players are drawn with their cart from the pose tuple (`hitch` in it): schema version bump.
@@ -169,3 +171,52 @@ centre) was inside the rear tyre (its back is 1.05 m behind), with no tow ball d
    step the same), hitch / unhitch / park with the bike, the box.
 2. Unfold / pack, upgrades with the wrench, level 1 shade.
 3. Level 2 workshop; the benches and chest out of the build menu; the starter kit, the beginning, econsim.
+
+## As built (phase 2, November 2026)
+
+- **Unfold / pack:** message `unfoldCart {id, open}` (server/vehicles.ts `unfold`): owner only, on foot, in reach,
+  parked; unfolding refused while linked (`TEXT.notice.unhitchFirst`) or where the sand rises more than `CART_TILT`
+  0.4 m across the unfolded footprint (`unfoldError`: |x| 1.33, |z| 1.15 and the tongue's tip; `tooSteep`). The client
+  sends it from the rotate key looking at your own unlinked cart (src/main.ts `foldPrompt`; not with a placeable or the
+  wrench in hand, which turn their preview with that key). `Vehicle.open` is persisted (`db.openVehicle`) and goes out
+  with the vehicles list. `tryHitch` packs an open cart before hitching it (`pack`), skipping it while
+  `VehicleServer.packBlocked(id)` returns a reason: **phase 3 sets that hook** (a machine on its table, a job running)
+  and `unfold(…, false)` refuses with the same reason.
+- **Upgrades:** `shared/tables.ts` `CART_TABLE` (1 shade: cloth 3 + scrap 4, a tarp's canvas plus poles and
+  stabilisers; 2 workshop: scrap 12 + wiring 1, the two benches' scrap less the frame they share with the cart),
+  `shared/crafting.ts` `CART_UPGRADES`. With the wrench in hand by your own parked cart (packed or open) the build menu
+  shows its next level first (`TEXT.cartLevels`, the cart's icon, what the bag has); picking it sends `upgradeCart {id}`
+  (server/vehicles.ts `upgrade`: owner, reach, wrench in the bag, level < `CART_MAX_LEVEL` 2, else
+  `TEXT.notice.fullyBuilt`; materials used up in the same transaction as `ItemData.level` is set on the item in
+  `veh<id>`, else `missingMaterials`). Never given back. Level 2 draws the sides and benches only; they aren't benches yet.
+- **Drawing (src/world/carts.ts):** `FOLD` is the table above: every hinge node turns from its rest pose by its
+  unfolded rotation (`legs` slides) × an eased share of its level's own 0..1 clock, `UNFOLD_S` 1.5 s each way (lid
+  0–0.5, stabilisers 0–0.4, poles 0.35–1; sides 0–0.6, their trestles 0.5–1), so a level raised while unfolded unfolds
+  just its new pieces. From level 1 the cart is levelled as its stabilisers come down (its slope tilt eased out). The
+  canopy appears once the poles are up. `src/cartSound.ts`: synthesised hinge creaks, scrap clanks and a knock
+  (`renderCartFold`), positional, through `audio.out`.
+- **Canopy (shared/cart.ts `canopyRig`):** a tarp rig (shared/tarp.ts, now any heading and shape: `rigFrame(cx, cz, a,
+  b)` with the frame's inverse, so `canvasYAt` and everything after it take a parallelogram) from the pole tips
+  (cart space (∓0.56, 2.67, ∓0.98): 6 cm under the tips) to two low corners 2.0 m out to either side of the axle at
+  1.95 m (over a head: no head boxes needed), sag 0.07 m, a line from each low corner to a stake 0.8 m further out, no
+  poles of its own. Levelled at the cart's `y`. `setCarts` (called by `setVehicles`, so server and client have the same)
+  hands the rigs of open level ≥ 1 carts to `setCanopyRigs`: the sim's `tarpGround`/`tarpCeiling`/`tarpSlope`, the shade
+  (shared/shade.ts reads `tarpRigs()` now, tarps and canopies alike), the camera boom (src/camera.ts) and the drawing
+  (src/world/tarps.ts `rigModel`, the billow) all use it. Standing on the deck, your head is through the canvas (it's
+  2.2–2.7 m up); you can't jump onto the deck from under it (the canvas stops the head).
+- **Solid:** every parked cart is capsules in world space (`cartCapsules`, `setCartCapsules` in shared/capsules.ts
+  alongside the placed things): the bed with the wheels (r 0.7, top 0.88; packed at level 2, its walls, 1.53), the box
+  (top 1.30) and, unfolded at level 2, a bench each side (centre x ±1.005, r 0.325, z ±1.08, top 0.88, flush with the
+  deck). The tongue is low enough to step over and isn't solid. Towed carts collide with nothing.
+- **For phase 3:** the benches in world space: `cartToWorld(v, ±1.005, 0)` is each bench's middle (x < 0 the workbench
+  `side_l`, x > 0 the dismantling table `side_r`), tops at `v.y + 0.88`, 0.65 × 2.16 m, along the cart's heading
+  (`v.heading`, forward (−sin, −cos)); only while `v.open && v.level >= 2 && parked(v)`.
+- **Tests:** `tools/cart.test.mjs` adds the canopy shading a point at noon and the sim landing a player on its canvas
+  (none packed), walking into a parked cart's side, and in the lab: a stranger can't unfold or upgrade it, the upgrade
+  refused without materials, spending them and raising the level, refused past 2; unfold, pack; backing up to it
+  unfolded packs and hitches it; linked, it won't unfold; unhitched it stays packed until unfolded.
+- **Econ:** `npm run econ` unchanged vs main (the simulator doesn't upgrade carts yet; phase 3 adds `CART_TABLE` to its
+  goals when the cart replaces the benches). Note level 2 takes wiring, which the beginning only gets from the pod's
+  machines: phase 3's starter kit must pay for it.
+- **Not checked yet:** a towed cart and the unfolded canopy in a browser (headless Chrome couldn't render the game while
+  the machine was busy). The sound measured −23.6 LUFS, −9.2 dBTP.

@@ -7,7 +7,7 @@ import { scrapTarget } from '../shared/scrap.ts';
 import { allBeaten } from '../shared/bosses.ts';
 import { BENCH, CALM, LAB, WORLD_ID } from '../shared/world.ts';
 import { bedTarget, EMPTY, GROWN, SPROUTS } from '../shared/garden.ts';
-import { BEDROLL, bedLit, placed } from '../shared/placed.ts';
+import { BEDROLL, bedLit, isPlaceable, placed } from '../shared/placed.ts';
 import { stationTarget } from '../shared/stations.ts';
 import { isTableId, tableId } from '../shared/crash.ts';
 import { FirstPersonCamera } from './camera';
@@ -16,8 +16,8 @@ import { ShieldFx } from './shieldFx';
 import { InventoryHud, itemLabel } from './inventory';
 import { stormAt } from '../shared/storm.ts';
 import { addItem, debrisItem, SCRAP } from '../shared/items.ts';
-import { kbd } from './bindings';
-import { readInput, takePickup } from './input';
+import { isBound, kbd } from './bindings';
+import { readInput, takePickup, ui } from './input';
 import { pollPad } from './gamepad';
 import { LocatorBar } from './locator';
 import { Menu } from './menu';
@@ -52,6 +52,7 @@ import { drinkSound } from './drinkSound';
 import { grinderSound } from './grinderSound';
 import { footsteps } from './footsteps';
 import { bikeLandSound } from './bikeLandSound';
+import { cartSound } from './cartSound';
 import { music } from './music';
 import { uiSound } from './uiSound';
 import { breathing } from './breathing';
@@ -97,6 +98,7 @@ import { lootPrompt } from './world/loot';
 import { ownVehicleTargets } from './world/vehicles';
 import { vehicles, vehicleTarget } from '../shared/vehicles.ts';
 import { cartTarget } from '../shared/cart.ts';
+import { WRENCH } from '../shared/crafting.ts';
 import type { Tower } from './world/carts';
 import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
@@ -395,6 +397,11 @@ function bagFull() {
   speech.event('bagFull', undefined);
 }
 const placer = new Placer(net, placedView, buildMenu);
+// The cart key (the rotate key, R / d-pad ←, free when nothing's being put down): our own cart in view unfolds or packs.
+let cartKey = false;
+addEventListener('keydown', (e) => {
+  if (!ui.inventoryOpen && !e.repeat && !e.ctrlKey && !e.metaKey && isBound('rotate', e.code)) cartKey = true;
+});
 const wiring = new Wiring(net, wireView);
 
 window.addEventListener('resize', () => {
@@ -693,6 +700,7 @@ renderer.setAnimationLoop((time) => {
   grinderSound.remotes(frameDt, others, orbit.camera.position);
   footsteps.listener(orbit.camera.position, orbit.viewYaw);
   bikeLandSound.listener(orbit.camera.position, orbit.viewYaw);
+  cartSound.listener(orbit.camera.position, orbit.viewYaw);
   breathing.update(survival.heatLevel, survival.dead);
   audio.setMuffled(survival.dead); // the world goes dull while you lie dead; the music doesn't
   const cam = orbit.camera.position;
@@ -751,6 +759,13 @@ renderer.setAnimationLoop((time) => {
     ? cartTarget(net.me, orbit.yaw, orbit.pitch, vehicles) : null;
   const unhitch = !!cart && cart.tongue && cart.v.hitched !== undefined && net.myVehicles.has(cart.v.id);
   const cartPrompt = !cart ? null : unhitch ? TEXT.prompt.unhitch : net.boxes[cargoBox(cart.v.id)] ? TEXT.prompt.open(itemLabel(cart.v.kind)) : null;
+  // Our own cart, let go of the bike: the cart key unfolds it, or packs it again (server/vehicles.ts unfold). Not with
+  // something in hand that the same key turns (a placeable, the wrench).
+  const heldKind = (net.boxes.bag ?? [])[survival.slot]?.kind;
+  const folding = !!cart && cart.v.hitched === undefined && net.myVehicles.has(cart.v.id) && !(heldKind && (isPlaceable(heldKind) || heldKind === WRENCH));
+  const foldPrompt = folding ? `${kbd('rotate')}${cart!.v.open ? TEXT.prompt.pack : TEXT.prompt.unfold}` : null;
+  if (cartKey && folding) net.unfoldCart(cart!.v.id, !cart!.v.open);
+  cartKey = false;
   const bed = here && !station ? bedTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), placed) : null;
   const bedState = bed ? net.garden.get(bed.id) : undefined;
   const bedStage = bed ? (bedState?.stage ?? EMPTY) : -1;
@@ -812,7 +827,7 @@ renderer.setAnimationLoop((time) => {
   const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? fixturePrompt ?? rollPrompt ?? ridePrompt ?? cartPrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));
-  const extra = [growing, wirePrompt, placing.prompt].filter(Boolean).join(' ');
+  const extra = [growing, wirePrompt, placing.prompt, foldPrompt].filter(Boolean).join(' ');
   hud.setTarget(fPrompt && extra && typeof fPrompt === 'string' ? `${kbd('interact')}${fPrompt} ${extra}` : (fPrompt ?? (extra || null)));
   const interact = takePickup() && !fly.active;
   if (interact && levelAct) levelAct.act();

@@ -7,6 +7,7 @@
 // its part slots to swap in better parts. A vehicle not being ridden doesn't move. The server owns the list
 // (server/vehicles.ts, `vehicles` table) and sends it whole on join and when it changes; client and server both keep
 // it here with setVehicles().
+import { setCarts } from './cart.ts';
 import { EYE_HEIGHT } from './dig.ts';
 import type { PlayerState } from './sim.ts';
 
@@ -15,7 +16,7 @@ import type { PlayerState } from './sim.ts';
  *  ones lie on their side), the parts fitted in it (its tier and look) and `rider`: the public id of whoever is
  *  getting on or riding it (it isn't drawn here then: the rider's state is the bike), or towing it (a cart: the rider's
  *  PlayerState.tow is it, its pose shared/cart.ts towedPose). A cart's own: `hitched`, the bike (vehicle id) it's linked
- *  to (towed, or parked behind it), `open` (unfolded: docs/cart.md, always false for now) and `level` (its item's
+ *  to (towed, or parked behind it), `open` (unfolded: docs/cart.md, its owner's Unfold / Pack) and `level` (its item's
  *  ItemData.level). */
 export type Vehicle = { id: number; kind: string; x: number; y: number; z: number; heading: number; up: boolean;
   parts: (string | null)[]; rider?: number; hitched?: number; open?: boolean; level?: number };
@@ -37,6 +38,7 @@ export let vehicles: Vehicle[] = [];
 
 export function setVehicles(list: Vehicle[]) {
   vehicles = list;
+  setCarts(list); // (parked carts are solid, unfolded ones' canopies shade: shared/cart.ts)
 }
 
 /** Standing still where it is: not being ridden or got on. */

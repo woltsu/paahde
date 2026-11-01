@@ -8,8 +8,17 @@
 // HITCH_BACK behind the bike's centre; the axle sits TOW_LENGTH behind H along the cart's heading. Each tick the axle
 // follows H (towHitch), the angle to the bike clamped at HITCH_MAX. The model (public/models/cart.glb, or the stand-in
 // built in src/world/carts.ts): origin on the ground under the axle's middle, forward -z, the coupler TOW_LENGTH ahead.
+//
+// Parked, a cart is solid (setCarts: capsules for the bed and its box, the fold-out sides; shared/capsules.ts), and
+// its owner unfolds it where the sand is level enough (unfoldError): its level's pieces out, the cart levelled on its
+// stabilisers at its own height (v.y). From level 1 it puts up a canopy between its poles' tips (canopyRig), a tarp
+// rig (shared/tarp.ts), so its shade, the solid canvas and the billow are the tarp's. Both come from the vehicles list
+// only (setVehicles calls setCarts), so the server and every client have the same.
+import { setCartCapsules, type Capsule } from './capsules.ts';
 import { EYE_HEIGHT } from './dig.ts';
 import type { ItemData } from './items.ts';
+import { rigFrame, setCanopyRigs, type TarpRig, type Vec } from './tarp.ts';
+import { heightAt } from './terrain.ts';
 import { inReach, parked, type Vehicle } from './vehicles.ts';
 
 /** The cart's GEAR / item / vehicle kind. */
@@ -54,6 +63,15 @@ export const CART_LEVEL_NODES: Record<string, number> = {
 };
 
 export const isCart = (v: { kind: string } | null | undefined) => v?.kind === CART;
+
+/** The highest level (docs/cart.md "Levels"): 1 shade, 2 workshop. */
+export const CART_MAX_LEVEL = 2;
+/** Unfolding or packing takes this long (s), drawn (src/world/carts.ts) and heard (src/cartSound.ts). */
+export const UNFOLD_S = 1.5;
+/** Unfolding needs sand this level: the most it may rise across the unfolded footprint (m). */
+export const CART_TILT = 0.4;
+/** The unfolded footprint's half width (the benches' outer edges) and half length (the bed's ends), m. */
+const OPEN_HX = 1.33, OPEN_HZ = 1.15;
 
 /** A cart item's level (ItemData.level), 0 when it isn't set. */
 export const cartLevel = (it: { data?: ItemData } | null | undefined) => it?.data?.level ?? 0;
@@ -153,6 +171,87 @@ export function cartTarget(feet: { x: number; y: number; z: number }, yaw: numbe
     }
   }
   return best;
+}
+
+/** Cart space (x to its right, z backwards, its forward is −z: the model's) to world, for a cart standing at `v`. Matches
+ *  three.js's rotation.y = heading. */
+export function cartToWorld(v: Pose, lx: number, lz: number): XZ {
+  const c = Math.cos(v.heading), s = Math.sin(v.heading);
+  return { x: v.x + lx * c + lz * s, z: v.z - lx * s + lz * c };
+}
+
+/** Why cart `v` (parked, its owner by it: server/vehicles.ts unfold) can't unfold, or null: not while it's linked to a
+ *  bike, nor on sand rising more than CART_TILT across its unfolded footprint. */
+export function unfoldError(v: Vehicle, ground: (x: number, z: number) => number = heightAt): 'hitched' | 'steep' | null {
+  if (v.hitched !== undefined) return 'hitched';
+  let lo = Infinity, hi = -Infinity;
+  for (const [lx, lz] of [[0, 0], [-OPEN_HX, -OPEN_HZ], [OPEN_HX, -OPEN_HZ], [-OPEN_HX, OPEN_HZ], [OPEN_HX, OPEN_HZ], [0, -TOW_LENGTH]]) {
+    const p = cartToWorld(v, lx, lz), h = ground(p.x, p.z);
+    lo = Math.min(lo, h);
+    hi = Math.max(hi, h);
+  }
+  return hi - lo > CART_TILT ? 'steep' : null;
+}
+
+// ---- The canopy (level 1) ---------------------------------------------------------------------------------------------
+
+/** The rear right pole's tip unfolded (pole_b_tip, cart space, docs/cart.md); the front left one's is it turned half
+ *  round the axle. The canvas's corner is tied this far under it (m). */
+const POLE_TIP = { x: 0.56, y: 2.73, z: 0.98 }, TIE = 0.06;
+/** The low corners: straight out to either side of the axle this far (m), past the benches, at this height (m, just over
+ *  a head: you walk in under it from anywhere), each held by a line to a stake STAKE_OUT further out. */
+const LOW_X = 2.0, LOW_Y = 1.95, STAKE_OUT = 0.8;
+/** It's small and pulled tight: it sags less than a tarp (m). */
+const CANOPY_SAG = 0.07;
+
+/** The canopy of unfolded cart `v` (level ≥ 1): a canvas parallelogram from pole tip to pole tip (a), its low corners out
+ *  over the cart's sides (b), on the cart levelled at v.y. No poles of its own (the model's are drawn); a line from each
+ *  low corner to a stake in the sand. */
+export function canopyRig(v: Vehicle): TarpRig {
+  const tip = cartToWorld(v, POLE_TIP.x, POLE_TIP.z), side = cartToWorld(v, -LOW_X, 0);
+  const f = rigFrame(v.x, v.z, tip.x - v.x, tip.z - v.z, side.x - v.x, side.z - v.z, CANOPY_SAG);
+  const at = (a: number, b: number, y: number): Vec => ({ x: f.cx + a * f.ax + b * f.bx, y, z: f.cz + a * f.az + b * f.bz });
+  const top = v.y + POLE_TIP.y - TIE, low = v.y + LOW_Y;
+  const corners = [at(-1, 0, top), at(0, -1, low), at(0, 1, low), at(1, 0, top)];
+  const guys = [-1, 1].map((sb) => {
+    const stake = at(0, sb * (1 + STAKE_OUT / LOW_X), 0);
+    return { from: corners[sb < 0 ? 1 : 2], stake: { ...stake, y: heightAt(stake.x, stake.z) } };
+  });
+  return { ...f, corners, poles: [], guys };
+}
+
+// ---- Solid while parked -------------------------------------------------------------------------------------------------
+
+/** Its pieces as capsules along its length (cart space: centre x, z, half length, radius, top over the ground, m). The
+ *  bed and the wheels, the box on it; packed at level 2 the upright sides make the bed's walls (docs/cart.md: 1.53);
+ *  unfolded at level 2 the benches either side, flush with the deck. The tongue is low enough to step over. */
+const BED = { x: 0, z: 0, half: 0.4, r: 0.7, top: 0.88 }, WALLS = 1.53;
+const BOX = { x: 0, z: -0.125, half: 0.2, r: 0.42, top: 1.3 };
+const BENCHES = [-1, 1].map((sx) => ({ x: sx * 1.005, z: 0, half: 0.755, r: 0.325, top: 0.88 }));
+
+/** A parked cart's capsules (world). */
+export function cartCapsules(v: Vehicle): Capsule[] {
+  const level = v.level ?? 0;
+  const pieces = [{ ...BED, top: level >= 2 && !v.open ? WALLS : BED.top }, BOX, ...(level >= 2 && v.open ? BENCHES : [])];
+  const ax = Math.sin(v.heading), az = Math.cos(v.heading);
+  return pieces.map((p) => {
+    const c = cartToWorld(v, p.x, p.z);
+    return { x: c.x, z: c.z, ax, az, half: p.half, r: p.r, y0: v.y, top: v.y + p.top };
+  });
+}
+
+/** What the vehicles list makes solid, as last set (a key of the parked carts' poses and states). */
+let lastCarts = '';
+
+/** The vehicles list changed (shared/vehicles.ts setVehicles): the parked carts' capsules (shared/capsules.ts) and the
+ *  unfolded ones' canopies (shared/tarp.ts), only when a cart's changed. */
+export function setCarts(list: readonly Vehicle[]) {
+  const carts = list.filter((v) => isCart(v) && parked(v));
+  const key = carts.map((v) => `${v.id},${v.x},${v.y},${v.z},${v.heading},${v.level ?? 0},${v.open ? 1 : 0}`).join(';');
+  if (key === lastCarts) return;
+  lastCarts = key;
+  setCartCapsules(carts.flatMap(cartCapsules));
+  setCanopyRigs(carts.filter((v) => v.open && (v.level ?? 0) >= 1).map(canopyRig));
 }
 
 /** Where the ray o + t·d first enters the box lo..hi (t ≥ 0), or null. */
