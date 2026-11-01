@@ -262,30 +262,31 @@ Everything built is shared, and anyone can take a building down.
   passenger: F on one being ridden (`pillionTarget`) → server `board`/`unboard`, `PlayerState.pillion` (the rider's id;
   `step` doesn't move them, server/world.ts `carryPassengers` puts them where the rider is each tick, `pillionOff`
   beside it), drawn on its back by `Quad.passenger()` (src/main.ts `pillion`); test `tools/quad-pillion.test.mjs`; lab
-  `models-lab.html?ride=quad&pillion&body=0,1,2&turn=6`. The cart (docs/cart.md): a
+  `models-lab.html?ride=quad&pillion&body=0,1,2&turn=6`. The cart (docs/cart.md): one per world, everyone's, a
   vehicle kind (`GEAR.cart`, no part slots, its level `ItemData.level` in box `veh<id>`, its box `cargo<id>` chest size)
   — `shared/cart.ts` (dimensions, `TOW_LENGTH`/`HITCH_BACK`/`HITCH_MAX`, `towHitch` the towing step, `towedPose`,
   `couplerOf`, `backingUpTo`, `cartTarget`, `CART_LEVEL_NODES`); towing in `shared/sim.ts` (`PlayerState.tow`/`hitch`,
-  `stepBike`), poses carry them (`shared/network.ts`); server: `arriveCart` (one per player by their pod, grant `cart`),
-  `tryHitch` (backing up, each tick from server/world.ts offBike), `unhitch`, `Vehicle.hitched`/`open` (columns);
+  `stepBike`: the bike's and the quad's alike, the quad's tow ball in its model), poses carry them (`shared/network.ts`);
+  server: `settleCart` (at the world's start: one by the first pod in a new world; `oneCart` once, setting `one_cart`,
+  left one of the per-player carts of older worlds, the others' boxes and table machines merged into it, the rest dropped
+  behind it), `tryHitch` (anyone, backing a bike or quad up, each tick from server/world.ts offBike), `unhitch`, `Vehicle.hitched`/`open` (columns);
   drawn by `src/world/carts.ts` (`public/models/cart.glb` or a stand-in with the same nodes). Phase 2: `unfold`
-  (message `unfoldCart`, the rotate key looking at your own unlinked cart, src/main.ts), `upgrade` (`upgradeCart`, the
-  wrench's build menu by your cart; `shared/tables.ts` `CART_TABLE`, `shared/crafting.ts` `CART_UPGRADES`), `tryHitch`
+  (message `unfoldCart`, the rotate key looking at the unlinked cart, src/main.ts), `upgrade` (`upgradeCart`, the
+  wrench's build menu by the cart; no owner checks; `shared/tables.ts` `CART_TABLE`, `shared/crafting.ts` `CART_UPGRADES`), `tryHitch`
   packs an open cart (hook `packBlocked`); `shared/cart.ts` `unfoldError` (tilt), `canopyRig` (a tarp rig: shade, solid
   canvas, billow), `cartCapsules` (parked carts are solid), `setCarts` (from `setVehicles`), `cartToWorld`; the hinge
   animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Phase 3: level 2's sides are the
   workshop (above, Work stations); the pods' kit pays for the wrench and both levels. Test `tools/cart.test.mjs`.
-  Your own cart unfolded at level ≥ 1 is where you wake after dying, ahead of a bedroll (`shared/cart.ts` `isCamp`,
-  `campWakeSpot`; `VehicleServer.campOf`; server/world.ts `homeOf`/`clearToWake`; the respawn's `facing` turns the
+  The cart unfolded at level ≥ 1 is where everyone wakes after dying, ahead of a bedroll (`shared/cart.ts` `isCamp`,
+  `campWakeSpot`; `VehicleServer.camp`; server/world.ts `homeOf`/`clearToWake`; the respawn's `facing` turns the
   camera to it, `net.onFace`). Test `tools/cart-spawn.test.mjs`.
   The bigger camp: the sides' leaves slide out (benches 1.2 m deep, camp 3.76 × 2.2 m), the poles rake out with
   telescoping tops, the canopy is put up visibly (`shared/cart.ts` `canopyRising`, drawn by `src/world/tarps.ts`
   `CanopyModel` in the canopy's own clean canvas style; it shades and is solid once `Vehicle.pitching` is cleared,
   `canopyUp`), and level 2's work lamps light the benches dusk to dawn (`CartView.lamps`, borrowing `PoleLamps`' pool).
-  Each cart wears its owner's colour, faded (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a
-  torn rag knotted round its back left corner post, swinging in the wind (a small Verlet chain), and a worn painted
-  stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar
-  (`src/world/vehicles.ts` `ownVehicleTargets`, shape `cart`)
+  It flies a faded rust-red rag (`RAG_COLOR`): torn, knotted round its back left corner post, swinging in the wind (a
+  small Verlet chain), and a worn painted stripe of it on the lid (`src/world/carts.ts`); parked, it's on everyone's
+  locator bar in a neutral colour (`src/world/vehicles.ts` `cartTargets`, shape `cart`)
 - `shared/garden.ts` — plant beds (stages, look target), owned by `server/garden.ts`; beds and UV lamps are placed
   things that stand on a shelter's floor only (not crafted for now)
 - `shared/trophies.ts` — the bosses' trophies, buildings like the others (kinds `trophy_<boss>`, `TROPHY_PLACEABLES` in

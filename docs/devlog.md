@@ -2,6 +2,32 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — One cart per world, everyone's
+
+- **Why:** a cart each split the camp: the pods' kit (once per world) built the first player's, and later joiners had a
+  bare cart of their own, nothing to build it with, and a camp nobody else could wake at, tow or pack.
+- **Rule:** the world has one cart, nobody's, standing by the first pod from its first start (`settleCart`; the lab's by
+  its spawn). Anyone tows it with any bike or the quad (backing up to it), lets it go, unfolds, packs and upgrades it;
+  whoever gets on the vehicle it's linked to tows it; a quad passenger changes nothing. Unfolded and built, it's
+  everyone's camp (`VehicleServer.camp`), ahead of a bedroll. No `arriveCart`, `cart` grant, owner checks, `mine` or
+  `Vehicle.color` for carts.
+- **The quad:** it already rode on the bike's sim (`stepBike`) with a tow ball modelled at `HITCH_BACK`, `HITCH_Y`
+  (`src/quad.ts` `hitchAt`, the parked one's ball through `VehicleView.ball`), so towing needed nothing new; only the
+  owner check kept others from hitching. Test: the same steps bit for bit as the bike's.
+- **Migration** (`oneCart`, once, setting `one_cart`, at the world's start before anyone is in): keep the highest
+  level, then the most stacks in its box, then the oldest, where it stands, owner cleared. Every other cart's box goes
+  into its box (plain stacks top up what's there, items with parts or data go in whole), the machine on its table comes
+  off whole (`CrashServer.takeBench`, as bunkerGone gave back the bunker table's) into it too; what doesn't fit lies on
+  the sand behind it, an item at a time, as dropped loot (`LootServer.dropItem`). Then the others' boxes are emptied
+  and their rows deleted (`db.deleteVehicle`); no refunds for their levels.
+- **Look:** one fixed faded rust-red rag and lid stripe (`RAG_COLOR`, against the teal box and the khaki canopy) in
+  place of the owner's colour; on everyone's locator bar in a neutral bone colour (`cartTargets`).
+- **Econ:** no change (the simulator is one player per world: it already built the one cart).
+- **Tests:** tools/cart.test.mjs (one cart, nobody's; a second player tows it on the bike linked to it, unhitches it;
+  anyone unfolds, packs, upgrades; a second player backs the quad up, tows it with a passenger, parks it, the first
+  tows it on the quad next; the migration keeps the fullest level-2 cart and nothing is lost), tools/cart-spawn.test.mjs
+  (someone who came later wakes by it too), tools/cart-tow.test.mjs (the quad tows as the bike does).
+
 ## 2026-11-01 — Waking up by your cart
 
 - **Why:** the cart is your camp (docs/cart.md); dying out on a trip sent you back to a bedroll or the pod far behind.

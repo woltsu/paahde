@@ -165,11 +165,13 @@ The pod launch is the level's exit: the server moves you to `DESERT` at your pod
 marks the grant, and you wake there as a new player does now. The same path serves Esc → skip.
 
 What comes next is the desert's, not this level's, but it is the same lesson by other means: lying about the pod is its
-starter kit (`shared/tables.ts` POD_LOOT: scrap 22, cloth 9, the pod's console and power box) and your cart stands by it
+starter kit (`shared/tables.ts` POD_LOOT: scrap 22, cloth 9, the pod's console and power box) and the world's one cart stands by it
 (docs/cart.md). The kit pays exactly for the wrench (by hand), the cart's shade and workshop (levels 1 and 2, with the
 wrench by the cart), a tarp and a bedroll (by hand). Unfolded, the workshop's table takes the console and power box
 apart: the first wiring and the bike's battery; their frames' scrap makes its bearing at the workshop's bench. So the
-order is wrench, cart, the pod's machines, bike; level 2 takes no wiring, since the table is what first gets it.
+order is wrench, cart, the pod's machines, bike; level 2 takes no wiring, since the table is what first gets it. Kit
+and cart are once per world: whoever comes later finds the kit taken and the cart built (if someone has), and wakes by
+it once it's unfolded.
 
 ### Who goes through it
 
