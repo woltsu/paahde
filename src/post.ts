@@ -149,6 +149,8 @@ const VX_OPAQUE = 30;
 const VX_BEND = 160;
 const VX_LEAN = 150;
 const VX_LIT = 1.4;
+/** The radius (m) of the cylinder round its foot the vortex is marched in; its dust fades out before it. */
+const VX_R = VX_R1 * 1.5 + VX_BEND + VX_LEAN;
 /** Poison gas (shared/gas.ts): how thick it is (×STORM_K: ~30 m to see in it), how soft its surface is (m), how far its
  *  wisps reach ahead of the leading edge (m), how far a ray is marched through it (m), and the steps. */
 const GAS_THICK = 0.65;
@@ -374,7 +376,7 @@ export class Post {
       const oc = camPos.xz.sub(vortex.xy);
       const a = max(dot(dir.xz, dir.xz), 1e-6);
       const b = dot(oc, dir.xz);
-      const R = float(VX_R1 * 1.25 + VX_BEND + VX_LEAN);
+      const R = float(VX_R);
       const h0 = b.mul(b).sub(a.mul(dot(oc, oc).sub(R.mul(R))));
       If(h0.greaterThan(0), () => {
         const sq = sqrt(h0);
@@ -422,7 +424,10 @@ export class Post {
               const rs = r.add(n.mul(30)).div(VX_SKIRT_R);
               const skirt = float(1).sub(smoothstep(0, 1, rs)).mul(exp(h.mul(n.mul(0.8).add(1)).div(-VX_SKIRT_H))).mul(saturate(n.mul(2.5).add(0.8))).mul(4);
               const billow = saturate(n.mul(1.4).add(0.6));
-              const dens = wall.mul(fadeTop).add(skirt).mul(billow);
+              // Thinned out before the bounding cylinder the ray is clipped to: the flared, lumpy bowl reaches past it, and
+              // cut off there its dust ended on a hard straight edge (stair-stepped by the low-res target).
+              const edge = float(1).sub(smoothstep(VX_R * 0.7, VX_R * 0.97, length(q.xz.sub(vortex.xy))));
+              const dens = wall.mul(fadeTop).add(skirt).mul(billow).mul(edge);
               const dd = vortex.w.mul(dens).mul(dt).mul(VX_THICK);
               const ds = dd.mul(exp(tau.mul(-STORM_K)));
               tau.addAssign(dd);
