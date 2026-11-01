@@ -19,7 +19,8 @@ import { viewCull } from './viewCull.ts';
 import { desertEnvironment, updateMaterialLighting } from './materialLighting.ts';
 import { DayNight } from './dayNight.ts';
 import { NightSky, nightSky } from './nightSky.ts';
-import { hazeColorFor, hazeFactor, moonColor, moonDirection, moonDisc, sandStorm, SHADOW_ONLY_LAYER, skyRadiance, sunColor, sunDirection, sunDisc, sunLight, time } from './env.ts';
+import { Mothership, shipCover, shipLight } from './mothership.ts';
+import { hazeColorFor, hazeFactor, moonColor, moonDirection, moonDisc, sandStorm, SHADOW_ONLY_LAYER, skyAir, stars, sunColor, sunDirection, sunDisc, sunLight, time } from './env.ts';
 
 /** Sun elevation (radians) below which the moon is the shadow-casting light. Both are ~dark here. */
 const MOON_TAKES_OVER = THREE.MathUtils.degToRad(-3);
@@ -59,6 +60,8 @@ export class Sky {
   /** Set by main.ts: the heightfield shadow draws with it. */
   renderer: THREE.WebGPURenderer | null = null;
   readonly night = new NightSky();
+  /** The mothership in its orbit (src/world/mothership.ts). */
+  readonly mothership = new Mothership();
 
   /** Built into `root` (the desert stage's, src/levels/desert.ts); `scene` is the one scene, whose fog, environment and
    *  background enter() sets while the desert is the stage. */
@@ -71,7 +74,9 @@ export class Sky {
     // for sky pixels (post uses that to tell sky from ground).
     const mat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
     const dir = normalize(positionWorld.sub(cameraPosition));
-    mat.colorNode = skyRadiance(dir).add(sunDisc(dir)).add(moonDisc(dir)).add(nightSky(dir));
+    // Space behind the mothership is covered by it; the air's glow is in front of it (src/world/mothership.ts).
+    const space = stars(dir).add(sunDisc(dir)).add(moonDisc(dir)).add(nightSky(dir));
+    mat.colorNode = skyAir(dir).add(space.mul(shipCover.oneMinus())).add(shipLight);
     this.dome = new THREE.Mesh(new THREE.SphereGeometry(4000, 48, 24), mat);
     this.dome.frustumCulled = false;
     this.dome.renderOrder = -1000;
@@ -160,6 +165,7 @@ export class Sky {
     viewCull.shadowLight.copy(this.heights.light.value);
     viewCull.shadowDistance = this.csm.enabled.value ? graphics.shadowDistance : 0;
     if (this.renderer && this.csm.enabled.value) this.heights.update(this.renderer, this.scene, focus);
+    if (this.renderer) this.mothership.update(this.renderer, camera, this.day.tod, unixMs);
     this.fitCascades(camera);
     this.cullSmall();
   }

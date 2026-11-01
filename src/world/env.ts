@@ -132,7 +132,11 @@ export const hazeColorFor = Fn(([dir]: [N]) => {
 });
 
 /** Sky radiance for a world-space view direction, without the sun disc. Linear HDR. */
-export const skyRadiance = Fn(([dirIn]: [N]) => {
+export const skyRadiance = Fn(([dirIn]: [N]) => skyAir(dirIn).add(stars(normalize(dirIn))));
+
+/** The air's own glow for a view direction (skyRadiance without the stars): what lies in front of anything in space
+ *  (the mothership, src/world/mothership.ts). */
+export const skyAir = Fn(([dirIn]: [N]) => {
   const dir = normalize(dirIn);
   const y = dir.y;
   const mu = dot(dir, sunDirection);
@@ -151,11 +155,11 @@ export const skyRadiance = Fn(([dirIn]: [N]) => {
   const clear = mix(hazeBase, upper, smoothstep(0.0, 0.06, y));
   // Dust raised by a sandstorm thickens the lower sky towards the haze colour.
   const sky = mix(clear, hazeBase, sandStorm.mul(0.55).mul(smoothstep(0.5, 0.0, y)));
-  return sky.add(HALO_TINT.mul(sunColor).mul(mieHalo(mu))).add(stars(dir)).add(moonGlow(dir));
+  return sky.add(HALO_TINT.mul(sunColor).mul(mieHalo(mu))).add(moonGlow(dir));
 });
 
 /** Star field: one star in a few hundred direction cells, varied brightness and a slow twinkle. */
-const stars = Fn(([dir]: [N]) => {
+export const stars = Fn(([dir]: [N]) => {
   const p = dir.mul(260);
   const cell = floor(p);
   const pick = mx_cell_noise_float(cell);
