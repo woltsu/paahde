@@ -13,6 +13,10 @@ import { Bolts } from './world/bolts';
 import { Missiles } from './world/missiles';
 import { Jets } from './world/jets';
 import { Harvesters } from './world/harvesters';
+import { Brood } from './world/brood';
+import { NEST_N, NEST_STRIDE, nestPerches, type Perch } from '../shared/nest.ts';
+import { SP_DIE, SP_PERCH } from '../shared/queen.ts';
+import { solarAt } from '../shared/solarfarms.ts';
 import { harvesterSound } from './harvesterSound';
 import { SPEED } from '../shared/harvester.ts';
 import { jetAt, jetPose, type JetPose } from '../shared/jets.ts';
@@ -36,6 +40,16 @@ const CHARGE_NEAR = 250;
 const RAM_NEAR = 90;
 /** A crawler's bite jolts the camera this much (m). */
 const BITE_SHAKE = 0.18;
+/** Nest spiderlings awake this close (m) are a fight. */
+const NEST_NEAR = 60;
+
+/** Which mirror the nest spiderling at offset o of 'bots' `n` is on (shared/nest.ts), if any. */
+function perchAt(n: number[], o: number): Perch | null {
+  const i = n[o + 6];
+  if (!(i >= 0)) return null;
+  const f = solarAt(n[o + 1], n[o + 2]);
+  return f ? nestPerches(f)[i] ?? null : null;
+}
 
 /** Firework bursts (rifleSound.firework) besides a guardian's weak point: a crawler's and a crashing drone's softer
  *  (×level), a missile's blast lower (pitch) to sound bigger. */
@@ -55,6 +69,11 @@ export class GuardianFx {
   readonly missiles: Missiles;
   readonly jets: Jets;
   readonly harvesters: Harvesters;
+  /** The solar farms' nests' spiderlings (shared/nest.ts). */
+  readonly nest: Brood;
+  /** Nest spiderlings awake within NEST_NEAR m of us. */
+  private nested = false;
+  private scene: THREE.Object3D;
   /** A harvester is charging within CHARGE_NEAR m of us. */
   private charged = false;
   private jetPose: JetPose = jetPose();
@@ -94,6 +113,8 @@ export class GuardianFx {
     this.missiles = new Missiles(scene);
     this.jets = new Jets(scene);
     this.harvesters = new Harvesters(scene);
+    this.scene = scene;
+    this.nest = new Brood(scene, NEST_N * 2);
     // A shot into a core: a heavy clang; one shot out: a burst of fire and sparks out of its maw.
     this.harvesters.onHit = (x, y, z) => guardianSound.footfall(x, y, z, 0.8, this.ear);
     this.harvesters.onCoreOut = (x, y, z, dx, dz) => {
@@ -236,6 +257,27 @@ export class GuardianFx {
     if (best < TREMBLE_R) this.shake = Math.max(this.shake, 0.06 * Math.min(4, v) * (1 - best / TREMBLE_R));
   }
 
+  /** The nests' spiderlings, from the newest 'bots' (they ease towards it themselves): drawn, heard, and a fight once
+   *  they're awake round us. */
+  private updateNest(net: Net, dt: number, time: number, focus: { x: number; z: number }) {
+    const n = net.bots[net.bots.length - 1]?.n ?? [];
+    this.nest.update({
+      s: n, start: 0, stride: NEST_STRIDE, cap: NEST_N * 2,
+      from: (o, out) => {
+        const q = perchAt(n, o);
+        return q ? out.set(q.x, q.y, q.z) : null;
+      },
+      perch: (o) => perchAt(n, o),
+    }, { scene: this.scene, ear: this.ear, me: null, time, dt, thump: (...a) => this.thump(...a), shake: (a) => this.jolt(a) }, false);
+    const was = this.nested;
+    this.nested = false;
+    for (const l of this.nest.each()) {
+      if (l.st !== SP_PERCH && l.st !== SP_DIE && Math.hypot(l.x - focus.x, l.z - focus.z) < NEST_NEAR) this.nested = true;
+      this.seen(`n${l.id}`, l.st === SP_DIE, 'crawler');
+    }
+    if (this.nested && !was) this.onAggro('crawler');
+  }
+
   /** Every frame, after the camera has been placed: draws them and shakes the camera. */
   update(net: Net, dt: number, camera: THREE.Camera, focus: { x: number; z: number }) {
     this.net = net;
@@ -331,6 +373,7 @@ export class GuardianFx {
     for (const id of this.crawled) if (!gs.some((g) => g.id === id)) this.crawled.delete(id);
     for (const id of this.lunging) if (!gs.some((g) => g.id === id)) this.lunging.delete(id);
     for (const id of this.hunted) if (!gs.some((g) => g.id === id)) this.hunted.delete(id);
+    this.updateNest(net, dt, t, focus);
     const spotted = ds.some((d) => d.lock === 2);
     if (spotted && !this.locked) {
       guardianSound.chirp();
@@ -342,7 +385,7 @@ export class GuardianFx {
     this.alive.clear();
     this.locked = spotted;
     const incoming = this.missiles.incoming(focus.x, focus.z, 30, net.serverTime()).length > 0;
-    this.combat = incoming || spotted || this.hunted.size > 0 || this.crawled.size > 0 || this.charged;
+    this.combat = incoming || spotted || this.hunted.size > 0 || this.crawled.size > 0 || this.charged || this.nested;
     if (this.shake > 0.001) {
       const s = this.shake;
       camera.position.x += (Math.random() - 0.5) * s;

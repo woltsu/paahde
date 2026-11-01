@@ -7,7 +7,7 @@
 import type { BossKind } from './bosses.ts';
 import type { LootLevel } from './crashsites.ts';
 import type { JetKind } from './jetbreak.ts';
-import { bossDrops, harvesterDrops, jetDrops, killDrops, type Drop, type Rand } from './lootRoll.ts';
+import { bossDrops, harvesterDrops, jetDrops, killDrops, spiderlingDrops, type Drop, type Rand } from './lootRoll.ts';
 
 /** The best gun you carry, else the scrap mace (shared/mace.ts). */
 export type Weapon = 'none' | 'mace' | 'pistol' | 'rifle';
@@ -53,7 +53,7 @@ export type Enemy = {
   mass: number;
 };
 
-export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | BossKind;
+export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | 'spiderling' | BossKind;
 
 /** The mace is no better than bare hands but against crawlers, the one thing it can reach. */
 const odds = (none: number, pistol: number, rifle: number, mace = none): Record<Weapon, number> => ({ none, mace, pistol, rifle });
@@ -74,8 +74,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   // Player-sized walkers at every crash site of crawler and guardian ground (an outpost's pack is smaller: server/guardians.ts
   // CRAWLERS_MIN..MAX, OUTPOST_CRAWLERS_MAX); the ones killed are back PACK_BACK_S after everyone has left. By night small
   // packs (1–3) roam the open desert too, one turning up near whoever is out every few minutes (server/guardians.ts
-  // NIGHT_PACK_*); about half of them pass by unnoticed. Each solar farm (shared/solarfarms.ts) far out is kept by 3–4
-  // packs of 2–3 (server/guardians.ts FARM_PACKS), not played by the economy simulator (it stays nearer home).
+  // NIGHT_PACK_*); about half of them pass by unnoticed. None at the solar farms: their nests' spiderlings keep them.
   crawler: {
     n: [1, 4],
     meet: [{ at: 'site', levels: [0.5, 1, 2], odds: 1, backS: PACK_BACK_S }, { at: 'roam', where: 'open', perMin: 0.2, night: true }],
@@ -118,6 +117,16 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(40, 240, 150), win: odds(0, 0.3, 0.85), death: odds(0.25, 0.15, 0.06), quality: 0.2 },
     drops: (rand) => harvesterDrops(rand),
     mass: 2e6,
+  },
+  // The solar farms' nests (shared/nest.ts): NEST_N spiderlings each, clinging to the mirrors by the tower, dropping on
+  // whoever comes near; one rifle shot or two of the pistol. Not played by the economy simulator (the farms are further
+  // out than it goes): `meet` is empty.
+  spiderling: {
+    n: [10, 30],
+    meet: [],
+    fight: { seconds: odds(30, 90, 70, 60), win: odds(0, 0.6, 0.85, 0.3), death: odds(0.6, 0.3, 0.12, 0.45), quality: 0.2 },
+    drops: (rand) => spiderlingDrops(rand),
+    mass: 8,
   },
   worm: boss('worm'),
   carrier: boss('carrier'),

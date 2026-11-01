@@ -7,9 +7,9 @@
 // site. Crawlers belong to a crash site: they turn up there when someone comes near (any time, at crawler and guardian
 // ground) and go when everyone has left. The scrap fields (level 0) near the start have none. At night small packs
 // also roam the open desert (nightPacks): a made-up home walking across the sand, its crawlers patrolling round it. The
-// solar farms (shared/solarfarms.ts) are kept by a few packs each, one at the tower's foot and the rest out among the
-// heliostats, there like a site's when someone comes near (farmPacks).
-import { FIELD, roadToLocal, SHED, solarFarmsNear, type SolarFarm } from '../shared/solarfarms.ts';
+// solar farms (shared/solarfarms.ts) have no crawlers: their nests of spiderlings cling to the mirrors (server/nests.ts,
+// ticked from here, sent in 'bots' `n`).
+import { NestServer } from './nests.ts';
 import { ORIGIN } from '../shared/origin.ts';
 import type { Vortex } from '../shared/vortex.ts';
 import { PACK_BACK_S } from '../shared/enemies.ts';
@@ -60,11 +60,6 @@ const HUNT_GIVE_UP_R: Record<Kind, number> = { [GUARDIAN]: 200, [CRAWLER]: 70 };
 /** After crushing someone, a guardian ignores everyone for this long (ms). */
 const CALM_MS = 20_000;
 const CRAWLERS_MIN = 1, CRAWLERS_MAX = 4;
-/** A solar farm's packs: how many, of how many crawlers each (the first at the tower's foot, the others out in the field);
- *  they come when someone is FARM_NEAR_R (m) from its tower and go when nobody is within FARM_LEAVE_R. */
-const FARM_PACKS: [number, number] = [3, 4];
-const FARM_PACK_N: [number, number] = [2, 3];
-const FARM_NEAR_R = 480, FARM_LEAVE_R = 650;
 /** Most crawlers at an outpost (a crawler site among the scrap fields, inside LEVEL_R[0]: shared/crashsites.ts). */
 const OUTPOST_CRAWLERS_MAX = 2;
 /** Night packs (nightPacks): at most NIGHT_PACKS out at once. Someone out in the open (NIGHT_PACK_KEEP_OUT m or more from
@@ -158,10 +153,8 @@ export class GuardianServer {
   private swarmed = new Set<number>();
   /** Crash site id → when everyone left it and how many of its crawlers were alive then (swarm). */
   private left = new Map<number, { at: number; crawlers: number }>();
-  /** Solar farm id → its packs' made-up homes, while someone is near (farmPacks). */
-  private farms = new Map<number, { farm: SolarFarm; homes: CrashSite[] }>();
-  /** Solar farm id → when everyone left it and how many of its crawlers in each pack were alive then. */
-  private farmsLeft = new Map<number, { at: number; crawlers: number[] }>();
+  /** The solar farms' nests of spiderlings. */
+  readonly nests = new NestServer();
   /** Debug menu packs: their made-up home (where they were summoned), gone like a site's once everyone has left it. */
   private summoned: CrashSite[] = [];
   private nextSummon = 1;
@@ -295,44 +288,6 @@ export class GuardianServer {
     }
   }
 
-  /** The solar farms' packs (FARM_PACKS): out when someone comes near a farm, gone when everyone has left it; a farm left
-   *  comes back with the crawlers it had then until PACK_BACK_S is up, like a site. */
-  private farmPacks(players: BotPlayer[], now: number) {
-    for (const [id, { farm, homes }] of this.farms) {
-      if (players.some((p) => Math.hypot(p.x - farm.x, p.z - farm.z) < FARM_LEAVE_R)) continue;
-      this.farms.delete(id);
-      this.farmsLeft.set(id, { at: now, crawlers: homes.map((h) => this.guardians.filter((g) => g.home === h && g.deadAt < 0).length) });
-      this.guardians = this.guardians.filter((g) => !homes.includes(g.home));
-    }
-    for (const [id, l] of this.farmsLeft) if (now - l.at >= PACK_BACK_S * 1000) this.farmsLeft.delete(id);
-    for (const p of players) for (const farm of solarFarmsNear(p.x, p.z, FARM_NEAR_R)) {
-      if (this.farms.has(farm.id)) continue;
-      const left = this.farmsLeft.get(farm.id)?.crawlers;
-      this.farmsLeft.delete(farm.id);
-      const packs = left?.length ?? FARM_PACKS[0] + Math.floor(Math.random() * (FARM_PACKS[1] - FARM_PACKS[0] + 1));
-      const homes: CrashSite[] = [];
-      for (let k = 0; k < packs; k++) {
-        // The first in front of the shed by the tower; the others out among the heliostats.
-        let hx: number, hz: number;
-        if (k === 0) [hx, hz] = roadToLocal(farm, SHED.at + SHED.hd + 8, 0);
-        else {
-          const a = rand(-Math.PI, Math.PI), r = rand(FIELD.r0 + 20, FIELD.r1 - 30);
-          hx = Math.sin(a) * r;
-          hz = Math.cos(a) * r;
-        }
-        const home: CrashSite = { ...this.sites[0], id: -this.nextSummon++, x: farm.x + hx, z: farm.z + hz };
-        homes.push(home);
-        const n = left?.[k] ?? FARM_PACK_N[0] + Math.floor(Math.random() * (FARM_PACK_N[1] - FARM_PACK_N[0] + 1));
-        for (let i = 0; i < n; i++) {
-          const a = rand(-Math.PI, Math.PI), r = rand(...PATROL[CRAWLER]);
-          const [cx, cz] = keepOut(home.x + Math.sin(a) * r, home.z + Math.cos(a) * r, CRAWLER_R);
-          this.guardians.push(this.walker(CRAWLER, 4, home, cx, cz));
-        }
-      }
-      this.farms.set(farm.id, { farm, homes });
-    }
-  }
-
   /** Night packs (NIGHT_PACK_*): new ones near people out in the open by night, their homes walking on (stopped while
    *  one of the pack hunts, so the chase keeps to where it began), walking off at dawn; gone once nobody is near or,
    *  walking off, nobody can see them, or all of them are dead and cleared away. */
@@ -412,7 +367,6 @@ export class GuardianServer {
     const exposed = players.filter(open);
     this.vel.update(now, dt, players);
     this.swarm(players, now);
-    this.farmPacks(players, now);
     this.nightPacks(dt, now, tod, players, exposed);
     this.wrecks(now);
     const lit = this.drones.tick(dt, now, tod, players, exposed, byId, this.storms, (p) => this.alert(p, now), this.vortices);
@@ -431,6 +385,7 @@ export class GuardianServer {
       this.stepFeet(g, dt);
       if (KINDS[g.kind].gun && !stuck) this.tickGun(g, now, byId, events);
     }
+    this.nests.tick(dt, now, players, exposed, bitten, this.vel);
     this.tickBolts(dt, exposed, shot, events);
     this.updatePosts();
     return { bitten, shot, blasted, events };
@@ -959,7 +914,8 @@ export class GuardianServer {
         o.kind === CRAWLER ? o.lunge : o.chargeAt >= 0 ? 1 : o.aiming ? 0 : -1,
         o.broken, o.deadAt < 0 ? 0 : Math.round((time - o.deadAt) / 100) / 10 + 0.01);
     }
-    return { t: 'bots', time, g, d: this.drones.msg(time, id, x, z), f };
+    const n = this.nests.msg(x, z);
+    return { t: 'bots', time, g, d: this.drones.msg(time, id, x, z), f, ...(n.length ? { n } : {}) };
   }
 
   // The drones, for server/world.ts.

@@ -10,7 +10,7 @@
 // - Modes (shared/queen.ts): ROAM (wander round its crash site, pausing now and then) → HUNT (charge) → REAR (front
 //   legs up, REAR_MS) → slam → RECOVER (stands, RECOVER_MS: the window to run or shoot) → HUNT. It gives up past
 //   GIVE_UP or after CHASE_MS, and leaves that player be for a while. LEAVE: walks away from everyone, out of sight.
-// - The brood: while it fights, every so often its sac opens (BIRTH_MS) and a clutch of spiderlings drops out from
+// - The brood (their hunt is server/brood.ts, shared with the solar farms' nests): while it fights, every so often its sac opens (BIRTH_MS) and a clutch of spiderlings drops out from
 //   under it. They run at whoever is out in the open (spread over everyone), faster than a run, the ones on the same
 //   person fanning out to come at them from all sides (server/pack.ts); close by they crouch, then spring at where
 //   their prey will be, taking turns (SP_TURNS) so one leap follows another: a sidestep while one crouches, or a
@@ -21,9 +21,9 @@
 //   is the baseline.
 import { crashSitesNear } from '../shared/crashsites.ts';
 import {
-  BIRTH_MS, BIRTH_Y, BIRTH_Z, BODY_H, BROOD_CAP, CHARGE, CHASE_MS, CROUCH_MS, DEATH_HOLE, DIE_MS, DROP_MS, FRONT, GIVE_UP, GROUP, HUNT,
-  HUNT_TURN, LEAP_HIT, LEAP_MAX, LEAP_MS, LEAP_R, LEAVE, LEGS, REAR, REAR_CONE, REAR_MS, REAR_R, RECOVER, RECOVER_MS, REST_MS, restSpot,
-  ROAM, SETTLE, SETTLE_S, SIGHT, SLAM_HOLE, SLAM_R, slamPoints, SP_DIE, SP_DROP, SP_LEAP, SP_REST, SP_RUN, SP_CROUCH, SP_SPEED,
+  BIRTH_MS, BIRTH_Z, BODY_H, BROOD_CAP, CHARGE, CHASE_MS, DEATH_HOLE, DIE_MS, FRONT, GIVE_UP, GROUP, HUNT,
+  HUNT_TURN, LEAP_HIT, LEAVE, LEGS, REAR, REAR_CONE, REAR_MS, REAR_R, RECOVER, RECOVER_MS, restSpot,
+  ROAM, SETTLE, SETTLE_S, SIGHT, SLAM_HOLE, SLAM_R, slamPoints, SP_DIE, SP_DROP, SP_REST, SP_RUN, SP_SPEED,
   STAB_HOLE, STAB_R, stabY, swingTime, TURN, WALK,
 } from '../shared/queen.ts';
 import { blastPush } from '../shared/ragdoll.ts';
@@ -32,7 +32,7 @@ import { crowd, scaled } from './bossCrowd.ts';
 import { blast, column, due } from './blasts.ts';
 import { Tracks, type TrackOpts } from './tracks.ts';
 import type { Boss, BossOut, BossPlayer, Brain } from './bosses.ts';
-import { flank, keepOut, skirt, type Skirt } from './pack.ts';
+import { huntLings, setLing, type Ling } from './brood.ts';
 
 /** The client draws bosses this far (ms) behind the server (src/world/botFrames.ts BOT_DELAY_MS). */
 const DRAW_DELAY = 250;
@@ -83,14 +83,6 @@ type St = {
   fightAt: number; fadeAt: number;
   /** Players' velocities (smoothed), for leading the leaps. */
   vel: Tracks;
-};
-/** A spiderling: where, which way, state (shared/queen.ts SP_*) since when, its prey (-1 none), born when; crouched
- *  or leaping, where it's springing to (from where); landed, when its bite is worked out (0 done). */
-type Ling = {
-  id: number; x: number; z: number; yaw: number; st: number; stAt: number; prey: number; born: number;
-  ax: number; az: number; fx: number; fz: number; biteAt: number;
-  /** Which way round what's in its way (server/pack.ts). */
-  skirt: Skirt;
 };
 
 /** Calm this long (ms: not hunting anyone), the brood runs down: a spiderling curls up every FADE_MS. */
@@ -275,7 +267,7 @@ export const queen: Brain = {
     const l = (b.st as St).brood.find((o) => o.id === i && o.st !== SP_DIE);
     if (!l || Math.hypot(l.x - x, l.z - z) > LING_HIT || Math.abs(y - heightAt(l.x, l.z)) > 7) return false;
     l.biteAt = 0;
-    ling(l, SP_DIE, now);
+    setLing(l, SP_DIE, now);
     return true;
   },
 
@@ -285,7 +277,7 @@ export const queen: Brain = {
     st.speed = 0;
     // The brood runs down with her.
     st.due = false;
-    for (const l of st.brood) if (l.st !== SP_DIE) ling(l, SP_DIE, now);
+    for (const l of st.brood) if (l.st !== SP_DIE) setLing(l, SP_DIE, now);
     out.craters.push({ x: b.x, z: b.z, r: DEATH_HOLE.r, mm: DEATH_HOLE.mm });
   },
 
@@ -357,10 +349,6 @@ function land(b: Boss, st: St, now: number, players: BossPlayer[], out: BossOut)
   });
 }
 
-function ling(l: Ling, s: number, now: number) {
-  l.st = s;
-  l.stAt = now;
-}
 
 /** The brood (see the top of the file): clutches out of the sac, and every spiderling's run, crouch, leap and bite. */
 function brood(b: Boss, st: St, dt: number, now: number, n: number, players: BossPlayer[], out: BossOut) {
@@ -373,7 +361,7 @@ function brood(b: Boss, st: St, dt: number, now: number, n: number, players: Bos
   else if (alive && now - st.fightAt > CALM_MS && now >= st.fadeAt) {
     const l = st.brood.find((o) => o.st === SP_RUN || o.st === SP_REST);
     if (l) {
-      ling(l, SP_DIE, now);
+      setLing(l, SP_DIE, now);
       st.fadeAt = now + FADE_MS;
     }
   }
@@ -397,127 +385,11 @@ function brood(b: Boss, st: St, dt: number, now: number, n: number, players: Bos
     }
   }
 
-  const chasing = new Map<number, number>();
-  for (const l of st.brood) if (l.prey >= 0 && l.st !== SP_DIE) chasing.set(l.prey, (chasing.get(l.prey) ?? 0) + 1);
-  // Who's after whom (by id, for each one's side of them), and when someone's prey last had one crouch at them.
-  const packs = new Map<number, number[]>(), pounced = new Map<number, number>();
-  for (const l of st.brood) {
-    if (l.prey < 0 || l.st === SP_DIE || l.st === SP_DROP) continue;
-    if (l.st === SP_RUN) packs.set(l.prey, [...(packs.get(l.prey) ?? []), l.id]);
-    if (l.st === SP_CROUCH || l.st === SP_LEAP) pounced.set(l.prey, Math.max(pounced.get(l.prey) ?? 0, l.stAt));
-  }
   const killed = new Set(out.kills.map((k) => k.id));
-  st.brood = st.brood.filter((l) => {
-    const since = now - l.stAt;
-    if (l.st === SP_DIE) return since < DIE_MS;
-    if (l.st === SP_DROP) {
-      if (since >= DROP_MS) ling(l, SP_RUN, now);
-      return true;
-    }
-    if (l.st === SP_RUN) {
-      let p = l.prey >= 0 ? players.find((o) => o.id === l.prey) : undefined;
-      if (!p || p.safe || Math.hypot(p.x - l.x, p.z - l.z) > SP_SIGHT) {
-        // Someone else: the nearest, counting those already chased as further.
-        if (l.prey >= 0) chasing.set(l.prey, (chasing.get(l.prey) ?? 1) - 1);
-        l.prey = -1;
-        p = undefined;
-        let best = Infinity;
-        for (const o of players) {
-          const d = Math.hypot(o.x - l.x, o.z - l.z);
-          if (o.safe || d > SP_SIGHT) continue;
-          const cost = d + SP_SHARE * (chasing.get(o.id) ?? 0);
-          if (cost < best) (best = cost), (p = o);
-        }
-        if (p) {
-          l.prey = p.id;
-          chasing.set(p.id, (chasing.get(p.id) ?? 0) + 1);
-        }
-      }
-      let want: number, heading: number;
-      if (p) {
-        const d = Math.hypot(p.x - l.x, p.z - l.z);
-        // Where they'll be when it lands (as they see it: drawn DRAW_DELAY late). In reach of that (or right on
-        // them): crouch, aimed there. So walking away only puts it off; a sprint, or a sidestep as it crouches, doesn't.
-        const v = st.vel.get(p.id), lead = (CROUCH_MS + LEAP_MS + DRAW_DELAY) / 1000;
-        const ax = p.x + (v ? v.vx * lead : 0) - l.x, az = p.z + (v ? v.vz * lead : 0) - l.z, len = Math.hypot(ax, az);
-        const waiting = d >= LEAP_R && now - (pounced.get(p.id) ?? -Infinity) < SP_TURNS;
-        if ((len <= LEAP_MAX || d < LEAP_R) && !waiting) {
-          const k = Math.min(1, LEAP_MAX / Math.max(len, 1e-3));
-          l.fx = l.x;
-          l.fz = l.z;
-          l.ax = l.x + ax * k;
-          l.az = l.z + az * k;
-          if (len > 0.1) l.yaw = Math.atan2(ax, az);
-          ling(l, SP_CROUCH, now);
-          pounced.set(p.id, now);
-          return true;
-        }
-        if (len <= LEAP_MAX + 2) {
-          // Another's turn to spring: round them at leaping range, ready.
-          const ccw = l.id % 2 ? 1 : -1;
-          heading = Math.atan2(l.x - p.x, l.z - p.z) + ccw * (Math.PI / 2 + (d - LEAP_MAX * 0.8) * 0.15);
-          want = SP_SPEED * 0.8;
-        } else {
-          // Heading them off, each from its own side (server/pack.ts), zigzagging in further off.
-          const pack = packs.get(p.id) ?? [l.id];
-          const [tx, tz] = flank(l.x, l.z, p.x, p.z, v?.vx ?? 0, v?.vz ?? 0, SP_SPEED, Math.max(0, pack.indexOf(l.id)), pack.length, SP_WIDE);
-          heading = Math.atan2(tx - l.x, tz - l.z);
-          if (d > 14) heading += Math.sin(now * 0.006 + l.id * 1.7) * 0.25;
-          want = SP_SPEED;
-        }
-      } else if (Math.hypot(b.x - l.x, b.z - l.z) > 25) {
-        // Nobody: back to her, milling about under her.
-        heading = Math.atan2(b.x - l.x, b.z - l.z);
-        want = 3;
-      } else {
-        heading = l.yaw + Math.sin(now * 0.002 + l.id) * 1.5;
-        want = 1.5;
-      }
-      // Round wrecks and scrap, not through them.
-      heading = skirt(l.x, l.z, heading, SP_R, l.skirt, now);
-      l.yaw = wrap(l.yaw + Math.max(-SP_TURN * dt, Math.min(SP_TURN * dt, wrap(heading - l.yaw))));
-      [l.x, l.z] = keepOut(l.x + Math.sin(l.yaw) * want * dt, l.z + Math.cos(l.yaw) * want * dt, SP_R);
-      return true;
-    }
-    if (l.st === SP_CROUCH) {
-      if (since >= CROUCH_MS) ling(l, SP_LEAP, now);
-      return true;
-    }
-    if (l.st === SP_LEAP) {
-      const t = Math.min(1, since / LEAP_MS);
-      l.x = l.fx + (l.ax - l.fx) * t;
-      l.z = l.fz + (l.az - l.fz) * t;
-      if (t >= 1) {
-        ling(l, SP_REST, now);
-        l.biteAt = now + DRAW_DELAY;
-      }
-      return true;
-    }
-    // Landed: the bite as the drawn one comes down, then up and after them again.
-    if (l.biteAt && now >= l.biteAt) {
-      l.biteAt = 0;
-      const y = heightAt(l.x, l.z);
-      for (const p of players) {
-        if (p.safe || killed.has(p.id) || Math.hypot(p.x - l.x, p.z - l.z) > LEAP_HIT || Math.abs(p.y - y) > 2.5) continue;
-        killed.add(p.id);
-        out.kills.push({ id: p.id, cause: 'crawler', push: blastPush(l.x, y, l.z, p.x, p.y, p.z, LEAP_HIT * 3) });
-      }
-    }
-    if (since >= REST_MS) ling(l, SP_RUN, now);
-    return true;
-  });
-
-  // Running ones keep a little apart.
-  const run = st.brood.filter((l) => l.st === SP_RUN);
-  for (let i = 0; i < run.length; i++) {
-    for (let j = i + 1; j < run.length; j++) {
-      const a = run[i], c = run[j], dx = c.x - a.x, dz = c.z - a.z, d = Math.hypot(dx, dz);
-      if (d >= SP_GAP || d < 1e-4) continue;
-      const k = (SP_GAP - d) / d / 2;
-      a.x -= dx * k;
-      a.z -= dz * k;
-      c.x += dx * k;
-      c.z += dz * k;
-    }
-  }
+  st.brood = huntLings(st.brood, {
+    sight: SP_SIGHT, share: SP_SHARE, turn: SP_TURN, speed: SP_SPEED, gap: SP_GAP, turns: SP_TURNS, wide: SP_WIDE, r: SP_R, delay: DRAW_DELAY, vel: st.vel,
+    // Nobody: back to her, milling about under her.
+    idle: (l) => Math.hypot(b.x - l.x, b.z - l.z) > 25 ? [Math.atan2(b.x - l.x, b.z - l.z), 3] : [l.yaw + Math.sin(now * 0.002 + l.id) * 1.5, 1.5],
+    bite: (l, p, y) => out.kills.push({ id: p.id, cause: 'crawler', push: blastPush(l.x, y, l.z, p.x, p.y, p.z, LEAP_HIT * 3) }),
+  }, dt, now, players, killed, DIE_MS);
 }

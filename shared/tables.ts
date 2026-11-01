@@ -323,7 +323,7 @@ export const SHELTER_STASHES = {
 
 /** Stashes left at the solar farms (shared/solarfarms.ts): how many lie at each farm (in its control shed, at the tower's
  *  foot, under its broken heliostats; a taken one comes back at whichever farm is shortest), and what they are: the
- *  richest out there, far from the start and kept by crawlers. The farms' own stuff runs to the electrics. */
+ *  richest out there, far from the start and kept by a nest of spiderlings (shared/nest.ts). The farms' own stuff runs to the electrics. */
 export const SOLAR_STASHES = {
   perFarm: 6,
   contents: { part: 0.48, scrap: 0.06, cloth: 0.04, pistol: 0.07, rifle: 0.07, gear: 0.24, receiver: 0.04 },
@@ -347,6 +347,11 @@ export const KILL_SPOILS: Record<'guardian' | 'crawler' | 'drone', Spoils> = {
   crawler: { odds: 0.35, min: 1, max: 1, parts: SPOILS, tierWeights: { scrap: 1, basic: 1 } },
   drone: { odds: 1, min: 1, max: 1, parts: SPOILS, tierWeights: { basic: 1, quality: 1 } },
 };
+
+/** A solar farm nest's spiderling (shared/nest.ts), of which there are dozens: now and then a small part or a bit of
+ *  scrap off it, no wiring (server/world.ts dropNestSpoils). */
+export const SPIDERLING_SPOILS: Spoils = { odds: 0.12, min: 1, max: 1, parts: SPOILS, tierWeights: { scrap: 2, basic: 1 } };
+export const SPIDERLING_SCRAP_ODDS = 0.2;
 
 /** A downed jet's crash site (server/world.ts jetCame): the flying wing's engines are machines to take apart (shared/jetcrash.ts); the drone has
  *  none, its avionics and engine parts lie about instead (DRONE_JET_SPOILS, one more if it was jammed down whole). Besides, either leaves its drone

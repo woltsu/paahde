@@ -99,8 +99,9 @@ export const S_BROOD = S_FEET + LEGS * 4;
 export const BROOD_N = 6;
 /** Never more than this many out at once, however many people. */
 export const BROOD_CAP = 16;
-/** Spiderling states: dropping out of the sac, running, crouched to spring, in the air, landed (getting up), dying. */
-export const SP_DROP = 0, SP_RUN = 1, SP_CROUCH = 2, SP_LEAP = 3, SP_REST = 4, SP_DIE = 5;
+/** Spiderling states: dropping out of the sac (or off its perch), running, crouched to spring, in the air, landed
+ *  (getting up), dying; perched on a heliostat's mirror (a solar farm's nest, shared/nest.ts), waiting. */
+export const SP_DROP = 0, SP_RUN = 1, SP_CROUCH = 2, SP_LEAP = 3, SP_REST = 4, SP_DIE = 5, SP_PERCH = 6;
 /** The sac opens for BIRTH_MS (glowing, pulsing), then the clutch drops out from under it (body frame: BIRTH_Z
  *  along, BIRTH_Y down from the thorax centre), each falling for DROP_MS. */
 export const BIRTH_MS = 1400;

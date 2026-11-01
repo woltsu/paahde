@@ -341,6 +341,7 @@ if (location.search.includes('debug')) Object.assign((window as unknown as { dbg
 // The beam starts at the drawn gun: the first-person one, or in third person the one in the body's hand.
 const rifle = new Rifle(orbit, net, guardianFx.guardians, guardianFx.drones, guardianFx.jets, guardianFx.harvesters,
   (out) => viewmodel.muzzle(out) ?? (orbit.showBody && me.muzzle(out) ? out : null));
+rifle.nest = guardianFx.nest;
 rifle.remoteMuzzle = (id, out) => (remotes.get(id)?.muzzle(out) ? out : null);
 scene.add(zaps.root);
 zaps.setCamera(orbit.camera);

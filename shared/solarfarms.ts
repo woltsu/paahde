@@ -6,7 +6,7 @@
 // broken, some are snapped off at the post, a few are gone. The mirrors are high enough to walk and ride under (their
 // shade counts: shared/shade.ts), only the posts are in the way. Four access roads cross the field, and by the tower's
 // foot a roofless control shed. Stashes lie in the shed, at the tower's foot and under the broken heliostats
-// (server/loot.ts, SOLAR_STASHES); a pack of crawlers keeps each farm (server/guardians.ts).
+// (server/loot.ts, SOLAR_STASHES); a nest of spiderlings clings to the mirrors by the tower (shared/nest.ts).
 //
 // Shared by server physics and client prediction (collideSolar, solarCeiling in sim.ts), the terrain (the pad in
 // baseHeight), the shade, the shots and the renderer (src/world/solarfarms.ts builds them from this layout).

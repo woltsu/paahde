@@ -21,7 +21,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BOSSES, type BossSnap } from '../../shared/bosses.ts';
 import {
-  ABD_PITCH, BIRTH_MS, BODY_H, FEMUR, FRONT, HUNT, LEGS, PEDICEL, REAR, REAR_MS, RECOVER, restSpot, ROAM, S_BROOD, S_FEET, SOCKETS, TARSUS,
+  ABD_PITCH, BIRTH_MS, BODY_H, BROOD_CAP, BROOD_N, FEMUR, FRONT, HUNT, LEGS, PEDICEL, REAR, REAR_MS, RECOVER, restSpot, ROAM, S_BROOD, S_FEET, SOCKETS, TARSUS,
   TARSUS_LEAN, TIBIA,
 } from '../../shared/queen.ts';
 import { heightAt } from '../../shared/terrain.ts';
@@ -252,7 +252,7 @@ export class QueenView implements BossView {
     this.usesModel = geos !== null;
     if (!geos) void load();
     scene.add(this.root);
-    this.brood = new Brood(scene);
+    this.brood = new Brood(scene, BROOD_CAP);
   }
 
   /** Fill the part groups with meshes from `g`. */
@@ -296,7 +296,7 @@ export class QueenView implements BossView {
     if (!this.placed || Math.hypot(s.x - this.x, s.z - this.z) > 40) this.place(s);
     if (s.dead > 0) {
       this.die(s, ctx);
-      this.brood.update(s.s, ctx, far, this.dropAt);
+      this.brood.update({ s: s.s, start: S_BROOD + 2, stride: BROOD_N, cap: BROOD_CAP, from: (_o, out) => this.dropAt(out) }, ctx, far);
       return;
     }
     // Velocity from the interpolated track (smoothed), turn rate.
@@ -382,7 +382,7 @@ export class QueenView implements BossView {
     this.glow.sac.color.setScalar(0.75 + 0.35 * Math.sin(ctx.time * 0.0021) + raise * 0.6 + open * (1.2 + 0.6 * Math.sin(ctx.time * 0.025)));
     this.glow.legs.color.setScalar(1);
     this.gutMat.color.setScalar(open * 0.9);
-    this.brood.update(s.s, ctx, far, this.dropAt);
+    this.brood.update({ s: s.s, start: S_BROOD + 2, stride: BROOD_N, cap: BROOD_CAP, from: (_o, out) => this.dropAt(out) }, ctx, far);
   }
 
   /** Under the sac, where the spiderlings drop from (world). */

@@ -2586,10 +2586,37 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   its reach (`solarWithin`). Placement itself asks only the dunes, canyons and mud flats, so nothing calls back into it.
   Deterministic: the rings' angles and the frozen sun go through `sinPoly`, a polynomial.
 - **Loot and enemies:** 6 stashes per farm within 6 km of the origin (`SOLAR_STASHES`: richer than the shelters'; in the
-  shed, at the tower's foot, under broken heliostats). 3–4 crawler packs of 2–3 keep each farm, one in front of the shed,
-  the rest out in the field (server/guardians.ts `farmPacks`), there like a site's when someone comes within 480 m. Not in
-  the economy simulator (it stays nearer home).
+  shed, at the tower's foot, under broken heliostats). Kept by a nest of the queen's spiderlings, not crawlers (see
+  "Solar farm nests"). Not in the economy simulator (it stays nearer home).
 - **View:** the tower from 5.8 km, the field and shed from 2.4 km, cut into 4 × 4 tiles of three instanced meshes (posts,
   frames, mirror panels) so cameras and cascades cull them; only posts and frames cast shadows. The panels reflect the
   sky's radiance along the reflected view ray (the desert's environment is too dim for a mirror) and are dusted towards
   the sand's colour. F3 → "Go to solar farm" puts you at the nearest field's edge.
+
+## Solar farm nests
+
+- **What:** the solar farms lost their crawler packs (server/guardians.ts `farmPacks` is gone); each has a nest of 30 of
+  the brood queen's spiderlings instead (shared/nest.ts, server/nests.ts). They cling to the mirrors of the four inner
+  rings (42–78 m out), in clutches of two to four a mirror, some on the face, some hanging under it, off the post's head
+  and apart (`nestPerches`, seeded by the farm, worked out the same on server and client; 'bots' `n` only says which
+  perch). Out when someone is within 480 m of the tower, gone past 650 m; a farm left keeps who was alive for
+  PACK_BACK_S, like a site.
+- **Waking:** someone out in the open within 48 m of a perch wakes it (up to 0.9 s later); each one dropping wakes those
+  perched within 24 m a moment later; anyone in among the nest's mirrors sets off the lot, a wave out from them (35 ms a
+  metre). Walking in from the field's edge, the first come down about 100 m from the tower and most of the nest is
+  down by the time you reach its foot.
+- **Hunt:** the queen's brood's (pulled out into server/brood.ts `huntLings`, both run it): faster than a run (8.6 m/s
+  here, the queen's 9.5), fanning out round you, crouch and spring in turns (650 ms here), a sidestep or slide gets you
+  out of a spring; a landing on you is a killing blow (a shield plate takes one). With nobody to go for they mill about
+  under the mirrors by the tower.
+- **Killing:** 2 hit points, a rifle shot takes 2, the pistol's 1 (`NEST_HP`, `NEST_DAMAGE`), no weak points; hit on its
+  perch and still alive, it drops at once; killed there, it falls off as it curls up. Drops (shared/enemies.ts
+  `spiderling`): 12% a scrap- or basic-tier part, 20% a bit of scrap, no wiring (there are dozens).
+- **Look:** the spiderlings (the queen's too) were dark brown blobs; now small queens in tools/blender/queen.py's palette,
+  built in src/world/brood.ts: a faceted gunmetal hull under yellowed ceramic plates, a rusted belly, the sac's amber slits
+  down the back, a red eye cluster over steel cutters, a faded hazard plate on the tail, five-sided legs (gunmetal
+  thighs, steel shins), flat-shaded, still three draw calls. Perched they splay their legs on the glass, breathe a dim
+  glow and shift a foot now and then.
+- **Tests:** tools/nest.test.mjs (perches on the inner mirrors, the same every time; none wake for someone keeping off;
+  walking in brings most down and they bite; a rifle shot kills, the pistol takes two and the first knocks it off; a
+  farm left and come back to keeps the survivors; no crawlers at a farm, the nest rides in 'bots').

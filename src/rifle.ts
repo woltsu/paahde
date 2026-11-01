@@ -27,6 +27,7 @@ import type { Guardians } from './world/guardians';
 import type { Drones } from './world/drones';
 import type { Jets } from './world/jets';
 import type { Harvesters } from './world/harvesters';
+import type { Brood } from './world/brood';
 import { bossFx } from './bosses';
 import { MINION } from '../shared/bosses.ts';
 import { zaps } from './world/zaps';
@@ -161,6 +162,8 @@ export class Rifle {
   forceFire = false;
   /** Where player `id`'s drawn gun's muzzle is (world), or null (not drawn, or no gun in hand). */
   remoteMuzzle: (id: number, out: THREE.Vector3) => THREE.Vector3 | null = () => null;
+  /** The solar farms' nests' spiderlings (src/guardians.ts), to shoot at. */
+  nest: Brood | null = null;
 
   constructor(view: FirstPersonCamera, net: Net, guardians: Guardians, drones: Drones, jets: Jets, harvesters: Harvesters, muzzle: (out: THREE.Vector3) => THREE.Vector3 | null) {
     this.drones = drones;
@@ -348,6 +351,8 @@ export class Rifle {
     if (jet) dist = jet.dist;
     const crawler = this.harvesters.raycast(_o, _d, dist);
     if (crawler) dist = crawler.dist;
+    const nest = this.nest?.ray(_o, _d, dist) ?? null;
+    if (nest) dist = nest.dist;
     const boss = bossFx?.raycast(_o, _d, dist) ?? null;
     if (boss) dist = boss.dist;
     _e.copy(_o).addScaledVector(_d, dist);
@@ -367,6 +372,10 @@ export class Rifle {
       zaps.burst(_e.x, _e.y, _e.z, boss.normal.x, boss.normal.y, boss.normal.z, lens ? 6 : 16, 1.4);
       if (lens) bossFx!.breakLocal(boss.boss, boss.index);
       rifleSound.impact(lens ? 'glass' : 'metal', _e, _o);
+    } else if (nest) {
+      // No weak points: its shell throws sparks (a rifle shot kills it, the pistol's takes two).
+      zaps.burst(_e.x, _e.y, _e.z, -_d.x, -_d.y, -_d.z, 12, 1.1);
+      rifleSound.impact('metal', _e, _o);
     } else if (crawler) {
       // Its armour just throws sparks; a core in its maw takes the hit.
       zaps.burst(_e.x, _e.y, _e.z, crawler.normal.x, crawler.normal.y, crawler.normal.z, crawler.index >= 0 ? 18 : 10, crawler.index >= 0 ? 1.4 : 1);
@@ -389,9 +398,9 @@ export class Rifle {
       for (let i = 0; i < 3; i++) tyreDust.emit(_e.x, _e.y + 0.1, _e.z, (Math.random() - 0.5) * 1.5, 1 + Math.random(), (Math.random() - 0.5) * 1.5, 0.35);
       rifleSound.impact('sand', _e, _o);
     }
-    const key = boss ? `b${boss.boss}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
+    const key = boss ? `b${boss.boss}` : nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
     if (key) kills.hit(key);
-    this.net.fire(_o.x, _o.y, _o.z, _e.x, _e.y, _e.z, boss ? (boss.index >= 0 ? { b: boss.boss, bi: boss.index } : undefined) : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
+    this.net.fire(_o.x, _o.y, _o.z, _e.x, _e.y, _e.z, boss ? (boss.index >= 0 ? { b: boss.boss, bi: boss.index } : undefined) : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
     // Recoil: the muzzle climbs (some of it stays: pull it back down), kicks a little sideways; less held to the eye.
     const ads = playerHands.aim;
     const climb = feel.climb * (1.25 - 0.45 * ads) * (0.85 + Math.random() * 0.3);

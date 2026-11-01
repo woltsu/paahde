@@ -161,7 +161,8 @@ when you find it stale.
 - `shared/solarfarms.ts` — solar farms: old power towers with rings of heliostats far out (none within 2.3 km of the
   origin), on a graded pad (`withSolarPad`) the rocks, shelters, crash sites, scrap and wrecks keep off (`solarWithin`);
   collision of posts, tower and shed (`collideSolar`), the mirrors as a ceiling (`solarCeiling`) and as shade
-  (shared/shade.ts), stash spots (`solarLootSpot`, `SOLAR_STASHES`); crawler packs in server/guardians.ts `farmPacks`;
+  (shared/shade.ts), stash spots (`solarLootSpot`, `SOLAR_STASHES`); no crawlers: a nest of spiderlings on the mirrors
+  by the tower (`shared/nest.ts` perches and numbers, `server/nests.ts`, ticked by server/guardians.ts, 'bots' `n`);
   drawn by `src/world/solarfarms.ts` (instanced field tiles, the receiver glowing at the hour the farm froze)
 
 ## Weather and survival
@@ -371,7 +372,8 @@ Everything built is shared, and anyone can take a building down.
     missiles from its back; Terraria-style head steering, segments follow its path
   - carrier — the hive carrier: huge four-fan drone that bombs from its belly, fan hubs are its weak points
   - queen — the brood queen: giant eight-legged spider (gait, rear-and-slam numbers); the server steps the feet and
-    simulates the spiderlings it drops from its sac (drawn by `src/world/brood.ts`); leg IK in the view
+    simulates the spiderlings it drops from its sac (their hunt `server/brood.ts`, shared with the solar farms' nests;
+    drawn by `src/world/brood.ts`, a small queen in its palette, also the nests'); leg IK in the view
   - colossus — 67 m biped (rig sizes, gait, stomps, snapshot layout); the server has the feet, footprint craters, big
     stomp and fall furrow; leg IK and the death topple in the view
 

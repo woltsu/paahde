@@ -1,6 +1,6 @@
 // Which enemies we hit lately (rifle or pistol shot, jammer), so the moment one dies can be put down to us: the
 // character's remark on a kill (src/speechLines.ts `killed`). Client-side only, by key: `g<id>` walker, `d<id>` drone,
-// `j<id>` jet, `h<id>` harvester, `b<id>` boss. Someone else finishing it off still counts: we helped.
+// `j<id>` jet, `h<id>` harvester, `b<id>` boss, `n<id>` a nest's spiderling. Someone else finishing it off still counts: we helped.
 
 /** A hit this long ago (ms) still earns the kill. */
 const CREDIT_MS = 20_000;

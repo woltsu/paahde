@@ -121,7 +121,7 @@ export type ClientMsg =
   // A laser rifle or pistol shot (shared/rifle.ts) from (x, y, z) to where it stopped, (ex, ey, ez). `g`/`i`: the client
   // found it hit weak point i of walker g (i -1: just its body, which angers it); `d`: it hit drone d; `j`: fixed-wing
   // drone j (shared/jets.ts); `h`/`hi`: intake core hi of harvester h (shared/harvester.ts);
-  // `b`/`bi`: weak point bi of boss b (shared/bosses.ts). The server checks
+  // `b`/`bi`: weak point bi of boss b (shared/bosses.ts); `n`: a solar farm nest's spiderling n (shared/nest.ts). The server checks
   // the gun is in hand, its reach, the rate and that the shot was aimed at that walker, breaks the point, and shows the
   // shot to everyone near ('zap').
   // Holding the jammer (shared/jammer.ts) on jet or drone `id` from the eye (x, y, z) along (dx, dy, dz), about every
@@ -133,7 +133,7 @@ export type ClientMsg =
   // A guardian's foot (client IK) came down on you (shared/guardians.ts FOOT_CRUSH_R); the server checks guardian `g`
   // is alive and near enough, and kills you ('died', cause 'guardian').
   | { t: 'stomped'; g: number }
-  | { t: 'fire'; x: number; y: number; z: number; ex: number; ey: number; ez: number; g?: number; i?: number; d?: number; j?: number; h?: number; hi?: number; b?: number; bi?: number }
+  | { t: 'fire'; x: number; y: number; z: number; ex: number; ey: number; ez: number; g?: number; i?: number; d?: number; j?: number; h?: number; hi?: number; b?: number; bi?: number; n?: number }
   // Throw the scrap item in hotbar slot `slot` (shared/throw.ts) from the eye (x, y, z) along unit (dx, dy, dz). `n`:
   // the client's count of its throws, echoed in the 'toss' so it can tie its own flying junk to the server's.
   | { t: 'throw'; slot: number; n: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }
@@ -363,7 +363,8 @@ export type ServerMsg =
   // hunt / lock: 0 nobody, 1 someone else, 2 you.
   // f: [id, leg, x, y, z, left] per foot of each living guardian (shared/guardians.ts F_STRIDE): where the server has
   // planted it (y its sole), or is swinging it to with `left` s to go (0 planted). Planted feet block players.
-  | { t: 'bots'; time: number; g: number[]; d: number[]; f?: number[] }
+  // n: the solar farms' nests' spiderlings near you (shared/nest.ts NEST_STRIDE: id, x, z, yaw, state, since, perch).
+  | { t: 'bots'; time: number; g: number[]; d: number[]; f?: number[]; n?: number[] }
   // Guardian `g` fired laser bolt `id` from (x, y, z) along unit (dx, dy, dz) at server time `time`; it flies at
   // BOLT_SPEED (shared/guardians.ts) until it bursts ('boom': on the ground, a player, or out of range).
   | { t: 'shot'; id: number; g: number; time: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }

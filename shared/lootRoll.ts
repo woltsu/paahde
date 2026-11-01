@@ -20,7 +20,8 @@ import { nearPod, onPodGround, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
 import type { JetKind } from './jetbreak.ts';
 import {
   BOSS_SPOILS, BROKEN_GEAR, CACHES, DRONE_JET_SPOILS, FINDS, HARVESTER_SCRAP, HARVESTER_SPOILS, JET_RELIC_ODDS, JET_SCRAP,
-  KILL_SPOILS, RARE_FINDS, RECEIVER_DROPS, RELIC_DROPS, SHELTER_STASHES, SOLAR_STASHES, POD_LOOT, TOWER_PARTS, WIRING_DROPS, type TierWeights,
+  KILL_SPOILS, RARE_FINDS, RECEIVER_DROPS, RELIC_DROPS, SHELTER_STASHES, SOLAR_STASHES, SPIDERLING_SCRAP_ODDS, SPIDERLING_SPOILS,
+  POD_LOOT, TOWER_PARTS, WIRING_DROPS, type TierWeights,
 } from './tables.ts';
 
 export type Rand = () => number;
@@ -298,6 +299,13 @@ export function killDrops(kind: 'guardian' | 'crawler' | 'drone', rand: Rand): D
   if (rand() < RELIC_DROPS[kind].odds) out.push({ kind: RELIC_DROPS[kind].kind });
   if (rand() < RECEIVER_DROPS[kind]) out.push(broken(randomReceiver(rand), rand));
   return [...out, ...spoils(KILL_SPOILS[kind], rand), ...wiring(kind)];
+}
+
+/** A nest's spiderling: a small part now and then (SPIDERLING_SPOILS), a bit of scrap sometimes. */
+export function spiderlingDrops(rand: Rand): Drop[] {
+  const out = spoils(SPIDERLING_SPOILS, rand);
+  if (rand() < SPIDERLING_SCRAP_ODDS) out.push({ kind: SCRAP });
+  return out;
 }
 
 /** A downed jet's loose things (its engines are machines, shared/jetcrash.ts): the drone's parts (one more if `soft`: jammed

@@ -987,6 +987,13 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
     if (r.kill) dropBossSpoils(r.kill);
     return;
   }
+  if (m.n !== undefined) {
+    const r = guardians.nests.shoot(m.ex, m.ey, m.ez, m.n, now, kind === PISTOL ? 'pistol' : 'rifle');
+    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
+    for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
+    if (r.kill) dropNestSpoils(r.kill);
+    return;
+  }
   if (m.h !== undefined) {
     const r = harvesters.shoot(m.x, m.z, m.ex, m.ey, m.ez, m.h, m.hi, now);
     const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
@@ -1135,6 +1142,11 @@ const lay = (x: number, z: number, d: Drop, spread?: number) => {
 /** What a killed walker or downed drone leaves on the sand (shared/enemies.ts). */
 function dropSpoils(k: Kill) {
   for (const d of ENEMIES[k.kind === GUARDIAN ? 'guardian' : k.kind === 'drone' ? 'drone' : 'crawler'].drops(Math.random)) lay(k.x, k.z, d);
+}
+
+/** What a nest's spiderling leaves (shared/enemies.ts spiderling). */
+function dropNestSpoils(k: { x: number; z: number }) {
+  for (const d of ENEMIES.spiderling.drops(Math.random)) lay(k.x, k.z, d);
 }
 
 /** A jet's nose met the sand (shared/jets.ts): it comes apart (shared/jetbreak.ts: every client flies the same pieces from the same impact), the sand is
