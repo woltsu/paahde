@@ -475,6 +475,10 @@ net.onTeleport = (state) => {
   orbit.yaw = state.facing;
   orbit.pitch = 0;
 };
+net.onFace = (facing) => {
+  orbit.yaw = facing;
+  orbit.pitch = 0;
+};
 levels.onBroken = () => { audio.suspendForRecovery(); showReload(TEXT.recovery.update); };
 if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed, BED }, fall: () => import('./levels/beginning/sound.ts') });
 terrain.loading = true;

@@ -120,7 +120,8 @@ when you find it stale.
   model in four poses, a drogue chute behind one); drawn by `src/world/pods.ts`. Old worlds: `server/podsLanded.ts`
   (once: things in a pod's way moved out, the first bike by the pods, the gone pump shelter's things back on the sand)
 - Bedrolls (`bedroll`, shared/placed.ts) and spawn points — each player has at most one spawn point, a bedroll
-  (anyone's), where they wake up after dying (`homeOf` in server/world.ts; none: where players arrive). Laying a
+  (anyone's), where they wake up after dying (`homeOf` in server/world.ts; none: where players arrive; their own
+  unfolded, built cart comes first: docs/cart.md "Spawn"). Laying a
   bedroll makes it yours; F on one toggles it (`spawnToggle`, server/placed.ts `toggleSpawn`; `spawns` table, browser
   IDs server-side only). Only a bedroll's owner picks it up; taking one up clears it for whoever slept there. Each
   player alone is told theirs (`spawn` message): a lantern by its pillow (src/world/placed.ts), the locator's home
@@ -268,6 +269,9 @@ Everything built is shared, and anyone can take a building down.
   canvas, billow), `cartCapsules` (parked carts are solid), `setCarts` (from `setVehicles`), `cartToWorld`; the hinge
   animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Phase 3: level 2's sides are the
   workshop (above, Work stations); the pods' kit pays for the wrench and both levels. Test `tools/cart.test.mjs`.
+  Your own cart unfolded at level ≥ 1 is where you wake after dying, ahead of a bedroll (`shared/cart.ts` `isCamp`,
+  `campWakeSpot`; `VehicleServer.campOf`; server/world.ts `homeOf`/`clearToWake`; the respawn's `facing` turns the
+  camera to it, `net.onFace`). Test `tools/cart-spawn.test.mjs`.
   Each cart wears its owner's colour, faded (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a
   torn rag knotted round its back left corner post, swinging in the wind (a small Verlet chain), and a worn painted
   stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar

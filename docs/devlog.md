@@ -2,6 +2,21 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — Waking up by your cart
+
+- **Why:** the cart is your camp (docs/cart.md); dying out on a trip sent you back to a bedroll or the pod far behind.
+- **Rule:** your own cart, unfolded and built (level ≥ 1), is where you wake after dying, on the sand beside it, facing
+  it (the respawn's `facing` turns the camera). Packed, linked or towed, level 0, or with no free spot by it: the
+  bedroll, else the pod, as before. A camp beats a bedroll (simpler than "most recently chosen", which would need times
+  kept for both). Someone else's cart never counts.
+- **Code:** shared/cart.ts `isCamp`, `campWakeSpot` (spots round the unfolded footprint, the first `free` one);
+  `VehicleServer.campOf`; server/world.ts `homeOf`, `clearToWake` (the desert level's ground, ceiling and collide, rocks,
+  slip faces, shelters). No speech line: the client learns where it woke a snapshot after the respawn event, and the
+  generic respawn lines fit anyway.
+- **Tests:** tools/cart-spawn.test.mjs, in the lab: level 0 unfolded → bedroll; level 1 unfolded → beside it (clear of
+  its capsules, not under its canopy, facing it); a stranger by it → their own spawn; packed → bedroll; unfolded under a
+  tarp (no free spot) → bedroll.
+
 ## 2026-11-01 — The cart, phase 3: the workshop; the benches out of the build menu
 
 - **Why:** the cart replaces the wrench-built benches and chest (docs/cart.md): your camp goes where you go.

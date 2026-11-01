@@ -843,6 +843,7 @@ export class Net {
       if (this.dying) this.fall(this.dying);
       this.down = null;
       this.snapNext = true; // the next snapshot has us back at the bedroll or our pod: jump there, don't glide
+      if (msg.facing !== undefined) this.onFace?.(msg.facing); // (woken by our cart, facing it)
       return;
     }
     if (msg.t === 'wires') {
@@ -990,6 +991,8 @@ export class Net {
   }
   /** Put somewhere else by the server (a door): main.ts turns the camera the way we now face. */
   onTeleport?: (state: PlayerState) => void;
+  /** Turned by the server to face `facing` (woken by our cart): main.ts turns the camera. */
+  onFace?: (facing: number) => void;
 
   /** F at a level's way in or out (the server checks we are at one, and moves us: 'level'). */
   enter() {

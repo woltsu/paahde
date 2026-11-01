@@ -339,13 +339,14 @@ export type ServerMsg =
   // maxSips: what the water bottle in your bag holds (shared/gear.ts bottleSips), 0 without one.
   | { t: 'water'; heat: number; sips: number; maxSips: number; rising: boolean; temp: number; shade: boolean }
   // You died: you lie where you fell as a ragdoll for DOWN_MS (shared/ragdoll.ts; your input is ignored), then
-  // 'respawn' says the server has moved you to your bedroll or your pod (the next snapshot snaps you there) with no heat and a
+  // 'respawn' says the server has moved you beside your cart, to your bedroll or your pod (the next snapshot snaps you there) with no heat and a
   // full canteen; a 'water' follows. For the death screen. push: the blast's launch velocity for the body (m/s).
   // 'heat': heatstroke; 'guardian': one walked over you; 'laser': a guardian's cannon got you; 'missile': one called
   // down by a drone's searchlight landed on you (shared/missiles.ts); 'crawler': bitten once too often.
   /** `bolt`: the guardian's bolt ('shot' id) that killed, which the client draws reaching you before you fall. */
   | { t: 'died'; cause: DeathCause; push?: [number, number, number]; bolt?: number }
-  | { t: 'respawn' }
+  /** `facing`: woken by your cart (docs/cart.md "Spawn"), the way to face it (PlayerState.facing): the camera turns there. */
+  | { t: 'respawn'; facing?: number }
   // You are somewhere else now: in level `level` (shared/levels.ts), standing as `state`. A teleport (src/net.ts drops
   // its prediction); the client switches the stage (src/levels/stage.ts) behind a fade.
   | { t: 'level'; level: number; state: PlayerState }

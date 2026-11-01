@@ -282,3 +282,32 @@ function hit(o: number[], d: number[], lo: number[], hi: number[]): number | nul
   }
   return t0 > t1 ? null : t0;
 }
+
+// ---- Waking up by it (docs/cart.md "Spawn") -----------------------------------------------------------------------------
+
+/** Is cart `v` its owner's camp: parked, unfolded and built (level ≥ 1, upgraded with the wrench at least once)? Then its
+ *  owner wakes up beside it after dying (server/world.ts homeOf), ahead of a bedroll or the pod. */
+export const isCamp = (v: Vehicle) => isCart(v) && parked(v) && !!v.open && (v.level ?? 0) >= 1;
+
+/** Clear of the unfolded footprint (its benches' outer edges, the bed's ends) by this much (m): a body's radius and a
+ *  step. */
+const WAKE_GAP = 0.75;
+/** Beside the benches, this far back of the axle (m): out of the line from the canopy's low corner to its stake. */
+const WAKE_SIDE_Z = 0.7;
+
+/**
+ * Where cart `v`'s owner wakes up beside it: the first of a few spots round it (cart space, from the unfolded footprint,
+ * so they follow its size) that `free` takes (the server's: on sand, not a rock, not in anything's capsules, not under
+ * the canopy's canvas), facing the cart; or null if none is (then the bedroll or the pod). By the tongue either side
+ * first (where you'd walk up to it), then beside the benches, then behind it.
+ */
+export function campWakeSpot(v: Vehicle, free: (x: number, z: number) => boolean): { x: number; z: number; facing: number } | null {
+  const sx = OPEN_HX + WAKE_GAP, sz = OPEN_HZ + WAKE_GAP;
+  for (const [lx, lz] of [[-sx, -sz], [sx, -sz], [-sx, WAKE_SIDE_Z], [sx, WAKE_SIDE_Z], [-sx, sz], [sx, sz], [0, sz]]) {
+    const p = cartToWorld(v, lx, lz);
+    if (!free(p.x, p.z)) continue;
+    // Facing (forward (−sin, −cos), shared/sim.ts) the axle's middle.
+    return { x: p.x, z: p.z, facing: Math.atan2(p.x - v.x, p.z - v.z) };
+  }
+  return null;
+}

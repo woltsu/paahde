@@ -48,6 +48,17 @@ when it stands linked to a bike of yours (the bike marks both).
   bike. Unhitching leaves it packed. Packing refuses while a machine is on its table or a dismantling job runs.
   Backing the bike up to it unfolded packs and hitches it in one go (refused, so not hitched, while packing is).
   Getting off with it still linked keeps it packed. What's in the box rides along.
+- **Spawn:** your own cart, unfolded **and built** (level ≥ 1: upgraded with the wrench at least once; the level-0
+  cart you start with never is) is your camp: after dying you wake on the sand beside it, facing it (shared/cart.ts
+  `isCamp`, `campWakeSpot`; server/world.ts `homeOf`). Unfolding it is making camp. Otherwise (packed, linked to a bike,
+  towed when you died, level 0, or no free spot by it) it's your bedroll, else your pod, as before. A camp beats a
+  bedroll (simple and predictable; "most recently chosen wins" would need a time on both and they'd fight). The spot:
+  the first free one of a few round the unfolded footprint (from the footprint's size, so it follows the model), by the
+  tongue either side, then beside the benches, then behind: free is on the desert's sand about the cart's height, not a
+  rock or a slip face, no shelter, no canvas over it (the canopy, a tarp), nothing to be pushed out of (the level's
+  collide: the cart's capsules, what's built, scrap) for a body a little wider than a player's (`clearToWake`). The
+  respawn message's `facing` turns the camera to the cart. Someone else's cart is never your spawn. No text: you just
+  wake there. The bedroll's lantern and the locator's home still show the bedroll.
 
 ## Towing (netcode: `docs/netcode.md`)
 

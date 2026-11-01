@@ -26,7 +26,7 @@ import { partKind, setData, type ItemData } from '../shared/items.ts';
 import { CART_UPGRADES, WRENCH } from '../shared/crafting.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
 import { arrivalBikeSpot, brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
-import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCart, towedPose, unfoldError } from '../shared/cart.ts';
+import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCamp, isCart, towedPose, unfoldError } from '../shared/cart.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import type { PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
@@ -265,6 +265,12 @@ export class VehicleServer {
     if (vehicles.some((v) => isCart(v) && v.color !== color && this.owner.get(v.id) === browserId)) {
       this.set(vehicles.map((v) => (isCart(v) && this.owner.get(v.id) === browserId ? { ...v, color } : v)));
     }
+  }
+
+  /** Player `browserId`'s camp: their own cart, parked, unfolded and built (shared/cart.ts isCamp), or undefined. They
+   *  wake up beside it (server/world.ts homeOf). */
+  campOf(browserId: string): Vehicle | undefined {
+    return vehicles.find((v) => isCamp(v) && this.owner.get(v.id) === browserId);
   }
 
   /** Player `browserId`'s vehicles' ids. */

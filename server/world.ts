@@ -5,7 +5,7 @@ import { buildingBox, cargoBox, isShared, storeBox, vehicleBox } from '../shared
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { DT, INPUT_MASK, levelSpawn, NO_LEGS, NO_PULL, spawnPoint, spawnState, step, TICK_RATE, YAW_STEPS, yawFromQ, type PlayerState } from '../shared/sim.ts';
+import { DT, INPUT_MASK, isSlipFace, levelSpawn, NO_LEGS, NO_PULL, PLAYER_HEIGHT, PLAYER_RADIUS, quantizeYaw, spawnPoint, spawnState, STEP_UP, step, TICK_RATE, YAW_STEPS, yawFromQ, type PlayerState } from '../shared/sim.ts';
 import { clientMessage } from './messages.ts';
 import { InputQueue } from './inputQueue.ts';
 import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
@@ -46,7 +46,7 @@ import { bunkerGone } from './bunkerGone.ts';
 import { podsLanded } from './podsLanded.ts';
 import { VehicleServer } from './vehicles.ts';
 import { vehicles } from '../shared/vehicles.ts';
-import { CART } from '../shared/cart.ts';
+import { campWakeSpot, CART } from '../shared/cart.ts';
 import { PowerServer } from './power.ts';
 import { TowerServer } from './towers.ts';
 import { WireServer } from './wires.ts';
@@ -78,7 +78,7 @@ import { drink, fill, newHeat, revive, setBottle, tickHeat, waterMsg, type Heat 
 import { HEALTH_MAX, KILL } from '../shared/health.ts';
 import { TIERS } from '../shared/salvage.ts';
 import type { Caster } from '../shared/shade.ts';
-import { heightAt } from '../shared/terrain.ts';
+import { heightAt, onRock } from '../shared/terrain.ts';
 import { blastPush, DOWN_MS } from '../shared/ragdoll.ts';
 import { WIND } from '../shared/dunes.ts';
 import { CHOKE_RECOVER, CHOKE_S, frontExposure, stormAt, stormDrag, toolsDown } from '../shared/storm.ts';
@@ -828,11 +828,29 @@ function onStomped(p: Player, g: number) {
   if (!p.down && p.ready && guardians.stomp(g, { id: p.id, x: s.x, y: s.y, z: s.z, safe: Date.now() - p.heat.diedAt < BOT_GRACE_MS }, performance.now())) hurt(p, 'guardian', KILL);
 }
 
-/** Where `p` comes back after dying: beside their spawn point, a bedroll (anyone's, server/placed.ts spawnOf), if they
- *  have one and it's still down; else beside the hatch of the pod they first came down in (podOf). */
-function homeOf(p: Player): { x: number; y?: number; z: number } {
+/** Where `p` comes back after dying (docs/cart.md "Spawn"): beside their own cart if it's their camp (parked, unfolded,
+ *  level ≥ 1: shared/cart.ts isCamp) and there's a free spot by it (campWakeSpot), facing it; else at their spawn point,
+ *  a bedroll (anyone's, server/placed.ts spawnOf), if they have one and it's still down; else beside the hatch of the
+ *  pod they first came down in (podOf). The camp beats the bedroll: unfolding it is making camp. */
+function homeOf(p: Player): { x: number; y?: number; z: number; facing?: number } {
+  const camp = vehicleSrv.campOf(p.browserId);
+  const by = camp && campWakeSpot(camp, (x, z) => clearToWake(x, z, camp.y));
+  if (by) return { ...by, y: heightAt(by.x, by.z) };
   const b = placedThings.spawnOf(p.browserId);
   return b ? { x: b.x, y: b.y + 0.2, z: b.z } : spawnPoint(podOf(p.browserId));
+}
+
+/** Can a player wake up standing at (x, z) on the desert's sand, `nearY` the cart's height: the sand there about as high,
+ *  not a rock or a slip face, no shelter, nothing over it (a canopy's or tarp's canvas, a deck, a roof) and nothing to
+ *  be pushed out of (the cart's own capsules, what's built, scrap, machines: the level's collide, a body a little wider
+ *  than a player's). */
+function clearToWake(x: number, z: number, nearY: number): boolean {
+  const L = level(DESERT), y = heightAt(x, z);
+  if (Math.abs(y - nearY) > 1 || onRock(x, z) || isSlipFace(x, z) || overShelter(x, z, 1)) return false;
+  if (L.ground(x, z, Infinity) > y + 0.05 || L.ceiling(x, z, y, PLAYER_HEIGHT, PLAYER_RADIUS) < y + 0.05) return false;
+  const c = { x, z, vx: 0, vz: 0 };
+  const top = L.collide(c, y, y, PLAYER_RADIUS + 0.15, PLAYER_HEIGHT, 0, x, z);
+  return c.x === x && c.z === z && top <= y + STEP_UP;
 }
 
 /** Tell `p` which bedroll is their spawn point (its lantern, the locator's home: src/world/placed.ts, src/locator.ts), or none. */
@@ -848,16 +866,18 @@ function onSpawnToggle(p: Player, id: unknown) {
   sendSpawn(p);
 }
 
-/** Back at their bedroll or their pod, cooled down, with a full canteen. */
+/** Back by their cart, at their bedroll or their pod, cooled down, with a full canteen. */
 function respawn(p: Player) {
   p.down = null;
   p.inputs.clear();
   const home = homeOf(p);
-  p.state = spawnState(home.x, home.z, home.y);
+  p.state = spawnState(home.x, home.z, home.y, DESERT, home.facing);
+  // Facing the cart (the client turns its camera there: the respawn's `facing`).
+  if (home.facing !== undefined) p.yaw = quantizeYaw(home.facing);
   p.health = HEALTH_MAX;
   revive(p.heat, Date.now());
   save(p);
-  send(p.ws, { t: 'respawn' });
+  send(p.ws, home.facing !== undefined ? { t: 'respawn', facing: home.facing } : { t: 'respawn' });
   send(p.ws, waterMsg(p.heat));
 }
 
