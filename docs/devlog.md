@@ -2,6 +2,18 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — The cart's canopy gets drop edges
+
+- **Why:** the high flat canopy shaded the camp only around midday; a low morning or evening sun got under it.
+- **What:** short valances (0.45 m, every edge alike, kept shallow so the canopy stays airy) hang from its four edges:
+  the same khaki, a bound hem, the canvas's seams carried down, swaying in the wind with the hem; they unroll last
+  when it's put up and roll up first when it's packed. Their lowest is 1.95 m, over every body's head, so you walk in
+  anywhere. In the shade (`tarpTris`, once it's up), not solid. At the best heading a point over the table is shaded
+  8:30–16:33 (was 9:36–16:06); over all headings the bench spots average 9.8 shaded hours, up from 8.1.
+- **The lines while it's put up:** no more straight kinked lengths across the camp from the start; each line is paid out
+  once its corner is nearly in place, its end carried to the stake (driven in as it gets there), hanging in a smooth
+  sag, then pulled taut; the low corners are carried out high. docs/cart.md "the canopy's drop edges".
+
 ## 2026-11-01 — One cart per world, everyone's
 
 - **Why:** a cart each split the camp: the pods' kit (once per world) built the first player's, and later joiners had a

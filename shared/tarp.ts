@@ -19,7 +19,9 @@
 // tarp's own a (X in its frame), the low corners along b (Z), TARP_HALF out from the centre.
 //
 // A cart's canopy (shared/cart.ts canopyRig) is a rig too, of another shape at any heading (rigFrame): every tarp
-// function here takes either, and its canvas joins the tarps' in the sim and the shade (setCanopyRigs, tarpRigs).
+// function here takes either, and its canvas joins the tarps' in the sim and the shade (setCanopyRigs, tarpRigs). Its
+// drop edges (`skirt`: short valances hanging straight down from all four edges, skirtAt) are in its shade triangles
+// but not solid: the sim's canvas is the flat cloth alone (they hang over a head everywhere, docs/cart.md).
 //
 // Deterministic: + - * / and heightAt only.
 import { heightAt } from './terrain.ts';
@@ -58,7 +60,10 @@ export type TarpRig = { poles: { foot: Vec; top: Vec }[]; corners: Vec[]; guys: 
   cx: number; cz: number; ax: number; az: number; bx: number; bz: number; iax: number; iaz: number; ibx: number; ibz: number;
   /** How far it sags (m) mid-way between its corners; how far its corners reach from the centre (m, on either axis: the
    *  sim's quick test). */
-  sag: number; reach: number };
+  sag: number; reach: number;
+  /** A cart's canopy: how deep (m) the drop edges (valances) hang straight down from each of its four edges; none on a
+   *  tarp. */
+  skirt?: number };
 
 /** Turn `rot` (quarter turns) of a point in the tarp's frame, about its centre: world offset. Matches three.js's
  *  rotation.y = rot·π/2 and shared/placed.ts worldBoxes. */
@@ -142,6 +147,19 @@ export function canvasYAt(r: TarpRig, x: number, z: number): number {
   return surface(r, s, t);
 }
 
+/** Edge `e` (0..3, round the square: v = 0, u = 1, v = 1, u = 0) at `w` ∈ [0, 1] along it, as the canvas's (u, v): the
+ *  line a canopy's drop edge hangs from (skirtAt). Each edge runs from a high corner to a low one or back. */
+export function edgeUV(e: number, w: number): [number, number] {
+  return e === 0 ? [w, 0] : e === 1 ? [1, w] : e === 2 ? [1 - w, 1] : [0, 1 - w];
+}
+
+/** The top of the drop edge at `w` along edge `e` (on the canvas's hem, without the wind); its bottom is `r.skirt`
+ *  straight under it. */
+export function skirtAt(r: TarpRig, e: number, w: number, out: Vec = { x: 0, y: 0, z: 0 }): Vec {
+  const [u, v] = edgeUV(e, w);
+  return canvasAt(r, u, v, out);
+}
+
 /** Grid cells along each side of the canvas for the shade's triangles. */
 const SHADE_N = 4;
 /** The canvas as triangles (three corners each, flattened) for the shade (shared/shade.ts): a SHADE_N² grid of canvasAt,
@@ -154,6 +172,17 @@ export function tarpTris(r: TarpRig): Vec[] {
     for (let i = 0; i < SHADE_N; i++) {
       const k = j * n + i;
       out.push(pts[k], pts[k + n], pts[k + n + 1], pts[k], pts[k + n + 1], pts[k + 1]);
+    }
+  }
+  // A canopy's drop edges: a strip of SHADE_N quads down from each edge (they keep a low sun off the camp's sides).
+  const d = r.skirt ?? 0;
+  if (d > 0) {
+    for (let e = 0; e < 4; e++) {
+      for (let i = 0; i < SHADE_N; i++) {
+        const a = skirtAt(r, e, i / SHADE_N), b = skirtAt(r, e, (i + 1) / SHADE_N);
+        const a1 = { x: a.x, y: a.y - d, z: a.z }, b1 = { x: b.x, y: b.y - d, z: b.z };
+        out.push(a, b, b1, a, b1, a1);
+      }
     }
   }
   return out;

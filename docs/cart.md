@@ -418,3 +418,38 @@ box and a machine on the table stayed dark, and it looked a bit fake. Earlier ni
   2.4 m): a few ALU per canopy pixel, no lights added. Same pool, same slots: no new lights or shadow maps.
 - **Checked:** night shots after a day load and after a night load, ~4 m from each bench and ~8 m from two sides, and
   under the canopy looking up.
+
+## As built: the canopy's drop edges (November 2026)
+
+From play: the high flat canvas shaded the camp only around midday; a morning or evening sun got in under it.
+
+- **Drop edges:** short valances hang straight down from all four of the canopy's edges, `CANOPY_SKIRT` 0.45 m (the
+  same on every edge: kept shallow so the canopy stays open and airy; the user asked for "just a little bit"). Their
+  lowest, under the low corners, is 1.95 m over the sand: over every body's head (the human's 1.85 m the tallest), so
+  you still walk in under any edge, no gaps needed. `TarpRig.skirt` (a tarp has none), `shared/tarp.ts`
+  `edgeUV`/`skirtAt`: each hangs from the canvas's (scalloped) hem.
+- **Shade, not solid:** `tarpTris` adds a strip of quads down each edge for a rig with a skirt, so they're in the same
+  shade path as the canvas (`shared/shade.ts`), only once it's up (`canopyUp`, as before). They're not solid to walking,
+  jumping or the camera: they hang above every head, and a cloth flap you can brush through is fine. At the cart's best
+  heading (60°), a chest-high point over the dismantling table is shaded 8:30–16:33 (was 9:36–16:06: 6.5 h → 8 h);
+  over the workbench 9:06–16:39 (was 10:33–16:18: 5.75 h → 7.55 h); on the deck 9:42–17:24 (was 10:57–16:57: 6 h →
+  7.7 h). Over all headings (every 15°), those three spots average 9.8 shaded hours a day, up from 8.1. Tested at that heading
+  (`tools/cart.test.mjs`), with the head room under the lowest edge at four headings.
+- **Look (`src/world/tarps.ts`):** the canopy's khaki, a stitched line where each is sewn to the hem, a dark bound hem
+  along the bottom and down the ends, the canvas's seams carried down them (its panel seams on the two edges they cross,
+  its middle one on the other two). In the wind each follows the hem it hangs from (the canvas's own lift there) and
+  sways out and in, most at the bottom (`skirtMaterial`).
+- **Put up:** they unroll last on the level-1 clock (0.9–1): rolled along the edges while the canvas goes up and
+  spreads, then let down, the roll thinning as it goes (`canopyRising`'s `unroll`, `CanopyModel`'s rolls). Packing rolls
+  them up first. The billow comes in as it's pulled tight and the rest once they're down.
+- **The lines while it's put up (from play: "the ropes are too angular and uncanny"):** they were two straight lengths
+  each, from the moving corners to the finished stakes from the start: V shapes from the tips, long straight lines
+  across the camp and through the deck, crossing. Now each line stays coiled at its corner (unseen) until that corner
+  is nearly in place, then is paid out: its end carried from the tie to the stake (driven in from a hand over the sand
+  as it gets there), the line hanging behind it in a smooth sag (a parabola of 16 points, as deep as 10% slack gives,
+  never under the sand: `hang`), then pulled taut (0.15% slack). The tips' lines go out as the tips get there (0.76–0.88;
+  hoist now 0.6–0.8), the low corners' as they near their places (0.84–0.94; spread 0.78–0.9), before the drop edges
+  (`CanopyModel.set`'s `pay`, `src/world/carts.ts` `CANOPY_TIP_LINES`/`CANOPY_LOW_LINES`). The low corners are carried
+  out high and let down at the end (`canopyFrom`: a lift on the way, not a straight slide). The lines are one mesh
+  refilled in place. Packing runs it all backwards: drop edges rolled up, the low corners' lines taken in and their
+  stakes pulled, the corners carried in, the tips' lines, the canvas down.

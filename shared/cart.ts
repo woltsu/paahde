@@ -206,13 +206,17 @@ const TIE = 0.06;
 const LOW = { x: -3.8, y: 2.4, z: 0.7 }, STAKE_OUT = 1.2, TIP_OUT = 1.6;
 /** It's pulled tight: it sags less than a tarp (m). */
 const CANOPY_SAG = 0.07;
+/** Its drop edges: short valances hanging this deep (m) straight down from all four edges, so a low morning or evening
+ *  sun gets under it later. Their lowest, under the low corners, is 1.95 m over the sand: over every body's head (the
+ *  human's 1.85 the tallest), so you walk in under them anywhere (tested). Not solid. */
+export const CANOPY_SKIRT = 0.45;
 /** The canvas rolled up and strapped on the deck behind the box while it's packed (cart space: its middle, its half
  *  length across the deck, its radius), where code draws it (src/world/carts.ts). */
 export const CANOPY_ROLL = { y: 0.97, z: 0.8, half: 0.44, r: 0.075 };
 
 /** A canopy rig of cart `v` from its two high ties `ta` (front left) and `tb` (rear right) (world), its low corners at
  *  `spread` (0: folded in along the line between the ties, 1: out where they're staked) and its sag. */
-function canopyFrom(v: Vehicle, ta: Vec, tb: Vec, spread: number, sag: number): TarpRig {
+function canopyFrom(v: Vehicle, ta: Vec, tb: Vec, spread: number, sag: number, skirt: number): TarpRig {
   const low = cartToWorld(v, LOW.x, LOW.z);
   const cx = (ta.x + tb.x) / 2, cz = (ta.z + tb.z) / 2, ax = (tb.x - ta.x) / 2, az = (tb.z - ta.z) / 2;
   // Folded in: a hand's width across the line between the ties, on the low corner's side.
@@ -222,7 +226,8 @@ function canopyFrom(v: Vehicle, ta: Vec, tb: Vec, spread: number, sag: number): 
   const bx = px * 0.12 + (bfx - px * 0.12) * spread, bz = pz * 0.12 + (bfz - pz * 0.12) * spread;
   const f = rigFrame(cx, cz, ax, az, bx, bz, sag);
   const at = (a: number, b: number, y: number): Vec => ({ x: f.cx + a * f.ax + b * f.bx, y, z: f.cz + a * f.az + b * f.bz });
-  const lowY = (ta.y + tb.y) / 2 + (v.y + LOW.y - (ta.y + tb.y) / 2) * spread;
+  // Carried out high and let down to their height at the end (a lift on the way: never through the benches' heads).
+  const lowY = (ta.y + tb.y) / 2 + (v.y + LOW.y - (ta.y + tb.y) / 2) * spread * spread + 0.25 * Math.sin(Math.PI * spread);
   const corners = [at(-1, 0, ta.y), at(0, -1, lowY), at(0, 1, lowY), at(1, 0, tb.y)];
   // The lines (always the finished rig's stakes): the low corners', then the poles' tips'.
   const blen = Math.hypot(bfx, bfz), alen = Math.hypot(POLE_TIP.x, POLE_TIP.z);
@@ -237,7 +242,7 @@ function canopyFrom(v: Vehicle, ta: Vec, tb: Vec, spread: number, sag: number): 
     { from: corners[0], stake: stake(-POLE_TIP.x * ka, -POLE_TIP.z * ka) },
     { from: corners[3], stake: stake(POLE_TIP.x * ka, POLE_TIP.z * ka) },
   ];
-  return { ...f, corners, poles: [], guys };
+  return { ...f, corners, poles: [], guys, skirt };
 }
 
 /** The canopy of unfolded cart `v` (level ≥ 1), as it stands once it's up: a canvas parallelogram from pole tip to pole
@@ -245,14 +250,14 @@ function canopyFrom(v: Vehicle, ta: Vec, tb: Vec, spread: number, sag: number): 
  *  drawn); a line from each corner to a stake in the sand. */
 export function canopyRig(v: Vehicle): TarpRig {
   const tb = cartToWorld(v, POLE_TIP.x, POLE_TIP.z), ta = cartToWorld(v, -POLE_TIP.x, -POLE_TIP.z), y = v.y + POLE_TIP.y - TIE;
-  return canopyFrom(v, { x: ta.x, y, z: ta.z }, { x: tb.x, y, z: tb.z }, 1, CANOPY_SAG);
+  return canopyFrom(v, { x: ta.x, y, z: ta.z }, { x: tb.x, y, z: tb.z }, 1, CANOPY_SAG, CANOPY_SKIRT);
 }
 
 /** The canopy of cart `v` being put up (drawn only: src/world/carts.ts), `hoist` 0..1 its high corners hauled from the
  *  roll's ends on the deck to the drawn pole tips `tipA`, `tipB` (world, the ties TIE under them), then `spread` 0..1 its
- *  low corners out to their stakes as it's pulled tight. At hoist = spread = 1 it's canopyRig(v) (the tips where it
- *  stands them). */
-export function canopyRising(v: Vehicle, tipA: Vec, tipB: Vec, hoist: number, spread: number): TarpRig {
+ *  low corners out to their stakes as it's pulled tight, then `unroll` 0..1 its drop edges let down from their rolls
+ *  along the edges. At hoist = spread = unroll = 1 it's canopyRig(v) (the tips where it stands them). */
+export function canopyRising(v: Vehicle, tipA: Vec, tipB: Vec, hoist: number, spread: number, unroll = 0): TarpRig {
   const s3 = (u: number, a: number, b: number) => {
     const t = Math.min(1, Math.max(0, (u - a) / (b - a)));
     return t * t * (3 - 2 * t);
@@ -263,7 +268,7 @@ export function canopyRising(v: Vehicle, tipA: Vec, tipB: Vec, hoist: number, sp
     return { x: r.x + (tip.x - r.x) * along, y: ry + (tip.y - TIE - ry) * up, z: r.z + (tip.z - r.z) * along };
   };
   const sag = (0.02 + 0.3 * hoist) * (1 - spread) + CANOPY_SAG * spread;
-  return canopyFrom(v, end(-1, tipA), end(1, tipB), spread, sag);
+  return canopyFrom(v, end(-1, tipA), end(1, tipB), spread, sag, CANOPY_SKIRT * unroll);
 }
 
 // ---- The workshop (level 2) --------------------------------------------------------------------------------------------

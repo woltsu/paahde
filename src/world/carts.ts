@@ -89,8 +89,11 @@ const FOLD: Fold[] = [
   { name: 'lamp_a', level: 2, from: 0.5, to: 0.9, q: [-0.57567, -0.01238, 0, 0.81759] },
   { name: 'lamp_b', level: 2, from: 0.5, to: 0.9, q: [0.57567, -0.01238, 0, 0.81759] },
 ];
-/** The canopy on the level-1 clock: hauled up from its roll to the poles' tips, then spread out and pulled tight. */
-const CANOPY_HOIST = [0.6, 0.85], CANOPY_SPREAD = [0.8, 1];
+/** The canopy on the level-1 clock: hauled up from its roll to the poles' tips, the tips' lines paid out to their
+ *  stakes as they get there; then its low corners carried out and pulled tight, their lines paid out as they near their
+ *  places; then its drop edges let down from their rolls. Packing runs it backwards (the drop edges rolled up first). */
+const CANOPY_HOIST = [0.6, 0.8], CANOPY_TIP_LINES = [0.76, 0.88], CANOPY_SPREAD = [0.78, 0.9], CANOPY_LOW_LINES = [0.84, 0.94];
+const CANOPY_SKIRT = [0.9, 1];
 /** The work lamps (level 2, unfolded, dusk to dawn: shared/power.ts darkAt): warm spots from their bulbs down onto the
  *  benches' middles, borrowing the light poles' pool (src/world/lightPoles.ts). A bare bulb's falloff (decay 2) and a
  *  short reach: the bench 1.2 m under it bright, the sand 2 m under it (lit through the bench: no shadows) a soft,
@@ -674,6 +677,7 @@ export class CartView {
   private canopy(s: Shown, v: Vehicle, level: number, towed: boolean) {
     const u = s.fold[1];
     const hoist = ease(u, CANOPY_HOIST[0], CANOPY_HOIST[1]), spread = ease(u, CANOPY_SPREAD[0], CANOPY_SPREAD[1]);
+    const unroll = ease(u, CANOPY_SKIRT[0], CANOPY_SKIRT[1]);
     const out = level >= 1 && !towed && parked(v) && u > CANOPY_HOIST[0] && !!s.model;
     s.roll.visible = level >= 1 && !out;
     const key = out ? `${v.x},${v.y},${v.z},${v.heading}` : '';
@@ -704,7 +708,10 @@ export class CartView {
     };
     const a = tip('pole_a_tip', tmpTipA), b = tip('pole_b_tip', tmpTipB);
     if (!a || !b) return;
-    s.canopy.set(canopyRising(v, a, b, hoist, spread), final, spread);
+    // The billow comes in as it's pulled tight, the rest once the drop edges are down.
+    const tipLines = ease(u, CANOPY_TIP_LINES[0], CANOPY_TIP_LINES[1]), lowLines = ease(u, CANOPY_LOW_LINES[0], CANOPY_LOW_LINES[1]);
+    // (final.guys: the low corners' lines, then the tips'.)
+    s.canopy.set(canopyRising(v, a, b, hoist, spread, unroll), final, spread * (0.3 + 0.7 * unroll), [lowLines, lowLines, tipLines, tipLines]);
   }
 
   /** The work lamps: out with the level-2 pieces, lit from dusk to dawn while it's a workshop (unfolded, parked), stuttering

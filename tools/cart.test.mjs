@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import WebSocket from 'ws';
-import { canopyRig, cartAxle, cartToWorld, couplerOf, HITCH_BACK, HITCH_MAX, hitchPoint, TOW_LENGTH, towedPose } from '../shared/cart.ts';
+import { CANOPY_SKIRT, canopyRig, cartAxle, cartToWorld, couplerOf, HITCH_BACK, HITCH_MAX, hitchPoint, TOW_LENGTH, towedPose } from '../shared/cart.ts';
 import { CART_TABLE, HAND_TABLE, HOME_BIKE, POD_LOOT, RETIRED_BUILD_TABLE } from '../shared/tables.ts';
 import { GEAR } from '../shared/gear.ts';
 import { BUILDS, buildCost, isBuildable } from '../shared/crafting.ts';
@@ -32,7 +32,7 @@ import { stations, stationTarget } from '../shared/stations.ts';
 import { openDb } from '../server/db.ts';
 import { LAB_SPAWN } from '../shared/lab.ts';
 import { inSun, sunDirection } from '../shared/shade.ts';
-import { canvasYAt } from '../shared/tarp.ts';
+import { canvasYAt, setCanopyRigs, skirtAt } from '../shared/tarp.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { setVehicles } from '../shared/vehicles.ts';
 import { PROTOCOL_VERSION } from '../shared/protocol.ts';
@@ -133,6 +133,37 @@ test('unfolded at level 1, its canopy shades a point under it at noon, and the s
   for (let i = 0; i < 120 && !s.grounded; i++) s = step(s, 0, quantizeYaw(0));
   assert.ok(s.y < v.y + 0.5, 'no canvas packed');
   setVehicles([]);
+});
+
+test('its drop edges keep the low sun off the benches longer, and hang over every body\'s head', () => {
+  // At its best heading for the bench (60°), a chest-high point over the dismantling table's middle.
+  const v = cartAt(3200, 3100, Math.PI / 3, { level: 1, open: true });
+  const r = canopyRig(v), p = cartToWorld(v, 1.28, 0), py = v.y + 1.2;
+  /** The hours (in quarters) around noon the point is shaded through, with the canopy's rigs as `rigs`. */
+  const span = (rigs) => {
+    setCanopyRigs(rigs);
+    const shaded = (h) => !inSun(p.x, py, p.z, h / 24);
+    assert.ok(shaded(12), 'shaded at noon');
+    let a = 12, b = 12;
+    while (a > 5 && shaded(a - 0.25)) a -= 0.25;
+    while (b < 19 && shaded(b + 0.25)) b += 0.25;
+    return [a, b];
+  };
+  setVehicles([v]);
+  const [a0, b0] = span([{ ...r, skirt: 0 }]), [a1, b1] = span([r]);
+  assert.ok(a0 >= 9.5 && b0 <= 16, `the flat canvas alone: ${a0}–${b0}`);
+  assert.ok(a1 <= a0 - 1 && b1 >= b0 + 0.5, `with its drop edges: ${a1}–${b1} (was ${a0}–${b0})`);
+  setVehicles([]);
+  // The lowest a drop edge hangs (under the low corners, at any heading) clears the tallest body's head (the human's
+  // 1.85 m, docs/character.md: the dwarf's 1.35 and the gnome's 1 well under it), so you walk in under it anywhere.
+  for (const heading of [0, 0.7, 2, 4.4]) {
+    const w = canopyRig(cartAt(3200, 3100, heading, { level: 1, open: true }));
+    let low = Infinity;
+    for (let e = 0; e < 4; e++) for (let i = 0; i <= 40; i++) low = Math.min(low, skirtAt(w, e, i / 40).y - w.skirt);
+    const ground = heightAt(3200, 3100);
+    assert.ok(low - ground > 1.85 + 0.08, `the drop edges' lowest at heading ${heading}: ${low - ground}`);
+    assert.ok(w.skirt === CANOPY_SKIRT && CANOPY_SKIRT >= 0.4, 'they hang');
+  }
 });
 
 test('a parked cart is solid: walking into its side stops at it', () => {
