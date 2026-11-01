@@ -28,6 +28,13 @@ One per player. A new player's cart stands, already usable at level 0, by their 
 unfolds, packs and upgrades it; anyone may use its box and, unfolded, its benches (everything is shared). The owner is
 a browser ID: never sent to other clients (each player is told which cart is `mine`, as with bikes).
 
+Whose is whose shows on the cart: it flies its owner's colour (`Vehicle.color`, their avatar's, a public value; the
+server reads it from the owner's player row, so it's right while they're offline, and sets it again on every join,
+`VehicleServer.recolor`) as a rag pennant on a whip mast at the bed's back left corner and a painted stripe down the
+box's lid (`src/world/carts.ts`, drawn in code over the model). The pennant streams back when towed and stirs parked.
+Your own parked cart is on the locator bar like your bikes (a box on a wheel with its tongue, in your colour), except
+when it stands linked to a bike of yours (the bike marks both).
+
 ## States
 
 - **Hitched:** packed and following a bike. Nothing on it is usable.
@@ -138,7 +145,7 @@ is clear. Packed, the sides are the cart's walls (top 1.53), so hiding them belo
   others' from their pose tuple (indices 12, 13: `tow`, `hitch`). The stand swings down (`rotation.x` +90°, the table
   above) while it's not linked to a bike. `src/world/carts.ts` loads `cart.glb`, falling back to a stand-in built in code
   to the same contract if it fails to load (a coupler not at z = −TOW_LENGTH is warned about in the console).
-- Not yet: the cart on the locator bar, a rattle (`src/cartSound.ts`), speech.
+- Not yet: a rattle (`src/cartSound.ts`), speech.
 
 ## As built: towing (November 2026)
 

@@ -6,7 +6,7 @@
 // wake up after dying, shared/placed.ts), else the crashed pods (shared/pods.ts). Salvage
 // wrecks lying within a few hundred metres (src/world/wrecks.ts) get a diamond, and the packs the dead left
 // (src/world/corpses.ts) a little flag in the rag's colour, however far, and your own bikes (src/world/vehicles.ts) two
-// wheels under a bar in your colour, however far.
+// wheels under a bar in your colour, however far, and your own cart a box on one wheel with its tongue, the same way.
 import type * as THREE from 'three/webgpu';
 import { LAB_SPAWN } from '../shared/lab.ts';
 import { heightAt } from '../shared/terrain.ts';
@@ -16,7 +16,7 @@ const NEAR = 25; // m: closer than this, no dot (fades in over the next FADE met
 const FADE = 10;
 const ELEVATION = 0.35; // rad off the view's pitch before the up/down arrow shows
 
-export type LocatorTarget = { id: number; color: number; x: number; y: number; z: number; shape?: 'wreck' | 'flag' | 'bike' };
+export type LocatorTarget = { id: number; color: number; x: number; y: number; z: number; shape?: 'wreck' | 'flag' | 'bike' | 'cart' };
 
 const HOME_ID = -1; // player ids are positive
 /** The middle of the crashed pods, where players arrive (where you start in the dev lab, which has none). Worked out on
@@ -47,6 +47,11 @@ const css = `
   aspect-ratio: 1; border-radius: 50%; background: currentColor; }
 #locator .dot.bike::before { left: 0; }
 #locator .dot.bike::after { right: 0; }
+#locator .dot.cart { border-radius: 0; box-shadow: none; filter: drop-shadow(0 0 1px rgba(20, 10, 5, 0.9));
+  background: linear-gradient(currentColor, currentColor) 0 58% / 34% 14% no-repeat,
+    linear-gradient(currentColor, currentColor) 100% 0 / 66% 62% no-repeat; }
+#locator .dot.cart::before { content: ''; position: absolute; bottom: 0; left: 50%; height: 50%;
+  aspect-ratio: 1; border-radius: 50%; background: currentColor; transform: translateX(-10%); }
 `;
 
 export class LocatorBar {
@@ -90,11 +95,11 @@ export class LocatorBar {
       const rel = Math.atan2(Math.sin(Math.atan2(-dx, -dz) - yaw), Math.cos(Math.atan2(-dx, -dz) - yaw));
       const u = -rel / halfH; // -1 = left edge, 1 = right edge
       const outside = Math.abs(u) > 1;
-      const size = (dist < 60 ? 10 : dist < 150 ? 8 : dist < 400 ? 6 : 5) + (isHome ? 4 : p.shape === 'flag' || p.shape === 'bike' ? 2 : 0);
+      const size = (dist < 60 ? 10 : dist < 150 ? 8 : dist < 400 ? 6 : 5) + (isHome ? 4 : p.shape === 'flag' || p.shape === 'bike' || p.shape === 'cart' ? 2 : 0);
       const color = `#${p.color.toString(16).padStart(6, '0')}`;
       const s = d.el.style;
       s.left = `${(Math.max(-1, Math.min(1, u)) * 0.5 + 0.5) * 100}%`;
-      s.width = `${p.shape === 'bike' ? Math.round(size * 1.5) : size}px`;
+      s.width = `${p.shape === 'bike' || p.shape === 'cart' ? Math.round(size * 1.5) : size}px`;
       s.height = `${size}px`;
       s.color = color;
       s.background = isHome || p.shape ? '' : color;

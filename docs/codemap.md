@@ -261,7 +261,10 @@ Everything built is shared, and anyone can take a building down.
   wrench's build menu by your cart; `shared/tables.ts` `CART_TABLE`, `shared/crafting.ts` `CART_UPGRADES`), `tryHitch`
   packs an open cart (hook `packBlocked`); `shared/cart.ts` `unfoldError` (tilt), `canopyRig` (a tarp rig: shade, solid
   canvas, billow), `cartCapsules` (parked carts are solid), `setCarts` (from `setVehicles`), `cartToWorld`; the hinge
-  animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Test `tools/cart.test.mjs`
+  animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Test `tools/cart.test.mjs`.
+  Each cart flies its owner's colour (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a pennant
+  on a whip mast and a stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar
+  (`src/world/vehicles.ts` `ownVehicleTargets`, shape `cart`)
 - `shared/garden.ts` — plant beds (stages, look target), owned by `server/garden.ts`; beds and UV lamps are placed
   things that stand on a shelter's floor only (not crafted for now)
 - `shared/trophies.ts` — the bosses' trophies, buildings like the others (kinds `trophy_<boss>`, `TROPHY_PLACEABLES` in

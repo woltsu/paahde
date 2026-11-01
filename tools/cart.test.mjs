@@ -126,18 +126,21 @@ async function until(condition, ms = 6000, what = 'condition') {
 }
 
 class Client {
-  constructor(port, name) {
+  constructor(port, name, color) {
     this.ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
     this.name = name;
+    this.color = color;
+    this.browserId = randomUUID();
     this.messages = [];
     this.seq = 1;
     this.ws.on('message', (raw) => this.messages.push(JSON.parse(String(raw))));
   }
   async join() {
     await new Promise((r) => this.ws.once('open', r));
-    this.ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, browserId: randomUUID(), name: this.name }));
+    this.ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, browserId: this.browserId, name: this.name, color: this.color }));
     await until(() => this.messages.some((m) => m.t === 'welcome'), 6000, 'welcome');
     this.id = this.messages.find((m) => m.t === 'welcome').id;
+    this.welcomeColor = this.messages.find((m) => m.t === 'welcome').color;
     this.send({ t: 'ready' });
     await until(() => this.snap()?.players.some((p) => p[0] === this.id), 6000, 'ready');
   }
@@ -192,7 +195,7 @@ async function lab(t) {
 
 test('a cart of your own: hitch by backing up, park and remount still linked, unhitch at the tongue, the box rides along, nobody else tows it', { timeout: 120_000 }, async (t) => {
   const { port, peers, output } = await lab(t);
-  const me = new Client(port, 'Hauler'); peers.push(me);
+  const me = new Client(port, 'Hauler', 0x2a9d8f); peers.push(me);
   await me.join();
 
   // Our cart stands near, ours (and only told as ours: no owners in the list).
@@ -200,6 +203,7 @@ test('a cart of your own: hitch by backing up, park and remount still linked, un
   const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
   assert.ok(cartId, 'a cart of our own');
   assert.ok(!JSON.stringify(me.vehicles).includes('owner'), 'no owners sent');
+  assert.equal(me.vehicle(cartId).color, 0x2a9d8f, 'in our colour');
   const cart0 = me.vehicle(cartId);
   assert.equal(carts.length, 1);
   assert.equal(cart0.level, 0);
@@ -278,6 +282,9 @@ test('a cart of your own: hitch by backing up, park and remount still linked, un
   const other = new Client(port, 'Stranger'); peers.push(other);
   await other.join();
   assert.ok(!other.vehicles.mine.includes(cartId), 'not theirs');
+  assert.equal(other.vehicle(cartId).color, 0x2a9d8f, 'they see it in our colour');
+  assert.ok(!JSON.stringify(other.vehicles).includes(me.browserId), 'never our browser ID');
+  assert.equal(other.vehicles.list.find((v) => v.kind === 'cart' && v.id !== cartId)?.color, other.welcomeColor, 'theirs in theirs');
   await other.walkTo(cart1.x + 1.2, cart1.z + 1.2, 0.5);
   assert.equal(await other.notice({ t: 'unhitch', id: cartId }), TEXT.notice.notYours);
   assert.equal(other.vehicle(cartId).hitched, bikeId);

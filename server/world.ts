@@ -451,6 +451,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
     sendShared(vehicleBox(cart));
     sendShared(cargoBox(cart));
   }
+  vehicleSrv.recolor(browserId, color); // (their carts in their colour, before the list goes out)
   const p: Player = {
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,

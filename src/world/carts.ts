@@ -9,6 +9,8 @@
 // level's on its own clock (FOLD: docs/cart.md's table), so a level raised while it's out unfolds its new pieces; from
 // level 1 it's levelled on its stabilisers and, once the poles are up, the canopy (shared/cart.ts canopyRig) is drawn
 // by src/world/tarps.ts, as the sim and the shade have it. Unfolding and packing are heard (src/cartSound.ts).
+// Each cart flies its owner's colour (Vehicle.color): a rag pennant on a whip mast at the back left corner, and a
+// painted stripe down the box's lid, so yours is told from the others by the pods from a way off.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
@@ -31,6 +33,15 @@ const STAND_RATE = 4;
 /** A cart whose tower drops out of sight for a moment (the state and the vehicles list arrive apart) stays where it
  *  was last drawn this long (s), then is hidden. */
 const HOLD_S = 0.6;
+/** The whip mast: its foot on the back left corner of the bed (cart coordinates, docs/cart.md) and how tall it is (m),
+ *  leaning back a little. */
+const MAST = { x: -0.6, y: 0.86, z: 1.08, h: 2.4, lean: 0.06 };
+/** The pennant on it: along the mast at its top (m), how far it trails, in segments that ripple. */
+const FLAG = { h: 0.55, len: 1.15, segs: 6 };
+/** The paint's colour while the server hasn't said whose it is (an older server): a faded rag. */
+const NO_COLOR = 0xb8a88a;
+const mastGeo = new THREE.CylinderGeometry(0.012, 0.022, MAST.h, 5).translate(0, MAST.h / 2, 0);
+const mastMat = new THREE.MeshStandardNodeMaterial({ color: 0x3a332d, roughness: 0.7, metalness: 0.5 });
 
 const DEG = Math.PI / 180;
 /** Each hinge node unfolded (docs/cart.md "As built"): its level, the share [from, to] of that level's unfolding it
@@ -72,6 +83,9 @@ type Shown = {
   canopy: THREE.Group | null; canopyKey: string;
   /** Towed: the two wheels' tyre tracks (left, right). */
   tracks: [TyreTrack, TyreTrack];
+  /** The owner's colour on the pennant and the lid (its own material), its colour now, the pennant's geometry (its
+   *  own: rippled each frame) and the ripple's phase. */
+  paint: THREE.MeshStandardNodeMaterial; color: number; flag: THREE.BufferGeometry; wave: number;
 };
 
 let template: Promise<THREE.Object3D> | undefined;
@@ -144,6 +158,51 @@ function standIn(): THREE.Object3D {
   return root;
 }
 
+/** The pennant: a strip of `FLAG.segs` quads trailing back (+z) from the mast, tapering to a point. */
+function flagGeometry(): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  const n = FLAG.segs + 1;
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3));
+  const index: number[] = [];
+  for (let i = 0; i < FLAG.segs; i++) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+  g.setIndex(index);
+  rippleFlag(g, 0, 0);
+  return g;
+}
+
+/** The pennant at ripple phase `wave`, trailing `swing` rad off straight back (towed fast it streams back, parked it
+ *  stirs in the breeze). */
+function rippleFlag(g: THREE.BufferGeometry, wave: number, swing: number) {
+  const a = g.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i <= FLAG.segs; i++) {
+    const u = i / FLAG.segs, half = (FLAG.h / 2) * (1 - u * 0.85);
+    const along = u * FLAG.len;
+    const side = Math.sin(swing) * along + Math.sin(wave - u * 5) * 0.09 * u;
+    const back = Math.cos(swing) * along;
+    const droop = -u * u * 0.08;
+    a.setXYZ(i * 2, side, droop + half, back);
+    a.setXYZ(i * 2 + 1, side, droop - half, back);
+  }
+  a.needsUpdate = true;
+  g.computeVertexNormals();
+}
+
+/** A stripe painted down the middle of the lid (on its top, as a child of the `lid` node so it opens with it), sized
+ *  from the lid as loaded. */
+function paintLid(model: THREE.Object3D, paint: THREE.Material) {
+  const lid = model.getObjectByName('lid');
+  if (!lid) return;
+  model.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(lid);
+  if (b.isEmpty()) return;
+  const at = lid.getWorldPosition(new THREE.Vector3()); // (packed, every node's rotation is identity: docs/cart.md)
+  const w = Math.min(0.26, (b.max.x - b.min.x) * 0.3), d = (b.max.z - b.min.z) * 0.92;
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), paint);
+  stripe.position.set((b.min.x + b.max.x) / 2 - at.x, b.max.y + 0.004 - at.y, (b.min.z + b.max.z) / 2 - at.z);
+  stripe.receiveShadow = true;
+  lid.add(stripe);
+}
+
 const tmpSlope = { gx: 0, gz: 0 };
 
 export class CartView {
@@ -184,11 +243,14 @@ export class CartView {
         this.place(s, pose);
       }
       this.pieces(s, v, dt, !!t);
+      this.colors(s, v, dt, !!t, Math.hypot(pose.x - me.x, pose.z - me.z) < 120);
     }
     for (const [id, s] of this.shown) {
       if (seen.has(id)) continue;
       this.group.remove(s.obj);
       this.dropCanopy(s);
+      s.flag.dispose();
+      s.paint.dispose();
       this.shown.delete(id);
     }
   }
@@ -199,9 +261,22 @@ export class CartView {
     tilt.rotation.order = 'YXZ';
     obj.add(tilt);
     this.group.add(obj);
+    const paint = new THREE.MeshStandardNodeMaterial({ color: NO_COLOR, roughness: 0.95, metalness: 0, side: THREE.DoubleSide });
     const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0,
       coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang(), slopeX: 0, slopeZ: 0,
-      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '', tracks: [new TyreTrack(), new TyreTrack()] };
+      fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '', tracks: [new TyreTrack(), new TyreTrack()],
+      paint, color: NO_COLOR, flag: flagGeometry(), wave: Math.random() * 6 };
+    // The whip mast and its pennant, in the cart's frame (the model's: it sits in `tilt` unmoved).
+    const mast = new THREE.Group();
+    mast.position.set(MAST.x, MAST.y, MAST.z);
+    mast.rotation.x = MAST.lean;
+    const pole = new THREE.Mesh(mastGeo, mastMat);
+    pole.castShadow = true;
+    const flag = new THREE.Mesh(s.flag, paint);
+    flag.position.y = MAST.h - FLAG.h / 2 - 0.04;
+    flag.castShadow = true;
+    mast.add(pole, flag);
+    tilt.add(mast);
     loadCart().then((t) => {
       const m = t.clone(true);
       m.traverse((o) => {
@@ -221,6 +296,7 @@ export class CartView {
         return n ? [{ n, f, y0: n.position.y }] : [];
       });
       s.level = -1;
+      paintLid(m, paint);
       tilt.add(m);
     }, () => {});
     return s;
@@ -317,5 +393,13 @@ export class CartView {
         if (n) n.visible = level >= at;
       }
     }
+  }
+
+  /** The owner's colour, and the pennant rippling: streaming back when towed, stirring when parked. */
+  private colors(s: Shown, v: Vehicle, dt: number, towed: boolean, near: boolean) {
+    const color = v.color ?? NO_COLOR;
+    if (color !== s.color) s.paint.color.setHex((s.color = color));
+    s.wave += dt * (towed ? 11 : 3.5);
+    if (near) rippleFlag(s.flag, s.wave, towed ? 0 : 0.35 * Math.sin(s.wave * 0.13));
   }
 }

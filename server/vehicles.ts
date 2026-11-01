@@ -18,6 +18,8 @@
 // backing the bike up to it unfolded packs and hitches it in one go (tryHitch). Packing (and so that hitch) is
 // refused while `packBlocked` says so (phase 3's benches). Its owner raises its level with the wrench from the build menu (upgrade():
 // shared/crafting.ts CART_UPGRADES, ItemData.level on its item in veh<id>).
+// Each cart carries its owner's colour (`color`, from their player row: right while they're offline, and set again on
+// every join, recolor()), so it's told apart by the pods.
 import { cargoBox, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bikeLevel, GEAR, isVehicle, partsOf, repaired, scrapParts } from '../shared/gear.ts';
 import { partKind, setData, type ItemData } from '../shared/items.ts';
@@ -80,6 +82,12 @@ export class VehicleServer {
       this.src.set(r.id, r.src);
       if (r.owner) this.owner.set(r.id, r.owner);
     }
+    // A cart's owner's colour (a public one: the owner's browser ID never goes out).
+    setVehicles(vehicles.map((v) => {
+      const o = isCart(v) ? this.owner.get(v.id) : undefined;
+      const color = o === undefined ? undefined : db.getPlayer(o)?.color;
+      return color === undefined ? v : { ...v, color };
+    }));
     setVehicles(vehicles.map((v) => this.withParts(v)));
     db.tx(() => {
       if (![...this.src.values()].includes('home')) this.spawnHome();
@@ -250,6 +258,13 @@ export class VehicleServer {
     this.db.ownVehicle(id, browserId);
     this.owner.set(id, browserId);
     this.changed = true;
+  }
+
+  /** Player `browserId`'s colour is `color` (every join): their carts are painted it. */
+  recolor(browserId: string, color: number) {
+    if (vehicles.some((v) => isCart(v) && v.color !== color && this.owner.get(v.id) === browserId)) {
+      this.set(vehicles.map((v) => (isCart(v) && this.owner.get(v.id) === browserId ? { ...v, color } : v)));
+    }
   }
 
   /** Player `browserId`'s vehicles' ids. */

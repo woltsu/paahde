@@ -19,7 +19,9 @@ import type { PlayerState } from './sim.ts';
  *  to (towed, or parked behind it), `open` (unfolded: docs/cart.md, its owner's Unfold / Pack) and `level` (its item's
  *  ItemData.level). */
 export type Vehicle = { id: number; kind: string; x: number; y: number; z: number; heading: number; up: boolean;
-  parts: (string | null)[]; rider?: number; hitched?: number; open?: boolean; level?: number };
+  parts: (string | null)[]; rider?: number; hitched?: number; open?: boolean; level?: number;
+  /** A cart's owner's colour (their avatar's; never who they are). */
+  color?: number };
 
 /** F reaches a vehicle within this far (m, horizontally from the feet to the edge of its footprint). */
 export const VEHICLE_REACH = 3.2;
