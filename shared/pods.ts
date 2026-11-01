@@ -7,23 +7,18 @@
 // Each has two emergency water tanks strapped to its hull by the hatch, their taps dripping: the canteen fills there, as
 // at a pump (atPodTap, shared/wells.ts waterAt), so the first water is where you arrive.
 //
-// Together they are a small scrap-field site: a starter machine thrown out by each (podSites: machine sites "pod:<n>"
-// like a crash site's, shared/crash.ts, carried off and back on the starter timer, server/crash.ts), and a starter kit
-// lying about them: scrap, cloth, and the pod's console and power box, torn out (podLootSpot, POD_LOOT in
-// shared/tables.ts, rolled in shared/lootRoll.ts, laid out by server/loot.ts). Each player finds a broken motorcycle
-// of their own lying by their pod: the first player's is the world's first (shared/lootRoll.ts homeBikeSpot), the
-// others' round it (arrivalBikeSpot; server/vehicles.ts arrive).
+// Each has its equipment bay torn half out of its right flank, still cabled to it (podSites: machine sites "pod:<n>"
+// like a crash site's large machine, shared/crash.ts, worked where it lies; built in shared/machineBuilders.ts podBay):
+// stripped, it gives what the quad by the pods is missing, its battery and bearing, and the first wiring. Lying about
+// them, a starter kit of scrap and cloth only (podLootSpot, POD_LOOT in shared/tables.ts, rolled in
+// shared/lootRoll.ts, laid out by server/loot.ts). The quad lies by the first pod (shared/lootRoll.ts homeBikeSpot).
 //
 // Solid (collidePods in sim.ts step(); a top within a step of the feet is ground, anything taller a wall) and they cast
 // shade (podCasters, shared/shade.ts). Same determinism rules as shared/scrap.ts in the collision: + - * /, Math.sqrt,
 // Math.abs, Math.min/max only.
 import type { CrashSite } from './crash.ts';
-import { WORLD_SEED } from './dunes.ts';
-import { mulberry32 } from './noise.ts';
 import { POD_POSES } from './podModel.ts';
 import { ARRIVAL, ARRIVAL_R, PODS, podToWorld, type PodSpot } from './podSpot.ts';
-import { type ComponentKind } from './salvage.ts';
-import { POD_MACHINES } from './tables.ts';
 import { baseHeight } from './terrain.ts';
 
 export { ARRIVAL, nearPod, onPodGround, PODS } from './podSpot.ts';
@@ -136,27 +131,24 @@ export function atPodTap(x: number, y: number, z: number, margin = 0): boolean {
   return false;
 }
 
-// ---- the machines thrown out of them -------------------------------------------------------------------------------
+// ---- their equipment bays -----------------------------------------------------------------------------------------
 
-/** The numeric site the pods' machines belong to (shared/crash.ts CrashSite.wreck): no crash site has it, so it never
- *  smokes or goes spent. */
+/** The numeric site the pods' bays belong to (shared/crash.ts CrashSite.wreck): no crash site has it, so it never
+ *  smokes; spent (server/crash.ts) once a bay has been stripped and its frame mashed to scrap. */
 export const POD_WRECK = -2;
-/** Where each pod's machine lies, pod-local (x, z): off its right flank, by its tail (the hatch is on its left). */
-export const POD_MACHINE_SPOT: [number, number] = [3.4, -1.2];
+/** Where each pod's equipment bay lies, pod-local (x, z): against its right flank (the hatch is on its left), its back
+ *  to the hull, on the flat between the furrow's banks behind and the heap at the nose (shared/podSpot.ts). */
+export const POD_MACHINE_SPOT: [number, number] = [2.05, -0.4];
 
 let sites: CrashSite[] | null = null;
 
-/** The pods' machines, as small machine sites of a scrap field (level 0: the starter machines, POD_MACHINES), one by each pod. */
+/** The pods' equipment bays, one by each pod, its back to the hull (its +z the pod's +X, its cables running back in). */
 export function podSites(): CrashSite[] {
   if (sites) return sites;
-  const r = mulberry32(Math.imul(WORLD_SEED, 0x2c1b3c6d) ^ 0x90d5);
-  const kinds = Object.entries(POD_MACHINES) as [ComponentKind, number][];
-  const total = kinds.reduce((a, [, w]) => a + w, 0);
   return (sites = PODS.map((pod, index) => {
-    let u = r() * total, kind = kinds[0][0];
-    for (const [k, w] of kinds) if ((u -= w) < 0) { kind = k; break; }
     const p = podToWorld(pod, POD_MACHINE_SPOT[0], POD_MACHINE_SPOT[1]);
-    return { id: `pod:${index}`, wreck: POD_WRECK, index, level: 0, ...p, yaw: r() * 6.2831853, kind, seed: (r() * 4294967296) >>> 0 };
+    const seed = (Math.imul(index + 1, 0x9e3779b1) ^ Math.imul(pod.x | 0, 0x85ebca6b) ^ Math.imul(pod.z | 0, 0xc2b2ae35)) >>> 0;
+    return { id: `pod:${index}`, wreck: POD_WRECK, index, level: 0, ...p, yaw: Math.atan2(pod.dz, -pod.dx), kind: 'pod_bay', seed };
   }));
 }
 
@@ -170,7 +162,7 @@ export function podSiteById(id: unknown): CrashSite | null {
 // ---- what lies about them ------------------------------------------------------------------------------------------
 
 /** Where loot lies by a pod, pod-local (x, z): ahead of its nose, by its flanks, along its furrow. */
-export const POD_LOOT_SPOTS: [number, number][] = [[-2.6, 4.2], [2.8, 3.5], [3.2, 1.2], [-3.4, -2.6], [2.4, -4.5], [-2.2, -7], [1.6, -10]];
+export const POD_LOOT_SPOTS: [number, number][] = [[-2.6, 4.2], [2.8, 3.5], [3.6, 1.9], [-3.4, -2.6], [2.4, -4.5], [-2.2, -7], [1.6, -10]];
 
 /** A spot to lay something out by one of the pods, from `rand` (shared/lootRoll.ts podFindSpot). */
 export function podLootSpot(rand: () => number): { x: number; z: number } {

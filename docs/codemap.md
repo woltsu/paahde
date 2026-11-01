@@ -109,12 +109,13 @@ when you find it stale.
 - `shared/pods.ts` — the crashed escape pod(s) players arrive in (new players and the dead without a bedroll appear
   beside the hatch of "their" pod, `podOf(browserId)`: `podSpawn`, `spawnPoint(n)` in shared/sim.ts): each pod in the
   world (`podPlaces`), collision (`collidePods`), shade casters, the water tap on each hull (`atPodTap`, through
-  shared/wells.ts `waterAt`), a starter machine by each (`podSites`, ids `pod:<n>`, through shared/crash.ts; kinds
-  `POD_MACHINES`, no winch: no bearing before the cart's workbench) and loot spots (`POD_LOOT`, server/loot.ts: a starter kit
-  kept whole, an older kit's surplus cleared on load). The kit's pod console and power box (`pod_console`,
-  `pod_powerbox`) are carried machines (shared/salvage.ts COMPONENTS, never at crash sites) holding the first wiring and
-  the first bike's battery: models `tools/blender/finds.py` → `public/models/finds/pod_*.glb` (lying, and the icons),
-  on the bench `podConsole` / `podPowerbox` in src/teardown/junk.ts. Their spots (a cluster picked per world 37–67 m from the origin), the keep-clear
+  shared/wells.ts `waterAt`), its equipment bay torn half out of its right flank (`podSites`, ids `pod:<n>`, through
+  shared/crash.ts: kind `pod_bay`, a large machine worked where it lies, built by shared/machineBuilders.ts `podBay`;
+  `POD_MACHINE_SPOT`; spent once scrapped, `POD_WRECK`): the quad's battery and bearing and the first wiring
+  (shared/tables.ts COMPONENT_LOOT `pod_bay`), and loot spots (`POD_LOOT`, server/loot.ts: scrap and cloth only, kept
+  whole; an older kit's surplus, the old console and power box, cleared on load). The old `pod_console` / `pod_powerbox`
+  carried machines still exist for old worlds' bags (models `tools/blender/finds.py`,
+  on the bench `podConsole` / `podPowerbox` in shared/machineBuilders.ts). The pods' spots (a cluster picked per world 37–67 m from the origin), the keep-clear
   that hugs each hull (`nearPod`), the layout's keep-off (`onPodGround`) and the furrows in the terrain:
   `shared/podSpot.ts`; model `tools/blender/pod.py` → `public/models/pod.glb` + generated `shared/podModel.ts` (one
   model in four poses, a drogue chute behind one); drawn by `src/world/pods.ts`. Old worlds: `server/podsLanded.ts`

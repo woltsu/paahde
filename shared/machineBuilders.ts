@@ -855,6 +855,84 @@ function podPowerbox(k: Kit) {
   k.mount('coil', [[0.25, 0.06, 0], [0, 0, 0]], () => [lead, k.bolt(S.coilBolt, [0.25, 0.1, 0.27], [0, 1, 0], lidScrews, 2)]);
 }
 
+/** The pod's equipment bay (shared/pods.ts podSites), torn half out of its flank on the way down and still cabled to it:
+ *  a grey box, its back (-z) to the hull with the bent mounting brackets and the cut umbilicals running back into the
+ *  sand under it, its front (+z) an off-white hull panel in the pod's paint, dented: four screws, then its jammed
+ *  bottom seam prised. Behind it a divider: on the left the emergency battery, strapped and wired to the bus at the
+ *  top (unclip, shake the lead off, heave it out); upper right the cooling fan on its shroud screws, the bearing in
+ *  its hub under a clip once the fan is off; lower right the wiring loom, one or two coils on a harness, a latch and a
+ *  bolt. It stands on its mounting rails, sunk a little in the sand. What the quad by the pods is missing (its battery
+ *  and bearing) and the first wiring, in a dozen steps. */
+function podBay(k: Kit) {
+  const THREE = k.shapes;
+  const W = 1.9, H = 1.25, D = 0.9, F = D / 2;
+  /** It stands on its mounting rails, their feet in the sand: everything else is this much up. */
+  const B = 0.3;
+  for (const z of [-F + 0.12, F - 0.12]) k.box(W - 0.1, B, 0.12, 0, 0, z, 'dark');
+  // the box, open at the front
+  k.box(W, 0.06, D, 0, B, 0, 'trim');
+  k.box(W, H, 0.06, 0, B, -F + 0.03, 'hullGrey');
+  for (const s of [-1, 1]) {
+    k.box(0.06, H, D, s * (W / 2 - 0.03), B, 0, 'hullGrey');
+    k.box(0.01, 0.14, D, s * (W / 2 + 0.005), B + H - 0.3, 0, 'orange');
+  }
+  k.box(W + 0.06, 0.06, D + 0.04, 0, B + H, 0, 'hull');
+  k.box(W + 0.06, 0.03, 0.06, 0, B + H + 0.06, F - 0.02, 'red');
+  // inside: the divider, the shelf on the right, the bus bar at the top, the fan's motor at the back
+  k.box(0.06, H - 0.06, D - 0.1, -0.08, B + 0.06, -0.02, 'trim');
+  k.box(W / 2 - 0.05, 0.04, D - 0.1, W / 4 - 0.02, B + 0.55, -0.02, 'trim');
+  k.box(0.5, 0.06, 0.12, -0.08, B + H - 0.14, 0.18, 'copper');
+  k.cyl(0.15, 0.3, 0.46, B + 0.9, -0.22, 'trim', 'z', 16);
+  // the bent brackets that held it to the hull, and the umbilicals it was torn out by, back into the sand under the hull
+  for (const s of [-1, 1]) {
+    const b = k.box(0.1, 0.05, 0.45, s * 0.8, B + H - 0.2, -F - 0.2, 'trim');
+    b.rotation.set(-0.5, 0.3 * s, 0.4 * s);
+  }
+  k.cable([[0.3, B + 0.95, -F], [0.4, B + 0.8, -F - 0.4], [0.3, 0.45, -F - 0.9], [0.15, 0.05, -F - 1.4], [0.05, -0.15, -F - 1.7]], 0.06, 'black');
+  k.cable([[-0.35, B + 0.7, -F], [-0.5, B + 0.5, -F - 0.35], [-0.45, 0.2, -F - 0.8], [-0.2, -0.1, -F - 1.2]], 0.045, 'red');
+  k.cable([[-0.1, B + 1.0, -F], [-0.1, B + 0.9, -F - 0.3], [0.0, 0.4, -F - 0.9], [-0.1, -0.12, -F - 1.25]], 0.035, 'yellow');
+
+  // the front panel, dented askew: four screws, then the jammed seam at its foot prised
+  const panel = k.group([0, B + H / 2, F + 0.04], [0.03, 0, -0.025]);
+  k.mesh(new THREE.BoxGeometry(W + 0.04, H + 0.02, 0.06), 'hull', 0, 0, 0, panel);
+  k.mesh(new THREE.BoxGeometry(W + 0.04, 0.16, 0.02), 'orange', 0, H / 2 - 0.3, 0.04, panel);
+  k.mesh(new THREE.BoxGeometry(W + 0.04, 0.05, 0.02), 'red', 0, -H / 2 + 0.05, 0.04, panel);
+  k.mesh(new THREE.BoxGeometry(0.34, 0.2, 0.02), 'yellow', -0.55, -0.1, 0.04, panel); // the warning plate
+  k.mesh(new THREE.BoxGeometry(0.5, 0.05, 0.03), 'hullGrey', 0.45, 0.12, 0.04, panel).rotation.z = -0.5; // the dent's crease
+  const screws = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy]) => k.screw(S.coverScrew, [sx * (W / 2 - 0.12), B + H / 2 + sy * (H / 2 - 0.12), F + 0.08], [0, 0, 1]));
+  const seam = k.pry(S.doorSeam, [0.2, B + 0.1, F + 0.09], [0, 0, 1], screws);
+  const panelHolds = [...screws, seam];
+  k.cover(panel, panelHolds, [0.2, 0.3, 1], 0.04);
+
+  // left: the battery, strapped, its lead up to the bus; heavy, heaved out once free
+  const strap = k.clip(S.cellStrap, [-0.5, B + 0.7, 0.22], [0, 0, 1], 1, panelHolds);
+  const lead = k.wire(S.batteryLead, [[-0.55, B + 0.66, 0.12], [-0.45, B + 0.92, 0.26], [-0.22, B + H - 0.08, 0.2]], 'red', panelHolds, 0.035);
+  k.mount('battery', [[-0.5, B + 0.06, 0.02], [0, 0, 0]], () => [strap, lead, k.lift(S.liftTheBatteryOut, [-0.5, B + 0.78, 0.0], [0, 1, 0], [strap, lead])]);
+
+  // upper right: the cooling fan on its shroud, the bearing in its hub behind
+  const FY = B + 0.9;
+  const fan = k.group([0.46, FY, 0.18]);
+  k.mesh(new THREE.TorusGeometry(0.3, 0.035, 6, 24), 'dark', 0, 0, 0, fan);
+  for (let i = 0; i < 5; i++) {
+    const blade = k.mesh(new THREE.BoxGeometry(0.07, 0.26, 0.015), 'trim', 0, 0, 0, fan);
+    const a = (i / 5) * Math.PI * 2;
+    blade.position.set(Math.sin(a) * 0.14, Math.cos(a) * 0.14, 0);
+    blade.rotation.set(0, 0.5, -a);
+  }
+  k.mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.08, 12).rotateX(Math.PI / 2), 'dark', 0, 0, 0, fan);
+  for (const a of [0.5, 2.6, 4.7]) k.rod([0.46 + Math.cos(a) * 0.3, FY + Math.sin(a) * 0.3, 0.18], [0.46 + Math.cos(a) * 0.12, FY + Math.sin(a) * 0.12, -0.08], 0.015, 'trim');
+  const shroud = k.circle(S.shroudScrew, [0.46, FY, 0.22], [0, 0, 1], 0.3, 3, panelHolds, 'screw', 0.5);
+  k.cover(fan, shroud, [0.3, 0.2, 1], 0.04);
+  k.mount('bearing', k.ax('bearing', [0.46, FY, -0.02], 'z'), () => [...shroud, k.clip(S.bearingClip, [0.46, FY + 0.2, 0.06], [0, 0, 1], 1, shroud)]);
+
+  // lower right: the loom, a coil on its harness and connector latch, maybe a second on its bolt
+  k.mount('coil', [[0.28, B + 0.06, -0.05], [0, 0, 0]], () => [
+    k.wire(S.harness, [[0.12, B + 0.4, 0.2], [0.3, B + 0.5, 0.3], [0.55, B + 0.42, 0.24]], 'yellow', panelHolds, 0.03),
+    k.clip(S.connectorLatch, [0.3, B + 0.22, 0.36], [0, 0, 1], 1, panelHolds),
+  ]);
+  k.mount('coil', [[0.72, B + 0.06, -0.05], [0, 0, 0]], () => [k.bolt(S.coilBolt, [0.72, B + 0.4, 0.3], [0, 0, 1], panelHolds, 2)]);
+}
+
 export const BUILDERS: Record<JunkKind, (k: Kit) => void> = {
   pump_housing: pumpHousing,
   jet_engine: jetEngine,
@@ -865,6 +943,7 @@ export const BUILDERS: Record<JunkKind, (k: Kit) => void> = {
   beacon,
   pod_console: podConsole,
   pod_powerbox: podPowerbox,
+  pod_bay: podBay,
   vehicle_frame: vehicleFrame,
   water_jet: waterJet,
   warp_core: warpCore,

@@ -21,7 +21,7 @@
 import { machineChanged, machineShove, maxShove, pushedMachine, setMachineProgress, setMachineShove } from '../shared/machineBoxes.ts';
 import { CROUCH, BACK, DT, FORWARD, LEFT, PLAYER_RADIUS, RIGHT, STEP_UP } from '../shared/sim.ts';
 import { CARRY_KINDS, crashSiteById, isTableId, tableById, crashSpent, crashTaken, crashVisited, CRASH_REACH, SITE_RANGE, TEARDOWN_LAYOUT } from '../shared/crash.ts';
-import { podSiteById } from '../shared/pods.ts';
+import { POD_WRECK, podSiteById } from '../shared/pods.ts';
 import { CRASH_KINDS } from '../shared/crashKinds.ts';
 import { crashSite, crashSitesNear, CRASH_CELL, debrisById, debrisReach, DEBRIS_REACH } from '../shared/crashsites.ts';
 import { debrisItem } from '../shared/items.ts';
@@ -116,7 +116,7 @@ export class CrashServer {
       this.taken.set(r.id, r.taken_at);
       crashTaken.add(r.id);
     }
-    for (const r of db.loadCrashSpent()) if (crashSite(r.site)) crashSpent.add(r.site);
+    for (const r of db.loadCrashSpent()) if (crashSite(r.site) || r.site === POD_WRECK) crashSpent.add(r.site); // (a pod's bay: scrapped)
     for (const site of db.loadCrashVisited()) if (crashSite(site)) crashVisited.add(site);
     console.log(`crash: ${this.taken.size} machines carried off, ${crashSpent.size} sites spent, ${crashVisited.size} visited`);
   }

@@ -57,7 +57,7 @@ export const SALVAGE: Record<SalvageId, SalvageKind> = {
 
 /** Crash-site components (src/teardown): smaller than the wrecks above, and taken apart on the spot. */
 export type ComponentKind = 'pump_housing' | 'jet_engine' | 'robot_arm' | 'control_cabinet' | 'winch' | 'solenoid_valve' | 'beacon'
-  | 'pod_console' | 'pod_powerbox';
+  | 'pod_console' | 'pod_powerbox' | 'pod_bay';
 
 export interface ComponentSpec {
   label: string;
@@ -93,6 +93,9 @@ export const COMPONENTS: Record<ComponentKind, ComponentSpec> = {
   pod_console: { label: TEXT.machines.pod_console, carry: true, ...COMPONENT_LOOT.pod_console },
   // The pod's power box: the emergency battery under a screwed lid, a distribution coil, cut cables out of its glands.
   pod_powerbox: { label: TEXT.machines.pod_powerbox, carry: true, ...COMPONENT_LOOT.pod_powerbox },
+  // The pod's equipment bay, torn half out of its flank and still cabled to it (shared/pods.ts podSites): worked where it
+  // lies. The quad's battery and bearing and the first wiring. Only by the pods (not in LEVEL_KINDS).
+  pod_bay: { label: TEXT.machines.pod_bay, carry: false, ...COMPONENT_LOOT.pod_bay },
 };
 
 /** Anything the disassembly mode can take apart: a crash-site component or a salvage wreck. */

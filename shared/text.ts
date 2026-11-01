@@ -96,6 +96,7 @@ const en = {
     beacon: 'Distress beacon',
     pod_console: 'Pod console',
     pod_powerbox: 'Pod power box',
+    pod_bay: 'Pod equipment bay',
     vehicle_frame: 'Broken vehicle frame',
     water_jet: 'Broken water jet',
     warp_core: 'Warp drive core',
@@ -618,7 +619,7 @@ const en = {
   },
   /** What holds a machine together: the steps in the disassembly mode (src/teardown/junk.ts, wrecks.ts). */
   steps: {
-    antennaFeed: 'Antenna feed', axleNut: 'Axle nut', batteryStrap: 'Battery strap',
+    antennaFeed: 'Antenna feed', axleNut: 'Axle nut', batteryLead: 'Battery lead', batteryStrap: 'Battery strap',
     bearingCapBolt: 'Bearing cap bolt', bearingCapScrew: 'Bearing cap screw', bearingClip: 'Bearing clip',
     bearingRetainer: 'Bearing retainer', boardStandoff: 'Board standoff', brakeFeed: 'Brake feed',
     cageClamp: 'Cage clamp', caliperBolt: 'Caliper bolt', cardLatch: 'Card latch', cellStrap: 'Cell strap',
@@ -632,7 +633,7 @@ const en = {
     guardLatch: 'Guard latch', heatSinkBolt: 'Heat sink bolt', hubNut: 'Hub nut', hubSetScrew: 'Hub set screw',
     igniterBolt: 'Igniter bolt', igniterLead: 'Igniter lead', impellerNut: 'Impeller nut',
     junctionBoxScrew: 'Junction box screw', lidScrew: 'Lid screw', lidSeam: 'Lid seam',
-    liftTheCasingOff: 'Lift the casing off', liftTheMotorOff: 'Lift the motor off', liveIn: 'Live in',
+    liftTheBatteryOut: 'Lift the battery out', liftTheCasingOff: 'Lift the casing off', liftTheMotorOff: 'Lift the motor off', liveIn: 'Live in',
     liveToMotor: 'Live to motor', mainsCable: 'Mains cable', mastFootBolt: 'Mast foot bolt',
     motorFlangeBolt: 'Motor flange bolt', motorFootBolt: 'Motor foot bolt', motorMountBolt: 'Motor mount bolt',
     motorPowerCable: 'Motor power cable', neutral: 'Neutral', phaseLead: 'Phase lead', pinionClip: 'Pinion clip',

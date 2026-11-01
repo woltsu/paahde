@@ -1004,7 +1004,7 @@ export class Kit {
 // The wrecks are built at about twice their models' size (tools/blender/salvage), so they come back to it here.
 const SCALE: Record<JunkKind, number> = {
   pump_housing: 0.7, jet_engine: 0.7, robot_arm: 0.8, control_cabinet: 0.85, winch: 0.75, solenoid_valve: 0.75, beacon: 0.8,
-  pod_console: 0.6, pod_powerbox: 0.6,
+  pod_console: 0.6, pod_powerbox: 0.6, pod_bay: 0.65,
   vehicle_frame: 0.5, water_jet: 0.8, warp_core: 0.55, ai_control: 0.62,
 };
 export const JUNK_KINDS = Object.keys(BUILDERS) as JunkKind[];

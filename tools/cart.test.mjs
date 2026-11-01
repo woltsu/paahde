@@ -20,7 +20,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import WebSocket from 'ws';
 import { canopyRig, cartAxle, cartToWorld, couplerOf, HITCH_BACK, HITCH_MAX, hitchPoint, TOW_LENGTH, towedPose } from '../shared/cart.ts';
-import { CART_TABLE, HAND_TABLE, POD_LOOT, RETIRED_BUILD_TABLE } from '../shared/tables.ts';
+import { CART_TABLE, HAND_TABLE, HOME_BIKE, POD_LOOT, RETIRED_BUILD_TABLE } from '../shared/tables.ts';
+import { GEAR } from '../shared/gear.ts';
 import { BUILDS, buildCost, isBuildable } from '../shared/crafting.ts';
 import { onTable, tableById } from '../shared/crash.ts';
 import { quantizePitch } from '../shared/dig.ts';
@@ -640,7 +641,24 @@ test('the pods\' kit pays for the wrench, the cart\'s levels 1 and 2, a tarp and
   assert.deepEqual(Object.keys(want).sort(), ['cloth', 'scrap']);
   assert.equal(POD_LOOT.kit.scrap, want.scrap);
   assert.equal(POD_LOOT.kit.cloth, want.cloth);
-  assert.ok(POD_LOOT.kit.pod_console && POD_LOOT.kit.pod_powerbox);
+  assert.deepEqual(Object.keys(POD_LOOT.kit).sort(), ['cloth', 'scrap'], 'nothing but scrap and cloth lies about the pods');
+});
+
+test('each pod\'s equipment bay, stripped where it lies, holds the quad\'s battery and bearing and the first wiring', () => {
+  assert.deepEqual(HOME_BIKE.fitted, ['motor']);
+  assert.deepEqual(GEAR.quad.slots.map((s) => s.part).sort(), ['battery', 'bearing', 'motor']);
+  for (let seed = 1; seed < 200; seed++) {
+    const parts = machineParts('pod_bay', seed * 7919, 0);
+    for (const p of ['battery', 'bearing', 'coil']) assert.ok(parts.some((x) => x.part === p), `${p} (seed ${seed})`);
+    const rules = stepList('pod_bay', seed * 7919, 0), done = new Set();
+    for (let more = true; more;) {
+      more = false;
+      for (let i = 0; i < rules.list.length; i++) if (!done.has(i) && stepAllowed(rules, done, i)) done.add(i), (more = true);
+    }
+    assert.equal(done.size, rules.list.length, 'every step can be done');
+    assert.ok(rules.list.length >= 10 && rules.list.length <= 18, `a dozen or so steps (${rules.list.length})`);
+    for (let i = 0; i < parts.length; i++) assert.ok(partAllowed(rules, done, i), `part ${i} free`);
+  }
 });
 
 /** A lab world whose database has an old workbench, dismantling table and chest standing by the spawn. */
@@ -704,6 +722,8 @@ test('the beginning with the pods\' kit: wrench, cart shade, cart workshop, a ta
   await toSide(west);
   for (const [kind, n] of Object.entries(POD_LOOT.kit)) await answer({ t: 'debugGive', kind, n });
   assert.equal(count('scrap'), POD_LOOT.kit.scrap);
+  // (An older world's pod console and power box, carried machines: taken apart on the cart's table below.)
+  for (const kind of ['pod_console', 'pod_powerbox']) await answer({ t: 'debugGive', kind, n: 1 });
 
   // The order: the wrench by hand, the cart's shade and workshop with it, the tarp and the bedroll by hand.
   assert.equal(await answer({ t: 'craft', recipe: 'wrench' }), undefined);
