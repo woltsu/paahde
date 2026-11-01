@@ -1,4 +1,5 @@
-// The build menu (the right mouse with the wrench in hand, src/placing.ts): every building (shared/crafting.ts BUILDS; the
+// The build menu (the right mouse with the wrench in hand, src/placing.ts): every building (shared/crafting.ts BUILDS: not the
+// workbench, dismantling table or chest any more, the cart has those; the
 // bosses' trophies once they're won, shared/trophies.ts) with what it takes of the base materials and what the bag has. Picking one puts its preview on the crosshair to put
 // up; picking it again puts the wrench back to just a wrench. By your own parked cart it offers the cart's next level
 // first (shared/crafting.ts CART_UPGRADES): picking that raises it there and then. The mouse is freed like the inventory

@@ -669,7 +669,7 @@ const en = {
     wrench: (k: HintKeys) => `With the wrench on the hotbar, press ${k.aim} to build.`,
     part: () => 'Parts repair gear at the workbench.',
     broken: () => "It's broken. You can repair it at a workbench.",
-    machine: () => 'Take it apart at a dismantling bench.',
+    machine: () => "Take it apart on your cart's workshop table.",
     inventory: (k: HintKeys) => `Press ${k.inventory} for the inventory.`,
   } as Record<string, (k: HintKeys) => string>,
 
@@ -715,8 +715,8 @@ const en = {
     bottleNight: ["A water bottle. I'll be glad of that when the sun comes up.", "I'd better grab that before the day comes."],
     machine: "This thing's full of good parts. Let's crack it open.",
     machineCarry: "It's too fiddly to strip out here. I'll haul it home.",
-    /** The first machine in the bag to take apart: it wants a dismantling bench (built with the wrench). */
-    machineBench: "I can't take this apart by hand. I'll have to build a dismantling bench.",
+    /** The first machine in the bag to take apart: it wants a table, the cart's workshop (raised with the wrench). */
+    machineBench: "I can't take this apart by hand. My cart could do with a proper table.",
     /** The first thing said in a world, on arriving at the pod. */
     start: "I'd better find a way to build a shelter.",
     /** The beginning (docs/levels/tutorial.md), once each, as you go. */

@@ -130,7 +130,7 @@ export class PlacedServer {
    */
   build(browserId: string, feet: { x: number; y: number; z: number }, kind: unknown, x: unknown, z: unknown, rot: unknown,
     players: { x: number; y: number; z: number }[]): Placed | string {
-    if (typeof kind !== 'string' || !isBuildable(kind) || !isPlaceable(kind)) return TEXT.notice.cantPlace;
+    if (typeof kind !== 'string' || !Object.hasOwn(BUILDS, kind) || !isPlaceable(kind)) return TEXT.notice.cantPlace;
     if (!this.items.has(browserId, WRENCH)) return TEXT.notice.cantPlace;
     const why = this.spotError(kind, feet, x, z, rot, players);
     if (why) return why;

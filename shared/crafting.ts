@@ -15,7 +15,7 @@ import { fitsSlot, GEAR } from './gear.ts';
 import { addItem, HOTBAR, ITEMS, setPart, withData, type Part, type Shape, type Slots } from './items.ts';
 import { partOf } from './parts.ts';
 import { TIERS } from './salvage.ts';
-import { BUILD_TABLE, CART_TABLE, HAND_TABLE, RECIPE_TABLE, type IngredientSpec } from './tables.ts';
+import { BUILD_TABLE, CART_TABLE, HAND_TABLE, RECIPE_TABLE, RETIRED_BUILD_TABLE, type IngredientSpec } from './tables.ts';
 import { TROPHY_PLACEABLES } from './trophies.ts';
 
 export type Ingredient = { label: string; n: number; match: (kind: string) => boolean };
@@ -56,8 +56,10 @@ export const CART_UPGRADES: Record<number, Recipe> = Object.fromEntries(
   Object.entries(CART_TABLE).map(([level, needs]) => [Number(level), { makes: 'cart', needs: needs.map(ingredient) }]),
 );
 
-/** Put up with the wrench (never carried as an item). */
-export const isBuildable = (kind: string | undefined) => !!kind && kind in BUILDS;
+/** Put up with the wrench (never carried as an item), and taken down with it: what it can build (BUILDS) and what it no
+ *  longer builds but still stands in older worlds (the workbench, dismantling table and chest: shared/tables.ts
+ *  RETIRED_BUILD_TABLE, the cart has them now). */
+export const isBuildable = (kind: string | undefined) => !!kind && (kind in BUILDS || kind in RETIRED_BUILD_TABLE);
 /** The tool that opens the build menu. */
 export const WRENCH = 'wrench';
 
@@ -114,7 +116,7 @@ export function useUp(slots: Slots, recipe: Recipe): boolean {
 
 /** The materials building `kind` took, as items to give back when it comes down (or [] if it isn't one). */
 export const buildCost = (kind: string): { kind: string; n: number }[] =>
-  (BUILD_TABLE[kind] ?? []).flatMap((s) => ('kinds' in s ? [{ kind: s.kinds[0], n: s.n }] : []));
+  (BUILD_TABLE[kind] ?? RETIRED_BUILD_TABLE[kind] ?? []).flatMap((s) => ('kinds' in s ? [{ kind: s.kinds[0], n: s.n }] : []));
 
 /** Craft `id` in `slots`: use up the ingredients, add what it makes. Mutates; false (no change) if it can't. */
 export function craft(slots: Slots, id: string, newId: () => number, shape: Shape): boolean {

@@ -79,16 +79,19 @@ export const BUILD_TABLE: Record<string, IngredientSpec[]> = {
   beacon_light: [SCRAP(6), WIRING(2)],
   // A taller scrap mast with an arm, a floodlight on its end, its wiring (the battery goes in after).
   light_pole: [SCRAP(8), WIRING(2)],
+  // Casing and riser pipe of scrap, a tank on a stand, a control box, the cable down the bore (the pump's parts go in after).
+  well: [SCRAP(12), WIRING(3)],
+};
+
+/** What the buildings the cart replaced took (docs/cart.md): no longer built, but ones still standing in older worlds
+ *  work, and give this back when taken down with the wrench (shared/crafting.ts buildCost). */
+export const RETIRED_BUILD_TABLE: Record<string, IngredientSpec[]> = {
   // A scrap bench with a pegboard, a lamp wired in (shared/stations.ts: repairs and recipes).
   workbench: [SCRAP(6), WIRING(1)],
-  // A heavy slatted steel table with a vise, a hand-cranked grinder, a tarp for the parts (carried machines are taken
-  // apart on it: shared/crash.ts tables). No wiring: it's what gets the first wiring out of the machines (the pod's
-  // console and power box, POD_LOOT).
+  // A heavy slatted steel table with a vise, a hand-cranked grinder, a tarp for the parts (shared/crash.ts tables).
   dismantle_bench: [SCRAP(8), CLOTH(1)],
   // A scrap box lined with cloth, its lid on a hinge (shared/storage.ts: CHEST_COLS × CHEST_ROWS, shared).
   storage_chest: [SCRAP(8), CLOTH(2)],
-  // Casing and riser pipe of scrap, a tank on a stand, a control box, the cable down the bore (the pump's parts go in after).
-  well: [SCRAP(12), WIRING(3)],
 };
 
 /** The cart's levels (shared/cart.ts, docs/cart.md), raised with the wrench by your own parked cart from the build menu
@@ -99,8 +102,10 @@ export const CART_TABLE: Record<number, IngredientSpec[]> = {
   // stabilisers that let down to hold it still.
   1: [CLOTH(3), SCRAP(4)],
   // Workshop: the fold-out sides, a workbench on one and a dismantling table on the other (the two benches' scrap,
-  // BUILD_TABLE.workbench and .dismantle_bench, less the frame they share with the cart; the bench's lamp wired in).
-  2: [SCRAP(12), WIRING(1)],
+  // RETIRED_BUILD_TABLE.workbench and .dismantle_bench, less the frame they share with the cart; a tarp for the parts).
+  // No wiring: the table is what gets the first wiring out of the machines (the pod's console and power box, POD_LOOT),
+  // so the beginning can't need it before.
+  2: [SCRAP(12), CLOTH(1)],
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -216,8 +221,8 @@ export const COMPONENT_LOOT: Record<ComponentKind, Loot> = {
       { part: 'coil', min: 1, max: 1 },
     ],
     tierWeights: { scrap: 6, basic: 3, quality: 0.3 },
-  },  // Torn out of the crashed pod (POD_LOOT): the first wiring (coils unwind into it, shared/parts.ts UNTIERED), for the
-  // workbench, and the first bike's battery. Taken apart on the dismantling bench, which needs no wiring.
+  },  // Torn out of the crashed pod (POD_LOOT): the first wiring (coils unwind into it, shared/parts.ts UNTIERED) and the
+  // first bike's battery. Taken apart on the cart's dismantling table, which needs no wiring.
   pod_console: {
     yields: [
       { part: 'coil', min: 1, max: 2 },
@@ -277,20 +282,20 @@ export const FINDS: Record<string, { n: number; level: SiteLevel }> = {
 /** One broken motorcycle lies on the sand by the first crashed pod in a new world (server/vehicles.ts,
  *  shared/lootRoll.ts homeBikeSpot), so a bike is in sight from the first step out, and each new player after the
  *  first finds another of their own round their pod (arrivalBikeSpot): it has these slots fitted (scrap
- *  tier). Its battery comes out of the pod's power box (POD_LOOT, on the dismantling bench) and its bearing is hammered
- *  out of scrap at the workbench (RECIPE_TABLE bearing_scrap): nothing at the pods gives one (POD_MACHINES), so the bike
- *  comes after the workbench. Repaired where it lies, it is whoever stood it up's (like any bike). */
+ *  tier). Its battery comes out of the pod's power box (POD_LOOT, on the cart's dismantling table) and its bearing is
+ *  hammered out of scrap at the cart's workbench (RECIPE_TABLE bearing_scrap): nothing at the pods gives one
+ *  (POD_MACHINES), so the bike comes after the cart's workshop (level 2). Repaired where it lies, it is whoever stood it up's (like any bike). */
 export const HOME_BIKE = { fitted: ['motor'] as PartId[] };
 
 /** Lying about the crashed pods players arrive in (shared/pods.ts, server/loot.ts): a starter kit, kept whole. `kit`: how
- *  many of each lie about them at once: enough scrap and cloth for the wrench, a dismantling bench, a workbench, a tarp
- *  and a bedroll (HAND_TABLE, BUILD_TABLE), and the pod's console and power box
- *  (COMPONENT_LOOT), carried machines whose coils are the first wiring (the workbench's) and whose battery is the first
- *  bike's. The order: wrench, dismantling bench, those two taken apart on it, workbench, bike. `once`: what lies there
- *  once per world, never laid out again when taken: all of it (nothing at spawn comes back; the scrap piles further out
- *  are where more is). `n` and `contents` (the kit's shares, as odds) are for whoever doesn't count what's lying (the
- *  economy simulator). */
-const POD_KIT = { scrap: 20, cloth: 7, pod_console: 1, pod_powerbox: 1 };
+ *  many of each lie about them at once: enough scrap and cloth for the wrench, the cart's levels 1 and 2 (its shade, then
+ *  its workshop: a workbench and a dismantling table, CART_TABLE), a tarp and a bedroll (HAND_TABLE), and the pod's
+ *  console and power box (COMPONENT_LOOT), carried machines whose coils are the first wiring and whose battery is the
+ *  first bike's. The order: wrench, the cart's levels, those two taken apart on its table, the bike (its bearing hammered
+ *  out at its workbench). `once`: what lies there once per world, never laid out again when taken: all of it (nothing at
+ *  spawn comes back; the scrap piles further out are where more is). `n` and `contents` (the kit's shares, as odds) are
+ *  for whoever doesn't count what's lying (the economy simulator). */
+const POD_KIT = { scrap: 22, cloth: 9, pod_console: 1, pod_powerbox: 1 };
 export const POD_LOOT = {
   kit: POD_KIT,
   n: Object.values(POD_KIT).reduce((a, b) => a + b, 0),
@@ -299,7 +304,7 @@ export const POD_LOOT = {
 };
 
 /** The starter machine thrown out by each pod (shared/pods.ts podSites), relative odds: the scrap fields' starter
- *  machines but the winch, whose bearing would put the first bike before the workbench. */
+ *  machines but the winch, whose bearing would put the first bike before the cart's workbench. */
 export const POD_MACHINES: Partial<Record<ComponentKind, number>> = { solenoid_valve: 3, beacon: 3 };
 
 /** Parts that only an engine gives (nothing uses them yet): never found loose. */
