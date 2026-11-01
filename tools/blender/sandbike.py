@@ -615,4 +615,5 @@ def main():
         render_preview(os.path.abspath(args.preview))
 
 
-main()
+if __name__ == '__main__':  # tools/blender/quadbike.py imports the builders and materials
+    main()

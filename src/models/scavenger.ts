@@ -1094,7 +1094,7 @@ export class ScavengerModel {
     const toRoot = _im.copy(this.root.matrix).invert();
     // A short rider sits up on the front of the seat, nearer the bars.
     const forward = RIDE_FORWARD * (1 - this.body.stride);
-    _t.copy(r.seat).add(_o.set(0, forward * RIDE_PERCH, -forward)).applyMatrix4(toRoot);
+    _t.copy(r.seat).add(_o.set(0, forward * (r.perch ?? RIDE_PERCH), -forward)).applyMatrix4(toRoot);
     this.tilt.position.add(_t.sub(this.root.worldToLocal(this.hips.getWorldPosition(_p))));
     this.root.updateMatrixWorld(true);
     rotateAboutRoot(this.root, this.spine, Z_AXIS, r.lean);
@@ -1129,16 +1129,19 @@ export class ScavengerModel {
       const leg = this.legs[i];
       if (leg) {
         // Knees forward and a little out, toes forward and down off the peg. Legs too short for the pegs (a dwarf, a
-        // gnome) rest the feet higher up on the frame instead, straight above the pegs, as high as they need.
+        // gnome) move the feet the climb's way instead (on the bike straight up onto the frame, on the quad up its toe
+        // ramp), as far as they need: to where that line first comes within the leg's reach of the hip.
         this.tilt.worldToLocal(leg[0].getWorldPosition(_s0));
         this.tilt.worldToLocal(this.root.localToWorld(_t.copy(r.pegs[i]).applyMatrix4(toRoot)));
         const len = (leg[0].getWorldPosition(_o).distanceTo(leg[1].getWorldPosition(_p)) + _p.distanceTo(leg[2].getWorldPosition(_o))) / this.body.size;
-        const flat = Math.hypot(_t.x - _s0.x, _t.z - _s0.z), most = len * 0.95;
-        const up = flat < most ? _s0.y - Math.sqrt(most * most - flat * flat) : _s0.y;
-        if (_t.y < up) _t.y = up;
+        const most = len * 0.95, c = r.climb ?? Y_AXIS;
+        _o.subVectors(_t, _s0);
+        const dc = _o.dot(c), far = _o.lengthSq() - most * most;
+        if (far > 0) _t.addScaledVector(c, Math.max(0, dc * dc >= far ? -dc - Math.sqrt(dc * dc - far) : -dc));
         this.tilt.localToWorld(_t);
         reach(leg[0], leg[1], leg[2], _t, _pole.set(side * 0.35, 0.3, -1).transformDirection(this.root.matrixWorld));
-        aim(leg[2], leg[3], _t.add(_o.set(0, -0.12, -0.12).transformDirection(this.root.matrixWorld).multiplyScalar(0.17 * this.body.stride)));
+        _o.copy(r.toe ?? RIDE_TOE).normalize().transformDirection(this.root.matrixWorld);
+        aim(leg[2], leg[3], _t.add(_o.multiplyScalar(0.17 * this.body.stride)));
       }
     }
   }
@@ -1513,6 +1516,8 @@ const RIDE_REACH_STEPS = 6;
  *  and how much higher per metre forward (the seat rises to the tank). */
 const RIDE_FORWARD = 0.42;
 const RIDE_PERCH = 0.3;
+/** Where a rider's toes point when the vehicle doesn't say (RidePose.toe): forward and down off the bike's pegs. */
+const RIDE_TOE = new THREE.Vector3(0, -1, -1);
 const RUN_UPPER = 0.29;
 const RUN_FORE = 0.26;
 const _pq = new THREE.Quaternion();

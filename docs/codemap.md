@@ -256,7 +256,9 @@ Everything built is shared, and anyone can take a building down.
   chest with anything in it can't be taken down (server/world.ts onUnplace)
 - Vehicles — `shared/vehicles.ts` (the list, reach, `vehicleTarget`), `server/vehicles.ts` (`vehicles` table: broken
   motorcycles by the pods and at the crash sites, repair, `mount`/`release`, `mine` per player), drawn by
-  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). The cart (docs/cart.md): a
+  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). A quad design study (not in the game yet): `tools/blender/quadbike.py`
+  → `public/models/quadbike.glb`, drawn and seated by `src/quad.ts` (`RidePose.perch`/`climb`/`toe`: short legs go up its
+  toe ramp), seen in `models-lab.html?ride=quad&body=0,1,2&turn=6`. The cart (docs/cart.md): a
   vehicle kind (`GEAR.cart`, no part slots, its level `ItemData.level` in box `veh<id>`, its box `cargo<id>` chest size)
   — `shared/cart.ts` (dimensions, `TOW_LENGTH`/`HITCH_BACK`/`HITCH_MAX`, `towHitch` the towing step, `towedPose`,
   `couplerOf`, `backingUpTo`, `cartTarget`, `CART_LEVEL_NODES`); towing in `shared/sim.ts` (`PlayerState.tow`/`hitch`,

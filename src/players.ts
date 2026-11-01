@@ -52,6 +52,13 @@ export type RidePose = {
   lean: number;
   twist: number;
   tuck: number;
+  /** How much higher the seat gets per metre forward, where a short rider sits nearer the bars (the bike's rises up the
+   *  tank; missing for that). */
+  perch?: number;
+  /** Which way a foot too short for its peg moves until it finds a footing (missing: straight up, onto the bike's frame;
+   *  the quad's runs up its toe ramp), and which way the toes then point (missing: forward and down off the peg). */
+  climb?: THREE.Vector3;
+  toe?: THREE.Vector3;
 };
 
 /** What a model needs each frame; placement is already applied to its parent. */

@@ -7,7 +7,8 @@
 // &target=x,y,z: where the camera looks (default 0,1,0).
 // ?gear=255 wears and carries that gear (shared/gear.ts wornGear | carriedGear bits).
 // ?look=0,38354534400 dresses the characters in those looks (shared/look.ts packLook), one after another.
-// ?ride seats each character on a sand bike, to check the fit of every body; &body=0,1,2
+// ?ride seats each character on a sand bike (?ride=quad: on the sand quad, src/quad.ts), to check the fit of every body;
+// &turn=6 drives them round on the spot as if in a 6 m circle to the left (-6: right), for the riders' lean; &body=0,1,2
 // gives them those bodies (shared/look.ts BODIES) over the plain look. With one clip (?clip, ?ride), one character per look.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -15,6 +16,7 @@ import { ScavengerModel, type ScavengerClip } from './scavenger';
 import { CROUCH_SPEED } from '../../shared/sim.ts';
 import { packLook, unpackLook } from '../../shared/look.ts';
 import { Bike } from '../bike';
+import { Quad } from '../quad';
 
 const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -70,6 +72,9 @@ const drinking = params.has('drink'); // ?item=canteen&drink: at the mouth
 const aimPitch = Number(params.get('pitch') ?? 0);
 const only = params.get('clip') as ScavengerClip | null;
 const riding = params.has('ride');
+const quads = params.get('ride') === 'quad';
+const turnRadius = Number(params.get('turn') ?? 0);
+const TURN_SPEED = 6; // m/s
 const bodyLooks = (params.get('body') ?? '').split(',').filter(Boolean).map((b) => packLook({ ...unpackLook(0), body: Number(b) }));
 const looks = [...(params.get('look') ?? '').split(',').filter(Boolean).map(Number), ...bodyLooks];
 const one: ScavengerClip | null = riding ? 'Idle' : only;
@@ -80,16 +85,16 @@ if (params.has('yaw')) yaw = Number(params.get('yaw'));
 if (params.has('dist')) dist = Number(params.get('dist'));
 if (params.has('target')) target.fromArray(params.get('target')!.split(',').map(Number)); // e.g. &target=0.3,0.95,0 to look at a hand
 
-const models: { m: ScavengerModel; clip: ScavengerClip; bike?: Bike }[] = [];
+const models: { m: ScavengerModel; clip: ScavengerClip; bike?: Bike | Quad }[] = [];
 clips.forEach((clip, i) => {
   const m = new ScavengerModel(colors[i % colors.length]);
   m.root.position.set((i - (clips.length - 1) / 2) * 1.6, 0, 0);
   m.root.rotation.y = Math.PI + 0.5; // face the camera, turned a little to show the profile
   if (clip === 'Jump') m.root.position.y = 0.5;
   scene.add(m.root);
-  let bike: Bike | undefined;
+  let bike: Bike | Quad | undefined;
   if (riding) {
-    bike = new Bike(scene);
+    bike = quads ? new Quad(scene) : new Bike(scene);
     bike.root.position.set(m.root.position.x * 1.4, 0, 0);
   }
   models.push({ m, clip, bike });
@@ -183,7 +188,9 @@ renderer.setAnimationLoop((time) => {
     }
     if (bike) {
       const { x, z } = bike.root.position;
-      bike.update({ x, y: 0, z, heading: 0.5, vx: 0, vy: 0, vz: 0, grounded: true, nose: 0, jumpHeld: false }, dt);
+      // Turning on the spot: the heading goes round as if driving the circle, the velocity along it.
+      const h = turnRadius ? 0.5 + (time / 1000) * (TURN_SPEED / turnRadius) : 0.5, v = turnRadius ? TURN_SPEED : 0;
+      bike.update({ x, y: 0, z, heading: h, vx: -Math.sin(h) * v, vy: 0, vz: -Math.cos(h) * v, grounded: true, nose: 0, jumpHeld: false }, dt);
       bike.seat(m.root);
       m.update({ ...pose, ride: bike.rider() }, dt);
       continue;
