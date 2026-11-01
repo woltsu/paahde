@@ -6,9 +6,15 @@ A mega-structure in orbit, always in the desert's sky. For now it's only seen. *
 ## What you see
 
 - A wheel station ~12,000 km across (a continent's size), after the classic wheel stations of 1970s–80s space art: a
-  great segmented ring on four spokes and fine cables, spinning round a hub column (a red band, collars); under the
-  hub a cone out to a saucer and back in to an antenna with two small dishes; on top a platform with tanks, a mast and
-  a big dish; four golden solar panels on arms, turned to the sun.
+  great segmented ring on four lattice spokes (a lift shaft inside each) and fine cables, spinning round a hub column;
+  under the hub a ribbed cone out to a saucer and back in to a lattice antenna with two small dishes; on top a railed
+  platform with piped tanks, a lattice mast and a big ribbed dish; gold solar panels on truss arms, turned to the sun.
+- **Vast through a scope too.** Size is judged by detail, so it has detail at every scale, the way a city does from a
+  plane: plating in sections, panels and sub-panels (procedural, each scale fading in only once it's over a pixel, so
+  zooming keeps finding more instead of blurring), ~2,000 modules, fins, docking bays, pipe runs and rails on the ring
+  and column, lattices you can count the bays of, decks of pinprick windows (resolved only from ~6× zoom; to the naked
+  eye just their faint average), and tiny shuttles and tugs drifting between ring and hub or docked, for scale. Zoomed
+  in, its picture sharpens to full resolution and shimmers faintly, as through a long column of air.
 - **Subtle, not a light show:** silvery and plated, a few dim warm portholes round the ring, no coloured or blinking
   lights. Its light comes through a veil of the sky's glow and its picture is a touch soft (rendered under the
   screen's resolution), as through 40,000 km of air.
@@ -43,10 +49,12 @@ orbit that repeats daily, the ring a slanting ellipse all day).
 
 ## Drawing (`src/world/mothership.ts`)
 
-- The model is built in code (prisms, tori, rods, sphere caps; ~10 draw calls), in units of its size. Node materials:
-  plated silver, a row of dim portholes on the ring, dull gold solar cells, red paint.
+- The model is built in code (prisms, tori, rods, lattices, sphere caps; ~128k triangles in 36 draw calls, merged per
+  material; seeded, so the same every time), in units of its size. Node materials: multi-scale plating faded by
+  `fwidth` (no sparkle), deck windows, two-scale gold solar cells, red paint; the craft are moved each frame.
 - Its own little scene (the model, a directional light from `sunDirection` at space strength, a dim orange one from
-  below for planetshine), rendered each frame **only when it's in view** into an HDR target at 0.6 of the screen's resolution with a camera
+  below for planetshine), rendered each frame **only when it's in view** into an HDR target at 0.6 of the screen's resolution to the naked
+  eye, rising with the zoom (a scope narrows the field of view) to full resolution with a camera
   turned like the player's but at the origin (no parallax at 40,000 km).
 - The sky dome (`src/world/sky.ts`) composites it physically: `skyAir + (stars + sun + moon + night sky) × (1 − cover)
   + station × clearness × veil` (veil 0.5: the rest of its light is lost in the air). The air's glow (`skyAir` in `src/world/env.ts`, `skyRadiance` without the stars) is in front of
