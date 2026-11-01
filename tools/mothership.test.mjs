@@ -1,4 +1,5 @@
-// The mothership's orbit (shared/mothership.ts): always up over the desert, sunlit all night, biggest at midnight.
+// The mothership's orbit (shared/mothership.ts): always up over the desert, sunlit all night, biggest at midnight,
+// its ring a slanting ellipse with the mast up.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mothershipAt, ORBIT_A, ORBIT_E, PLANET_R } from '../shared/mothership.ts';
@@ -30,4 +31,12 @@ test('a real orbit: range within perigee and apogee, the same path every day', (
   }
   const a = mothershipAt(0.3), b = mothershipAt(1.3);
   for (const k of ['x', 'y', 'z']) assert.ok(Math.abs(a.dir[k] - b.dir[k]) < 1e-9);
+});
+
+test('the ring is a slanting ellipse all day (never edge-on or face-on), the mast pointing up', () => {
+  for (const s of day) {
+    const open = Math.abs(s.dir.x * s.axis.x + s.dir.y * s.axis.y + s.dir.z * s.axis.z);
+    assert.ok(open > 0.3 && open < 0.7, `openness ${open}`);
+    assert.ok(s.axis.y > 0.6);
+  }
 });

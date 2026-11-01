@@ -3,12 +3,14 @@
 //
 // A real Kepler orbit round a planet the size of Earth: geosynchronous (one turn per day, so it traces the same path
 // over the same desert every day and never leaves it), eccentric and a little inclined. From the desert (LAT) it never
-// sets: at midnight it's at perigee, nearest (biggest, ~23° long) and lowest (~15° up, due south), right where you
+// sets: at midnight it's at perigee, nearest (biggest, ~23° across) and lowest (~15° up, due south), right where you
 // look over the dunes; through the morning it swings east and climbs, shrinking with distance and slowing (Kepler's
-// second law), to ~67° up and ~15° long at noon, and comes back down the west through the evening: a long loop over the
-// southern sky. At midnight it passes just clear of the planet's shadow, so it's sunlit all night. Its attitude is nadir-pointing (belly to the planet, nose along its flight), so you see it turn as it
-// goes. It goes dark in the planet's shadow only when that shadow reaches it (with a red rim from the planet's
-// atmosphere on the way in and out); its own lights stay on.
+// second law), to ~67° up and ~15° across at noon, and comes back down the west through the evening: a long loop over
+// the southern sky. At midnight it passes just clear of the planet's shadow, so it's sunlit all night (the shadow math
+// is here all the same, with a red rim from the planet's air). Its attitude is held to its orbit (as the ISS
+// flies: turning once a turn, here once a day), its spin axis tipped 55° from straight up towards the orbit's north:
+// from the desert the ring is always a slanting ellipse, its mast leaning up, its underside to us. (An axis held still in
+// space, gyroscope-fashion, would show the ring edge-on twice a day, at night among them.)
 //
 // Frames: inertial I with z the planet's spin axis (north) and the sun fixed at right ascension 0, declination DECL
 // (the game has no seasons); the desert's meridian points at right ascension θ = the sun's hour angle. Game axes
@@ -29,10 +31,12 @@ const ORBIT_W = (270 * Math.PI) / 180;
  *  at midnight (the meridian is at right ascension π then; perigee is 270° on from the node). */
 const ORBIT_NODE = -Math.PI / 2;
 const PERIGEE_TOD = 0;
-/** Length of the ship, nose to tail (km). A mega-structure the size of a continent: 15–23° across the sky (the moon,
- *  drawn big, is 4°). */
+/** Size of the station, end to end (km; its ring is ~5/6 of it across). A mega-structure the size of a continent:
+ *  15–23° across the sky (the moon, drawn big, is 4°). */
 export const SHIP_LENGTH = 12000;
 
+/** How far its spin axis leans from straight up (away from the planet), towards the orbit's north. */
+const AXIS_TILT = (55 * Math.PI) / 180;
 /** Atmosphere's top (km over the surface): sunlight grazing it reddens the ship at the shadow's edge. */
 const ATMOSPHERE = 100;
 
@@ -41,9 +45,10 @@ export type Mothership = {
   dir: Vec3;
   /** Distance from the desert (km). */
   range: number;
-  /** Angular length (radians) of the ship as seen from here, if it were broadside on. */
+  /** Angular size (radians) of the station seen from here, if it were broadside on. */
   angle: number;
-  /** Unit vectors (game axes) for its attitude: nose (along its flight) and belly (towards the planet's centre). */
+  /** Unit vectors (game axes): its spin axis (the mast's end), along its flight, and towards the planet's centre. */
+  axis: Vec3;
   nose: Vec3;
   belly: Vec3;
   /** Sunlight on it: 1 in full sun, 0 in the planet's shadow; `red` 0..1 in the rim (sunlight through the air). */
@@ -54,7 +59,7 @@ export type Mothership = {
 };
 
 const v = (): Vec3 => ({ x: 0, y: 0, z: 0 });
-export const newMothership = (): Mothership => ({ dir: v(), range: 0, angle: 0, nose: v(), belly: v(), sunlit: 1, red: 0, planetshine: 0 });
+export const newMothership = (): Mothership => ({ dir: v(), range: 0, angle: 0, axis: v(), nose: v(), belly: v(), sunlit: 1, red: 0, planetshine: 0 });
 
 /** Eccentric anomaly for mean anomaly M (Newton on Kepler's equation). */
 function eccentric(M: number, e: number): number {
@@ -123,6 +128,12 @@ export function mothershipAt(tod: number, out: Mothership = newMothership()): Mo
   const along = vel.x * bx + vel.y * by + vel.z * bz;
   toGame({ x: bx, y: by, z: bz }, out.belly);
   toGame(normalize({ x: vel.x - along * bx, y: vel.y - along * by, z: vel.z - along * bz }), out.nose);
+  // Spin axis: straight up (away from the planet) tipped by AXIS_TILT towards the orbit's normal (perifocal z).
+  const nx = Math.sin(ORBIT_NODE) * si, ny = -Math.cos(ORBIT_NODE) * si, nz = ci;
+  const nb = nx * bx + ny * by + nz * bz;
+  const n = normalize({ x: nx - nb * bx, y: ny - nb * by, z: nz - nb * bz });
+  const ca = Math.cos(AXIS_TILT), sa = Math.sin(AXIS_TILT);
+  toGame({ x: -bx * ca + n.x * sa, y: -by * ca + n.y * sa, z: -bz * ca + n.z * sa }, out.axis);
 
   // Sunlight: the planet's shadow is a cylinder behind it (the sun is far off); its edge is the atmosphere.
   sun.x = Math.cos(DECL); sun.y = 0; sun.z = Math.sin(DECL);

@@ -180,7 +180,7 @@ when you find it stale.
 
 ## Weather and survival
 
-- `shared/mothership.ts` — the mothership's geosynchronous orbit from the time of day (`docs/mothership.md`); drawn by
+- `shared/mothership.ts` — the mothership's geosynchronous orbit and attitude from the time of day (`docs/mothership.md`); drawn by
   `src/world/mothership.ts` in its own pass, laid into the sky dome (`src/world/sky.ts`) between the air and the stars
 - `shared/sun.ts` — day clock + sun elevation (client sky and server heat); `shared/water.ts` — thirst/canteen; where
   it fills: `shared/wells.ts` `waterAt` (a pump, or a running electric well); `arrivalEase`: a newcomer's first

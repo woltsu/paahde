@@ -5,16 +5,20 @@ A mega-structure in orbit, always in the desert's sky. For now it's only seen. *
 
 ## What you see
 
-- A ship ~12,000 km long (a continent's size): a long hexagonal hull with a knife prow, built over with a city of
-  blocks (the servers), a great habitat ring spinning round its middle, swept heat vanes at the stern that glow like
-  embers at night, three engine bells glowing blue, hangar mouths lit on its belly, and blinking nav lights.
-- **It never sets.** Lowest (~15° up), nearest and biggest (~23° long) due south at midnight, right over the dunes
-  you're looking at. Through the morning it swings east and climbs, shrinking and slowing, to ~67° up and ~15° long at
-  noon, then comes back down the west through the evening. The same loop every day. (The moon, drawn big, is 4°.)
-- By night it's sunlit (it passes just clear of the planet's shadow at midnight), a bright shape blotting out the
-  stars, with its windows lit. By day it shows pale through the sky like a daytime moon, its shadowed side lost in the
-  blue. Low down it reddens and fades into the haze; sandstorms hide it.
-- Its belly always faces the planet (nadir-pointing), so you see it turn as it goes round.
+- A wheel station ~12,000 km across (a continent's size), after the classic wheel stations of 1970s–80s space art: a
+  great segmented ring on four spokes and fine cables, spinning round a hub column (a red band, collars); under the
+  hub a cone out to a saucer and back in to an antenna with two small dishes; on top a platform with tanks, a mast and
+  a big dish; four golden solar panels on arms, turned to the sun.
+- **Subtle, not a light show:** silvery and plated, a few dim warm portholes round the ring, no coloured or blinking
+  lights. Its light comes through a veil of the sky's glow and its picture is a touch soft (rendered under the
+  screen's resolution), as through 40,000 km of air.
+- **It never sets.** Lowest (~15° up), nearest and biggest (~23° across) due south at midnight, right over the dunes
+  you're looking at. Through the morning it swings east and climbs, shrinking and slowing, to ~67° up and ~15° across
+  at noon, then comes back down the west through the evening. The same loop every day. (The moon, drawn big, is 4°.)
+- The ring is always a slanting ellipse (0.4–0.5 as tall as it's wide), mast up, its underside to us.
+- By night it's sunlit (it passes just clear of the planet's shadow at midnight), a dim shape blotting out stars. By
+  day it shows pale through the sky like a daytime moon, its shadowed side lost in the blue. Low down it reddens and
+  fades into the haze; sandstorms hide it.
 
 ## The orbit (`shared/mothership.ts`)
 
@@ -28,25 +32,27 @@ so the server can use it later:
 - **Inclined** 22°, perigee at its southernmost point. More inclination takes it down into the dunes at midnight;
   20° or less puts it in the planet's shadow at midnight (it would go dark but for its lights).
 - Seen from the desert at latitude `LAT` with topocentric parallax (the planet's radius is a sixth of the range).
-- Also returned: its attitude (nose along the flight, belly to the planet's centre), sunlight (planet's cylindrical
-  shadow with a red atmospheric rim; never reached with these numbers) and how much sunlit desert it sees (planetshine).
+- **Attitude** held to the orbit (as the ISS flies, turning once a turn: here once a day), the spin axis tipped 55°
+  from straight up towards the orbit's north. An axis held still in space (gyroscope-fashion) was tried and dropped:
+  the line of sight to it turns right round each day, so the ring would go edge-on twice a day, at night among them.
+- Also returned: sunlight (planet's cylindrical shadow with a red atmospheric rim; never reached with these numbers)
+  and how much sunlit desert it sees (planetshine).
 
 Test: `tools/mothership.test.mjs` (always above the horizon, always sunlit, biggest and southmost at midnight, a real
-orbit that repeats daily).
+orbit that repeats daily, the ring a slanting ellipse all day).
 
 ## Drawing (`src/world/mothership.ts`)
 
-- The model is built in code (boxes, hexagonal prisms, extruded vanes, a torus; ~10 draw calls), in units of its
-  length. Node materials: plated gunmetal with window lights (cell noise), ember vanes, unlit lamps past the bloom
-  threshold.
+- The model is built in code (prisms, tori, rods, sphere caps; ~10 draw calls), in units of its size. Node materials:
+  plated silver, a row of dim portholes on the ring, dull gold solar cells, red paint.
 - Its own little scene (the model, a directional light from `sunDirection` at space strength, a dim orange one from
-  below for planetshine), rendered each frame **only when it's in view** into a screen-sized HDR target with a camera
+  below for planetshine), rendered each frame **only when it's in view** into an HDR target at 0.6 of the screen's resolution with a camera
   turned like the player's but at the origin (no parallax at 40,000 km).
 - The sky dome (`src/world/sky.ts`) composites it physically: `skyAir + (stars + sun + moon + night sky) × (1 − cover)
-  + ship × clearness`. The air's glow (`skyAir` in `src/world/env.ts`, `skyRadiance` without the stars) is in front of
+  + station × clearness × veil` (veil 0.5: the rest of its light is lost in the air). The air's glow (`skyAir` in `src/world/env.ts`, `skyRadiance` without the stars) is in front of
   it, everything in space behind it. The depth buffer stays at 1 there, as for any sky (post.ts tells sky by it), and
   the ground covers it.
-- The ring spins at 1 g for its radius (~57 game minutes a turn, ~71 s real).
+- The ring spins at 1 g for its radius (~142 game minutes a turn, ~3 min real); the hub doesn't.
 
 ## Later: bringing it down
 
