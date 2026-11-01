@@ -269,6 +269,9 @@ test('a cart of your own: hitch by backing up, park and remount still linked, un
   assert.equal(cart1.hitched, bikeId, 'still linked');
   const behind = cartAxle(bike1.x, bike1.z, bike1.heading, cart1.heading);
   assert.ok(Math.hypot(behind.x - cart1.x, behind.z - cart1.z) < 1e-3, 'parked behind the bike');
+  // Its coupler on the parked bike's tow ball (shared/cart.ts hitchPoint), as drawn and as it collides and unfolds.
+  const ball = hitchPoint(bike1.x, bike1.z, bike1.heading), cpl = couplerOf(cart1);
+  assert.ok(Math.hypot(ball.x - cpl.x, ball.z - cpl.z) < 0.03, `coupler ${Math.hypot(ball.x - cpl.x, ball.z - cpl.z).toFixed(3)} m off the parked bike's ball`);
   assert.ok(Math.hypot(cart1.x - cart0.x, cart1.z - cart0.z) > 3, 'where it was taken');
   assert.equal(me.items(box)[0]?.kind, kind, 'the box kept it');
 

@@ -11,7 +11,7 @@ import { float, length, mix, sin, smoothstep, uv, vec3 } from 'three/tsl';
 import { parsePart } from '../../shared/items.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { parked, vehicles, type Vehicle } from '../../shared/vehicles.ts';
-import { loadBikeModel } from '../bike';
+import { HITCH, loadBikeModel, towBar } from '../bike';
 import type { LocatorTarget } from '../locator';
 import { applyTier } from '../tierLook';
 import { nightLevel, time } from './env';
@@ -48,7 +48,7 @@ function ledMaterial() {
   return ledMat;
 }
 
-type Shown = { obj: THREE.Group; key: string; rims: THREE.Mesh[] | null; tilt: THREE.Group; led: THREE.Sprite | null };
+type Shown = { obj: THREE.Group; key: string; rims: THREE.Mesh[] | null; tilt: THREE.Group; led: THREE.Sprite | null; bar: THREE.Group | null };
 
 /** The tier its parts look (0 Scrap .. 3 Space-grade): the mean of the fitted parts', rounded down, as gear's. */
 function tierOf(v: Vehicle): number {
@@ -117,7 +117,19 @@ export class VehicleView {
         s.led = null;
       }
       s.led?.scale.setScalar(Math.max(LED_SIZE, Math.hypot(d, v.y - me.y) * LED_PER_M));
+      // Its tow bar while a cart is linked to it (shared/cart.ts): the cart hangs from its ball (src/world/carts.ts).
+      const linked = v.up && list.some((c) => c.kind === 'cart' && c.hitched === v.id);
+      if (linked && !s.bar) s.tilt.add((s.bar = towBar()));
+      if (s.bar) s.bar.visible = linked;
     }
+  }
+
+  /** Parked bike `id`'s tow ball where it's drawn (world), its pitch and heading, or null if it isn't drawn standing. */
+  ball(id: number): { at: THREE.Vector3; pitch: number; heading: number } | null {
+    const s = this.shown.get(id);
+    if (!s?.bar?.visible) return null;
+    s.obj.updateMatrixWorld(true);
+    return { at: s.tilt.localToWorld(new THREE.Vector3().copy(HITCH)), pitch: s.tilt.rotation.x, heading: s.obj.rotation.y };
   }
 
   private build(v: Vehicle): Shown {
@@ -150,7 +162,7 @@ export class VehicleView {
       if (rims) addRims(m, rims, glowColor(tier));
     }, () => {});
     this.group.add(obj);
-    return { obj, key: keyOf(v), rims, tilt, led: null };
+    return { obj, key: keyOf(v), rims, tilt, led: null, bar: null };
   }
 }
 

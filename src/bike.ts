@@ -35,7 +35,7 @@ const WHEELIE = 0.45; // rad the nose comes up, about the rear tyre's contact
 const WHEELIE_TOW = 0.2; // …towing the cart (shared/sim.ts: no hop then either)
 /** The tow ball (shared/cart.ts HITCH_BACK, HITCH_Y) in the bike's frame: the towed cart's coupler is pinned to it
  *  (src/world/carts.ts). */
-const HITCH = new THREE.Vector3(0, HITCH_Y, HITCH_BACK);
+export const HITCH = new THREE.Vector3(0, HITCH_Y, HITCH_BACK);
 const BIG_AIR = 0.6; // s in the air before a landing throws up a cloud and thumps
 /** The headlight lens in the Handlebar node's frame (tools/blender/sandbike.py lamp_c), and where the beam
  *  aims from there: ahead and a little down, so it pools on the sand ~15 m out. */
@@ -331,11 +331,11 @@ export class Bike {
   }
 }
 
-/** The tow bar (shown while towing), in the bike's frame: two struts from the rack's back corners (sandbike.py: the
+/** The tow bar (shown while towing, and on a parked bike its cart is linked to: src/world/vehicles.ts), in the bike's frame: two struts from the rack's back corners (sandbike.py: the
  *  rack ends 0.95 behind the centre, 0.82 up, x ±0.13) down round the outside of the rear tyre to a cross bar, a
  *  short tongue back to the ball at HITCH. Built once, shared by every bike. */
 let towBarParts: { geo: THREE.BufferGeometry; mat: THREE.Material; at: THREE.Vector3; to: THREE.Vector3 }[] | undefined;
-function towBar(): THREE.Group {
+export function towBar(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'towBar';
   g.visible = false;

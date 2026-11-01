@@ -173,6 +173,19 @@ centre) was inside the rear tyre (its back is 1.05 m behind), with no tow ball d
   under each drawn wheel's hub, broken while that wheel is off the sand (flying, more than 5 cm up) or on the mudflat.
   The tyre pool holds 4096 strips (was 1024), so three tracks still last the 90 s fade at a cruise; a print sends only
   its own slots to the GPU. On a curve they run inside the bike's, as a trailer's do.
+- Rolling smoothly (a follow-up: it bounced a little up hills). The cause: every frame the sand pushing the axle up was
+  taken as a landing (the bounce fired whenever the ground's climb rate rose by 3 m/s within a frame, more often at
+  uneven frame times), and with its height re-solved from free fall each frame at the frame's own length it left and
+  caught the sand over and over (158 times on a minute's drive over the dunes). Now it steps at a fixed 1/120 s (the
+  ball and the bike's pitch interpolated across the frame, so it moves the same at 30, 60, 144 fps or jittery frames);
+  rolling, its wheels stay on the sand unless free fall would leave it by more than 7.5 mm in a step, the same margin
+  that takes the bike off a crest (`BIKE_LAUNCH_EPS`, so the cart leaves the sand where the bike would and rolls over
+  ripples); the bounce only on a landing from the air; the pitch that puts the wheels on the sand solved exactly
+  (fixed-point steps, bisection where they stall on steep slopes). Same drive: it left the sand once, 46 mm.
+- Parked still linked (got off with it): the parked bike (`src/world/vehicles.ts`) draws its tow bar, and `src/main.ts`
+  hangs the cart from that bar's ball the same way (`VehicleView.ball`), so getting on and off moves nothing but the
+  bike's own lean onto its stand. The server already parks it to the hitch geometry (`release`: `towedPose` of the
+  state it got off in), so its stored place (collision, unfolding, F at the tongue) is within mm of the drawing.
 - Checked in headless Chrome, own and a remote bot's cart, towing, hard turns, reversing to the 100° limit, a
   wheelie, a crest launch: the coupler-to-ball distance stayed under 1e-13 m every frame.
 

@@ -24,6 +24,12 @@ What we built, why, and what's left. Dated sessions newest first, then undated t
   unfold/upgrade, refused while linked, without materials, past level 2; backing up to it unfolded packs and hitches).
 ## 2026-11-01 — The cart hangs from the bike's tow ball, and towing is felt
 
+- **Follow-ups:** up a hill it bounced a little (the sand pushing the axle up was taken for a landing each frame, and the
+  height re-solved at each frame's own length left and caught the sand): now fixed 1/120 s steps, the bounce only on
+  real landings, and it leaves the sand only where the bike would (`TOW_STICK` ≈ `BIKE_LAUNCH_EPS`); tested up and
+  down long slopes and over crests at 30/60/144 fps and jittery frames. Got off with it linked, it looked unattached:
+  the parked bike draws its tow bar too and the parked cart hangs from that ball.
+
 - **Why:** played, the cart stayed on the sand when the bike jumped and sometimes looked unattached. It was posed from
   the sim's flat hitch point at the sand's height under its own axle, so the bike's height, nose, wheelie and lean never
   reached it; and the hitch point was inside the rear tyre, with nothing drawn there.

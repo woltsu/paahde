@@ -96,7 +96,7 @@ import { bagShape, equipped, isBuilding, locatorRange, quality, repaired, spygla
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { lootPrompt } from './world/loot';
 import { ownVehicleTargets } from './world/vehicles';
-import { vehicles, vehicleTarget } from '../shared/vehicles.ts';
+import { parked, vehicles, vehicleTarget } from '../shared/vehicles.ts';
 import { cartTarget } from '../shared/cart.ts';
 import { WRENCH } from '../shared/crafting.ts';
 import type { Tower } from './world/carts';
@@ -641,6 +641,12 @@ renderer.setAnimationLoop((time) => {
     // ball where that bike was just drawn (ride() above), so it never comes off it.
     const towers: Tower[] = others.flatMap((o) => (o.tow ? [tower(o.id, o.id, o.tow, o.x, o.y, o.z, o.facing, o.hitch)] : []));
     if (s.tow) towers.unshift(tower(net.id, 0, s.tow, v.x, v.y, v.z, v.heading, v.hitch));
+    // Parked still linked (got off with it): hung the same way from the parked bike's tow ball, so nothing jumps.
+    for (const c of vehicles) {
+      if (c.kind !== 'cart' || c.hitched === undefined || !parked(c)) continue;
+      const b = vehicleView.ball(c.hitched);
+      if (b) towers.push({ id: -c.id, tow: c.id, x: c.x, y: c.y, z: c.z, heading: b.heading, hitch: c.heading, at: b.at, pitch: b.pitch });
+    }
     cartView.update(frameDt, vehicles, towers, focus);
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
