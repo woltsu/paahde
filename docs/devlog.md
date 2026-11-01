@@ -2620,3 +2620,45 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
 - **Tests:** tools/nest.test.mjs (perches on the inner mirrors, the same every time; none wake for someone keeping off;
   walking in brings most down and they bite; a rifle shot kills, the pistol takes two and the first knocks it off; a
   farm left and come back to keeps the survivors; no crawlers at a farm, the nest rides in 'bots').
+
+## Radio towers
+
+- **What:** huge abandoned telecom towers here and there on high ground (shared/towers.ts, docs/radiotowers.md), after a
+  reference photo of a self-supporting lattice tower, scaled up to feel big: a triangular lattice 16 m across at the
+  foot and 4 m at the top deck, 120 m up, X-braced in bays that shorten towards the top, a banded mast with an aviation
+  lamp to 142 m. Three grating decks with rails (a rest deck at 40 m, the dish deck at 80 m with the drum-covered dishes
+  round it and the big dish on its pivot, the top deck at 120 m ringed with panel antennas), a caged ladder straight up
+  the middle through hatches in the decks, the radio's cabinet at the foot. One per 1.8 km cell (50%), each 400 m inside
+  its cell so two are at least 800 m apart; of 14 spots in the cell, the highest even enough to pad (a dune's crest, a
+  low rise of rock). About 13 within 8 km of the start in the worlds tried, the first 800–1100 m out.
+- **Drawing:** the frame (lattice, decks, rails, ladder, mast) is one set of geometry shared by every tower, built in
+  code (src/world/towers.ts); the dishes and panels are seeded per tower (some gone, some hanging). Its members are
+  pushed out along their normals with distance (a vertex shader, by the main camera's distance so the shadow pass
+  agrees) to about a pixel, so a tower still stands on the horizon from kilometres off; the lamp is scaled up the same
+  way. Shadows only within 900 m.
+- **Climbing:** the ladder's column is `Level.ladder` (the desert's: shared/levels.ts), read in shared/sim.ts
+  `stepLadder`: in it you hang with no gravity, W climbs and S goes down (2.6 m/s, about a minute to the top), A/D move
+  you along it and out of the column, onto a deck where one is beside you; Space lets go, pushed off backwards. At its
+  foot only W climbs, so you walk past it. Deterministic and stateless (it's where you are), so no new PlayerState
+  field. The decks are ground for feet over them (`towerGround`), with the hatch open; no fall damage, as anywhere.
+  Others on it are turned to the rungs, legs stepping (src/players.ts).
+- **Fixing:** three fixtures, gear that stands in the world (`fixture` in shared/gear.ts): the radio in the cabinet
+  (relay, compute, battery), the dish drive on the dish deck (motor), the antenna feed on the top deck (coil, wiring),
+  each in a box of its own (`twr<tower×4+spot>`) opened with F where it's fitted, so fixing it means carrying parts up.
+  server/towers.ts makes them when someone first comes within 900 m, with what the seed left (shared/lootRoll.ts
+  `towerParts`, tables `TOWER_PARTS`: more gone the further out, the battery flat, at least one part gone). No icons of
+  their own yet: the control cabinet's, a motor's and a coil's.
+- **Alive:** all three whole and the radio's battery holding charge. Then the lamp blinks red, the big dish swings up
+  and searches, the cabinet's lamps light, and the radio draws 4 W (game time) from its battery (a Scrap one lasts some
+  three real hours). No grid power yet: the battery only.
+- **The signal (placeholder):** a radio muttering through static (src/towerSound.ts): a buzzy voice through two formant
+  filters jumping syllable by syllable, phrases with pauses, a tone now and then, a telephone band and a little
+  clipping; −31 LUFS at 3 m. From the cabinet and the decks' boxes, and through a receiver or jammer in hand within
+  1 km. The static is thicker the worse the parts. The lattice moans and whistles in the wind (−32 LUFS at the top in
+  full wind). It leads nowhere yet.
+- **Drones:** two circle each tower half way up, day and night, from when someone comes within 500 m; shot down they
+  stay down until everyone has gone past 700 m (server/drones.ts `keepTowers`).
+- **Speech:** under one, on top of one by day, and the radio first heard.
+- **Tests:** tools/towers.test.mjs (placement, pad, spacing; climbing up and down, decks, letting go; solids and spots;
+  fixtures made, opened where fitted, alive, drained, dead again; the drones not coming back). The economy simulator
+  shows no change.

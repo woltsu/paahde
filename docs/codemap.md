@@ -164,6 +164,19 @@ when you find it stale.
   (shared/shade.ts), stash spots (`solarLootSpot`, `SOLAR_STASHES`); no crawlers: a nest of spiderlings on the mirrors
   by the tower (`shared/nest.ts` perches and numbers, `server/nests.ts`, ticked by server/guardians.ts, 'bots' `n`);
   drawn by `src/world/solarfarms.ts` (instanced field tiles, the receiver glowing at the hour the farm froze)
+- `shared/towers.ts` — radio towers (docs/radiotowers.md): 120 m lattice telecom towers on high ground, one per 1.8 km
+  cell (none within 800 m of the origin, at least 800 m apart, off the biomes with `towers: false`, `empty` ones and the
+  solar farms), on a pad (`withTowerPad`) the shelters, crash sites, scrap and wrecks keep off (`towerWithin`). Legs,
+  mast, deck rails and cabinet collide (`collideTowers`), the three decks are desert ground (`towerGround`), the ladder's
+  column is the desert's `Level.ladder` (`towerLadder`; climbing is shared/sim.ts `stepLadder`), legs and cabinet stop
+  shots (`towerSolid`). Three fixtures where parts are fitted (`SPOTS`, `SPOT_ITEMS`: the radio at the cabinet, the dish
+  drive on the dish deck, the antenna feed on the top deck), each gear (`fixture`, shared/gear.ts) in a box of its own
+  (`twr<tower×4+spot>`, shared/boxes.ts `towerBox`); `server/towers.ts` makes them as players come near
+  (shared/lootRoll.ts `towerParts`), says which towers are alive ('towers': all whole and the radio's battery charged)
+  and drains that battery (`TOWER_W`). Drawn by `src/world/towers.ts` (the frame shared by every tower, its members
+  widened with distance; lamp, big dish and cabinet lamps follow `alive`); heard by `src/towerSound.ts` (the wind in the
+  lattice, the cabinet's hum, the radio muttering, also through a receiver or jammer in hand); two drones keep each
+  (server/drones.ts `keepTowers`). F3: To radio tower, Fix radio tower
 
 ## Weather and survival
 

@@ -5,6 +5,20 @@ You see one from far off and ride to it. You climb it to the top, and you find i
 power, and it comes alive: its lamp blinks and a radio starts **muttering** through the static. Nothing tells you any of this: the tower
 looks broken, the empty mounts look empty, and once it's alive it hums, blinks and crackles.
 
+## As built (November 2026)
+
+Everything below is built (code map: `shared/towers.ts`; devlog "Radio towers"), with these differences from the plan:
+
+- **Placement:** 50% of 1.8 km cells, each tower 400 m inside its cell, so two stand at least 800 m apart.
+- **The ladder** runs straight up the middle of the lattice (1 m off the axis, towards the first leg), not up a leg, through
+  hatches in the decks. Climbing needs no `PlayerState.climb`: being in the ladder's column is the state, so nothing new
+  goes over the wire; others on it are drawn facing the rungs, legs stepping. Hands on the rungs in first person: not yet.
+- **The antenna feed** takes a coil and a length of wiring.
+- **Power:** the radio's own battery only; no connector to a grid yet.
+- **Not done:** the camera sway at the top, icons of the fixtures' own (they borrow the control cabinet's, a motor's and
+  a coil's).
+- **F3:** "To radio tower" and "Fix radio tower" (every missing part Scrap, the battery charged).
+
 ## The look
 
 After the reference photo (a self-supporting lattice tower): three galvanised steel legs tapering to the top, X-braced
