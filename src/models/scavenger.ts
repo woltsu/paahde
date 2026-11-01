@@ -770,14 +770,17 @@ export class ScavengerModel {
    *  own rest frame (its inverse bind matrix), so a trunk drawn wider never shears the arms turning under it, and the
    *  bones keep their lengths for the clips and the IK. This instance's own copies of the bind matrices (clones share
    *  them), the rest kept to scale from. The gear (the pack, the things carried) keeps its shape: it goes where the
-   *  build puts the point of it nearest the body, scaled evenly by the body's `gear` about that point. */
+   *  build puts the point of it nearest the body, scaled evenly by the body's `gear` about that point. What's strapped
+   *  to the pack (the scrap plate) goes about the pack's point, or it floats off the bag on a dwarf or a gnome. */
   private thickenSkins() {
     this.built = this.body;
     const { gear } = this.body;
     const anchors = new Map<THREE.SkinnedMesh, THREE.Vector3>();
+    const packAnchor = this.pack ? gearAnchor(this.pack) : null;
     for (const o of [this.pack, ...this.carried.map((c) => c.mesh)]) {
       if (!o) continue;
-      const anchor = gearAnchor(o);
+      const onPack = this.carried.some((c) => c.mesh === o && (c.bits & BACK) !== 0);
+      const anchor = onPack && packAnchor ? packAnchor : gearAnchor(o);
       o.traverse((m) => {
         const mesh = m as THREE.SkinnedMesh;
         if (!mesh.isSkinnedMesh) return;
