@@ -26,7 +26,7 @@ import type { Stage, StageFrame } from '../stage.ts';
 import { bakeDataSliced, bakeMaps } from '../datacenter/bake.ts';
 import { makeMaterials } from '../datacenter/materials.ts';
 import { DATACENTER_ENV, DATACENTER_POST, datacenterEnvironment } from '../datacenter/environment.ts';
-import { DatacenterAmbience } from '../datacenter/ambience.ts';
+import { BED, DatacenterAmbience } from '../datacenter/ambience.ts';
 import { Pod } from './pod.ts';
 import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
@@ -46,7 +46,8 @@ export class BeginningStage implements Stage {
   readonly level = beginningLevel.id;
   readonly root = new THREE.Group();
   readonly ready = Promise.resolve();
-  readonly ambience = new DatacenterAmbience();
+  /** The datacenter's bed, 6 dB down: aboard it sits under the fall (docs/audio.md "The beginning's fall"). */
+  readonly ambience = new DatacenterAmbience(BED * 0.5);
   readonly fall = new FallSound();
   /** How hard it shakes now (src/camera.ts rumble). */
   rumble = 0;

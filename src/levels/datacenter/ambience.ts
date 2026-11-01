@@ -152,13 +152,20 @@ export class DatacenterAmbience {
   private chatterIn = 3;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
+  private readonly level: number;
+
+  /** `level`: the bed's level at volume 1 (the beginning plays it quieter). */
+  constructor(level = BED) {
+    this.level = level;
+  }
+
   start() {
     this.on = true;
     clearTimeout(this.stopTimer);
     audio.onStart((ctx) => {
       if (!audio.ambience) return;
       this.bed ??= buildBed(ctx, audio.ambience);
-      this.bed.out.gain.setTargetAtTime(this.on ? BED : 0, ctx.currentTime, FADE);
+      this.bed.out.gain.setTargetAtTime(this.on ? this.level : 0, ctx.currentTime, FADE);
     });
   }
 

@@ -115,8 +115,9 @@ The beginning (docs/levels/tutorial.md) plays the datacenter's bed and over it `
 rumble`), a boom at the hall's jolt, a two-note chime every 5 s in the bay corridor. Measured as the datacenter's bed was
 (offline, 48 kHz, K-weighted, gated, +3 dB for the two channels; `?debug` `dbg.fall()` loads it), at master volume 0.4,
 the fall alone: −48.6 LUFS at rumble 0.3 (the control room), −38.9 at 0.55 with the chime (the bay corridor), −29.5 at
-1 (the ride down); sample peak −8.2 dBFS at volume 1 with the boom and a chime. With the bed (−30) the ride sums to
-about −26.7: still under the −23 target, a bed and not a scene.
+1 (the ride down); sample peak −8.2 dBFS at volume 1 with the boom and a chime. Aboard, the datacenter's bed plays
+6 dB down (`BED × 0.5`, about −36: at full level it drowned the station; 1 November 2026), so the ride sums to about
+−28.6: under the −23 target, a bed and not a scene.
 
 The pod opening (`pod(cue)`: the relay's click, the cover's clunk, the wake chirp, the seal's hiss over the hatch's
 motor, the hatch's thud; src/levels/beginning/pod.ts times them over 3.2 s), the five cues alone, rendered the same way:
