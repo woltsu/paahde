@@ -90,6 +90,29 @@ wide over the wheels, a 2.2 m bed, the tongue reaching 1.3 m ahead of the bed wi
 Pieces of a level not reached are hidden by code. Stylised scrap, `docs/look.md`; the benches reuse
 `tools/blender/stationkit.py`.
 
+As built (`tools/blender/cart.py`, whose header has the details): exported **packed**, every node's rotation identity,
+so code unfolds a node by setting the rotation (for `legs`, the position) below, times t ∈ [0, 1]. Pivots in cart
+coordinates (y up, metres); all nodes are children of the root `cart` except the nested ones.
+
+| Node | Pivot (x, y, z) | Unfolded | |
+|---|---|---|---|
+| `body` | (0, 0, 0) | — | bed (deck top 0.88), frame, axle, the box (x ±0.42, z −0.75 .. 0.50, top 1.30), end boards |
+| `wheel_l` / `wheel_r` | (∓0.60, 0.36, 0) | spun: forward is `rotation.x -= d / 0.36` | radius 0.36, the bike's balloon tyres |
+| `tongue` | (0, 0.79, −1.1) | — | A-frame; child empty `coupler` at (0, 0.54, −2.40) |
+| `stand` (in `tongue`) | (0, 0.50, −2.0) | `rotation.x = +90°` | packed lying back under the tongue; down, its foot on the ground |
+| `lid` | (0, 1.32, −0.76) | `rotation.x = −100°` | hinged on the box's front edge (tongue side), opens from the rear |
+| `pole_a` | (−0.56, 0.93, −0.98) | `rotation.x = −90°` | front left; tip empty `pole_a_tip` (−0.56, 0.93, 0.82) → (−0.56, 2.73, −0.98) |
+| `pole_b` | (0.56, 0.93, 0.98) | `rotation.x = +90°` | rear right; tip empty `pole_b_tip` (0.56, 0.93, −0.82) → (0.56, 2.73, 0.98) |
+| `side_l` | (−0.68, 0.88, 0) | `rotation.z = +90°` | workbench; folds out level with the deck |
+| `leg_l` (in `side_l`) | (−0.73, 1.48, 0) | `rotation.z = −90°` (relative to `side_l`) | trestle, packed flat on the wall's outside |
+| `side_r` | (0.68, 0.88, 0) | `rotation.z = −90°` | dismantling table |
+| `leg_r` (in `side_r`) | (0.73, 1.48, 0) | `rotation.z = +90°` (relative to `side_r`) | |
+| `legs` | (0, 0, 0) | `position.y = −0.46` (a slide) | four stabilisers at (±0.50, z ±1.145), feet down to the ground |
+
+Unfolded, both bench tops are at y 0.88 (flush with the deck), |x| 0.68 .. 1.33 (0.65 m deep), z −1.08 .. 1.08, their
+trestles' feet on the ground at |x| ≈ 1.30, z ±0.98. The workbench's tools sit near its outer edge, the table's middle
+is clear. Packed, the sides are the cart's walls (top 1.53), so hiding them below level 2 leaves the bed open-sided.
+
 ## Phases
 
 1. Cart and towing, level 0 with its box: sim, server, drawing, hitching. Tests: towing deterministic (server and client
