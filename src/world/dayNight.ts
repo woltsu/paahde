@@ -103,8 +103,10 @@ export class DayNight {
     for (const k of KEY_COLORS) c[k].copy(a[k]).lerp(b[k], t);
     c.amb = a.amb + (b.amb - a.amb) * t;
 
-    // The disc's light goes out as it sinks; the twilight keys carry the afterglow.
-    sunColor.value.copy(c.sun).multiplyScalar(THREE.MathUtils.smoothstep(el, -2, 1.5) * dayGain.sun);
+    // The disc's light goes out as it sinks, through the last few degrees (the air it shines through thickens), and is gone as the disc
+    // touches the horizon; the twilight keys carry the afterglow. A low sun throws a dune's shadow kilometres and sweeps it across the
+    // ground at hundreds of m/s, so a sun still bright under 1° went out like a switch when the last ridge covered you.
+    sunColor.value.copy(c.sun).multiplyScalar(THREE.MathUtils.smoothstep(el, -0.25, 4) * dayGain.sun);
     zenithColor.value.copy(c.zenith);
     midSkyColor.value.copy(c.mid);
     horizonColor.value.copy(c.horizon);

@@ -389,7 +389,8 @@ export class HeightShadow {
         near = max(near, step(p.xz.sub(b.xy).length(), b.z).mul(step(p.y, b.w))) as F;
       }
       let under: F = float(0);
-      const tan = this.light.y.div(max(vec2(this.light.x, this.light.z).length(), 1e-4));
+      // (never negative: a light under the horizon turned the soft edge inside out, lighting the shadows and shadowing the light)
+      const tan = max(this.light.y, 1e-4).div(max(vec2(this.light.x, this.light.z).length(), 1e-4));
       for (const l of this.levels) {
         // A steep wall facing the sun would find its own top a texel away and shadow itself: look it up a little out from the wall
         // (along the surface's horizontal normal; flat ground is not moved, so dune shadow edges stay where they are).
@@ -410,7 +411,8 @@ export class HeightShadow {
         lit.assign(lit.sub(w.mul(float(1).sub(value))));
         covered.addAssign(w);
       }
-      return lit.max(under);
+      // The light down (where update() stops redoing the grids, and below): the horizon shadows everything.
+      return lit.max(under).mul(smoothstep(0, 0.005, this.light.y));
     })() as F;
   }
 }
