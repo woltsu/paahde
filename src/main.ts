@@ -311,6 +311,17 @@ function ride(id: number, avatar: Avatar, p: { riding: boolean; pitch?: number; 
   avatar.update({ x: p.x, y: p.y, z: p.z, facing: p.heading, speed: 0, grounded: true, pitch: p.pitch, ride: bike.rider() }, dt);
   return true;
 }
+/** Player `id` towing cart `tow` (src/world/carts.ts), their bike drawn as bikes.get(`bike`). */
+function tower(id: number, bike: number, tow: number, x: number, y: number, z: number, heading: number, hitch: number): Tower {
+  const b = bikes.get(bike);
+  const t: Tower = { id, tow, x, y, z, heading, hitch };
+  if (b) {
+    const at = b.hitchAt(new THREE.Vector3());
+    t.at = { x: at.x, y: at.y, z: at.z };
+    t.pitch = b.drawnPitch;
+  }
+  return t;
+}
 const eye = new THREE.Vector3();
 const RIDE_EYE_AHEAD = 0.15;
 const locator = new LocatorBar();
@@ -615,9 +626,10 @@ renderer.setAnimationLoop((time) => {
   if (L.things) {
     lootView.update(frameDt, net.loot, focus);
     vehicleView.update(vehicles, net.myVehicles, focus, (id) => (id === net.id ? net.me.riding : others.find((o) => o.id === id)?.riding ?? false));
-    // Carts (shared/cart.ts): ours where our prediction has it, others' from their poses.
-    const towers: Tower[] = others.flatMap((o) => (o.tow ? [{ id: o.id, tow: o.tow, x: o.x, z: o.z, heading: o.facing, hitch: o.hitch }] : []));
-    if (s.tow) towers.unshift({ id: net.id, tow: s.tow, x: v.x, z: v.z, heading: v.heading, hitch: v.hitch });
+    // Carts (shared/cart.ts): ours where our prediction has it, others' from their poses, each hung from its bike's tow
+    // ball where that bike was just drawn (ride() above), so it never comes off it.
+    const towers: Tower[] = others.flatMap((o) => (o.tow ? [tower(o.id, o.id, o.tow, o.x, o.y, o.z, o.facing, o.hitch)] : []));
+    if (s.tow) towers.unshift(tower(net.id, 0, s.tow, v.x, v.y, v.z, v.heading, v.hitch));
     cartView.update(frameDt, vehicles, towers, focus);
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
@@ -675,7 +687,7 @@ renderer.setAnimationLoop((time) => {
   // Sand hissing under you: a speed slide, or (softer) slipping down a slip face on your feet.
   const ownSpeed = Math.hypot(s.vx, s.vz);
   slideSound.update(frameDt, !s.grounded || s.riding || net.down ? 0 : s.sliding ? 1 : ownSpeed > 2 && !L.flat && isSlipFace(s.x, s.z) ? 0.5 : 0, ownSpeed);
-  engineSound.update(frameDt, s.riding, s.grounded, Math.hypot(s.vx, s.vz), s.riding && (input & (FORWARD | BACK)) !== 0, s.bike);
+  engineSound.update(frameDt, s.riding, s.grounded, Math.hypot(s.vx, s.vz), s.riding && (input & (FORWARD | BACK)) !== 0, s.bike, !!s.tow);
   engineSound.updateRemotes(frameDt, others, orbit.camera.position, s);
   drinkSound.remotes(others, orbit.camera.position);
   grinderSound.remotes(frameDt, others, orbit.camera.position);

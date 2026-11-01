@@ -103,7 +103,7 @@ const wobble = (t: number, k: number) =>
 type Vec = { x: number; y: number; z: number };
 type Vel = { vx: number; vy: number; vz: number };
 /** What a remote rider looks like to us (src/net.ts RemotePlayer). */
-type Rider = Vec & { id: number; riding: boolean; grounded: boolean; vx: number; vy: number; vz: number; bike: number };
+type Rider = Vec & { id: number; riding: boolean; grounded: boolean; vx: number; vy: number; vz: number; bike: number; tow?: number };
 
 let bodyWave: PeriodicWave | null = null;
 let noise: AudioBuffer | null = null;
@@ -217,11 +217,11 @@ class Motor {
   }
 
   /** `throttle` in [0, 1]; `bike` the motorcycle (PlayerState.bike: 1 + its quality); `pitch` scales the
-   *  frequency (Doppler). */
-  update(dt: number, riding: boolean, grounded: boolean, speed: number, throttle: number, bike: number, pitch = 1) {
+   *  frequency (Doppler); `towing` the cart (it levels off slower: bikeCruise). */
+  update(dt: number, riding: boolean, grounded: boolean, speed: number, throttle: number, bike: number, pitch = 1, towing = false) {
     this.time += dt;
     const q = clamp01((bike - 1) / 3); // quality, 0 Scrap .. 1 Space-grade
-    const cruise = bikeCruise(Math.max(0, bike - 1));
+    const cruise = bikeCruise(Math.max(0, bike - 1), towing);
     const shiftTime = SHIFT_SLOW * (SHIFT_QUICK / SHIFT_SLOW) ** q;
     if (!riding || grounded) this.wheel = speed;
     else if (throttle > 0.5) this.wheel = Math.min(GEARS[GEARS.length - 1] * cruise, this.wheel + AIR_SPIN_UP * cruise * dt);
@@ -285,10 +285,10 @@ export class EngineSound {
     });
   }
 
-  /** Your bike (`bike`: PlayerState.bike). `speed`: its ground speed (m/s); `throttle`: forward or back held. */
-  update(dt: number, riding: boolean, grounded: boolean, speed: number, throttle: boolean, bike: number) {
+  /** Your bike (`bike`: PlayerState.bike). `speed`: its ground speed (m/s); `throttle`: forward or back held; `towing` the cart. */
+  update(dt: number, riding: boolean, grounded: boolean, speed: number, throttle: boolean, bike: number, towing = false) {
     if (!this.own || !audio.running) return;
-    this.own.update(dt, riding, grounded, speed, throttle ? 1 : 0, bike);
+    this.own.update(dt, riding, grounded, speed, throttle ? 1 : 0, bike, 1, towing);
   }
 
   /** Other riders' bikes, heard from `listener` moving at `lv` (m/s). */
@@ -331,14 +331,14 @@ export class EngineSound {
       const prev = a.speed;
       a.speed += (speed - a.speed) * (1 - Math.exp(-dt / 0.15));
       a.acc += ((a.speed - prev) / Math.max(dt, 1e-3) - a.acc) * (1 - Math.exp(-dt / 0.2));
-      const cruise = bikeCruise(Math.max(0, r.bike - 1));
+      const cruise = bikeCruise(Math.max(0, r.bike - 1), !!r.tow);
       const throttle = clamp01(Math.max(Math.abs(a.acc) / REMOTE_LOAD_ACC, REMOTE_CRUISE_LOAD * (a.speed / cruise) ** 2));
 
       // Doppler: how fast the bike closes on us along the line between.
       const inv = 1 / Math.max(d, 0.1);
       const closing = ((r.vx - lv.vx) * (listener.x - r.x) + (r.vy - lv.vy) * (listener.y - r.y) + (r.vz - lv.vz) * (listener.z - r.z)) * inv;
       const pitch = SOUND_SPEED / (SOUND_SPEED - Math.max(-60, Math.min(60, closing)));
-      a.motor.update(dt, true, r.grounded, a.speed, throttle, r.bike, pitch);
+      a.motor.update(dt, true, r.grounded, a.speed, throttle, r.bike, pitch, !!r.tow);
     }
     for (const [id, a] of this.remotes) {
       if (keep.has(id)) continue;

@@ -2,6 +2,20 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — The cart hangs from the bike's tow ball, and towing is felt
+
+- **Why:** played, the cart stayed on the sand when the bike jumped and sometimes looked unattached. It was posed from
+  the sim's flat hitch point at the sand's height under its own axle, so the bike's height, nose, wheelie and lean never
+  reached it; and the hitch point was inside the rear tyre, with nothing drawn there.
+- **What:** a tow bar and ball on the bike (src/bike.ts, `HITCH_BACK` 1.15, `HITCH_Y` 0.54); the cart is hung from the
+  ball as drawn (`Bike.hitchAt`), its coupler on it by construction, pitched about it by its axle's own fall, the sand
+  under its wheels and the coupler's 0.6 rad of play (shared/cartHang.ts): it flies off a crest with the bike and lands
+  on its wheels. Same code for ours and others'. Towing slows the bike 11–15% (`TOW_*` in shared/sim.ts, `bikeCruise(q,
+  towing)` for the engine's gears) and Space no longer hops while towing (a small wheelie still lifts).
+- **Test:** `tools/cart-tow.test.mjs` (coupler on the ball every tick of a drive with a crest launch, the cart airborne
+  with the bike, never into the sand; cruise lower towing; no hop). In headless Chrome, own and a remote bot's cart: the
+  coupler stayed within 1e-13 m of the ball every frame. docs/cart.md "As built: towing".
+
 ## 2026-11-01 — The cart, phase 1: towed behind the bike, its box
 
 - **Why:** the portable camp (docs/cart.md) replaces the built benches and chest; phase 1 is the cart itself, towing

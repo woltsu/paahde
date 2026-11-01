@@ -14,7 +14,7 @@ and so does the hand-made tarp.
 | 1 Shade | a canopy on two poles over the cart (a tarp rig, `shared/tarp.ts`) | upgrade with the wrench: cloth + scrap |
 | 2 Workshop | fold-out sides: a workbench on one side, a dismantling table on the other | upgrade with the wrench: scrap + wiring |
 
-No level 3 for now. Towing doesn't slow the bike (yet), whatever the level.
+No level 3 for now. Towing slows the bike a little (below, "Towing"), the same whatever the level.
 
 The level is the cart item's own state: an `ItemData` field (`shared/items.ts`), never a column. Upgrades cost base
 materials like a building does (`shared/tables.ts` BUILD_TABLE / `shared/crafting.ts` BUILDS): with the wrench in hand
@@ -44,8 +44,13 @@ The cart moves with a player, so towing is in `shared/sim.ts`, deterministic:
 - `PlayerState.tow`: the cart being towed (0 none), like `bike`; `PlayerState.hitch`: the cart's heading (absolute,
   same convention as `heading`). Its pose is derived: the hitch point H is behind the bike's centre; the axle sits
   `TOW_LENGTH` behind H along the cart's heading. Each tick the axle follows H (new axle = H − L · unit(H − old axle)),
-  which also handles reversing; the angle between bike and cart is clamped (no jackknife past ~100°). The cart's
-  wheels follow the ground for drawing; it collides with nothing while towed (first version).
+  which also handles reversing; the angle between bike and cart is clamped (no jackknife past ~100°). It collides
+  with nothing while towed (first version).
+- Towing is felt: the engine pulls 10% less and tops out 12% lower, the sand drags 0.4 m/s² more (`shared/sim.ts`
+  `TOW_*`), so it levels off 11–15% slower (`bikeCruise(q, towing)`, which `src/engineSound.ts` gears by). Space
+  still lifts a small wheelie but letting go doesn't hop; the bike still flies off a crest at speed, and the cart with it.
+- Drawn, the cart hangs from the bike's tow ball (`shared/cartHang.ts`): its coupler pinned to the ball where the bike
+  is drawn (nose, wheelie, lean and all), pitched about it, falling and landing on its own (below, "As built: towing").
 - Hitching: ride the bike slowly backwards up to your own parked, packed cart's tongue; once the bike's rear is close
   enough, the server hitches it (as `mount()` puts you on a bike: the server sets the state, the client reconciles).
   No key, no text.
@@ -132,6 +137,31 @@ is clear. Packed, the sides are the cart's walls (top 1.53), so hiding them belo
   above) while it's not linked to a bike. `src/world/carts.ts` loads `cart.glb`, falling back to a stand-in built in code
   to the same contract if it fails to load (a coupler not at z = −TOW_LENGTH is warned about in the console).
 - Not yet: the cart on the locator bar, a rattle (`src/cartSound.ts`), speech.
+
+## As built: towing (November 2026)
+
+Fixes for "the cart doesn't fly with the bike" and "it sometimes looks unattached". The causes: the cart was posed
+from the sim's flat hitch point with its height taken from the sand under its own axle and tilted about that axle, so
+its coupler sat at sand + 0.54 wherever the bike was (the bike in the air, pitched along a slope or the flight, in a
+wheelie, leaning: all moved the bike's rear and none moved the coupler); and the hitch point (0.95 m behind the bike's
+centre) was inside the rear tyre (its back is 1.05 m behind), with no tow ball drawn.
+
+- `HITCH_BACK` is 1.15 m and `HITCH_Y` 0.54 (the coupler's height, so a level cart behind a level bike). `src/bike.ts`
+  draws a tow bar there while towing (struts from the rack round the outside of the rear tyre, a cross bar, the ball)
+  and `hitchAt()` gives the ball's world position from the same transform the bike is drawn with.
+- `src/main.ts` hands `CartView` each tower's drawn ball (`Tower.at`) and the bike's drawn pitch, after `ride()` has
+  drawn the bikes: ours from the prediction (`net.view`, the smoothing offset included), others' from their
+  interpolated poses, through the same code.
+- `shared/cartHang.ts` (no three.js; `tools/cart-tow.test.mjs`): yaw is the sim's `hitch`; the pitch about the coupler
+  comes from the axle's own height and vertical speed: it falls at the sim's gravity (25 m/s²), the sand holds it up
+  under its wheels (a bounce of 25% past 3 m/s into the sand), and the coupler lets it pitch at most 0.6 rad off the
+  bike's line, which yanks it up when the bike rises sharply. Leaving a crest it keeps the climb rate the ramp gave it,
+  so it flies with the bike and lands on its wheels. On the sand it rolls to the slope under its two wheels. The
+  object's position is then the ball minus the turned coupler, so the coupler is on the ball by construction. Purely
+  drawn: the server never needs it, and the axle's horizontal place stays within cm of `towedPose`.
+- A towed cart is drawn however far its bike is (no bike without its cart at the view distance's edge).
+- Checked in headless Chrome, own and a remote bot's cart, towing, hard turns, reversing to the 100° limit, a
+  wheelie, a crest launch: the coupler-to-ball distance stayed under 1e-13 m every frame.
 
 ## Phases
 

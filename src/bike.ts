@@ -8,6 +8,7 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { biome } from '../shared/biomes.ts';
+import { HITCH_BACK, HITCH_Y } from '../shared/cart.ts';
 import { slopeAt } from '../shared/sim.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { END_FADE, TRACK_WRAP, tyreprints } from './footprints.ts';
@@ -32,6 +33,10 @@ const MAX_LEAN = 0.6;
 const MAX_STEER = 0.5;
 const TRACK_STEP = 0.3; // metres per tyre-track strip (short, so turns curve smoothly)
 const WHEELIE = 0.45; // rad the nose comes up, about the rear tyre's contact
+const WHEELIE_TOW = 0.2; // …towing the cart (shared/sim.ts: no hop then either)
+/** The tow ball (shared/cart.ts HITCH_BACK, HITCH_Y) in the bike's frame: the towed cart's coupler is pinned to it
+ *  (src/world/carts.ts). */
+const HITCH = new THREE.Vector3(0, HITCH_Y, HITCH_BACK);
 const BIG_AIR = 0.6; // s in the air before a landing throws up a cloud and thumps
 /** The headlight lens in the Handlebar node's frame (tools/blender/sandbike.py lamp_c), and where the beam
  *  aims from there: ahead and a little down, so it pools on the sand ~15 m out. */
@@ -78,13 +83,16 @@ export type BikePose = { x: number; y: number; z: number; heading: number; vx: n
   /** The bike's pitch (PlayerState.nose: along the sand, or steered by throttle and brake in the air). */
   nose: number;
   /** Space held: up on the back wheel while grounded. */
-  jumpHeld: boolean };
+  jumpHeld: boolean;
+  /** The cart being towed (PlayerState.tow), 0 or missing for none: the tow bar is drawn. */
+  tow?: number };
 
 export class Bike {
   readonly root = new THREE.Group(); // on the ground under the bike, turned to its heading
   private tilt = new THREE.Group(); // pitch along the ground, lean into turns
   private front?: THREE.Object3D;
   private rear?: THREE.Object3D;
+  private towBar = towBar();
   private bars?: THREE.Object3D;
   private heading = NaN;
   private pitch = 0;
@@ -119,6 +127,7 @@ export class Bike {
   constructor(scene: THREE.Object3D) {
     this.tilt.rotation.order = 'YXZ';
     this.root.add(this.tilt);
+    this.tilt.add(this.towBar);
     scene.add(this.root);
     addHeadlights(scene);
     this.headlight = headlights.find((h) => !h.used);
@@ -170,7 +179,7 @@ export class Bike {
 
     // Nose: the sim's (along the sand on the ground, throttle and brake turn it in the air); a crooked landing slams over.
     this.pitch += (p.nose - this.pitch) * k(p.grounded ? 14 : 30);
-    const wheelie = p.grounded && p.jumpHeld ? WHEELIE : 0;
+    const wheelie = p.grounded && p.jumpHeld ? (p.tow ? WHEELIE_TOW : WHEELIE) : 0;
     this.wheelie += (wheelie - this.wheelie) * k(wheelie > this.wheelie ? 7 : p.grounded ? 12 : 3);
     // Lean so that gravity balances the turn: tan(lean) = v·ω / g.
     const rate = dt > 0 ? turn / dt : 0;
@@ -199,6 +208,7 @@ export class Bike {
     this.tilt.rotation.x = b;
     this.tilt.rotation.z = this.lean;
     this.bars?.quaternion.setFromAxisAngle(STEER_AXIS, this.steer);
+    this.towBar.visible = !!p.tow;
     const spin = (forward * dt) / WHEEL_R;
     if (this.front) this.front.rotation.x -= spin;
     if (this.rear) this.rear.rotation.x -= spin;
@@ -292,6 +302,17 @@ export class Bike {
     bikeLandSound.play(p.x, p.z, impact);
   }
 
+  /** The tow ball where it's drawn this frame (world), after update(): the towed cart hangs from it. */
+  hitchAt(out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return this.tilt.localToWorld(out.copy(HITCH));
+  }
+
+  /** The bike's drawn pitch (rad, + = nose up): along the sand or the flight, plus the wheelie. */
+  get drawnPitch() {
+    return this.pitch + this.wheelie;
+  }
+
   /** How far the bike leans into the turn (rad, + = left). */
   get leanAngle() {
     return this.lean;
@@ -333,6 +354,46 @@ export class Bike {
       this.headlight.used = false;
     }
   }
+}
+
+/** The tow bar (shown while towing), in the bike's frame: two struts from the rack's back corners (sandbike.py: the
+ *  rack ends 0.95 behind the centre, 0.82 up, x ±0.13) down round the outside of the rear tyre to a cross bar, a
+ *  short tongue back to the ball at HITCH. Built once, shared by every bike. */
+let towBarParts: { geo: THREE.BufferGeometry; mat: THREE.Material; at: THREE.Vector3; to: THREE.Vector3 }[] | undefined;
+function towBar(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'towBar';
+  g.visible = false;
+  g.userData.shared = true;
+  if (!towBarParts) {
+    const steel = new THREE.MeshStandardNodeMaterial({ color: 0x4a423a, roughness: 0.6, metalness: 0.6 });
+    const rod = new THREE.CylinderGeometry(0.022, 0.022, 1, 6);
+    const ball = new THREE.SphereGeometry(0.05, 10, 8);
+    const H = HITCH, bz = H.z - 0.09, by = H.y + 0.02, sx = 0.2;
+    towBarParts = [
+      ...[-1, 1].flatMap((k) => [
+        { geo: rod, mat: steel, at: new THREE.Vector3(k * 0.13, 0.8, 0.9), to: new THREE.Vector3(k * sx, 0.72, 0.98) },
+        { geo: rod, mat: steel, at: new THREE.Vector3(k * sx, 0.72, 0.98), to: new THREE.Vector3(k * sx, by, bz) },
+      ]),
+      { geo: rod, mat: steel, at: new THREE.Vector3(-sx, by, bz), to: new THREE.Vector3(sx, by, bz) },
+      { geo: rod, mat: steel, at: new THREE.Vector3(0, by, bz), to: new THREE.Vector3(0, H.y + 0.01, H.z - 0.03) },
+      { geo: ball, mat: steel, at: H.clone(), to: H.clone() },
+    ];
+  }
+  const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3();
+  for (const p of towBarParts) {
+    const m = new THREE.Mesh(p.geo, p.mat);
+    m.castShadow = true;
+    d.subVectors(p.to, p.at);
+    const len = d.length();
+    m.position.addVectors(p.at, p.to).multiplyScalar(0.5);
+    if (len > 1e-6) {
+      m.scale.set(1, len, 1);
+      m.quaternion.setFromUnitVectors(up, d.normalize());
+    }
+    g.add(m);
+  }
+  return g;
 }
 
 const tmpSlope = { gx: 0, gz: 0 };

@@ -482,7 +482,7 @@ function stepLadder(s: PlayerState, L: Level, lad: { bottom: number; top: number
 
 // --- Sand bike -----------------------------------------------------------------------------------
 // A balloon-tyred dirt bike. W throttle, S brake then reverse, A/D steer, Space
-// held pulls a wheelie (drawn by src/bike.ts), released hops. The mouse only looks
+// held pulls a wheelie (drawn by src/bike.ts), released hops (not towing the cart). The mouse only looks
 // around (the client turns the camera with the bike).
 // - Steering is a bicycle model: turn rate = forward speed × tan(steer) / wheelbase, with the steer angle
 //   shrinking at speed. Sideways velocity is bled off by limited tyre grip, so hard turns drift.
@@ -497,12 +497,24 @@ const BIKE_REVERSE = 4; // top reverse speed (m/s)
 const BIKE_CRAWL = 0.15; // below this (m/s, forward) the brake reverses
 const BIKE_ROLL = 1.2; // rolling resistance in sand (m/s²)
 const BIKE_DRAG = 0.006; // air drag (per m, times v²)
+/** Towing the cart (PlayerState.tow, docs/cart.md): the engine pulls this much less, tops out this much lower, and the
+ *  sand drags this much more (m/s²), so it levels off 11–15% slower (bikeCruise) and picks up a little softer. */
+const TOW_ENGINE = 0.9;
+const TOW_TOP = 0.88;
+const TOW_ROLL = 0.4;
 
-/** The speed (m/s) a bike of quality `q` levels off at on the flat with the throttle held: where the engine's
- *  push, engine·(1 − v/top), meets rolling resistance and drag (src/engineSound.ts sets its gears by it). */
-export function bikeCruise(q: number): number {
-  const top = bikeTopSpeed(q), engine = bikeEngine(q);
-  const b = engine / top, c = BIKE_ROLL - engine;
+/** The bike's top speed, engine and rolling resistance, quality `q`, towing or not. */
+function bikePull(q: number, towing: boolean) {
+  return towing ? { top: bikeTopSpeed(q) * TOW_TOP, engine: bikeEngine(q) * TOW_ENGINE, roll: BIKE_ROLL + TOW_ROLL }
+    : { top: bikeTopSpeed(q), engine: bikeEngine(q), roll: BIKE_ROLL };
+}
+
+/** The speed (m/s) a bike of quality `q` levels off at on the flat with the throttle held (towing the cart or not):
+ *  where the engine's push, engine·(1 − v/top), meets rolling resistance and drag (src/engineSound.ts sets its gears
+ *  by it). */
+export function bikeCruise(q: number, towing = false): number {
+  const { top, engine, roll } = bikePull(q, towing);
+  const b = engine / top, c = roll - engine;
   return (-b + Math.sqrt(b * b - 4 * BIKE_DRAG * c)) / (2 * BIKE_DRAG);
 }
 const BIKE_GRIP = 26; // sideways tyre grip (m/s²): above this the back steps out
@@ -536,7 +548,8 @@ const BIKE_SKEW_LOSS = 0.85;
 export const BIKE_HARD_LANDING = 22; // impact (m/s into the sand) that costs speed and bogs the engine; src/bikeLandSound.ts crashes above it
 
 function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, storm: number, legs: readonly number[], pull: Pull): PlayerState {
-  const top = bikeTopSpeed(s.bike - 1), engine = bikeEngine(s.bike - 1);
+  const tow = s.tow ?? 0;
+  const { top, engine, roll } = bikePull(s.bike - 1, tow !== 0);
   const throttle = (input & FORWARD ? 1 : 0) - (input & BACK ? 1 : 0);
   const steer = (input & LEFT ? 1 : 0) - (input & RIGHT ? 1 : 0); // + turns left (heading grows counter-clockwise)
   const jumpDown = (input & JUMP) !== 0;
@@ -547,7 +560,8 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
   let vr = s.vx * rx + s.vz * rz;
   let vy = s.vy;
   let landTicks = s.landTicks > 0 ? s.landTicks - 1 : 0;
-  const hop = s.grounded && !jumpDown && s.jumpHeld; // on letting go of the wheelie
+  // On letting go of the wheelie; not towing the cart (docs/cart.md: it would only drag the bike back down).
+  const hop = s.grounded && !jumpDown && s.jumpHeld && !tow;
 
   if (s.grounded) {
     const onScrap = onFlat(L, s.x, s.y, s.z);
@@ -574,7 +588,7 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
     // (Brakes down to a crawl, then reverse: braking right down to 0 held it there on any slope that rolls it forward,
     // so it never backed up there, and backing up to the cart is how it's hitched.)
     else if (throttle < 0) vf = vf > BIKE_CRAWL ? Math.max(0, vf - brake * DT) : Math.max(-BIKE_REVERSE, vf - engine * 0.5 * grip * DT);
-    const resist = (BIKE_ROLL + BIKE_DRAG * vf * vf) * DT;
+    const resist = (roll + BIKE_DRAG * vf * vf) * DT;
     vf = vf > 0 ? Math.max(0, vf - resist) : Math.min(0, vf + resist);
     // The storm's push, before the tyres: mostly a head- or tailwind, they hold most of the sideways part.
     vf += WIND.x * storm * STORM_PUSH_BIKE * DT * fx + WIND.z * storm * STORM_PUSH_BIKE * DT * fz;
@@ -665,7 +679,6 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
   }
   h = Math.atan2(Math.sin(h), Math.cos(h));
   // The cart behind: its axle follows the hitch point (shared/cart.ts).
-  const tow = s.tow ?? 0;
   const hitch = tow ? towHitch(s.x, s.z, s.heading, s.hitch, x, z, h) : s.hitch ?? 0;
   return {
     x, y, z, vx, vy, vz, facing: h, grounded, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks,

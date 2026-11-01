@@ -16,8 +16,14 @@ import { inReach, parked, type Vehicle } from './vehicles.ts';
 export const CART = 'cart';
 /** From the axle to the coupler at the tongue's tip (m): the 2.2 m bed's front half and the 1.3 m tongue. */
 export const TOW_LENGTH = 2.4;
-/** The hitch point (the bike's tow ball) behind the bike's centre (m): past the rear tyre (the wheelbase is 1.36 m). */
-export const HITCH_BACK = 0.95;
+/** The hitch point (the bike's tow ball) behind the bike's centre (m): clear of the rear tyre (the wheelbase is 1.36 m,
+ *  the tyre's radius 0.37, so its back is 1.05 behind the centre). */
+export const HITCH_BACK = 1.15;
+/** The tow ball's height in the bike's frame (m), the cart's coupler's (docs/cart.md: `coupler` at y 0.54), so the cart
+ *  stands level behind a level bike. src/bike.ts draws the ball there and poses the cart from it. */
+export const HITCH_Y = 0.54;
+/** The coupler in the cart's frame (the model's `coupler` node, docs/cart.md). */
+export const COUPLER_Y = 0.54;
 /** The most the cart may swing off the bike's line (rad, ~100°): no jackknife past it. */
 export const HITCH_MAX = (100 * Math.PI) / 180;
 /** Backing up: the bike's hitch point this close to your own parked cart's coupler (m) hitches it… */

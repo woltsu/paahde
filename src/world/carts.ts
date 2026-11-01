@@ -1,13 +1,15 @@
 // Carts (shared/cart.ts, docs/cart.md) in the world: parked where they stand (shared/vehicles.ts), or towed behind a
-// bike, where the tower's state puts them (shared/cart.ts towedPose: our own predicted state, or a remote player's
-// interpolated pose, which carries `tow` and `hitch`). The model is public/models/cart.glb (tools/blender/cart.py) to
+// bike: pointing the way the tower's state says (PlayerState.hitch: our own predicted state, or a remote player's
+// interpolated pose, which carries `tow` and `hitch`), hung from their bike's tow ball where it's drawn
+// (shared/cartHang.ts), so it flies, lands and pitches with the bike and never comes off it. The model is public/models/cart.glb (tools/blender/cart.py) to
 // the node contract in docs/cart.md; until it's there (or if it fails to load) a stand-in built here with the same
 // nodes and pivots, so swapping the glb in changes nothing else. The wheels spin with the ground covered, the stand
 // under the tongue swings down when it's let go of the bike (no `hitched`), and the pieces of a level not reached
 // (shared/cart.ts CART_LEVEL_NODES) are hidden.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, isCart, TOW_LENGTH, towedPose } from '../../shared/cart.ts';
+import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose } from '../../shared/cart.ts';
+import { hangCart, newHang, type Hang } from '../../shared/cartHang.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { heightAt } from '../../shared/terrain.ts';
 import { parked, type Vehicle } from '../../shared/vehicles.ts';
@@ -23,14 +25,20 @@ const STAND_RATE = 4;
  *  was last drawn this long (s), then is hidden. */
 const HOLD_S = 0.6;
 
-/** Who's towing: an id, where they are and their bike's heading, and the cart's (PlayerState.hitch). */
-export type Tower = { id: number; tow: number; x: number; z: number; heading: number; hitch: number };
+/** Who's towing: an id, where they are and their bike's heading, and the cart's (PlayerState.hitch); `at`, the tow ball
+ *  where their bike is drawn (src/bike.ts hitchAt) and `pitch`, the bike's drawn pitch, when it is drawn. */
+export type Tower = { id: number; tow: number; x: number; y: number; z: number; heading: number; hitch: number;
+  at?: { x: number; y: number; z: number }; pitch?: number };
 
 type Pose = { x: number; y: number; z: number; heading: number };
 type Shown = {
   obj: THREE.Group; tilt: THREE.Group; model: THREE.Object3D | null; level: number;
   wheels: THREE.Object3D[]; stand: THREE.Object3D | null; standAngle: number;
   last: Pose | null; lostS: number; spin: number;
+  /** The coupler in the model's frame (its `coupler` node). */
+  coupler: THREE.Vector3;
+  /** Towed: how it hangs from the tow ball (reset while it isn't towed). */
+  hang: Hang;
 };
 
 let template: Promise<THREE.Object3D> | undefined;
@@ -123,19 +131,25 @@ export class CartView {
       let pose: Pose | null = null;
       if (t) {
         const p = towedPose(t);
-        pose = { x: p.x, y: heightAt(p.x, p.z), z: p.z, heading: p.heading };
+        pose = { x: p.x, y: heightAt(p.x, p.z), z: p.z, heading: p.heading }; // (for the view distance; tow() poses it)
       } else if (parked(v)) pose = { x: v.x, y: v.y, z: v.z, heading: v.heading };
       const s0 = this.shown.get(v.id);
       if (!pose && s0?.last && s0.lostS < HOLD_S) {
         s0.lostS += dt;
         pose = s0.last;
       }
-      if (!pose || Math.hypot(pose.x - me.x, pose.z - me.z) > VIEW) continue;
+      // (A towed one goes wherever its bike is drawn, however far: never a bike without its cart.)
+      if (!pose || (!t && Math.hypot(pose.x - me.x, pose.z - me.z) > VIEW)) continue;
       seen.add(v.id);
       let s = s0;
       if (!s) this.shown.set(v.id, (s = this.build()));
       if (t || parked(v)) s.lostS = 0;
-      this.place(s, v, pose, dt);
+      if (t) this.tow(s, t, dt);
+      else if (pose !== s.last) {
+        s.hang.ay = NaN;
+        this.place(s, pose);
+      }
+      this.pieces(s, v, dt);
     }
     for (const [id, s] of this.shown) {
       if (seen.has(id)) continue;
@@ -150,7 +164,8 @@ export class CartView {
     tilt.rotation.order = 'YXZ';
     obj.add(tilt);
     this.group.add(obj);
-    const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0 };
+    const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0,
+      coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang() };
     loadCart().then((t) => {
       const m = t.clone(true);
       m.traverse((o) => {
@@ -160,26 +175,55 @@ export class CartView {
       s.model = m;
       s.wheels = ['wheel_l', 'wheel_r'].flatMap((n) => m.getObjectByName(n) ?? []);
       s.stand = m.getObjectByName('stand') ?? null;
+      const c = m.getObjectByName('coupler');
+      if (c) {
+        m.updateMatrixWorld(true);
+        c.getWorldPosition(s.coupler);
+      }
       s.level = -1;
       tilt.add(m);
     }, () => {});
     return s;
   }
 
-  private place(s: Shown, v: Vehicle, p: Pose, dt: number) {
-    // The wheels roll with the ground covered along its heading.
+  /** Parked: standing on the sand at `p`, along the slope and across it. */
+  private place(s: Shown, p: Pose) {
+    this.roll(s, p);
+    s.obj.position.set(p.x, p.y, p.z);
+    s.obj.rotation.y = p.heading;
+    const g = slopeAt(p.x, p.z, tmpSlope);
+    s.tilt.rotation.x = Math.atan(-g.gx * Math.sin(p.heading) - g.gz * Math.cos(p.heading));
+    s.tilt.rotation.z = Math.atan(g.gx * Math.cos(p.heading) - g.gz * Math.sin(p.heading));
+  }
+
+  /** The wheels roll with the ground the axle covers along its heading. */
+  private roll(s: Shown, p: Pose) {
     if (s.last) {
       const d = -(p.x - s.last.x) * Math.sin(p.heading) - (p.z - s.last.z) * Math.cos(p.heading);
       if (Math.abs(d) < 5) s.spin -= d / CART_WHEEL_R;
     }
     s.last = p;
-    s.obj.position.set(p.x, p.y, p.z);
-    s.obj.rotation.y = p.heading;
-    // Along the slope and across it.
-    const g = slopeAt(p.x, p.z, tmpSlope);
-    s.tilt.rotation.x = Math.atan(-g.gx * Math.sin(p.heading) - g.gz * Math.cos(p.heading));
-    s.tilt.rotation.z = Math.atan(g.gx * Math.cos(p.heading) - g.gz * Math.sin(p.heading));
     for (const w of s.wheels) w.rotation.x = s.spin;
+  }
+
+  /** Towed by `t`: hung from its tow ball (the coupler exactly on it), heading t.hitch, pitched about the coupler, falling
+   *  and landing on its own (shared/cartHang.ts). */
+  private tow(s: Shown, t: Tower, dt: number) {
+    let H = t.at;
+    if (!H) {
+      const h = hitchPoint(t.x, t.z, t.heading);
+      H = { x: h.x, y: t.y + HITCH_Y, z: h.z };
+    }
+    const g = hangCart(s.hang, H, t.hitch, t.pitch ?? 0, t.heading, s.coupler, dt, heightAt);
+    s.obj.position.set(g.x, g.y, g.z);
+    s.obj.rotation.y = g.psi;
+    s.tilt.rotation.x = g.phi;
+    s.tilt.rotation.z = g.roll;
+    this.roll(s, { x: g.axle.x, y: g.axle.y - CART_WHEEL_R, z: g.axle.z, heading: g.psi });
+  }
+
+  /** The stand and the level's pieces. */
+  private pieces(s: Shown, v: Vehicle, dt: number) {
     const want = v.hitched !== undefined ? 0 : STAND_DOWN;
     s.standAngle += (want - s.standAngle) * Math.min(1, dt * STAND_RATE);
     if (s.stand) s.stand.rotation.x = s.standAngle;
