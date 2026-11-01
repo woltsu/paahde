@@ -200,7 +200,7 @@ export class Rifle {
       if (!this.remoteMuzzle(m.by, _o)) _o.set(m.x, m.y - 0.15, m.z).addScaledVector(_d, 0.8);
       const ear = this.view.camera.position;
       zaps.beam(_o.x, _o.y, _o.z, m.ex, m.ey, m.ez, _o.distanceTo(ear) < 60);
-      rifleSound.shot(_o, ear, !!m.pistol);
+      rifleSound.shot(_o, ear, m.gun === PISTOL);
       zaps.burst(m.ex, m.ey, m.ez, -_d.x, -_d.y, -_d.z, 10);
       rifleSound.impact(m.hit ? 'glass' : !onFlat() && heightAt(m.ex, m.ez) > m.ey - 0.3 ? 'sand' : 'metal', _e.set(m.ex, m.ey, m.ez), ear);
     };

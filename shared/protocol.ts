@@ -382,7 +382,8 @@ export type ServerMsg =
   // impact.
   | ({ t: 'missile'; id: number; g: number; time: number } & MissilePath)
   | { t: 'blast'; id: number; x: number; y: number; z: number }
-  // Player `by` fired a laser rifle (or the pistol: `pistol`) from (x, y, z) to (ex, ey, ez); `hit`: it broke a weak point there.
+  // Player `by` fired a laser rifle (or `gun`, another gun's item kind: shared/rifle.ts GUNS) from (x, y, z) to (ex, ey, ez);
+  // `hit`: it broke a weak point there.
   // Player `id` (public id; `color` their avatar's, `name` theirs or '') said `text` in chat at `at` (ms since epoch),
   // to everyone (also back to the sender).
   | { t: 'chat'; id: number; color: number; name: string; text: string; at: number }
@@ -401,7 +402,7 @@ export type ServerMsg =
   // flash, the crack, the shards, the field.
   // A shield plate took player `id`'s killing blow (server/world.ts shielded); `held`: it holds for more (no break).
   | { t: 'shieldBreak'; id: number; x: number; y: number; z: number; push: [number, number, number]; tier: number; ms: number; held?: true }
-  | { t: 'zap'; by: number; x: number; y: number; z: number; ex: number; ey: number; ez: number; hit: boolean; pistol?: true }
+  | { t: 'zap'; by: number; x: number; y: number; z: number; ex: number; ey: number; ez: number; hit: boolean; gun?: string }
   // Thrown scrap `id` (shared/throw.ts tossAt), item `kind`, thrown by player `by` (their throw `n`), flying from
   // (x, y, z) with velocity (vx, vy, vz) at server time `time`; sent again with `hit` as it bounces off a drone, and
   // 'tossEnd' where it lands (it becomes loot there) or is lost.

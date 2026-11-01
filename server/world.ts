@@ -29,7 +29,7 @@ import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
-import { GRAVITON, GUNS, PISTOL } from '../shared/rifle.ts';
+import { GRAVITON, GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
 import { inCone, JAM_BLEED, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { THROW_MS, THROWABLE } from '../shared/throw.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_SLACK } from '../shared/mace.ts';
@@ -1025,7 +1025,7 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   if (m.b !== undefined) {
     const out: BossOut = { kills: [], craters: [], events: [] };
     const r = bosses.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.b, m.bi, now, out);
-    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
+    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
     for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
     bossOut(out);
     if (r.boss?.called) db.setSetting(calledKey(r.boss.kind), r.kill ? 0 : BOSSES[r.boss.kind].hp - r.boss.hp + 1);
@@ -1034,14 +1034,14 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   }
   if (m.n !== undefined) {
     const r = guardians.nests.shoot(m.ex, m.ey, m.ez, m.n, now, kind === PISTOL ? 'pistol' : 'rifle');
-    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
+    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
     for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
     if (r.kill) dropNestSpoils(r.kill);
     return;
   }
   if (m.h !== undefined) {
     const r = harvesters.shoot(m.x, m.z, m.ex, m.ey, m.ez, m.h, m.hi, now);
-    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
+    const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
     for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
     if (r.kill) dropHarvesterSpoils(r.kill);
     return;
@@ -1049,7 +1049,7 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   const r = m.j !== undefined ? { hit: jets.shoot(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.j, now), kill: null }
     : m.d !== undefined ? { hit: guardians.shootDrone(m.x, m.y, m.z, m.ex, m.ey, m.ez, m.d, now, p.id, kind === PISTOL ? 'pistol' : 'rifle'), kill: null }
     : m.g === undefined ? { hit: false, kill: null } : guardians.shoot(by, m.x, m.y, m.z, m.ex, m.ey, m.ez, m.g, m.i, now, kind === PISTOL ? 'pistol' : 'rifle');
-  const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind === PISTOL ? { pistol: true as const } : {}) };
+  const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit: r.hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
   for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
   if (r.kill) dropSpoils(r.kill);
 }
