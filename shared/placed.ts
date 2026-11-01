@@ -28,6 +28,7 @@ import { EYE_HEIGHT } from './dig.ts';
 import { ITEMS } from './items.ts';
 import { insideShelter, inShelter, shelterAt, shelterRoomClear, shelterUnder } from './shelters.ts';
 import { solarBlocked } from './solarfarms.ts';
+import { towerBlocked } from './towers.ts';
 import { nearEntrance } from './levels/entrance.ts';
 import { nearPod } from './podSpot.ts';
 import { heightAt } from './terrain.ts';
@@ -332,6 +333,7 @@ export function placeError(kind: string, x: number, z: number, rot: number, floo
     if (outline.some(([cx, cz]) => insideShelter(cx, cz, STRUCTURE_GAP))) return TEXT.notice.tooClose(TEXT.spots.shelter);
     if (outline.some(([cx, cz]) => nearPod(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.pod);
     if (outline.some(([cx, cz]) => solarBlocked(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.solar);
+    if (outline.some(([cx, cz]) => towerBlocked(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.tower);
     if (outline.some(([cx, cz]) => nearEntrance(cx, cz, POD_GAP))) return TEXT.notice.tooClose(TEXT.spots.doorway);
     // (A tarp's diamond by where it's tied down: its footprint's corners are bare sand.)
     const hs = (kind === TARP ? tarpTies(x, z, rot) : corners).map(([cx, cz]) => heightAt(cx, cz));

@@ -12,7 +12,7 @@ import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
 import { packPlayerPose, PLAYER_VIEW_RADIUS, type PlayerAppearance } from '../shared/network.ts';
 import { podOf } from '../shared/pods.ts';
 import { PITCH_STEPS, quantizePitch } from '../shared/dig.ts';
-import { bottleSips, equipped, GEAR_KINDS, isBuilding, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
+import { bottleSips, equipped, GEAR_KINDS, isBuilding, isFixture, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { scrapKey, scrapTaken } from '../shared/scrap.ts';
 import { CLOTH, HOTBAR, ITEMS, levelOnlyItems, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
@@ -25,6 +25,7 @@ import { BEDROLL, CHEST, placed, TABLE } from '../shared/placed.ts';
 import { canyonFloorNear } from '../shared/canyons.ts';
 import { indoors, overShelter, shelterAt, sheltersNear } from '../shared/shelters.ts';
 import { FIELD, solarFarmsNear } from '../shared/solarfarms.ts';
+import { LADDER, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
@@ -47,6 +48,7 @@ import { VehicleServer } from './vehicles.ts';
 import { vehicles } from '../shared/vehicles.ts';
 import { CART } from '../shared/cart.ts';
 import { PowerServer } from './power.ts';
+import { TowerServer } from './towers.ts';
 import { WireServer } from './wires.ts';
 import { ItemServer } from './items.ts';
 import { grantKits } from './grants.ts';
@@ -326,6 +328,14 @@ wss.on('connection', (ws) => {
       p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false, facing: Math.atan2(ux, uz) };
       return;
     }
+    if (msg.t === 'debugTowerVisit' && p && !p.down && !p.state.riding) {
+      // By the foot of the nearest radio tower's ladder, facing it.
+      const t = towersNear(p.state.x, p.state.z, 20000).sort((a, b) => Math.hypot(a.x - p.state.x, a.z - p.state.z) - Math.hypot(b.x - p.state.x, b.z - p.state.z))[0];
+      if (!t) return;
+      const [ox, oz] = towerToWorld(t, LADDER.at + 4, 0), x = t.x + ox, z = t.z + oz;
+      p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false, facing: Math.atan2(ox, oz) };
+      return;
+    }
     if (msg.t === 'debugWeather' && p) {
       storms.off = msg.off === true;
       return;
@@ -473,6 +483,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   send(ws, vehicleSrv.joinMessage(browserId));
   send(ws, wiring.joinMessage());
   send(ws, power.msg());
+  send(ws, towers.msg());
   send(ws, garden.joinMessage());
   send(ws, storms.msg());
   send(ws, jets.msg());
@@ -484,7 +495,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   send(ws, { t: 'obituaries', list: db.lastObituaries(OBITUARY_KEEP) });
   recall(p);
   send(ws, corpses.joinMessage());
-  for (const box of [...OWN_BOXES, ...corpses.boxes(), ...placedThings.boxes(), ...vehicleSrv.boxes()]) send(ws, boxMsg(browserId, box));
+  for (const box of [...OWN_BOXES, ...corpses.boxes(), ...placedThings.boxes(), ...vehicleSrv.boxes(), ...towers.boxes()]) send(ws, boxMsg(browserId, box));
   send(ws, waterMsg(p.heat));
   p.syncing = false;
   if (p.readyWanted) onReady(p);
@@ -1299,7 +1310,7 @@ function onDrop(p: Player, box: unknown, slot: unknown) {
 // equipment slots (if free).
 function onDebugGear(p: Player, tier: unknown) {
   const t = TIERS[Number.isInteger(tier) ? (tier as number) : 0] ?? 'scrap';
-  for (const kind of GEAR_KINDS.filter((k) => !isBuilding(k) && !isVehicle(k))) {
+  for (const kind of GEAR_KINDS.filter((k) => !standsInWorld(k))) {
     const parts = scrapParts(kind, t);
     if (!items.equip(p.browserId, { kind, parts })) items.giveItem(p.browserId, { kind, parts });
   }
@@ -1312,7 +1323,7 @@ function onDebugGear(p: Player, tier: unknown) {
 }
 
 function onDebugGive(p: Player, kind: unknown, n: unknown, tier: unknown) {
-  if (typeof kind !== 'string' || !(kind in ITEMS) || RETIRED.has(kind) || isBuilding(kind)) return;
+  if (typeof kind !== 'string' || !(kind in ITEMS) || RETIRED.has(kind) || isBuilding(kind) || isFixture(kind)) return;
   const t = Number.isInteger(tier) ? (tier as number) : 0;
   if (GEAR_KINDS.includes(kind) && t >= 0) items.giveItem(p.browserId, { kind, parts: scrapParts(kind, TIERS[t] ?? 'scrap') });
   else items.give(p.browserId, kind, Math.max(1, Math.min(Number.isInteger(n) ? (n as number) : 1, stackOf(kind) * 10)));
@@ -1513,11 +1524,17 @@ let epoch = realEpoch + (db.getSetting('clockShift') ?? 0);
 
 // Electricity (server/power.ts): the windmills charge the battery stations every second; everyone hears how it stands.
 const power = new PowerServer(db, performance.now() + epoch, items);
+const towers = new TowerServer(items, (box) => sendShared(box));
 const POWER_SEND_MS = 2000;
 let powerSent = 0;
 setInterval(() => {
   const now = performance.now();
   power.tick(now + epoch, (x, z) => stormAt(storms.storms, x, z, now));
+  // The radio towers (server/towers.ts): their fixtures made as players come near, the live ones' batteries drained.
+  if (towers.tick([...players.values()].filter((p) => p.ready && level(p.state.level).things).map((p) => p.state), 1, now)) {
+    const msg = JSON.stringify(towers.msg());
+    for (const p of players.values()) if (p.ws.readyState === p.ws.OPEN) sendJson(p.ws, msg);
+  }
   if (now - powerSent < POWER_SEND_MS) return;
   powerSent = now;
   const json = JSON.stringify(power.msg());

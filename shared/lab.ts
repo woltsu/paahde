@@ -81,7 +81,7 @@ export function labItems(): LabItem[] {
   PART_IDS.forEach((part, r) => TIERS.forEach((tier, c) => {
     if (!UNTIERED[part] || c === 0) out.push({ kind: partItem(part, tier), ...at(24 + c * 3, 8 + r * 3) });
   }));
-  ['grinder', 'wrench', 'scrap_mace', ...GEAR_KINDS.filter((k) => !GEAR[k].built && !GEAR[k].vehicle)].forEach((kind, i) => {
+  ['grinder', 'wrench', 'scrap_mace', ...GEAR_KINDS.filter((k) => !GEAR[k].built && !GEAR[k].vehicle && !GEAR[k].fixture)].forEach((kind, i) => {
     const gear = GEAR[kind];
     out.push({ kind, ...(gear ? { parts: gear.slots.map(() => null) } : {}), plate: true, ...at(-24 - (i % 4) * 4, 8 + Math.floor(i / 4) * 4) });
   });

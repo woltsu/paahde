@@ -20,7 +20,7 @@ import { nearPod, onPodGround, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
 import type { JetKind } from './jetbreak.ts';
 import {
   BOSS_SPOILS, BROKEN_GEAR, CACHES, DRONE_JET_SPOILS, FINDS, HARVESTER_SCRAP, HARVESTER_SPOILS, JET_RELIC_ODDS, JET_SCRAP,
-  KILL_SPOILS, RARE_FINDS, RECEIVER_DROPS, RELIC_DROPS, SHELTER_STASHES, SOLAR_STASHES, POD_LOOT, WIRING_DROPS, type TierWeights,
+  KILL_SPOILS, RARE_FINDS, RECEIVER_DROPS, RELIC_DROPS, SHELTER_STASHES, SOLAR_STASHES, POD_LOOT, TOWER_PARTS, WIRING_DROPS, type TierWeights,
 } from './tables.ts';
 
 export type Rand = () => number;
@@ -37,7 +37,7 @@ export const CACHE_PARTS = PART_IDS.filter((p) => !CACHES.noParts.includes(p));
 export const RARE_PARTS = PART_IDS.filter((p) => !RARE_FINDS.noParts.includes(p));
 /** Broken gear a cache can hold (not the jammer or the receivers; the guns have their own odds: CACHES.contents.pistol
  *  and .rifle). */
-export const CACHE_GEAR = GEAR_KINDS.filter((k) => !(k in GUNS) && k !== JAMMER && !receiverBoss(k) && !GEAR[k].built && k !== 'cart');
+export const CACHE_GEAR = GEAR_KINDS.filter((k) => !(k in GUNS) && k !== JAMMER && !receiverBoss(k) && !GEAR[k].built && !GEAR[k].fixture && k !== 'cart');
 
 const between = (rand: Rand, a: number, b: number) => a + rand() * (b - a);
 export const pick = <T>(a: readonly T[], rand: Rand) => a[Math.floor(rand() * a.length)];
@@ -58,6 +58,29 @@ export function brokenParts(kind: string, rand: Rand): (string | null)[] {
   if (!parts.includes(null)) parts[Math.floor(rand() * parts.length)] = null;
   return parts;
 }
+
+/** A radio tower's fixtures as first found (TOWER_PARTS; shared/towers.ts SPOT_ITEMS, in order): for each, its parts
+ *  (null where gone) and their data (a battery's flat). `far`: 0 near the start .. 1 far out. Never all there. */
+export function towerParts(kinds: readonly string[], far: number, rand: Rand): { parts: (string | null)[]; data?: ItemData }[] {
+  const keep = TOWER_PARTS.near + (TOWER_PARTS.far - TOWER_PARTS.near) * Math.max(0, Math.min(1, far));
+  const out = kinds.map((kind) => {
+    const parts = GEAR[kind].slots.map((s): string | null =>
+      rand() < keep ? ('part' in s ? partKind(s.part, pickTier(TOWER_PARTS.tierWeights, rand)) : pick(s.scrap, rand)) : null);
+    return { kind, parts };
+  });
+  // At least one part gone (a battery doesn't count: a flat one wants changing anyway).
+  const gone = out.some((o) => o.parts.some((p, i) => !p && !batterySlot(o.kind, i)));
+  if (!gone) {
+    const o = out[Math.floor(rand() * out.length)], open = o.parts.map((_, i) => i).filter((i) => !batterySlot(o.kind, i));
+    o.parts[open[Math.floor(rand() * open.length)]] = null;
+  }
+  return out.map((o) => {
+    const it: { parts: (string | null)[]; data?: ItemData } = { parts: o.parts };
+    if (o.parts.some((p, i) => p && batterySlot(o.kind, i))) setFitted(it, o.parts.map((p, i) => (p && batterySlot(o.kind, i) ? { charge: 0 } : null)));
+    return it;
+  });
+}
+const batterySlot = (kind: string, i: number) => { const s = GEAR[kind].slots[i]; return 'part' in s && s.part === 'battery'; };
 
 /** A piece of broken gear of `kind`. */
 export const broken = (kind: string, rand: Rand): Drop => ({ kind, parts: brokenParts(kind, rand) });

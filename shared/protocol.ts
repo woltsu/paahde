@@ -152,6 +152,7 @@ export type ClientMsg =
   | { t: 'debugBike'; working?: boolean }
   | { t: 'debugVortexVisit' }
   | { t: 'debugSolarVisit' }
+  | { t: 'debugTowerVisit' }
   | { t: 'debugHeat'; off: boolean }
   // Debug menu: no random sandstorms in this world (shared by everyone) while on.
   | { t: 'debugWeather'; off: boolean }
@@ -311,6 +312,8 @@ export type ServerMsg =
   | { t: 'vehicles'; list: Vehicle[]; mine: number[] }
   // Electricity (shared/power.ts), every POWER_SEND_MS: each windmill's output and each station's charge.
   | ({ t: 'power' } & PowerState)
+  /** The radio towers alive now (shared/towers.ts ids; server/towers.ts): on join and whenever it changes. */
+  | { t: 'towers'; alive: number[] }
   // Every power line (shared/wires.ts), on join and whenever one goes up or comes down.
   | { t: 'wires'; list: Wire[] }
   // Every plant bed's stage and growth (shared/garden.ts), on join and whenever one changes.

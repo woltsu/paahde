@@ -330,6 +330,11 @@ export const SOLAR_STASHES = {
   tierWeights: { scrap: 0.5, basic: 2, quality: 3, space: 1 } satisfies TierWeights,
 };
 
+/** A radio tower's fixtures as they're first found (shared/towers.ts, server/towers.ts): the odds each part is still
+ *  fitted, near the start (`near`, the first km or two) and far out (`far`, 6 km on), and their tiers. Its battery, if
+ *  there, is flat. At least one part is always gone. */
+export const TOWER_PARTS = { near: 0.6, far: 0.25, tierWeights: { scrap: 6, basic: 3, quality: 0.6 } satisfies TierWeights };
+
 // ---------------------------------------------------------------------------------------------------------------
 // What a killed enemy leaves on the sand (server/world.ts dropSpoils): with `odds`, min..max parts, each a random
 // one of `parts` at a tier from tierWeights.

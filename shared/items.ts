@@ -76,6 +76,10 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   storage_chest: { label: TEXT.items.storage_chest, stack: 1, size: [2, 1] },
   // A borehole with an electric pump (shared/wells.ts): water at home while it has power.
   well: { label: TEXT.items.well, stack: 1, size: [2, 2] },
+  // A radio tower's fixtures (shared/towers.ts): never carried, their parts fitted where they stand.
+  tower_radio: { label: TEXT.items.tower_radio, stack: 1, size: [2, 2] },
+  tower_dish: { label: TEXT.items.tower_dish, stack: 1, size: [2, 2] },
+  tower_feed: { label: TEXT.items.tower_feed, stack: 1, size: [2, 2] },
   // The bosses' trophies (shared/trophies.ts): put up with the wrench once their kind is beaten.
   trophy_worm: { label: TEXT.items.trophy_worm, stack: 1 },
   trophy_carrier: { label: TEXT.items.trophy_carrier, stack: 1 },

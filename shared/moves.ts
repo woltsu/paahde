@@ -27,6 +27,7 @@ const SHAPES: Record<BoxKind, (box: string, boxes: Boxes) => Shape> = {
   bench: () => freeSlots(1),
   bld: () => freeSlots(1),
   veh: () => freeSlots(1),
+  twr: () => freeSlots(1),
   cargo: (box) => (isCart(vehicleById(cargoId(box))) ? gridShape(CHEST_COLS, CHEST_ROWS) : gridShape(BIKE_COLS, BIKE_ROWS)), // (a cart's: a chest's)
   store: () => gridShape(CHEST_COLS, CHEST_ROWS),
   corpse: grown,

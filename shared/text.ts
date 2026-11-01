@@ -60,6 +60,9 @@ const en = {
     dismantle_bench: 'Dismantling bench',
     storage_chest: 'Chest',
     well: 'Electric well',
+    tower_radio: 'Radio',
+    tower_dish: 'Dish drive',
+    tower_feed: 'Antenna feed',
     trophy_worm: "Worm's head",
     trophy_carrier: "Carrier's fan",
     trophy_colossus: "Colossus's head",
@@ -123,9 +126,12 @@ const en = {
     beacon_light: () => 'Shines a column of light into the sky while it has power, from a battery or a wire.',
     light_pole: () => 'Lights the sand around it at night while it has power, from a battery or a wire.',
     well: () => 'Pumps up water while it has power, for the water bottle.',
+    tower_radio: () => 'Listens while it has power.',
+    tower_dish: () => 'Turns the big dish.',
+    tower_feed: () => 'Carries what the antennas hear down the mast.',
   },
   /** Where placing is blocked: "Too close to the pump". */
-  spots: { pump: 'the pump', doorway: 'the doorway', shelter: 'the shelter', pod: 'the pod', solar: 'the mirrors' },
+  spots: { pump: 'the pump', doorway: 'the doorway', shelter: 'the shelter', pod: 'the pod', solar: 'the mirrors', tower: 'the tower' },
 
   // ---- Prompts under the crosshair (after the key) ---------------------------------------------------------------
 

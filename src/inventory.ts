@@ -186,6 +186,10 @@ const fit = (src: string, extra = '') => `<img class="fit" src="./icons/${src}.p
 const ICONS: Record<string, string> = {};
 for (const k of [...Object.keys(GEAR), 'grinder', 'plant_bed', 'uv_lamp', 'bedroll', 'power_pole', 'tarp', 'scrap', 'cloth', 'wrench', 'scrap_mace',
   'robot_arm', 'control_cabinet', 'winch', 'solenoid_valve', 'beacon', 'pod_console', 'pod_powerbox', 'workbench', 'dismantle_bench', 'storage_chest']) ICONS[k] = fit(`items/${k}`);
+// A radio tower's fixtures (shared/towers.ts) have no renders of their own: the nearest look-alikes'.
+ICONS.tower_radio = fit('items/control_cabinet');
+ICONS.tower_dish = fit('items/motor_basic');
+ICONS.tower_feed = fit('items/coil_basic');
 // Wiring is what a wiring coil comes out as (shared/parts.ts UNTIERED): the coil's render.
 ICONS.wiring = fit('items/coil_basic');
 // The beginning's relay (shared/items.ts tut_relay): a relay's render.

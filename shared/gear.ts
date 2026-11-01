@@ -35,6 +35,9 @@ export type GearSpec = {
   /** A vehicle (shared/vehicles.ts): lies broken in the world and is repaired and ridden where it stands, never carried;
    *  its item is in its own box (vehicleBox), like a building's. */
   vehicle?: true;
+  /** Part of something that stands in the world for good (a radio tower's radio, dish drive or antenna feed:
+   *  shared/towers.ts), never found, built or carried; its item is in its own box there (towerBox), like a building's. */
+  fixture?: true;
 };
 
 const P = (part: PartId): PartSlot => ({ part });
@@ -95,12 +98,21 @@ export const GEAR: Record<string, GearSpec> = {
   // relay in the control box that switches the pump.
   well: { slots: [P('motor'), P('valve'), P('relay')], better: 'how fast it fills a bottle, and the less power it takes',
     use: TEXT.gearUse.well, built: true },
+  // A radio tower's three fixtures (shared/towers.ts, server/towers.ts): the radio in the cabinet at its foot (a relay to
+  // switch it, a board to tune it, a battery to run it), the big dish's drive on the dish deck, the antennas' feed run
+  // up to the top deck. With all three whole and the battery holding charge, the tower comes alive.
+  tower_radio: { slots: [P('relay'), P('compute'), P('battery')], better: 'how clearly it hears', use: TEXT.gearUse.tower_radio, fixture: true },
+  tower_dish: { slots: [P('motor')], better: 'how clearly it hears', use: TEXT.gearUse.tower_dish, fixture: true },
+  tower_feed: { slots: [P('coil'), WIRING], better: 'how clearly it hears', use: TEXT.gearUse.tower_feed, fixture: true },
 };
 export const GEAR_KINDS = Object.keys(GEAR);
 
 export const isGear = (kind: string) => kind in GEAR;
 export const isBuilding = (kind: string | undefined) => !!kind && !!GEAR[kind]?.built;
 export const isVehicle = (kind: string | undefined) => !!kind && !!GEAR[kind]?.vehicle;
+export const isFixture = (kind: string | undefined) => !!kind && !!GEAR[kind]?.fixture;
+/** Stands in the world, never carried: a building, a vehicle or a fixture. */
+export const standsInWorld = (kind: string | undefined) => isBuilding(kind) || isVehicle(kind) || isFixture(kind);
 
 export function slotLabel(s: PartSlot) {
   return 'part' in s ? PART_LABELS[s.part] : s.label;

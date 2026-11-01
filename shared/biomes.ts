@@ -33,6 +33,8 @@ export type Biome = {
   haze?: number;
   /** Nothing is placed in it: no finds, scrap, wrecks, crash sites or shelters (shared/rocks.ts rocksNear). */
   empty?: boolean;
+  /** false: no radio towers stand in it (shared/towers.ts): no high ground to put them on. */
+  towers?: boolean;
 };
 
 /** Blobs a few hundred metres across from a slow noise, covering more of the land the further from the origin: none
@@ -62,6 +64,7 @@ export const MUDFLAT: Biome = {
   id: 'mudflat',
   place: blobs({ from: 1000, full: 2400, cover: 0.35, size: 1200, edge: 0.035, seed: 41 }),
   groundHeat: { sun: 7, shade: 3 },
+  towers: false,
 };
 
 /** Every biome, in order of precedence. */

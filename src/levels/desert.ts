@@ -21,6 +21,7 @@ import { labFloor } from '../world/sandMaterial.ts';
 import { PodsView } from '../world/pods.ts';
 import { Shelters } from '../world/shelters.ts';
 import { SolarFarms } from '../world/solarfarms.ts';
+import { Towers } from '../world/towers.ts';
 import { PlacedView } from '../world/placed.ts';
 import { glbMaterial } from '../world/glbMaterial.ts';
 import { WireView } from '../world/wires.ts';
@@ -50,6 +51,8 @@ export class DesertStage implements Stage {
   shelters!: Shelters;
   /** Old solar power towers and their heliostat fields, far out. */
   solarFarms!: SolarFarms;
+  /** Abandoned radio towers on the high ground, here and there (shared/towers.ts). */
+  towers!: Towers;
   /** Plant beds, UV lamps, the buildings, the work stations and the chests: in the shelters and out on the sand. */
   placedView!: PlacedView;
   /** The power lines between them (shared/wires.ts). */
@@ -106,6 +109,7 @@ export class DesertStage implements Stage {
     await slice();
     d.shelters = new Shelters(root); // small empty bunkers out in the desert
     d.solarFarms = new SolarFarms(root); // old solar power towers, far out
+    d.towers = new Towers(root); // abandoned radio towers
     await slice();
     d.placedView = new PlacedView(root, (mt, where) => glbMaterial(mt, where === 'out' ? null : d.shelters.lit));
     d.wireView = new WireView(root);
@@ -203,6 +207,7 @@ export class DesertStage implements Stage {
     this.shelters.update(camera.position);
     this.entrance.update(camera.position, true);
     this.solarFarms.update(camera.position);
+    this.towers.update(camera.position, f.dt);
     if (a && (!this.sky.csm.enabled.value || this.sky.heights.settledAt(focus))) a.done();
   }
 }

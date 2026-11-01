@@ -9,7 +9,8 @@
 import { level } from './levels.ts';
 import { lootReach } from './loot.ts';
 import { corpseId, corpsesNear } from './corpse.ts';
-import { boxKind, buildingId, cargoId, storeId, vehicleId, type BoxKind } from './boxes.ts';
+import { boxKind, buildingId, cargoId, storeId, towerBox, towerOfBox, vehicleId, type BoxKind } from './boxes.ts';
+import { SPOT_ITEMS, SPOTS, spotNear, towerById } from './towers.ts';
 import { EQUIP_SLOTS, isBuilding } from './gear.ts';
 import { BAG_SLOTS, BIKE_COLS, BIKE_ROWS, CHEST_COLS, CHEST_ROWS, coverage, gridShape, ITEMS, MAX_SIDE, type Slots } from './items.ts';
 import { CHEST, placed, PLACED_REACH, placedReach } from './placed.ts';
@@ -21,10 +22,12 @@ import { TEXT } from './text.ts';
 
 /** A chest opens within this reach (m) of the eye. */
 export const STORAGE_REACH = 2.5;
+/** A radio tower's fixture opens within this (m) of where you stand to work on it (shared/towers.ts SPOTS). */
+export const TOWER_REACH_SPOT = 2.2;
 
 /** Box ids: 'bag', 'equip' and 'bench' are the player's own; the chests ('store<id>'), the packs left by the dead
  *  ('corpse<id>', shared/corpse.ts), the buildings' ('bld<id>') and the vehicles' ('veh<id>', 'cargo<id>') are shared. */
-export type BoxId = 'bag' | 'equip' | 'bench' | `store${number}` | `corpse${number}` | `bld${number}` | `veh${number}` | `cargo${number}`;
+export type BoxId = 'bag' | 'equip' | 'bench' | `store${number}` | `corpse${number}` | `bld${number}` | `veh${number}` | `cargo${number}` | `twr${number}`;
 /** The player's own boxes. */
 export const OWN_BOXES = ['bag', 'equip', 'bench'];
 
@@ -45,6 +48,7 @@ const SIZES: Record<BoxKind, (box: string) => number> = {
     const v = vehicleById(cargoId(box));
     return !v?.up ? 0 : isCart(v) ? CHEST_COLS * CHEST_ROWS : BIKE_COLS * BIKE_ROWS; // (a cart's box is a chest's size)
   },
+  twr: (box) => (towerSpot(box) ? 1 : 0),
 };
 
 /**
@@ -68,6 +72,12 @@ export const storeChest = (box: string) => {
   return id < 0 ? undefined : placed.find((p) => p.id === id && p.kind === CHEST);
 };
 
+/** The radio tower and spot whose fixture's box this is (shared/towers.ts), or null. */
+export function towerSpot(box: string): { tower: number; spot: number } | null {
+  const t = towerOfBox(box);
+  return t && t.spot < SPOTS.length && towerById(t.tower) ? t : null;
+}
+
 /** The building standing in the world whose box this is, or undefined. */
 export const building = (box: string) => {
   const id = buildingId(box);
@@ -87,6 +97,7 @@ const LABELS: Record<BoxKind, (box: string) => string> = {
   bld: (box) => ITEMS[building(box)?.kind ?? '']?.label ?? '',
   veh: (box) => ITEMS[vehicleById(vehicleId(box))?.kind ?? '']?.label ?? '',
   cargo: (box) => (isCart(vehicleById(cargoId(box))) ? TEXT.items.cart : TEXT.boxes.cargo),
+  twr: (box) => ITEMS[SPOT_ITEMS[towerSpot(box)?.spot ?? 0]]?.label ?? '',
 };
 
 /** Boxes open to a player standing at `s` besides the bag, nearest chest first. */
@@ -105,6 +116,9 @@ export function openBoxes(s: PlayerState, slack = 0): BoxId[] {
     .filter((b) => b.d < PLACED_REACH + slack)
     .sort((a, b) => a.d - b.d);
   for (const b of near2) out.push(`bld${b.p.id}`);
+  // A radio tower's fixture where you stand (its cabinet, the dish deck's junction box, the top deck's feed box).
+  const spot = spotNear(s.x, s.y, s.z, TOWER_REACH_SPOT + slack);
+  if (spot) out.push(towerBox(spot.t.id, spot.i) as BoxId);
   // Vehicles in reach that nobody rides: their parts, and a working one's cargo (a cart's box: it has no parts to fit,
   // and none while it's towed).
   if (!s.riding) {

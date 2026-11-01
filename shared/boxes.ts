@@ -1,7 +1,7 @@
 // Item box ids and what kind of box each is: the one place their grammar lives. 'bag', 'equip' and 'bench' are the
 // player's own; the rest are numbered and shared: chests put up with the wrench
 // ('store<placed id>'), the packs left by the dead ('corpse<id>', shared/corpse.ts), a building's item ('bld<placed id>')
-// and a vehicle's ('veh<id>', its cargo 'cargo<id>'). A kind's fixed traits are in BOX_KINDS; what depends on the world (size, label, shape, reach) is per
+// and a vehicle's ('veh<id>', its cargo 'cargo<id>'), and a radio tower's fixtures' ('twr<tower id × 4 + spot>'). A kind's fixed traits are in BOX_KINDS; what depends on the world (size, label, shape, reach) is per
 // kind in shared/storage.ts and shared/gear.ts, as Record<BoxKind, ...> so a new kind can't be missed there.
 
 /**
@@ -20,6 +20,7 @@ export const BOX_KINDS = {
   bld: { fitted: true },
   veh: { fitted: true },
   cargo: {},
+  twr: { fitted: true },
 } as const satisfies Record<string, BoxTraits>;
 export type BoxKind = keyof typeof BOX_KINDS;
 
@@ -67,6 +68,14 @@ export const storeId = (box: string) => boxNumber('store', box);
  *  building's; its cargo is the grid `cargo<vehicle id>`. */
 export const vehicleBox = (id: number) => `veh${id}`;
 export const cargoBox = (id: number) => `cargo${id}`;
+/** A radio tower's fixture (shared/towers.ts SPOTS: the radio, the dish drive, the antenna feed) keeps its item in a box
+ *  of one slot, `twr<tower id × 4 + spot>`, open in reach of where it's fitted, like a building's. */
+export const towerBox = (tower: number, spot: number) => `twr${tower * 4 + spot}`;
+/** The tower id and spot of a tower's box, or null. */
+export function towerOfBox(box: string): { tower: number; spot: number } | null {
+  const n = boxNumber('twr', box);
+  return n < 0 ? null : { tower: Math.floor(n / 4), spot: n % 4 };
+}
 /** The vehicle id of a vehicle's item box, or -1. */
 export const vehicleId = (box: string) => boxNumber('veh', box);
 /** The vehicle id of a vehicle's cargo box, or -1. */

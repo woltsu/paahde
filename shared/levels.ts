@@ -9,6 +9,7 @@
 import { collideOutdoor } from './capsules.ts';
 import { collideShelter, sandHidden, shelterCeiling } from './shelters.ts';
 import { collideSolar, solarCeiling } from './solarfarms.ts';
+import { collideTowers, towerGround, towerLadder } from './towers.ts';
 import { collideCrash } from './crashsites.ts';
 import { collideMachines } from './machineBoxes.ts';
 import { collideJetWrecks } from './jetcrash.ts';
@@ -48,6 +49,8 @@ export type Level = {
   /** Push a mover out of the level's solids (it may stand on the low ones): the highest support top, or -Infinity.
    *  (prevX, prevZ): where it was a tick ago. */
   collide(c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number, prevX: number, prevZ: number, gates?: number): number;
+  /** A ladder at (x, y, z) a player there climbs (shared/sim.ts): its foot and top, or null. None: the level has none. */
+  ladder?(x: number, y: number, z: number): { bottom: number; top: number } | null;
   /** Lowest ceiling over (x, z) for a mover of this height (jumping into a roof). */
   ceiling(x: number, z: number, prevY: number, height: number, radius: number, gates?: number): number;
   /** Is one of its solids within r of (x, y, z)? The third-person camera's boom pulls in short of them (src/camera.ts). In
@@ -92,12 +95,13 @@ function sandAt(x: number, z: number, prevY: number): number {
   return sandHidden(x, z, prevY) ? -Infinity : heightAt(x, z);
 }
 
-/** The desert's ground: the sand, or a tarp's canvas for feet that were on it (shared/tarp.ts). */
+/** The desert's ground: the sand, a tarp's canvas (shared/tarp.ts) or a radio tower's deck (shared/towers.ts) for feet
+ *  that were on it. */
 function desertGround(x: number, z: number, prevY: number): number {
-  return Math.max(sandAt(x, z, prevY), tarpGround(x, z, prevY));
+  return Math.max(sandAt(x, z, prevY), tarpGround(x, z, prevY), towerGround(x, z, prevY));
 }
 
-/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, what is built
+/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, the radio towers, what is built
  *  outside and the datacenter's door (shared/levels/entrance.ts). */
 export const desertLevel: Level = {
   id: DESERT,
@@ -109,9 +113,10 @@ export const desertLevel: Level = {
       collideMachines(c, y, prevY, radius, stepUp), collideJetWrecks(c, y, prevY, radius, stepUp), collidePods(c, y, prevY, radius, stepUp));
     const builtTop = Math.max(collideShelter(c, y, prevY, radius, height, stepUp, prevX, prevZ),
       collideOutdoor(c, y, prevY, radius, height, stepUp), collideEntrance(c, y, prevY, radius, height, stepUp),
-      collideSolar(c, y, prevY, radius, height, stepUp));
+      collideSolar(c, y, prevY, radius, height, stepUp), collideTowers(c, y, prevY, radius, height, stepUp));
     return Math.max(scrapTop, builtTop);
   },
+  ladder: towerLadder,
   // Under a shelter's roof, a solar farm's mirror or a tarp's canvas.
   ceiling: (x, z, prevY, height, radius) => Math.min(shelterCeiling(x, z, prevY, height, radius), solarCeiling(x, z, prevY, height),
     tarpCeiling(x, z, prevY, height)),

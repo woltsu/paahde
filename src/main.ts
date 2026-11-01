@@ -1,5 +1,5 @@
 import { viewCull } from './world/viewCull';
-import { buildingBox, cargoBox, vehicleBox } from '../shared/boxes.ts';
+import { buildingBox, cargoBox, towerBox, vehicleBox } from '../shared/boxes.ts';
 import * as THREE from 'three/webgpu';
 import { BACK, DT, FORWARD, isSlipFace, quantizeYaw } from '../shared/sim.ts';
 import { EYE_HEIGHT, quantizePitch } from '../shared/dig.ts';
@@ -99,7 +99,8 @@ import { cartTarget } from '../shared/cart.ts';
 import type { Tower } from './world/carts';
 import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
-import { openBoxes } from '../shared/storage.ts';
+import { openBoxes, TOWER_REACH_SPOT } from '../shared/storage.ts';
+import { SPOT_ITEMS, spotNear } from '../shared/towers.ts';
 import { Chat } from './chat';
 import { nameGate } from './name';
 import { prologue } from './prologue';
@@ -355,6 +356,7 @@ net.onPlaced = () => {
   wireView.sync(wires);
 };
 net.onVehicles = () => hud.vehiclesChanged();
+net.onTowers = () => desert.towers.setAlive(net.towersAlive);
 net.onPower = () => {
   placedView.setPower(net.power);
   hud.powerChanged();
@@ -709,6 +711,11 @@ renderer.setAnimationLoop((time) => {
   const atTap = playerHands.held === 'canteen' && placing.target?.kind === WELL && !!waterAt(net.me.x, net.me.y, net.me.z);
   const building = !station && placing.target && isBuilding(placing.target.kind) && !atTap ? placing.target : null;
   const buildingPrompt = building ? TEXT.prompt.open(itemLabel(building.kind)) : null;
+  // Where a radio tower's fixture is fitted (shared/towers.ts SPOTS: its cabinet, the dish deck's and the top deck's
+  // boxes): F opens it next to the bag, to fit its parts.
+  const spot = here && !net.down && !station && !building ? spotNear(s.x, s.y, s.z, TOWER_REACH_SPOT) : null;
+  const fixture = spot && net.boxes[towerBox(spot.t.id, spot.i)] ? towerBox(spot.t.id, spot.i) : null;
+  const fixturePrompt = fixture && spot ? TEXT.prompt.open(itemLabel(SPOT_ITEMS[spot.i])) : null;
   // A bedroll in view (anyone's): F makes it where we wake up after dying, or stops that (net.spawn).
   const roll = !station && placing.target?.kind === BEDROLL ? placing.target : null;
   const rollPrompt = roll ? (net.spawn?.id === roll.id ? TEXT.prompt.dontSleepHere : TEXT.prompt.sleepHere) : null;
@@ -782,7 +789,7 @@ renderer.setAnimationLoop((time) => {
   for (const d of L.doors()) if (Math.hypot(s.x - (d.trigger[0] + d.trigger[1]) / 2, s.z - (d.trigger[4] + d.trigger[5]) / 2) < 60) levels.prefetch(d.to);
   // What the level asks F for first (the beginning's pod hatch).
   const levelAct = net.connected && !net.down && stage.level === net.me.level ? (stage.interact?.(net.me, net.boxes.bag) ?? null) : null;
-  const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? cartPrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
+  const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? fixturePrompt ?? rollPrompt ?? ridePrompt ?? cartPrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));
   const extra = [growing, wirePrompt, placing.prompt].filter(Boolean).join(' ');
@@ -806,6 +813,7 @@ renderer.setAnimationLoop((time) => {
         });
       } else hud.toast(TEXT.notice.nothingToTakeApart);
     } else if (building) hud.open(buildingBox(building.id));
+    else if (fixture) hud.open(fixture);
     else if (roll) net.spawnToggle(roll.id);
     else if (vehicle) {
       if (!vehicle.v.up) hud.open(vehicleBox(vehicle.v.id));
@@ -831,7 +839,7 @@ renderer.setAnimationLoop((time) => {
     } else if (wreck) net.crashTake(wreck.id);
     else if (pack || chest) hud.open();
   }
-  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || cartPrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
+  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || fixturePrompt !== null || rollPrompt !== null || ridePrompt !== null || cartPrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
   survival.update(frameDt, net.me, targeted, interact && !targeted, clockText(sky.day.tod));
   const w = net.water;
   const m = net.me;

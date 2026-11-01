@@ -21,7 +21,7 @@ import { BEATS } from '../shared/levels/beginning.ts';
 import { LEVELS } from '../shared/levels.ts';
 import { ui } from './input';
 import { BOSS_KINDS, BOSSES, type BossKind } from '../shared/bosses.ts';
-import { isBuilding, isGear } from '../shared/gear.ts';
+import { isBuilding, isFixture, isGear } from '../shared/gear.ts';
 import { CLOTH, ITEMS, RETIRED, SCRAP, stackOf, WIRING } from '../shared/items.ts';
 import { TONE_CURVES, toneControl, type ToneCurve } from './post';
 import { summonLocalStorm } from './storm';
@@ -34,7 +34,7 @@ export class DebugMenu {
   private panel = document.createElement('div');
 
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
-  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
+  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {},
     goLevel: (key: string) => void = () => {}) {
@@ -105,13 +105,14 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <div class="row"><button id="dbgMats" title="A full stack each of scrap, cloth and wiring, to build with">Materials: scrap, cloth, wiring</button></div>
 <div class="sub">Item</div>
 <div class="row"><input id="dbgItem" list="dbgItems" placeholder="search…" title="Any item, by name or id"></div>
-<datalist id="dbgItems">${Object.entries(ITEMS).filter(([k]) => !RETIRED.has(k) && !isBuilding(k)).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}</datalist>
+<datalist id="dbgItems">${Object.entries(ITEMS).filter(([k]) => !RETIRED.has(k) && !isBuilding(k) && !isFixture(k)).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}</datalist>
 <div class="row"><input id="dbgItemN" type="number" min="1" value="1" style="width:4em" title="How many (stackable items)">
 <select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${tiers.map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
 <button id="dbgGive" class="go">Give</button></div></details>
 <details data-sec="travel"><summary>Travel</summary>
 <div class="grid"><button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">To vortex</button>
-<button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">To solar farm</button></div>
+<button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">To solar farm</button>
+<button id="dbgTowerVisit" title="Put you by the foot of the nearest radio tower's ladder">To radio tower</button></div>
 <div class="sub">Level</div>
 <div class="grid">${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
 <div class="sub">Beginning beat</div>
@@ -150,6 +151,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     p.querySelector('#dbgVortex')!.addEventListener('click', () => summonStorm('vortex'));
     p.querySelector('#dbgVortexVisit')!.addEventListener('click', () => summonStorm('vortexVisit'));
     p.querySelector('#dbgSolarVisit')!.addEventListener('click', () => summonStorm('solarVisit'));
+    p.querySelector('#dbgTowerVisit')!.addEventListener('click', () => summonStorm('towerVisit'));
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);

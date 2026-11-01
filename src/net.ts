@@ -207,6 +207,9 @@ export class Net {
   /** Electricity (shared/power.ts), from the server every couple of seconds. */
   power: PowerState = { gen: {}, store: {} };
   onPower?: () => void;
+  /** The radio towers alive now (server/towers.ts). */
+  towersAlive = new Set<number>();
+  onTowers?: () => void;
   /** Placed things changed (shared/placed.ts keeps the list), or a bed's stage did. */
   onPlaced?: () => void;
   /** The vehicles changed (shared/vehicles.ts). */
@@ -666,9 +669,10 @@ export class Net {
 
   /** Debug menu: a sandstorm where we stand, for everyone; `front`: a mega-storm front over everyone at once; 'gas':
    *  poison gas creeping in over everyone. */
-  summonStorm(front: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' = false) {
+  summonStorm(front: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' = false) {
     if (front === 'vortexVisit') return this.send({ t: 'debugVortexVisit' });
     if (front === 'solarVisit') return this.send({ t: 'debugSolarVisit' });
+    if (front === 'towerVisit') return this.send({ t: 'debugTowerVisit' });
     this.send({ t: 'storm', ...(front === 'gas' ? { gas: true } : front === 'vortex' ? { vortex: true } : front ? { front } : {}) });
   }
 
@@ -829,6 +833,10 @@ export class Net {
     if (msg.t === 'wires') {
       setWires(msg.list);
       return this.onPlaced?.();
+    }
+    if (msg.t === 'towers') {
+      this.towersAlive = new Set(msg.alive);
+      return this.onTowers?.();
     }
     if (msg.t === 'power') {
       this.power = { gen: msg.gen, store: msg.store, lit: msg.lit, wells: msg.wells };

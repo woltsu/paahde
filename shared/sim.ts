@@ -26,6 +26,7 @@ import { WIND } from './dunes.ts';
 import { heightAt, onRock } from './terrain.ts';
 import { tarpSlope } from './tarp.ts';
 import { towHitch } from './cart.ts';
+import { CLIMB_SIDE, CLIMB_SPEED } from './towers.ts';
 
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
@@ -278,6 +279,9 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     dx /= len;
     dz /= len;
   }
+  // On a ladder (a radio tower's, shared/towers.ts): W up, S down. At its foot only W climbs: anything else walks.
+  const lad = L.ladder?.(s.x, s.y, s.z);
+  if (lad && (fwd > 0 || s.y > lad.bottom + 0.05)) return stepLadder(s, L, lad, fwd, strafe, yaw, input);
 
   let landTicks = s.landTicks > 0 ? s.landTicks - 1 : 0;
   let speed = WALK_SPEED;
@@ -446,6 +450,34 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0, level: s.level, gates,
     tow: 0, hitch: s.hitch ?? 0,
   };
+}
+
+// --- Ladder ----------------------------------------------------------------------------------------
+// In a ladder's column (Level.ladder: a radio tower's, shared/towers.ts) you hang on it, no gravity: W climbs, S goes
+// down, A/D move you along it (CLIMB_SIDE), out of the column at last: onto a deck where one is beside you
+// (shared/towers.ts towerGround), else you drop. Space lets go: pushed off backwards, out of the column. Nothing else
+// collides in the column. Grounded while on it (you're holding on: no fall, no landing).
+const LET_GO = 1.1; // m out of the column on letting go
+const LET_GO_SPEED = 1.2;
+
+function stepLadder(s: PlayerState, L: Level, lad: { bottom: number; top: number }, fwd: number, strafe: number, yaw: number, input: number): PlayerState {
+  const gates = L.tick ? L.tick(s.gates ?? 0) : s.gates ?? 0;
+  const jumpDown = (input & JUMP) !== 0;
+  const bikeDown = (input & BIKE) !== 0;
+  const base = {
+    ...s, facing: yaw, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks: 0, sliding: false, crouching: false,
+    slideSpent: false, slideCool: s.slideCool > 0 ? s.slideCool - 1 : 0, riding: false, bikeHeld: bikeDown, nose: 0, noseSpin: 0, gates,
+  };
+  if (jumpDown && !s.jumpHeld) {
+    // Backwards is (sin yaw, cos yaw).
+    const bx = Math.sin(yaw), bz = Math.cos(yaw);
+    return { ...base, x: s.x + bx * LET_GO, z: s.z + bz * LET_GO, vx: bx * LET_GO_SPEED, vy: LET_GO_SPEED, vz: bz * LET_GO_SPEED, grounded: false };
+  }
+  const vy = fwd * CLIMB_SPEED;
+  const y = Math.min(lad.top, Math.max(lad.bottom, s.y + vy * DT));
+  // Along it: the camera's right, (cos yaw, -sin yaw).
+  const vx = Math.cos(yaw) * strafe * CLIMB_SIDE, vz = -Math.sin(yaw) * strafe * CLIMB_SIDE;
+  return { ...base, x: s.x + vx * DT, y, z: s.z + vz * DT, vx, vy: y === s.y ? 0 : vy, vz, grounded: true };
 }
 
 // --- Sand bike -----------------------------------------------------------------------------------
