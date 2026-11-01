@@ -40,7 +40,7 @@ export class DebugMenu {
     goLevel: (key: string) => void = () => {}) {
     const style = document.createElement('style');
     style.textContent = `
-#debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh - 60px); overflow-y: auto;
+#debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh / var(--ui, 1) - 60px); overflow-y: auto;
   overscroll-behavior: contain; padding: 8px 10px 10px; display: none; box-sizing: border-box;
   font: 12px var(--mono); color: #ffe9cc; background: rgba(20, 10, 5, 0.86); border-radius: 8px;
   box-shadow: 0 0 0 1px rgba(255, 240, 220, 0.18); z-index: 10; scrollbar-width: thin; scrollbar-color: rgba(255, 233, 204, 0.3) transparent; }
