@@ -93,6 +93,9 @@ export type RemotePlayer = {
   jumpHeld: boolean; // Space down: a wheelie while riding
   /** On a radio tower's ladder (PlayerState.climb). */
   climb: boolean;
+  /** Riding a quad, not a motorcycle (PlayerState.quad); on the back of one, whose (PlayerState.pillion: 0 none). */
+  quad: boolean;
+  pillion: number;
   vy: number;
   /** Kind of the item in their hand (selected hotbar slot), null for none; the gear they wear (wornGear bits). */
   item: string | null;
@@ -1039,6 +1042,7 @@ export class Net {
       riding: server.riding, bikeHeld: server.bikeHeld, heading: server.heading, bike: server.bike,
       nose: server.nose ?? 0, noseSpin: server.noseSpin ?? 0, level: server.level ?? 0, gates: server.gates ?? 0,
       tow: server.tow ?? 0, hitch: server.hitch ?? 0, climb: server.climb ?? false,
+      ...(server.quad ? { quad: true } : {}), ...(server.pillion ? { pillion: server.pillion } : {}),
     };
     for (const p of this.pending) s = step(s, p.input, p.yaw, p.drag, this.legPosts, p.pull);
     this.errorX += this.me.x - s.x;
@@ -1072,7 +1076,7 @@ export class Net {
         x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t, z: pa.z + (pb.z - pa.z) * t,
         facing: lerpAngle(pa.facing, pb.facing, t), speed: Math.hypot(pick.vx, pick.vz), vx: pick.vx, vz: pick.vz, grounded: pick.grounded, sliding: pick.sliding ?? false, crouching: pick.crouching ?? false,
         riding: pick.riding ?? false, nose: (pa.nose ?? 0) + ((pb.nose ?? 0) - (pa.nose ?? 0)) * t,
-        tow: pick.tow ?? 0, hitch: (pa.tow ?? 0) === (pb.tow ?? 0) ? lerpAngle(pa.hitch ?? 0, pb.hitch ?? 0, t) : (pick.hitch ?? 0), jumpHeld: pick.jumpHeld ?? false, climb: pick.climb ?? false, vy: pick.vy, item: pick.item ?? null, gear: pick.gear ?? 0, tiers: pick.tiers ?? 0, bike: pick.bike ?? 0, drinking: pick.hands === 2, filling: pick.hands === 3, grinding: pick.hands === 5 ? 2 : pick.hands === 4 ? 1 : 0,
+        tow: pick.tow ?? 0, hitch: (pa.tow ?? 0) === (pb.tow ?? 0) ? lerpAngle(pa.hitch ?? 0, pb.hitch ?? 0, t) : (pick.hitch ?? 0), jumpHeld: pick.jumpHeld ?? false, climb: pick.climb ?? false, quad: pick.quad ?? false, pillion: pick.pillion ?? 0, vy: pick.vy, item: pick.item ?? null, gear: pick.gear ?? 0, tiers: pick.tiers ?? 0, bike: pick.bike ?? 0, drinking: pick.hands === 2, filling: pick.hands === 3, grinding: pick.hands === 5 ? 2 : pick.hands === 4 ? 1 : 0,
         aiming: pick.aim === 1 || this.justFired(pb.id),
         pitch: pitchFromQ(pa.pitch ?? 32768) * (1 - t) + pitchFromQ(pb.pitch ?? 32768) * t, down: pb.down ?? null,
       });

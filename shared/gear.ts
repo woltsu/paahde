@@ -53,6 +53,10 @@ const RECEIVER = { better: 'how steady its needle', use: TEXT.gearUse.receiver }
 export const GEAR: Record<string, GearSpec> = {
   motorcycle: { slots: [P('motor'), P('battery'), P('bearing')], vehicle: true, better: 'top speed and acceleration',
     use: TEXT.gearUse.motorcycle },
+  // The quad (src/quad.ts): the bike's bigger sibling, the one by the crashed pods; rides like it, and carries a
+  // passenger (shared/sim.ts PlayerState.pillion).
+  quad: { slots: [P('motor'), P('battery'), P('bearing')], vehicle: true, better: 'top speed and acceleration',
+    use: TEXT.gearUse.quad },
   // The cart (shared/cart.ts, docs/cart.md): towed behind the bike, no part slots; its level is its item's (ItemData.level).
   cart: { slots: [], vehicle: true, better: 'nothing', use: TEXT.gearUse.cart },
   spyglass: { slots: [P('gear'), P('bearing')], better: 'zoom', use: TEXT.gearUse.spyglass },
@@ -247,8 +251,11 @@ export function bottleSips(bag: Slots | undefined): number {
   return best < 0 ? 0 : canteenSips(best);
 }
 
-/** Motorcycle level for PlayerState.bike: 0 for none (or a broken one), else 1 + its quality (1..4). */
+/** The kinds that are ridden (shared/sim.ts stepBike): the motorcycle and the quad. */
+export const RIDDEN = ['motorcycle', 'quad'];
+
+/** Motorcycle (or quad) level for PlayerState.bike: 0 for none (or a broken one), else 1 + its quality (1..4). */
 export function bikeLevel(bike: Item | null | undefined): number {
-  return bike?.kind === 'motorcycle' && repaired(bike) ? 1 + quality(bike) : 0;
+  return bike && RIDDEN.includes(bike.kind) && repaired(bike) ? 1 + quality(bike) : 0;
 }
 

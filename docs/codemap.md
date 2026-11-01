@@ -255,10 +255,14 @@ Everything built is shared, and anyone can take a building down.
   keeps a job per table, `bench_jobs`; a cart with one doesn't pack or hitch: `packBlocked` in server/world.ts); a chest is box `store<placed id>` (CHEST_COLS × CHEST_ROWS, shared). A table with a machine on it or a
   chest with anything in it can't be taken down (server/world.ts onUnplace)
 - Vehicles — `shared/vehicles.ts` (the list, reach, `vehicleTarget`), `server/vehicles.ts` (`vehicles` table: broken
-  motorcycles by the pods and at the crash sites, repair, `mount`/`release`, `mine` per player), drawn by
-  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). A quad design study (not in the game yet): `tools/blender/quadbike.py`
-  → `public/models/quadbike.glb`, drawn and seated by `src/quad.ts` (`RidePose.perch`/`climb`/`toe`: short legs go up its
-  toe ramp), seen in `models-lab.html?ride=quad&body=0,1,2&turn=6`. The cart (docs/cart.md): a
+  the quad by the pods and motorcycles at the crash sites, repair, `mount`/`release`, `mine` per player), drawn by
+  `src/world/vehicles.ts` (parked) and `src/bike.ts` (ridden). The quad (`GEAR.quad`, the one broken by the pods, HOME_BIKE: rides
+  like the bike, `PlayerState.quad`): `tools/blender/quadbike.py` → `public/models/quadbike.glb`, drawn ridden by `src/quad.ts`
+  (`RidePose.perch`/`climb`/`toe`: short legs go up its toe ramp) and parked by `src/world/vehicles.ts`; it takes a
+  passenger: F on one being ridden (`pillionTarget`) → server `board`/`unboard`, `PlayerState.pillion` (the rider's id;
+  `step` doesn't move them, server/world.ts `carryPassengers` puts them where the rider is each tick, `pillionOff`
+  beside it), drawn on its back by `Quad.passenger()` (src/main.ts `pillion`); test `tools/quad-pillion.test.mjs`; lab
+  `models-lab.html?ride=quad&pillion&body=0,1,2&turn=6`. The cart (docs/cart.md): a
   vehicle kind (`GEAR.cart`, no part slots, its level `ItemData.level` in box `veh<id>`, its box `cargo<id>` chest size)
   — `shared/cart.ts` (dimensions, `TOW_LENGTH`/`HITCH_BACK`/`HITCH_MAX`, `towHitch` the towing step, `towedPose`,
   `couplerOf`, `backingUpTo`, `cartTarget`, `CART_LEVEL_NODES`); towing in `shared/sim.ts` (`PlayerState.tow`/`hitch`,

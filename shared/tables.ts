@@ -279,12 +279,12 @@ export const FINDS: Record<string, { n: number; level: SiteLevel }> = {
   receiver_worm: { n: 1, level: 2 },
 };
 
-/** One broken motorcycle lies on the sand by the first crashed pod in a new world (server/vehicles.ts,
- *  shared/lootRoll.ts homeBikeSpot), so a bike is in sight from the first step out, and each new player after the
- *  first finds another of their own round their pod (arrivalBikeSpot): it has these slots fitted (scrap
- *  tier). Its battery comes out of the pod's power box (POD_LOOT, on the cart's dismantling table) and its bearing is
+/** One broken quad lies on the sand by the first crashed pod (server/vehicles.ts, shared/lootRoll.ts homeBikeSpot), so
+ *  wheels are in sight from the first step out: one for everyone there, seating two (a rider and a passenger; before
+ *  the quad, each player found a motorcycle of their own by their pod, and older worlds keep those). It has these
+ *  slots fitted (scrap tier). Its battery comes out of the pod's power box (POD_LOOT, on the cart's dismantling table) and its bearing is
  *  hammered out of scrap at the cart's workbench (RECIPE_TABLE bearing_scrap): nothing at the pods gives one
- *  (POD_MACHINES), so the bike comes after the cart's workshop (level 2). Repaired where it lies, it is whoever stood it up's (like any bike). */
+ *  (POD_MACHINES), so the quad comes after the cart's workshop (level 2). Repaired where it lies, it is whoever stood it up's (like any bike). */
 export const HOME_BIKE = { fitted: ['motor'] as PartId[] };
 
 /** Lying about the crashed pods players arrive in (shared/pods.ts, server/loot.ts): a starter kit, kept whole. `kit`: how

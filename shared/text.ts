@@ -37,6 +37,7 @@ const en = {
     canteen: 'Water bottle',
     spyglass: 'Telescope',
     motorcycle: 'Motorcycle',
+    quad: 'Quad',
     cart: 'Cart',
     backpack: 'Backpack',
     storm_detector: 'Storm detector',
@@ -114,6 +115,7 @@ const en = {
    *  key or button names (src/bindings.ts hintKeys). */
   gearUse: {
     motorcycle: (k: HintKeys) => `Get on with ${k.interact}, off with ${k.bike}.`,
+    quad: (k: HintKeys) => `Get on with ${k.interact}, off with ${k.bike}. Room for two.`,
     cart: () => 'Holds whatever you put in it, wherever it goes.',
     spyglass: (k: HintKeys) => `Hold ${k.use} to look through it, and use ${k.zoom} to zoom.`,
     canteen: (k: HintKeys) => `Hold ${k.use} to drink. You can fill it up at any pump.`,
@@ -654,6 +656,7 @@ const en = {
 
   hints: {
     motorcycle: (k: HintKeys) => `Get on with ${k.interact}, off with ${k.bike}. The back holds cargo.`,
+    quad: (k: HintKeys) => `Get on with ${k.interact}, off with ${k.bike}. The back holds cargo, and someone can ride behind you.`,
     backpack: (k: HintKeys) => `Put the backpack in the Back slot (${k.inventory}).`,
     storm_detector: (k: HintKeys) => `Put the storm detector in the Belt slot (${k.inventory}). It beeps before a storm hits.`,
     wristpad: (k: HintKeys) => `Put the wrist computer in the Wrist slot (${k.inventory}).`,
@@ -740,6 +743,7 @@ const en = {
     got: {
       canteen: ["It's cracked, but I can patch it up.", "Water I can carry around. I'm never letting go of this."],
       motorcycle: ["A bike! It's dead, but it's a bike.", 'Wheels, finally. My feet can take the day off.'],
+      quad: ["Four wheels and not one of them turning.", 'Room on the back for a friend. Or for more junk.'],
       spyglass: ["The lens is cracked. Shame, I could've seen for miles with this.", 'Now I can see trouble before it sees me.'],
       backpack: ["It's torn, but it still beats stuffing my pockets.", 'More room to carry junk. My back is going to hate me.'],
       storm_detector: ["This would hear the storms coming, if it worked.", 'If this thing starts beeping, I run.'],

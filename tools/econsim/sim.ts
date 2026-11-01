@@ -181,7 +181,8 @@ export class Sim {
     for (const kind of Object.keys(ENEMIES) as EnemyKind[]) {
       this.spoilSamples.set(kind, Array.from({ length: 40 }, () => ENEMIES[kind].drops(sampleRand, { jet: 'drone' })));
     }
-    // The broken motorcycle by the player's crashed pod (shared/tables.ts HOME_BIKE), one per player: repaired where it lies.
+    // The broken quad by the crashed pods (shared/tables.ts HOME_BIKE): the motorcycle's slots and parts, so played as
+    // one (one player here: the quad is theirs to repair where it lies).
     this.chest.push({ id: this.newId(), kind: 'motorcycle', n: 1, parts: GEAR.motorcycle.slots.map((s) => ('part' in s && s.part === 'motor' ? 'motor_scrap' : null)) });
     this.recordStages();
   }

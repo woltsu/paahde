@@ -40,14 +40,29 @@ const BIG_AIR = 0.6; // s in the air before a landing throws up a cloud and thum
 /** The headlight lens in the Handlebar node's frame (tools/blender/sandbike.py lamp_c), and where the beam
  *  aims from there: ahead and a little down, so it pools on the sand ~15 m out. */
 const LAMP = new THREE.Vector3(0, 0.076, -0.25);
-const AIM = new THREE.Vector3(0, -0.06, -1);
-const HEADLIGHT = { color: 0xffe4bc, intensity: 30, distance: 45, angle: 0.5, penumbra: 0.8, decay: 1.2, glow: 6 };
+export const AIM = new THREE.Vector3(0, -0.06, -1);
+export const HEADLIGHT = { color: 0xffe4bc, intensity: 30, distance: 45, angle: 0.5, penumbra: 0.8, decay: 1.2, glow: 6 };
 /** Its shadow map: the near plane clears the lamp housing around the lens, so the bike only shadows what's ahead. */
 const HEADLIGHT_SHADOW = { map: 1024, near: 0.3, bias: -0.0005, normalBias: 0.03 };
 /** Headlights are a fixed pool that stays in the scene (adding or removing a light recompiles every material);
  *  a bike that finds none free rides without one. */
 const POOL = 3;
-const headlights: { light: THREE.SpotLight; used: boolean }[] = [];
+const headlights: Headlight[] = [];
+export type Headlight = { light: THREE.SpotLight; used: boolean };
+
+/** A free headlight from the pool (the bike's or the quad's), or none; give it back with releaseHeadlight(). */
+export function claimHeadlight(): Headlight | undefined {
+  const h = headlights.find((h) => !h.used);
+  if (h) h.used = true;
+  return h;
+}
+
+export function releaseHeadlight(h: Headlight | undefined) {
+  if (!h) return;
+  h.light.intensity = 0;
+  h.light.shadow.autoUpdate = false;
+  h.used = false;
+}
 
 /** Put the headlight pool in the scene at startup, behind the loading cover: done on the first ride instead,
  *  the recompile froze the game for a moment. Also starts loading the model. */
@@ -126,8 +141,7 @@ export class Bike {
     this.tilt.add(this.towBar);
     scene.add(this.root);
     addHeadlights(scene);
-    this.headlight = headlights.find((h) => !h.used);
-    if (this.headlight) this.headlight.used = true;
+    this.headlight = claimHeadlight();
     load().then(
       (gltf) => {
         if (this.disposed) return;
@@ -323,11 +337,7 @@ export class Bike {
     this.root.removeFromParent();
     this.root.traverse((o) => o.dispose()); // bindings are per bike; geometry and tier materials are shared
     for (const material of this.lens) material.dispose();
-    if (this.headlight) {
-      this.headlight.light.intensity = 0;
-      this.headlight.light.shadow.autoUpdate = false;
-      this.headlight.used = false;
-    }
+    releaseHeadlight(this.headlight);
   }
 }
 

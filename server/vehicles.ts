@@ -1,12 +1,15 @@
-// Server side of vehicles (shared/vehicles.ts): the `vehicles` table, the broken motorcycles lying in the world (one
-// by the first crashed pod in a new world, HOME_BIKE, and one more by their pod for each new player after the first,
-// arrive(); FINDS.motorcycle at the crash sites, a new one a while after one
-// is stood up), standing one up once its part slots are filled (its item is in box veh<id>: parts are fitted there
+// Server side of vehicles (shared/vehicles.ts): the `vehicles` table, the broken vehicles lying in the world (a quad
+// by the first crashed pod, HOME_BIKE, one per world and shared by everyone there: it seats two; motorcycles at the
+// crash sites, FINDS.motorcycle, a new one a while after one is stood up; older worlds also kept the motorcycle each
+// player found by their pod, before the quad), standing one up once its part slots are filled (its item is in box veh<id>: parts are fitted there
 // like a building's, server/items.ts fit / unfit), and getting on and off: mount() puts the player on it at once
 // (shared/sim.ts riding), and whoever rides it carries it with them until they get off (or die, or leave), when it
 // is parked where they are. Keeps shared/vehicles.ts's list in step and broadcasts it when it changes. Each one is
 // the player's who stood it up (one stood up before there were owners: whoever rides it first); each player is told
 // which are theirs (`mine` in the 'vehicles' message, never who owns the others: the owner is a browser ID).
+// A quad being ridden takes a passenger: board() puts someone on foot on its back (shared/sim.ts PlayerState.pillion;
+// server/world.ts carries them with it), unboard() takes them off (getting off, or the rider getting off, dying or
+// leaving).
 //
 // Carts (shared/cart.ts, docs/cart.md): one per player, standing by their pod (arriveCart(), once, a grant: existing
 // players get theirs on their next join), theirs from the start. Backing the bike you ride slowly up to your own parked
@@ -21,14 +24,14 @@
 // Each cart carries its owner's colour (`color`, from their player row: right while they're offline, and set again on
 // every join, recolor()), so it's told apart by the pods.
 import { cargoBox, vehicleBox, vehicleId } from '../shared/boxes.ts';
-import { bikeLevel, GEAR, isVehicle, partsOf, repaired, scrapParts } from '../shared/gear.ts';
+import { bikeLevel, GEAR, isVehicle, partsOf, repaired, RIDDEN, scrapParts } from '../shared/gear.ts';
 import { partKind, setData, type ItemData } from '../shared/items.ts';
 import { CART_UPGRADES, WRENCH } from '../shared/crafting.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
-import { arrivalBikeSpot, brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
+import { brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
 import { atTongue, backingUpTo, CART, CART_MAX_LEVEL, cartLevel, hitchHeading, isCamp, isCart, towedPose, UNFOLD_S, unfoldError } from '../shared/cart.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
-import type { PlayerState } from '../shared/sim.ts';
+import { carried, type PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { TEXT } from '../shared/text.ts';
@@ -46,13 +49,11 @@ const REACH_SLACK = 1.5;
 const FIND_RESPAWN_MS = 3 * 60_000;
 /** The world's DB setting that says the motorcycle items were made vehicles (v12, migrate()). */
 const MIGRATED = 'vehicles';
-/** The world's DB setting that says a new player has had the home bike as theirs to find (arrive()). */
-const HOME_GIVEN = 'home_bike_given';
-/** A player's grant (db markGrant) that says their own broken motorcycle has been laid out (arrive()). */
-const ARRIVAL_GRANT = 'arrival_bike';
 /** A player's grant that says their cart has been laid out by their pod (arriveCart()). */
 const CART_GRANT = 'cart';
 const KIND = 'motorcycle';
+/** The one by the pods. */
+const HOME = 'quad';
 
 export class VehicleServer {
   private db: Db;
@@ -90,7 +91,7 @@ export class VehicleServer {
     }));
     setVehicles(vehicles.map((v) => this.withParts(v)));
     db.tx(() => {
-      if (![...this.src.values()].includes('home')) this.spawnHome();
+      if (!vehicles.some((v) => v.kind === HOME && this.src.get(v.id) === 'home')) this.spawnHome();
       for (let n = this.lyingFinds(); n < this.wantFinds(); n++) this.spawnFind();
     });
     this.changed = false;
@@ -121,35 +122,20 @@ export class VehicleServer {
     return v;
   }
 
-  /** A home bike's parts: HOME_BIKE.fitted, scrap tier. */
+  /** The home quad's parts: HOME_BIKE.fitted, scrap tier. */
   private homeParts() {
-    return GEAR[KIND].slots.map((s) => ('part' in s && HOME_BIKE.fitted.includes(s.part) ? partKind(s.part, 'scrap') : null));
+    return GEAR[HOME].slots.map((s) => ('part' in s && HOME_BIKE.fitted.includes(s.part) ? partKind(s.part, 'scrap') : null));
   }
 
-  /** The broken motorcycle by the first crashed pod, once in a world (HOME_BIKE). */
+  /** The broken quad by the first crashed pod, once in a world (HOME_BIKE). An older world's home motorcycle may lie
+   *  on its spot: then a little way off. */
   private spawnHome() {
-    const { x, z } = homeBikeSpot();
-    this.add(x, z, 0.6, this.homeParts(), false, 'home');
-  }
-
-  /**
-   * A new player (browser ID `browserId`, first join to this world) arrives in pod `pod`: a broken motorcycle of their
-   * own lies by it (HOME_BIKE), once. The first one's is the home bike (if it's still lying broken); everyone after
-   * gets another, round the pod (shared/lootRoll.ts arrivalBikeSpot). It's the world's like any other until stood up.
-   * None in the lab. Returns the new one's id, if one was laid out.
-   */
-  arrive(browserId: string, pod: number): number | null {
-    if (LAB || this.db.hasGrant(browserId, ARRIVAL_GRANT)) return null;
-    return this.db.tx(() => {
-      this.db.markGrant(browserId, ARRIVAL_GRANT);
-      const home = vehicles.find((v) => this.src.get(v.id) === 'home');
-      if (!this.db.getSetting(HOME_GIVEN)) {
-        this.db.setSetting(HOME_GIVEN, 1);
-        if (home && !home.up) return null;
-      }
-      const at = arrivalBikeSpot(pod, [...vehicles, ...placed]);
-      return at ? this.add(at.x, at.z, at.heading, this.homeParts(), false, 'arrival').id : null;
-    });
+    let { x, z } = homeBikeSpot();
+    if (vehicles.some((v) => Math.hypot(v.x - x, v.z - z) < 3)) {
+      x += 3.5;
+      z += 1.5;
+    }
+    this.add(x, z, 0.6, this.homeParts(), false, 'home', undefined, undefined, HOME);
   }
 
   /**
@@ -300,7 +286,8 @@ export class VehicleServer {
    */
   mount(rider: number, browserId: string, s: PlayerState, id: unknown): PlayerState | string {
     const v = vehicles.find((q) => q.id === id);
-    if (!v || v.kind !== KIND) return TEXT.notice.alreadyGone;
+    if (!v || !RIDDEN.includes(v.kind)) return TEXT.notice.alreadyGone;
+    if (s.pillion) return TEXT.notice.getOffFirst;
     if (s.riding || this.ridden(rider)) return TEXT.notice.getOffFirst;
     if (!parked(v)) return TEXT.notice.someoneOnIt;
     if (!inReach(s, v, REACH_SLACK)) return TEXT.notice.tooFar;
@@ -316,7 +303,34 @@ export class VehicleServer {
     return {
       ...s, x: v.x, y: v.y, z: v.z, vx: 0, vy: 0, vz: 0, sliding: false, crouching: false,
       riding: true, heading: v.heading, bike, nose: 0, noseSpin: 0, tow: tow?.id ?? 0, hitch: tow?.heading ?? 0,
+      ...(v.kind === HOME ? { quad: true } : {}),
     };
+  }
+
+  /**
+   * Player `id` at `s` (on foot) gets on the back of quad `vid` behind whoever rides it (at `riding`, their state): it
+   * must have its back seat free and be within reach of them. Returns their state on it (shared/sim.ts PlayerState.pillion,
+   * where the rider is: server/world.ts carries them from then on), or why not.
+   */
+  board(id: number, s: PlayerState, vid: unknown, riding: PlayerState | undefined): PlayerState | string {
+    const v = vehicles.find((q) => q.id === vid);
+    if (!v || v.kind !== HOME || v.rider === undefined || !riding?.riding) return TEXT.notice.alreadyGone;
+    if (s.riding || s.pillion || this.ridden(id)) return TEXT.notice.getOffFirst;
+    if (v.passenger !== undefined) return TEXT.notice.someoneOnIt;
+    if (!inReach(s, riding, REACH_SLACK)) return TEXT.notice.tooFar;
+    this.update(v.id, { passenger: id });
+    return { ...carried(s, riding), sliding: false, crouching: false, climb: undefined, tow: 0, pillion: v.rider };
+  }
+
+  /** Player `id` is off the back of whatever quad they rode on (if any). */
+  unboard(id: number) {
+    const v = vehicles.find((q) => q.passenger === id);
+    if (v) this.update(v.id, { passenger: undefined });
+  }
+
+  /** The passenger on the back of the quad player `rider` rides, if any (their public id). */
+  passengerOf(rider: number): number | undefined {
+    return this.ridden(rider)?.passenger;
   }
 
   /** The cart linked to bike `bike` (vehicle id), if any. */
@@ -429,9 +443,9 @@ export class VehicleServer {
     return level;
   }
 
-  /** The bike player `rider` is riding, if any. */
+  /** The bike (or quad) player `rider` is riding, if any. */
   ridden(rider: number): Vehicle | undefined {
-    return vehicles.find((v) => v.rider === rider && v.kind === KIND);
+    return vehicles.find((v) => v.rider === rider && RIDDEN.includes(v.kind));
   }
 
   /** The cart player `rider` is towing, if any. */
@@ -444,6 +458,7 @@ export class VehicleServer {
    * stays where it stood.
    */
   release(rider: number, s?: PlayerState) {
+    this.unboard(rider); // (riding on someone's back: off it)
     // The cart they tow first: parked behind the bike, where the state has it (shared/cart.ts towedPose), still linked.
     const c = this.towed(rider);
     if (c && !s) this.update(c.id, { rider: undefined });
@@ -454,11 +469,12 @@ export class VehicleServer {
     }
     const v = this.ridden(rider);
     if (!v) return;
-    if (!s) return this.update(v.id, { rider: undefined });
+    // Its passenger is off with it (server/world.ts carryPassengers puts them down beside it).
+    if (!s) return this.update(v.id, { rider: undefined, passenger: undefined });
     // In the air (died, left mid-jump): down on the ground under them.
     const y = s.grounded ? s.y : Math.min(s.y, heightAt(s.x, s.z));
     this.db.moveVehicle(v.id, s.x, y, s.z, s.heading);
-    this.update(v.id, { x: s.x, y, z: s.z, heading: s.heading, rider: undefined });
+    this.update(v.id, { x: s.x, y, z: s.z, heading: s.heading, rider: undefined, passenger: undefined });
   }
 
   /**

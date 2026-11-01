@@ -56,7 +56,7 @@ STEER_AXIS = Vector((0, -math.sin(RAKE), math.cos(RAKE)))  # up the column, its 
 PIVOT = Vector((0, 0.36, 0.92))                             # top of the column (the Handlebar node)
 COLUMN_BOT = PIVOT - STEER_AXIS * ((PIVOT.z - 0.42) / math.cos(RAKE))
 SEAT_TOP = 0.82
-SEAT_Y = (-0.66, 0.06)
+SEAT_Y = (-0.76, 0.06)
 SEAT_W = 0.34
 TANK_Y = (0.08, 0.36)
 BOARD_Z = 0.28            # the footboards' top
@@ -266,7 +266,7 @@ def build_body(mb, rng):
     mb.jitter(seat, rng, 0.004)
     mb.box((SEAT_W + 0.006, 0.07, 0.122), (0, -0.36, SEAT_TOP - 0.06), 'tape', rot=(0, 0, 0.05))
     mb.box((0.12, 0.05, 0.122), (-0.06, -0.1, SEAT_TOP - 0.056), 'tape', rot=(0, 0, 0.5))
-    mb.box((SEAT_W + 0.02, 0.035, 0.13), (0, -0.56, SEAT_TOP - 0.06), 'red')
+    mb.box((SEAT_W + 0.02, 0.035, 0.13), (0, -0.66, SEAT_TOP - 0.06), 'red')
     mb.box((SEAT_W * 0.8, 0.1, 0.06), (0, sy1 + 0.01, SEAT_TOP - 0.1), 'seat', rot=(-0.5, 0, 0))   # nose onto the tank
 
     # Footboards: dark steel plates with weld-bead treads, rising at the front up a toe ramp under the front fender
@@ -328,7 +328,7 @@ def build_body(mb, rng):
         mb.tube(Vector((sx * 0.38, ry0, rz)), Vector((sx * 0.15, -0.5, 0.72)), 0.012, 'steel', 5)
     for y in (ry0, -0.79, ry1):
         mb.tube(Vector((-0.38, y, rz)), Vector((0.38, y, rz)), 0.011, 'steel', 5)
-    can_c = Vector((0.12, -0.8, rz + 0.13))
+    can_c = Vector((0.12, -0.9, rz + 0.13))  # at the back of the rack: a passenger's back is in front of it
     can = mb.box((0.17, 0.3, 0.24), can_c, 'olive', rot=(0, 0, 0.08))
     mb.dent(can, can_c + Vector((0.09, 0.05, 0.03)), 0.08, 0.015)
     mb.box((0.06, 0.04, 0.05), can_c + Vector((0, 0.12, 0.13)), 'olive')
@@ -337,11 +337,19 @@ def build_body(mb, rng):
         mb.box((0.19, 0.035, 0.26), can_c + Vector((0, dy, -0.005)), 'red', rot=(0, 0, 0.08))
     for k in range(3):                                                # a coil of rope
         r, z = 0.1 - k * 0.01, rz + 0.03 + k * 0.035
-        mb.sweep([Vector((-0.2 + math.cos(a) * r, -0.8 + math.sin(a) * r, z + 0.01 * math.sin(3 * a)))
+        mb.sweep([Vector((-0.2 + math.cos(a) * r, -0.86 + math.sin(a) * r, z + 0.01 * math.sin(3 * a)))
                   for a in (2 * math.pi * i / 12 for i in range(13))], 0.018, 'tape', segs=5)
     mb.box((0.12, 0.04, 0.05), (0, -1.0, 0.7), 'tail', rot=(0.4, 0, 0))
-    mb.tube(Vector((0, -0.9, 0.42)), Vector((0, -1.02, 0.4)), 0.02, 'steel', 6)
-    mb.cyl(0.04, 0.04, 0.06, 8, (0, -1.05, 0.43), 'steel')
+    # The tow ball where the cart's coupler hangs (shared/cart.ts HITCH_BACK, HITCH_Y), on a tongue off the frame.
+    mb.tube(Vector((0, -0.9, 0.7)), Vector((0, -1.1, 0.5)), 0.022, 'steel', 6)
+    mb.tube(Vector((0, -0.62, 0.42)), Vector((0, -1.1, 0.5)), 0.02, 'steel', 6)
+    mb.cyl(0.045, 0.045, 0.07, 8, (0, -1.15, 0.54), 'steel')
+
+    # A passenger's grab handles: a bent loop either side of the back of the seat (src/quad.ts PILLION_GRIP).
+    for sx in (-1, 1):
+        mb.sweep([Vector((sx * 0.15, -0.32, 0.7)), Vector((sx * 0.24, -0.37, 0.84)), Vector((sx * 0.24, -0.57, 0.84)),
+                  Vector((sx * 0.15, -0.62, 0.7))], 0.014, 'steel', segs=5)
+        mb.tube(Vector((sx * 0.24, -0.41, 0.84)), Vector((sx * 0.24, -0.53, 0.84)), 0.022, 'grip', 7)
 
 
 # ------------------------------------------------------------------------------------------------ build

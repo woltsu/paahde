@@ -139,6 +139,12 @@ export type PlayerState = {
   /** On a ladder (a radio tower's: shared/towers.ts), hanging where Level.ladder says one hangs on it: grabbed with F
    *  (GRAB), let go of with F or Space. Absent: false. */
   climb?: boolean;
+  /** The bike ridden is a quad (shared/gear.ts GEAR.quad): drawn as one (src/quad.ts), and it seats a passenger. Set by
+   *  the server with `bike`. Absent: a motorcycle. */
+  quad?: boolean;
+  /** A passenger on the back of a quad: the public id of whoever rides it (0 or absent: none). step() doesn't move them:
+   *  the server keeps them where the quad is (server/world.ts carryPassengers); the bike key gets off (pillionOff). */
+  pillion?: number;
 };
 
 // Input is a bitmask so it is tiny on the wire and trivially comparable.
@@ -269,8 +275,10 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   if (!s.bike && s.riding) s = { ...s, riding: false }; // gone from under you
   if (bikeDown && !s.bikeHeld && s.riding && s.grounded) {
     // Get off at once with the bike's momentum (it stays where you got off: server/vehicles.ts).
-    s = { ...s, riding: false, bike: 0 };
+    s = { ...s, riding: false, bike: 0, quad: undefined };
   }
+  // On the back of a quad: carried, not stepped; the bike key (a fresh press) gets off beside it.
+  if (s.pillion) return bikeDown && !s.bikeHeld ? pillionOff({ ...s, bikeHeld: true }) : s.bikeHeld === bikeDown ? s : { ...s, bikeHeld: bikeDown };
   // Getting on is at once too: the server puts you on it (server/vehicles.ts mount).
   if (s.riding) return stepBike(s, L, input, bikeDown, storm, legs, pull);
   const fwd = (input & FORWARD ? 1 : 0) - (input & BACK ? 1 : 0);
@@ -702,9 +710,23 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
   return {
     x, y, z, vx, vy, vz, facing: h, grounded, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks,
     sliding: false, crouching: false, slideCool: s.slideCool, slideSpent: s.slideSpent, riding: true, bikeHeld: bikeDown, heading: h, bike: s.bike,
-    nose, noseSpin, level: s.level, gates: s.gates ?? 0, tow, hitch,
+    nose, noseSpin, level: s.level, gates: s.gates ?? 0, tow, hitch, ...(s.quad ? { quad: true } : {}),
   };
 }
+
+/** A passenger off the back of the quad (getting off, or the quad gone from under them): on foot beside it, on the
+ *  right, keeping its momentum. */
+export function pillionOff(s: PlayerState): PlayerState {
+  const x = s.x + Math.cos(s.heading) * PILLION_OFF, z = s.z - Math.sin(s.heading) * PILLION_OFF;
+  return { ...s, x, z, y: Math.max(s.y, heightAt(x, z)), grounded: false, pillion: 0, riding: false, facing: s.heading, nose: 0, noseSpin: 0 };
+}
+/** A passenger where the quad they ride on is (`r`: its rider's state): its place, speed, heading and pitch. */
+export function carried(s: PlayerState, r: PlayerState): PlayerState {
+  return { ...s, x: r.x, y: r.y, z: r.z, vx: r.vx, vy: r.vy, vz: r.vz, heading: r.heading, nose: r.nose, noseSpin: 0,
+    grounded: r.grounded, riding: false, level: r.level };
+}
+/** How far to the side of the quad a passenger gets off (m). */
+const PILLION_OFF = 0.9;
 
 /** Move the 2D vector (vx, vz) towards (tx, tz) by at most maxDelta (length, not per axis). */
 function approach2(vx: number, vz: number, tx: number, tz: number, maxDelta: number): [number, number] {

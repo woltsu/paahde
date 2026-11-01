@@ -1,5 +1,6 @@
 // Vehicles standing in the world (shared/vehicles.ts, from the server via src/net.ts): the sand bike's model
-// (src/bike.ts) where each one is, nobody riding it. A broken one lies on its side, half sunk in the sand, glowing
+// (src/bike.ts) or the quad's (src/quad.ts) where each one is, nobody riding it. A broken bike lies on its side, half
+// sunk in the sand (a broken quad stands nose down in it, tipped over onto one front wheel), glowing
 // along its edges in the colour of its parts' tier like broken gear on the sand (src/world/loot.ts); a working one
 // stands on its wheels, pitched along the slope and leaning a little on its stand. While someone rides it, it isn't
 // drawn here: src/main.ts draws it under its rider (src/bike.ts Bike). Your own ones are on the locator bar
@@ -12,6 +13,7 @@ import { parsePart } from '../../shared/items.ts';
 import { slopeAt } from '../../shared/sim.ts';
 import { parked, vehicles, type Vehicle } from '../../shared/vehicles.ts';
 import { HITCH, loadBikeModel, towBar } from '../bike';
+import { loadQuadModel } from '../quad';
 import type { LocatorTarget } from '../locator';
 import { applyTier } from '../tierLook';
 import { nightLevel, time } from './env';
@@ -29,6 +31,12 @@ const STAND_LEAN = 0.12;
  *  before bloom) by day and night, and its glow's size (m): never smaller than this, and from afar this much per metre
  *  of distance (a few pixels: a point of light, not a marker). One breath every BREATH s. */
 const LED = new THREE.Vector3(0.08, 1.2, -0.33);
+/** The quad's: on its gauge (tools/blender/quadbike.py). */
+const QUAD_LED = new THREE.Vector3(0.07, 1.06, -0.34);
+/** A broken quad: sunk this far (m), nose down and tipped onto its left front wheel (rad). */
+const QUAD_SINK = 0.1;
+const QUAD_NOSE = -0.1;
+const QUAD_TIP = 0.14;
 const LED_COLOR = vec3(0.35, 1, 0.45);
 const LED_DAY = 3.2;
 const LED_NIGHT = 1.4;
@@ -48,7 +56,9 @@ function ledMaterial() {
   return ledMat;
 }
 
-type Shown = { obj: THREE.Group; key: string; rims: THREE.Mesh[] | null; tilt: THREE.Group; led: THREE.Sprite | null; bar: THREE.Group | null };
+type Shown = { obj: THREE.Group; key: string; rims: THREE.Mesh[] | null; tilt: THREE.Group; led: THREE.Sprite | null; bar: THREE.Group | null;
+  /** A cart is linked to it (hung from its tow ball: the bike's on a tow bar, the quad's own). */
+  linked: boolean; quad: boolean };
 
 /** The tier its parts look (0 Scrap .. 3 Space-grade): the mean of the fitted parts', rounded down, as gear's. */
 function tierOf(v: Vehicle): number {
@@ -109,7 +119,7 @@ export class VehicleView {
       const lit = v.up && mine.has(v.id);
       if (lit && !s.led) {
         s.led = new THREE.Sprite(ledMaterial());
-        s.led.position.copy(LED);
+        s.led.position.copy(s.quad ? QUAD_LED : LED);
         s.led.castShadow = s.led.receiveShadow = false;
         s.tilt.add(s.led);
       } else if (!lit && s.led) {
@@ -118,16 +128,16 @@ export class VehicleView {
       }
       s.led?.scale.setScalar(Math.max(LED_SIZE, Math.hypot(d, v.y - me.y) * LED_PER_M));
       // Its tow bar while a cart is linked to it (shared/cart.ts): the cart hangs from its ball (src/world/carts.ts).
-      const linked = v.up && list.some((c) => c.kind === 'cart' && c.hitched === v.id);
-      if (linked && !s.bar) s.tilt.add((s.bar = towBar()));
-      if (s.bar) s.bar.visible = linked;
+      s.linked = v.up && list.some((c) => c.kind === 'cart' && c.hitched === v.id);
+      if (s.linked && !s.bar && !s.quad) s.tilt.add((s.bar = towBar()));
+      if (s.bar) s.bar.visible = s.linked;
     }
   }
 
   /** Parked bike `id`'s tow ball where it's drawn (world), its pitch and heading, or null if it isn't drawn standing. */
   ball(id: number): { at: THREE.Vector3; pitch: number; heading: number } | null {
     const s = this.shown.get(id);
-    if (!s?.bar?.visible) return null;
+    if (!s?.linked) return null;
     s.obj.updateMatrixWorld(true);
     return { at: s.tilt.localToWorld(new THREE.Vector3().copy(HITCH)), pitch: s.tilt.rotation.x, heading: s.obj.rotation.y };
   }
@@ -140,29 +150,34 @@ export class VehicleView {
     const rims = v.up ? null : ([] as THREE.Mesh[]);
     const tilt = new THREE.Group();
     tilt.rotation.order = 'YXZ';
+    const quad = v.kind === 'quad';
     if (v.up) {
-      // Along the slope (the sim's nose: shared/sim.ts stepBike), on its stand.
+      // Along the slope (the sim's nose: shared/sim.ts stepBike), on its stand (a quad on its four wheels).
       const g = slopeAt(v.x, v.z, tmpSlope);
       tilt.rotation.x = Math.atan(-g.gx * Math.sin(v.heading) - g.gz * Math.cos(v.heading));
-      tilt.rotation.z = STAND_LEAN;
+      tilt.rotation.z = quad ? 0 : STAND_LEAN;
+    } else if (quad) {
+      tilt.rotation.set(QUAD_NOSE, 0, QUAD_TIP);
+      tilt.position.y = -QUAD_SINK;
     } else {
       tilt.rotation.z = ROLL;
       tilt.position.y = LIFT;
     }
     obj.add(tilt);
-    loadBikeModel().then((gltf) => {
+    (quad ? loadQuadModel() : loadBikeModel()).then((gltf) => {
       const m = gltf.scene.clone(true);
       m.traverse((o) => {
         o.castShadow = o.receiveShadow = true;
         o.userData.shared = true; // its geometry is the ridden bikes' too: never disposed
       });
-      if (!v.up) m.getObjectByName('Handlebar')?.rotation.set(0, 0.45, 0);
+      if (!v.up && quad) for (const n of ['Handlebar', 'SteerFL', 'SteerFR']) m.getObjectByName(n)?.rotation.set(0, 0.4, 0);
+      else if (!v.up) m.getObjectByName('Handlebar')?.rotation.set(0, 0.45, 0);
       applyTier(m, tier);
       tilt.add(m);
       if (rims) addRims(m, rims, glowColor(tier));
     }, () => {});
     this.group.add(obj);
-    return { obj, key: keyOf(v), rims, tilt, led: null, bar: null };
+    return { obj, key: keyOf(v), rims, tilt, led: null, bar: null, linked: false, quad };
   }
 }
 

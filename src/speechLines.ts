@@ -163,6 +163,8 @@ export const LINES: Line[] = [
   // The motorcycle isn't carried (shared/vehicles.ts): said on first seeing one up close, broken, then working.
   { id: 'got.motorcycle', on: 'vehicle', when: (_, v) => v.kind === 'motorcycle' && !v.up, say: TEXT.speech.got.motorcycle[0] },
   { id: 'got.motorcycle.fixed', on: 'vehicle', when: (_, v) => v.kind === 'motorcycle' && v.up, say: TEXT.speech.got.motorcycle[1] },
+  { id: 'got.quad', on: 'vehicle', when: (_, v) => v.kind === 'quad' && !v.up, say: TEXT.speech.got.quad[0] },
+  { id: 'got.quad.fixed', on: 'vehicle', when: (_, v) => v.kind === 'quad' && v.up, say: TEXT.speech.got.quad[1] },
   ...firstGot('spyglass'),
   ...firstGot('backpack'),
   ...firstGot('storm_detector'),

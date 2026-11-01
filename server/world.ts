@@ -5,7 +5,7 @@ import { buildingBox, cargoBox, isShared, storeBox, vehicleBox } from '../shared
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { DT, INPUT_MASK, isSlipFace, levelSpawn, NO_LEGS, NO_PULL, PLAYER_HEIGHT, PLAYER_RADIUS, quantizeYaw, spawnPoint, spawnState, STEP_UP, step, TICK_RATE, YAW_STEPS, yawFromQ, type PlayerState } from '../shared/sim.ts';
+import { carried, DT, INPUT_MASK, isSlipFace, levelSpawn, NO_LEGS, NO_PULL, pillionOff, PLAYER_HEIGHT, PLAYER_RADIUS, quantizeYaw, spawnPoint, spawnState, STEP_UP, step, TICK_RATE, YAW_STEPS, yawFromQ, type PlayerState } from '../shared/sim.ts';
 import { clientMessage } from './messages.ts';
 import { InputQueue } from './inputQueue.ts';
 import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
@@ -444,9 +444,6 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   // Whatever of a level's own is in the bag outside it goes (a crash mid-level, a level left some other way).
   if (state.level !== TUTORIAL) stripLevelItems(browserId, level(TUTORIAL).key);
   grantKits(items, db, browserId);
-  // Their own broken bike by their pod (before the list goes out to them; the others are told now).
-  const bike = row?.name ? null : vehicleSrv.arrive(browserId, podOf(browserId));
-  if (bike !== null) sendShared(vehicleBox(bike));
   // And their cart (shared/cart.ts), once: a new player's from the start, an existing player's on this join.
   const cart = vehicleSrv.arriveCart(browserId, podOf(browserId));
   if (cart !== null) {
@@ -650,7 +647,11 @@ function onRepairVehicle(p: Player, id: unknown) {
 
 function onMount(p: Player, id: unknown) {
   if (p.down || !p.ready) return;
-  const r = vehicleSrv.mount(p.id, p.browserId, p.state, id);
+  // A quad someone rides: on its back, behind them.
+  const v = vehicles.find((q) => q.id === id);
+  const rider = v?.rider !== undefined ? playerById(v.rider) : undefined;
+  const r = v?.rider !== undefined ? vehicleSrv.board(p.id, p.state, id, rider && !rider.down ? rider.state : undefined)
+    : vehicleSrv.mount(p.id, p.browserId, p.state, id);
   if (typeof r === 'string') return send(p.ws, { t: 'notice', text: r });
   p.state = r; // the client takes it with the next snapshot (src/net.ts reconcile)
 }
@@ -658,6 +659,7 @@ function onMount(p: Player, id: unknown) {
 /** After a step (`before`: the state it started from): off the bike (the bike key): it's parked where they got off
  *  (and the cart they tow behind it). Still on it, towing nothing: backing it up to their own cart hitches it. */
 function offBike(p: Player, before: PlayerState) {
+  if (before.pillion && !p.state.pillion) vehicleSrv.unboard(p.id); // off the back of a quad (the bike key)
   if (before.bike && !p.state.bike) vehicleSrv.release(p.id, before.riding ? p.state : undefined);
   else if (p.state.riding && !p.state.tow) {
     const towing = vehicleSrv.tryHitch(p.id, p.browserId, p.state);
@@ -771,7 +773,7 @@ function die(p: Player, cause: DeathCause, push: [number, number, number] = [0, 
   p.choke = 0;
   p.gassed = 0;
   vehicleSrv.release(p.id, p.state.riding ? p.state : undefined); // the bike falls where they did
-  p.state = { ...p.state, vx: 0, vy: 0, vz: 0, riding: false, bike: 0, sliding: false, crouching: false };
+  p.state = { ...p.state, vx: 0, vy: 0, vz: 0, riding: false, bike: 0, quad: undefined, pillion: 0, sliding: false, crouching: false };
   revive(p.heat, Date.now());
   send(p.ws, { t: 'died', cause, push, ...(bolt !== undefined ? { bolt } : {}) });
   const obit: Obituary = { t: 'obituary', id: p.id, color: p.color, name: p.name, cause, at: Date.now() };
@@ -1522,6 +1524,27 @@ function onInput(p: Player, seq: unknown, input: unknown, yaw: unknown, pitch: u
   if (p.down) p.inputs.clear();
 }
 
+/** The player with public id `id`, if they're here. */
+function playerById(id: number): Player | undefined {
+  for (const p of players.values()) if (p.id === id) return p;
+  return undefined;
+}
+
+/** Each tick, after the steps: every passenger (shared/sim.ts PlayerState.pillion) goes where the quad they ride on is.
+ *  The quad gone from under them (its rider off it, down or gone): down beside it on foot. */
+function carryPassengers() {
+  for (const p of players.values()) {
+    if (!p.state.pillion) continue;
+    const rider = playerById(p.state.pillion);
+    if (!p.down && rider && !rider.down && rider.state.riding && vehicleSrv.passengerOf(rider.id) === p.id) {
+      p.state = carried(p.state, rider.state);
+      continue;
+    }
+    vehicleSrv.unboard(p.id);
+    p.state = pillionOff(p.state); // the client takes it with the next snapshot (src/net.ts reconcile)
+  }
+}
+
 function simulate(p: Player, now: number) {
   const command = p.inputs.take(now);
   p.input = command?.input ?? 0;
@@ -1565,6 +1588,7 @@ setInterval(() => {
     simAccum -= DT;
     for (const p of players.values()) if (p.ready && !p.down) simulate(p, now - simAccum * 1000);
   }
+  carryPassengers();
   if (stirred) tickBots(elapsed, now, tod); // (no walkers, drones or bosses in the lab or the art bench until stirred)
   tickThrows(elapsed, now);
   relaxAccum += elapsed;

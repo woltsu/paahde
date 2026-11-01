@@ -71,7 +71,7 @@ MATERIALS = {
 
 # Grid cells (w, h) per kind: shared/items.ts ITEMS sizes. The icon has this shape.
 CELLS = {
-    'canteen': (1, 2), 'spyglass': (2, 1), 'motorcycle': (4, 3), 'backpack': (2, 2), 'storm_detector': (1, 2),
+    'canteen': (1, 2), 'spyglass': (2, 1), 'motorcycle': (4, 3), 'quad': (4, 3), 'backpack': (2, 2), 'storm_detector': (1, 2),
     'wristpad': (1, 1), 'laser_rifle': (4, 1), 'laser_pistol': (2, 1),
     'jammer': (2, 1), 'grinder': (2, 1), 'shield': (2, 2), 'receiver_carrier': (2, 1), 'receiver_queen': (2, 1), 'receiver_colossus': (2, 1),
     'receiver_worm': (2, 1), 'pod_console': (3, 2), 'pod_powerbox': (2, 2),
@@ -637,6 +637,7 @@ IMPORTED = {
     'laser_rifle': ('rifle.glb', (0, 0, D90), SIDE),
     'laser_pistol': ('pistol.glb', (0, 0, D90), SIDE),
     'motorcycle': ('sandbike.glb', (0, 0, -D90 + 0.35), Vector((0.3, -1, 0.35)).normalized()),
+    'quad': ('quadbike.glb', (0, 0, -D90 + 0.5), Vector((0.3, -1, 0.45)).normalized()),
 }
 
 
@@ -752,7 +753,7 @@ def main():
         for o in bpy.data.objects:
             o.hide_render = False
         lay = {'canteen': (-D90, 0, 0), 'spyglass': (0, 0, 0), 'laser_rifle': (0, D90, 0), 'laser_pistol': (0, D90, 0),
-               'motorcycle': (0, 1.3, 0)}
+               'motorcycle': (0, 1.3, 0), 'quad': (0, 0, 0)}
         xs = 0.0
         for kind, obj in roots.items():
             obj.rotation_euler = Euler(BUILT[kind][1] if kind in BUILT else lay[kind])

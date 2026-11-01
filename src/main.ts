@@ -31,6 +31,7 @@ import { bodyScale, unpackLook } from '../shared/look.ts';
 import { loadScavenger, ScavengerModel } from './models/scavenger';
 import { Avatar } from './players';
 import { Bike } from './bike';
+import { Quad } from './quad';
 import { Post } from './post';
 import * as env from './world/env';
 import { Wiring } from './wiring';
@@ -96,7 +97,7 @@ import { bagShape, equipped, isBuilding, locatorRange, quality, repaired, spygla
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { lootPrompt } from './world/loot';
 import { ownVehicleTargets } from './world/vehicles';
-import { parked, vehicles, vehicleTarget } from '../shared/vehicles.ts';
+import { parked, vehicles, vehicleTarget, pillionTarget } from '../shared/vehicles.ts';
 import { cartTarget } from '../shared/cart.ts';
 import { WRENCH } from '../shared/crafting.ts';
 import type { Tower } from './world/carts';
@@ -292,26 +293,34 @@ const myModel = new ScavengerModel();
 myModel.ready.then(() => me.setModel(myModel, net.color), () => myModel.dispose());
 scene.add(me.root);
 const remotes = new Map<number, Avatar>();
-// Sand bikes (9, dev helper), one per riding player: drawn here, simulated in shared/sim.ts.
-const bikes = new Map<number, Bike>();
+// Sand bikes and quads, one per riding player (keyed by their id, 0 for us): drawn here, simulated in shared/sim.ts.
+const bikes = new Map<number, Bike | Quad>();
 let lastHeading = NaN;
-/** Draw player `id`'s bike while they ride, with `avatar` seated on it, and drop it when they get off.
+/** Draw player `id`'s bike (or quad) while they ride, with `avatar` seated on it, and drop it when they get off.
  *  False when not riding: then the caller updates the avatar on foot. */
-function ride(id: number, avatar: Avatar, p: { riding: boolean; pitch?: number; bike: number } & Parameters<Bike['update']>[0], dt: number): boolean {
+function ride(id: number, avatar: Avatar, p: { riding: boolean; pitch?: number; bike: number; quad?: boolean } & Parameters<Bike['update']>[0], dt: number): boolean {
   let bike = bikes.get(id);
-  if (!p.riding) {
-    if (bike) {
-      bike.dispose();
-      bikes.delete(id);
-      avatar.root.rotation.set(0, avatar.root.rotation.y, 0);
-    }
-    return false;
+  if (bike && (!p.riding || bike instanceof Quad !== !!p.quad)) {
+    bike.dispose();
+    bikes.delete(id);
+    avatar.root.rotation.set(0, avatar.root.rotation.y, 0);
+    bike = undefined;
   }
-  if (!bike) bikes.set(id, (bike = new Bike(scene)));
+  if (!p.riding) return false;
+  if (!bike) bikes.set(id, (bike = p.quad ? new Quad(scene) : new Bike(scene)));
   bike.setTier(Math.max(0, Math.min(3, Math.floor(p.bike - 1 + 1e-6)))); // PlayerState.bike: 1 + its quality
   bike.update(p, dt);
   bike.seat(avatar.root);
   avatar.update({ x: p.x, y: p.y, z: p.z, facing: p.heading, speed: 0, grounded: true, pitch: p.pitch, ride: bike.rider() }, dt);
+  return true;
+}
+/** Seat `avatar` on the back of the quad drawn under rider `driver` (its key in `bikes`: 0 for us), as its passenger.
+ *  False if that quad isn't drawn: then the caller updates the avatar where its pose says. */
+function pillion(driver: number, avatar: Avatar, pitch: number, dt: number): boolean {
+  const quad = bikes.get(driver);
+  if (!(quad instanceof Quad)) return false;
+  quad.seat(avatar.root);
+  avatar.update({ x: quad.root.position.x, y: quad.root.position.y, z: quad.root.position.z, facing: quad.root.rotation.y, speed: 0, grounded: true, pitch, ride: quad.passenger() }, dt);
   return true;
 }
 /** Player `id` towing cart `tow` (src/world/carts.ts), their bike drawn as bikes.get(`bike`). */
@@ -572,14 +581,17 @@ renderer.setAnimationLoop((time) => {
   const s = net.me;
   // Drawn between the last two ticks (the leftover accumulator), so motion is even at any frame rate.
   const v = net.view(accumulator / DT);
-  // On the bike the camera turns with it; the mouse still looks around on top.
-  if (s.riding && Number.isFinite(lastHeading)) orbit.yaw += Math.atan2(Math.sin(v.heading - lastHeading), Math.cos(v.heading - lastHeading));
-  lastHeading = s.riding ? v.heading : NaN;
+  // On the back of a quad: whoever rides it, as we see them (their quad is drawn from their pose).
+  const driver = s.pillion ? others.find((o) => o.id === s.pillion && o.riding) : undefined;
+  // On the bike (or the back of the quad) the camera turns with it; the mouse still looks around on top.
+  const rideHeading = s.riding ? v.heading : driver ? driver.facing : NaN;
+  if (Number.isFinite(rideHeading) && Number.isFinite(lastHeading)) orbit.yaw += Math.atan2(Math.sin(rideHeading - lastHeading), Math.cos(rideHeading - lastHeading));
+  lastHeading = rideHeading;
   // What's in hand (the selected hotbar slot) and worn (shared/gear.ts): drawn on the body, and sets what the tools can do.
   const inHand = tools.slot >= 0 ? net.boxes.bag?.[tools.slot] : null;
   me.setOutfit(inHand?.kind ?? null, wornGear(net.boxes.equip) | carriedGear(net.boxes.bag, tools.slot), gearTiers(net.boxes.equip, net.boxes.bag, tools.slot));
   const riding = ride(0, me, { ...s, x: v.x, y: v.y, z: v.z, heading: v.heading, nose: v.nose, pitch: orbit.pitch }, frameDt);
-  if (!riding) {
+  if (!riding && !driver) {
     me.update(
       { x: v.x, y: v.y, z: v.z, facing: v.facing, speed: Math.hypot(s.vx, s.vz), vx: s.vx, vz: s.vz, grounded: s.grounded, powerSlide: s.sliding, crouching: s.crouching,
       pitch: orbit.pitch, drinking: playerHands.drinking, aiming: aiming || net.justFired(net.id), down: net.down,
@@ -608,10 +620,19 @@ renderer.setAnimationLoop((time) => {
     avatar.showLabel(!(fly.active && fly.clean));
     avatar.setLook(r.look);
     avatar.setOutfit(r.item, r.gear, r.tiers);
-    if (!ride(r.id, avatar, { ...r, heading: r.facing }, frameDt)) {
+    if (!ride(r.id, avatar, { ...r, heading: r.facing }, frameDt) && !r.pillion) {
       avatar.update({ ...r, sliding: undefined, powerSlide: r.sliding, crouching: r.crouching }, frameDt);
     }
   }
+  // Passengers last, on the back of the quads just drawn under their riders.
+  for (const r of others) {
+    const avatar = r.pillion ? remotes.get(r.id) : undefined;
+    if (avatar && !pillion(r.pillion === net.id ? 0 : r.pillion, avatar, r.pitch, frameDt)) {
+      avatar.update({ ...r, sliding: undefined, powerSlide: r.sliding, crouching: r.crouching }, frameDt);
+    }
+  }
+  const backSeat = !!driver && pillion(driver.id, me, orbit.pitch, frameDt);
+  if (driver && !backSeat) me.update({ x: v.x, y: v.y, z: v.z, facing: v.facing, speed: 0, grounded: true, pitch: orbit.pitch }, frameDt);
   for (const [id, avatar] of remotes) {
     if (!seen.has(id)) {
       avatar.dispose();
@@ -623,7 +644,8 @@ renderer.setAnimationLoop((time) => {
 
   // Riding, the eye is the rider's (it leans and tucks with them), moved forward over the bars so the
   // shoulders and hood are behind it in first person: you see your hands on the grips. The camera adds EYE_HEIGHT.
-  if (riding && me.eye(eye)) focus.set(eye.x - Math.sin(v.heading) * RIDE_EYE_AHEAD, eye.y - EYE_HEIGHT, eye.z - Math.cos(v.heading) * RIDE_EYE_AHEAD);
+  // On the back of a quad the same, looking past the rider's shoulder.
+  if ((riding || backSeat) && me.eye(eye)) focus.set(eye.x - Math.sin(rideHeading) * RIDE_EYE_AHEAD, eye.y - EYE_HEIGHT, eye.z - Math.cos(rideHeading) * RIDE_EYE_AHEAD);
   else if (riding) focus.set(v.x, v.y, v.z);
   // On a ladder, the eye is the climber's too (leaning in to the rungs): your hands on them in front of you.
   // (Moved forward of the head, towards the rungs, so the shoulders and hood are behind it.)
@@ -642,7 +664,7 @@ renderer.setAnimationLoop((time) => {
     }
   }
   telescope.update(frameDt, spyglassZoom(Math.max(0, quality(inHand))));
-  const hands = !s.riding && !s.climb && !net.down && !fly.active; // the tools work (not with both hands on a ladder)
+  const hands = !s.riding && !s.pillion && !s.climb && !net.down && !fly.active; // the tools work (not with both hands on a ladder)
   const fire = rifle.update(frameDt, { speed: Math.hypot(s.vx, s.vz), grounded: s.grounded, crouching: !!(s.crouching || s.sliding) }, hands);
   viewCull.begin();
   if (L.things) {
@@ -663,7 +685,7 @@ renderer.setAnimationLoop((time) => {
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);
   orbit.rumble = stage.level === net.me.level ? (stage.rumble ?? 0) : 0;
-  orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding, heading: v.heading, lean: bikes.get(0)?.leanAngle, short: L.crouchUnder,
+  orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding || backSeat, heading: backSeat ? rideHeading : v.heading, lean: bikes.get(backSeat ? driver!.id : 0)?.leanAngle, short: L.crouchUnder,
     ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined }, frameDt);
   bossFx.update(net, frameDt, orbit.camera);
   bossBar.update(frameDt, bossFx.bar);
@@ -682,8 +704,8 @@ renderer.setAnimationLoop((time) => {
   jammer.others(others, orbit.camera.position); // others' jammers: their static
   receiver.update(frameDt, inHand, hands, storm.toolsDown);
   // T: third person. On the bike the body is drawn in first person too (hands on the bars), minus the head; on a ladder
-  // too (hands on the rungs).
-  const holding = riding || !!s.climb;
+  // too (hands on the rungs), and on the back of a quad (on its grab handles).
+  const holding = riding || backSeat || !!s.climb;
   const bodyShown = orbit.showBody || holding || fly.active;
   if (bodyShown === bodyHidden) me.setShadowOnly((bodyHidden = !bodyShown));
   me.setHeadless(holding && !orbit.showBody && !fly.active);
@@ -773,10 +795,16 @@ renderer.setAnimationLoop((time) => {
   const rollPrompt = roll ? (net.spawn?.id === roll.id ? TEXT.prompt.dontSleepHere : TEXT.prompt.sleepHere) : null;
   // A motorcycle in view (shared/vehicles.ts): F repairs a broken one (its part slots next to the bag), gets on a
   // working one, or opens its cargo from the back. On the bike, F gets off.
-  const onBike = s.riding;
+  // A quad someone rides, its back seat free: F gets on behind them. On its back, F gets off.
+  const onBike = s.riding || !!s.pillion;
   const vehicle = here && !net.down && !onBike && !station && !building
     ? vehicleTarget(net.me, orbit.yaw, orbit.pitch) : null;
-  const ridePrompt = !vehicle ? null : !vehicle.v.up ? TEXT.prompt.repair(itemLabel(vehicle.v.kind))
+  const backOf = here && !net.down && !onBike && !station && !building && !vehicle
+    ? pillionTarget(net.me, orbit.yaw, orbit.pitch, (id) => {
+      const o = others.find((q) => q.id === id && q.riding);
+      return o ? { x: o.x, y: o.y, z: o.z, heading: o.facing } : null;
+    }) : null;
+  const ridePrompt = backOf ? TEXT.prompt.getOn : !vehicle ? null : !vehicle.v.up ? TEXT.prompt.repair(itemLabel(vehicle.v.kind))
     : vehicle.rear ? TEXT.prompt.open(TEXT.boxes.cargo) : TEXT.prompt.getOn;
   // A cart (shared/cart.ts): F on our own's tongue, linked to a bike, lets it go; anywhere else on it opens its box.
   const cart = here && !net.down && !onBike && !station && !building && !vehicle
@@ -881,6 +909,7 @@ renderer.setAnimationLoop((time) => {
     } else if (building) hud.open(buildingBox(building.id));
     else if (fixture) hud.open(fixture);
     else if (roll) net.spawnToggle(roll.id);
+    else if (backOf) net.mount(backOf.id);
     else if (vehicle) {
       if (!vehicle.v.up) hud.open(vehicleBox(vehicle.v.id));
       else if (vehicle.rear) hud.open(cargoBox(vehicle.v.id));

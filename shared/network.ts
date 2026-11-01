@@ -7,20 +7,21 @@ import { EDIT_CHUNK } from './terrain.ts';
 export const PLAYER_VIEW_RADIUS = 1200;
 export const MAX_PENDING_INPUTS = 120;
 export type PlayerAppearance = { id: number; color: number; look?: number; hands?: Hands; aim?: 1; item?: string; gear?: number; tiers?: number; down?: [number, number, number] };
-/** `tow`, `hitch`: the cart they tow (PlayerState.tow, 0 none) and its heading (shared/cart.ts), so others draw it. */
-export type PlayerPose = [id: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, facing: number, pitch: number, flags: number, nose: number, bike: number, tow: number, hitch: number];
-export type RemotePlayerSnap = PlayerAppearance & Pick<PlayerState, 'x' | 'y' | 'z' | 'vx' | 'vy' | 'vz' | 'facing' | 'grounded' | 'sliding' | 'crouching' | 'riding' | 'jumpHeld' | 'nose' | 'bike' | 'tow' | 'hitch' | 'climb'> & { pitch: number };
+/** `tow`, `hitch`: the cart they tow (PlayerState.tow, 0 none) and its heading (shared/cart.ts), so others draw it;
+ *  `pillion`: whose quad they ride on the back of (PlayerState.pillion, 0 none). */
+export type PlayerPose = [id: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, facing: number, pitch: number, flags: number, nose: number, bike: number, tow: number, hitch: number, pillion: number];
+export type RemotePlayerSnap = PlayerAppearance & Pick<PlayerState, 'x' | 'y' | 'z' | 'vx' | 'vy' | 'vz' | 'facing' | 'grounded' | 'sliding' | 'crouching' | 'riding' | 'jumpHeld' | 'nose' | 'bike' | 'tow' | 'hitch' | 'climb' | 'quad' | 'pillion'> & { pitch: number };
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 export function packPlayerPose(id: number, s: PlayerState, pitch: number): PlayerPose {
-  const flags = Number(s.grounded) | (Number(s.sliding) << 1) | (Number(s.crouching) << 2) | (Number(s.riding) << 3) | (Number(s.jumpHeld) << 4) | (Number(!!s.climb) << 5);
-  return [id, r3(s.x), r3(s.y), r3(s.z), r3(s.vx), r3(s.vy), r3(s.vz), r3(s.facing), pitch, flags, r3(s.nose), s.bike, s.tow, s.tow ? r3(s.hitch) : 0];
+  const flags = Number(s.grounded) | (Number(s.sliding) << 1) | (Number(s.crouching) << 2) | (Number(s.riding) << 3) | (Number(s.jumpHeld) << 4) | (Number(!!s.climb) << 5) | (Number(!!s.quad) << 6);
+  return [id, r3(s.x), r3(s.y), r3(s.z), r3(s.vx), r3(s.vy), r3(s.vz), r3(s.facing), pitch, flags, r3(s.nose), s.bike, s.tow, s.tow ? r3(s.hitch) : 0, s.pillion ?? 0];
 }
 
 export function unpackPlayerPose(p: PlayerPose, appearance: PlayerAppearance): RemotePlayerSnap {
   return { ...appearance, id: p[0], x: p[1], y: p[2], z: p[3], vx: p[4], vy: p[5], vz: p[6], facing: p[7], pitch: p[8],
-    grounded: !!(p[9] & 1), sliding: !!(p[9] & 2), crouching: !!(p[9] & 4), riding: !!(p[9] & 8), jumpHeld: !!(p[9] & 16), climb: !!(p[9] & 32), nose: p[10], bike: p[11],
-    tow: p[12] ?? 0, hitch: p[13] ?? 0 };
+    grounded: !!(p[9] & 1), sliding: !!(p[9] & 2), crouching: !!(p[9] & 4), riding: !!(p[9] & 8), jumpHeld: !!(p[9] & 16), climb: !!(p[9] & 32), quad: !!(p[9] & 64), nose: p[10], bike: p[11],
+    tow: p[12] ?? 0, hitch: p[13] ?? 0, pillion: p[14] ?? 0 };
 }
 
 export type ChunkData = { data: number[]; rle?: 1 };

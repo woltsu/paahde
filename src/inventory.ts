@@ -822,10 +822,11 @@ export class InventoryHud {
     if (repair) {
       if (repair.disabled) return;
       // Back into the game to see it stand up; how to ride it, once.
-      this.net.repairVehicle(Number(repair.dataset.repair));
+      const id = Number(repair.dataset.repair);
+      this.net.repairVehicle(id);
       uiSound.plop();
       this.toggle(false);
-      return this.hints.show('motorcycle');
+      return this.hints.show(vehicleById(id)?.kind === 'quad' ? 'quad' : 'motorcycle');
     }
     const at = this.slotAt(e.clientX, e.clientY);
     // A building's or vehicle's own item stays in it (its parts come and go).

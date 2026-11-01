@@ -79,7 +79,10 @@ rolling from foot to foot with its arms carried wide; the gnome scurrying, leani
 Short legs take more steps (the clips play faster by `stride`, up to each gait's `rate`); the footprints, footsteps
 and first-person bob follow the stride, the name tag sits over the head. On the bike the seat, grips and pegs stay
 where they are: a short rider sits forward on the seat (up onto the back of the tank), leans over the bars until it
-reaches them, and rests its feet on the frame above the pegs.
+reaches them, and rests its feet on the frame above the pegs. On the quad (src/quad.ts) the seat is long and flat and
+the footboards rise at the front into a toe ramp: a short rider slides forward against the tank and its feet climb the
+ramp until they reach it. Its passenger sits on the back of the seat, a hand on each grab handle, feet on the back of the
+boards (short legs up the heel guards).
 
 **Every piece fits every body**, and so does every piece of gear (the pack, the things carried, worn gear: the lab's
 `&gear=255` puts it all on). Whenever a piece or a look is added or changed, look at it on all three bodies

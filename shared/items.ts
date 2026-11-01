@@ -26,6 +26,7 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   canteen: { label: TEXT.items.canteen, stack: 1, size: [1, 2] },
   spyglass: { label: TEXT.items.spyglass, stack: 1, size: [2, 1] },
   motorcycle: { label: TEXT.items.motorcycle, stack: 1, size: [4, 2] },
+  quad: { label: TEXT.items.quad, stack: 1, size: [4, 2] },
   // The cart (shared/cart.ts): a vehicle like the motorcycle, never carried; its item (its level) stays in its box.
   cart: { label: TEXT.items.cart, stack: 1, size: [4, 2] },
   backpack: { label: TEXT.items.backpack, stack: 1, size: [2, 2] },

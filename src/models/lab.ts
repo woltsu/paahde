@@ -8,7 +8,7 @@
 // ?gear=255 wears and carries that gear (shared/gear.ts wornGear | carriedGear bits).
 // ?look=0,38354534400 dresses the characters in those looks (shared/look.ts packLook), one after another.
 // ?ride seats each character on a sand bike (?ride=quad: on the sand quad, src/quad.ts), to check the fit of every body;
-// &turn=6 drives them round on the spot as if in a 6 m circle to the left (-6: right), for the riders' lean; &body=0,1,2
+// &pillion puts a passenger of the same body on the back of each quad; &turn=6 drives them round on the spot as if in a 6 m circle to the left (-6: right), for the riders' lean; &body=0,1,2
 // gives them those bodies (shared/look.ts BODIES) over the plain look. With one clip (?clip, ?ride), one character per look.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -75,6 +75,7 @@ const riding = params.has('ride');
 const quads = params.get('ride') === 'quad';
 const turnRadius = Number(params.get('turn') ?? 0);
 const TURN_SPEED = 6; // m/s
+const pillions = quads && params.has('pillion');
 const bodyLooks = (params.get('body') ?? '').split(',').filter(Boolean).map((b) => packLook({ ...unpackLook(0), body: Number(b) }));
 const looks = [...(params.get('look') ?? '').split(',').filter(Boolean).map(Number), ...bodyLooks];
 const one: ScavengerClip | null = riding ? 'Idle' : only;
@@ -85,7 +86,7 @@ if (params.has('yaw')) yaw = Number(params.get('yaw'));
 if (params.has('dist')) dist = Number(params.get('dist'));
 if (params.has('target')) target.fromArray(params.get('target')!.split(',').map(Number)); // e.g. &target=0.3,0.95,0 to look at a hand
 
-const models: { m: ScavengerModel; clip: ScavengerClip; bike?: Bike | Quad }[] = [];
+const models: { m: ScavengerModel; clip: ScavengerClip; bike?: Bike | Quad; back?: ScavengerModel }[] = [];
 clips.forEach((clip, i) => {
   const m = new ScavengerModel(colors[i % colors.length]);
   m.root.position.set((i - (clips.length - 1) / 2) * 1.6, 0, 0);
@@ -97,12 +98,16 @@ clips.forEach((clip, i) => {
     bike = quads ? new Quad(scene) : new Bike(scene);
     bike.root.position.set(m.root.position.x * 1.4, 0, 0);
   }
-  models.push({ m, clip, bike });
-  void m.ready.then(() => {
-    m.play(clip, 0);
-    if (item || gear) m.setOutfit(item, gear);
-    if (looks.length) m.setLook(looks[i % looks.length]);
-  });
+  const back = pillions ? new ScavengerModel(colors[(i + 3) % colors.length]) : undefined;
+  if (back) scene.add(back.root);
+  models.push({ m, clip, bike, back });
+  for (const x of back ? [m, back] : [m]) {
+    void x.ready.then(() => {
+      x.play(clip, 0);
+      if (item || gear) x.setOutfit(item, gear);
+      if (looks.length) x.setLook(looks[i % looks.length]);
+    });
+  }
 });
 
 // optional extras (first-person hands, canteen) laid out behind the characters
@@ -161,7 +166,7 @@ renderer.setAnimationLoop((time) => {
     swungAt = time / 1000;
     for (const { m } of models) m.swing?.();
   }
-  for (const { m, clip, bike } of models) {
+  for (const { m, clip, bike, back } of models) {
     // drive through update() so the clip-selection logic is exercised too
     const pose = {
       speed: clip === 'Walk' ? 1.3 : clip === 'Run' ? 6 : clip === 'CrouchWalk' ? CROUCH_SPEED : 0,
@@ -193,6 +198,10 @@ renderer.setAnimationLoop((time) => {
       bike.update({ x, y: 0, z, heading: h, vx: -Math.sin(h) * v, vy: 0, vz: -Math.cos(h) * v, grounded: true, nose: 0, jumpHeld: false }, dt);
       bike.seat(m.root);
       m.update({ ...pose, ride: bike.rider() }, dt);
+      if (back && bike instanceof Quad) {
+        bike.seat(back.root);
+        back.update({ ...pose, ride: bike.passenger() }, dt);
+      }
       continue;
     }
     m.update(pose, dt);
