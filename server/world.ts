@@ -1738,6 +1738,7 @@ function playingOwners(): Set<string> {
 
 setInterval(() => {
   players.forEach(save);
+  for (const p of players.values()) if (p.state.riding) vehicleSrv.persist(p.id, p.state); // a crash keeps the bike where they rode
   terrain.heal();
   for (const p of players.values()) send(p.ws, { t: 'terrainHeal' });
   terrain.save();
@@ -1773,6 +1774,7 @@ function shutdown() {
   saveBossPlaces();
   for (const p of players.values()) {
     save(p);
+    vehicleSrv.release(p.id, p.state.riding ? p.state : undefined); // the bike parks under them, not back where they got on
     p.ws.close(1012, 'server restarting');
   }
   terrain.save(true);

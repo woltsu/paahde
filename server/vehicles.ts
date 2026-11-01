@@ -450,6 +450,20 @@ export class VehicleServer {
     this.update(v.id, { x: s.x, y, z: s.z, heading: s.heading, rider: undefined });
   }
 
+  /**
+   * Player `rider` (at `s`) is still on their vehicle: writes where it is now (and the cart they tow), so a server that
+   * stops without them getting off (a crash, a kill) brings it back near where they were, not where they got on.
+   */
+  persist(rider: number, s: PlayerState) {
+    const c = this.towed(rider);
+    if (c) {
+      const at = towedPose(s);
+      this.db.moveVehicle(c.id, at.x, heightAt(at.x, at.z), at.z, at.heading);
+    }
+    const v = this.ridden(rider);
+    if (v) this.db.moveVehicle(v.id, s.x, s.grounded ? s.y : Math.min(s.y, heightAt(s.x, s.z)), s.z, s.heading);
+  }
+
   /** Every few seconds: the finds stood up a while ago are replaced by broken ones. Returns the new ones' ids. */
   respawn(): number[] {
     const now = Date.now();
