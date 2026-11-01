@@ -178,7 +178,7 @@ test('the cabinet door comes first: nothing inside it can be worked (or shows it
 
 test('the cabinet and the pod on the server: the relay out opens the door, into the panel powers the pod, F rides it down', async () => {
   const { TutorialServer, RIDE_MS, atHatch } = await import('../server/tutorial.ts');
-  const { CABINET_GONE, RELAY_INDEX, cabinetSteps } = await import('../shared/levels/beginningCabinet.ts');
+  const { CABINET_DONE, CABINET_GONE, RELAY_INDEX, cabinetSteps } = await import('../shared/levels/beginningCabinet.ts');
   const t = new TutorialServer();
   const at = (x, z, gates = 0) => ({ ...levelSpawn(L.id), x, z, gates });
   // Too far from it: nothing.
@@ -187,12 +187,18 @@ test('the cabinet and the pod on the server: the relay out opens the door, into 
   const join = t.site(1, s, { t: 'siteJoin' }, () => true).answers[0];
   assert.equal(join.t, 'siteState');
   assert.deepEqual([...join.taken].sort(), [...CABINET_GONE].sort(), 'only the relay is left to take');
+  // What held only the gone parts went with them: left to do are the door and what holds the relay, nothing else.
+  assert.deepEqual([...join.done].sort(), [...CABINET_DONE].sort());
+  const rules = cabinetSteps();
+  const holds = rules.parts[RELAY_INDEX];
+  const left = rules.list.map((_, i) => i).filter((i) => !CABINET_DONE.includes(i));
+  assert.ok(holds.every((i) => left.includes(i)), 'a hold of the relay starts done');
+  assert.ok(left.every((i) => holds.includes(i) || holds.some((h) => rules.list[h].after.includes(i))), 'a step left that gets nothing out');
   // The relay can't come out before what holds it; every step in an allowed order, then it does.
   let bag = 0;
   const give = () => (bag++, true);
   assert.equal(t.site(1, s, { t: 'siteTake', i: RELAY_INDEX }, give).answers.length, 0);
-  const rules = cabinetSteps();
-  const done = new Set();
+  const done = new Set(CABINET_DONE);
   while (done.size < rules.list.length) {
     const i = rules.list.findIndex((r, k) => !done.has(k) && r.after.every((n) => done.has(n)));
     assert.ok(i >= 0, 'a step left that can never be done');

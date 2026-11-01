@@ -729,8 +729,10 @@ export class Kit {
     slide.obj.userData.target = { type: 'step', step } satisfies Target;
     return step;
   }
-  /** Wire from the first point to the last, a ring lug at each end: shake each end loose. */
-  wire(label: string, pts: V[], key: MatKey = 'red', after: Step[] = [], r = 0.035, plug?: { strands: number }): Step {
+  /** Wire from the first point to the last, a ring lug at each end: shake each end loose. Each lug sits on a terminal block
+   *  of its own, unless `bare` says which ends sit straight on the screw terminal of the part they feed (a relay's), which
+   *  has its own. */
+  wire(label: string, pts: V[], key: MatKey = 'red', after: Step[] = [], r = 0.035, plug?: { strands: number }, bare: readonly boolean[] = []): Step {
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
     const mid = curve.getPoint(0.5);
     const short = curve.getLength() < SHORT_WIRE;
@@ -756,7 +758,7 @@ export class Kit {
       this.add(lug, g);
       lugs.push(lug);
       if (!short) ends.push({ lug, base: lug.position.clone(), swings: 0, done: false });
-      if (plug) continue;
+      if (plug || bare[t]) continue;
       // What it is fastened to: a terminal block with a stud up through the lug, and a nut on it.
       const at = lug.position;
       const block = new THREE.Mesh(new THREE.BoxGeometry(0.16 * f, 0.05 * f, 0.16 * f), this.mats.dark);

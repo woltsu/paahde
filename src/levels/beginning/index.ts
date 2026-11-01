@@ -7,7 +7,7 @@
 import * as THREE from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { BEGINNING, CABIN_LIGHT, CABINET, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
-import { CABINET_GONE, CABINET_ID, CABINET_LEVEL, CABINET_SEED, RELAY, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
+import { CABINET_DONE, CABINET_GONE, CABINET_ID, CABINET_LEVEL, CABINET_SEED, RELAY, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
 import { CRASH_REACH } from '../../../shared/crash.ts';
 import { hasItem, type Slots } from '../../../shared/items.ts';
 import { inBox } from '../../../shared/levels.ts';
@@ -103,11 +103,11 @@ export class BeginningStage implements Stage {
     this.cabinLight = L.fixtures.findIndex((f) => f.pos[0] === CABIN_LIGHT.x && f.pos[1] === CABIN_LIGHT.y && f.pos[2] === CABIN_LIGHT.z);
     this.box.pool.weight[this.cabinLight] = 0;
     L.fixtures.forEach((f, i) => { if (f.zone === 'hall' && f.role === 'main') this.hallLights.push(i); });
-    // The cabinet lies on its back on the floor, everything but its relay long gone.
+    // The cabinet lies on its back on the floor, everything but its relay long gone (and what held only that).
     this.cabinet = buildJunk(CABINET.kind, CABINET_SEED, CABINET_LEVEL);
     this.cabinet.root.rotation.y = CABINET.yaw;
     this.cabinet.root.position.set(CABINET.x, 0, CABINET.z);
-    fastForward(this.cabinet, [], CABINET_GONE);
+    fastForward(this.cabinet, CABINET_DONE, CABINET_GONE);
     this.root.add(this.cabinet.root);
     this.root.updateMatrixWorld(true);
     const off = this.cabinet.fixed ? null : lowestOffset(this.cabinet.root);

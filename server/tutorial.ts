@@ -6,7 +6,7 @@
 // per-player state: the cabinet's session (never saved: the level is short, a reconnect finds it whole again, its relay
 // out if `gates` says so) and the ride down.
 import { CABINET, GATE, POD, POD_OPEN_MS, beginningLevel, beatAt, triggersAt } from '../shared/levels/beginning.ts';
-import { CABINET_GONE, CABINET_ID, RELAY_INDEX, cabinetSteps } from '../shared/levels/beginningCabinet.ts';
+import { CABINET_DONE, CABINET_GONE, CABINET_ID, RELAY_INDEX, cabinetSteps } from '../shared/levels/beginningCabinet.ts';
 import { partAllowed, stepAllowed } from '../shared/machineSteps.ts';
 import { inBox } from '../shared/levels.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
@@ -53,7 +53,7 @@ export class TutorialServer {
   private cabinet(pid: number, gates: number): Session {
     let c = this.cabinets.get(pid);
     if (!c) {
-      c = { done: new Set(), taken: new Set(CABINET_GONE) };
+      c = { done: new Set(CABINET_DONE), taken: new Set(CABINET_GONE) };
       if (gates & GATE.control) c.taken.add(RELAY_INDEX); // (back after a reconnect with it already out)
       this.cabinets.set(pid, c);
     }

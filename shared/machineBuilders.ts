@@ -591,51 +591,69 @@ function robotArm(k: Kit) {
 // ---- control cabinet ---------------------------------------------------------------------------------------
 
 /** A small control cabinet, lying with its door up. Mains come in through a gland on the -z wall to a terminal
- *  block (earth to a stud), live and neutral go to the transformer's primary, its secondary feeds the first
- *  contactor on the DIN rail, the contactors switch the controller board. The door has screws, a pry tab
- *  and a latch on the back wall; the transformer is bolted through the back plate. */
+ *  block (earth to a stud), the mains lead goes on to the transformer's primary, its secondary feeds the first
+ *  contactor on the DIN rail, the contactors switch the controller board. The door has a pry tab and a latch on the
+ *  back wall; the transformer is bolted through the back plate. Everything sits on the mounting plate inside the walls
+ *  (x -0.74..0.74, z -0.69..0.69) and under the shut door (y 0.65), each lead from a terminal on the plate or on top
+ *  of what it feeds: the transformer and the battery down the -x side, the rail in the middle, the boards on +x. */
 function controlCabinet(k: Kit) {
-  const THREE = k.shapes;
   const g = k.grade;
   k.box(1.6, 0.05, 1.5, 0, 0, 0, 'trim'); // back plate
   k.box(1.4, 0.02, 1.3, 0, 0.05, 0, 'dark'); // mounting plate
-  for (const z of [-0.6, 0.6]) k.cyl(0.04, 0.3, -0.83, 0.25, z, 'trim', 'y'); // hinge knuckles
+  for (const z of [-0.5, 0.5]) k.cyl(0.04, 0.3, -0.82, 0.66, z, 'trim', 'z'); // the door's hinge knuckles, along its -x edge
   // everything inside waits on the door (its holds): no marker shows through it shut, and the server allows no step
   const door = k.bay(0, 0, 1.6, 1.5, 0.05, 0.6, { screws: 0, latch: true, pry: true }).holds;
-  const Y = 0.07;
-  // cable gland and the cable going off
-  k.cyl(0.07, 0.12, -0.55, 0.3, -0.75, 'trim', 'z');
-  k.cable([[-0.55, 0.3, -0.82], [-0.55, 0.12, -1.3], [-0.2, 0.1, -1.8]], 0.045);
+  const Y = 0.07; // the mounting plate
+  const LUG = 0.07; // a wire's lug above what its terminal sits on
+  // cable gland in the -z wall, the cable going off outside and into the middle terminal inside
+  const GX = -0.44;
+  k.cyl(0.07, 0.12, GX, 0.3, -0.75, 'trim', 'z');
+  k.cable([[GX, 0.3, -0.82], [GX, 0.12, -1.3], [-0.2, 0.1, -1.8]], 0.045);
+  k.cable([[GX, 0.3, -0.7], [GX, 0.27, -0.62], [GX, Y + 0.12, -0.56]], 0.035, 'brown');
   // terminal block, DIN rail
-  for (const x of [-0.75, -0.62, -0.49]) k.box(0.1, 0.12, 0.12, x, Y, -0.5, 'yellow');
+  for (const x of [-0.56, GX, -0.32]) k.box(0.1, 0.12, 0.12, x, Y, -0.52, 'yellow');
   k.box(0.04, 0.03, 1.2, 0, Y, -0.05, 'chip');
-  k.cable([[-0.6, 0.3, -0.68], [-0.7, 0.14, -0.55], [-0.78, 0.1, -0.3]], 0.035, 'green'); // earth to its stud
-  k.stud(-0.78, Y + 0.02, -0.28, 0.05);
-  const mains = k.wire(S.mainsCable, [[-0.55, 0.3, -0.68], [-0.55, 0.4, -0.3], [-0.5, 0.34, 0.0]], 'brown', door, 0.045);
-  const secondary = k.wire(S.transformerSecondary, [[-0.45, 0.34, 0.22], [-0.25, 0.4, 0.1], [-0.08, 0.33, -0.5]], 'red', door, 0.03);
-  // transformer on the left, bolted through the back plate
-  k.mount('coil', [[-0.5, Y, 0.1], [0, 0, 0]], () => [mains, secondary, k.bolt(S.transformerBolt, [-0.5, 0, 0.1], [0, -1, 0], [mains, secondary], 2)]);
-  // two contactors on the rail: the first fed by the transformer, the second driven from the board
+  k.cable([[GX - 0.06, 0.29, -0.7], [-0.68, 0.22, -0.64], [-0.68, 0.12, -0.46], [-0.66, Y + 0.04, -0.38]], 0.03, 'green'); // earth to its stud
+  k.stud(-0.66, Y + 0.02, -0.38, 0.05);
+  // the transformer's terminals on the plate by its +x side: primary (mains) behind, secondary in front
+  const PRI: V = [-0.2, Y + LUG, -0.05], SEC: V = [-0.2, Y + LUG, 0.12];
+  const mains = k.wire(S.mainsCable, [[GX, Y + 0.12 + LUG, -0.52], [-0.3, 0.32, -0.42], [-0.24, 0.26, -0.24], PRI], 'brown', door, 0.045);
+  // the contactors (tools/blender/items.py build_relay: 0.2 wide, 0.3 along the rail, a shelf of screw terminals 0.19 up at each end
+  // of a raised middle): line in on the -z shelf, load out on the +z one, each lead's lug on the terminal's screw
+  const R1 = -0.4, RT = Y + 0.21, SHELF = 0.145;
+  const secondary = k.wire(S.transformerSecondary, [SEC, [-0.2, 0.36, -0.1], [-0.14, 0.44, -0.42], [-0.04, 0.44, R1 - 0.2], [0, RT, R1 - SHELF]],
+    'red', door, 0.03, undefined, [false, true]);
+  // transformer on the -x side, bolted through the back plate
+  const TZ = -0.06;
+  k.mount('coil', [[-0.5, Y, TZ], [0, 0, 0]], () => [mains, secondary, k.bolt(S.transformerBolt, [-0.5, 0, TZ], [0, -1, 0], [mains, secondary], 2)]);
+  // controller board on +x, behind: its terminals on the board's free strips either side of the controller
+  const BX = 0.46, BZ = -0.28, BT = Y + 0.04 + LUG;
   const relay1 = k.take('relay');
-  const out1 = k.wire(S.contactor1Out, [[0.08, 0.33, -0.5], [0.3, 0.4, -0.45], [0.42, 0.14, -0.45]], 'red', door, 0.03);
-  if (relay1) k.part('relay', relay1, [0.0, Y, -0.4], [k.clip(S.railClip, [0.0, Y + 0.02, -0.2], [0, 1, 0], 1, door), secondary, out1]);
+  const out1 = k.wire(S.contactor1Out, [[0, RT, R1 + SHELF], [0.04, 0.42, -0.2], [0.22, 0.42, -0.42], [0.36, 0.3, -0.54], [0.45, BT, -0.52]],
+    'red', door, 0.03, undefined, [true, false]);
+  // two contactors on the rail: the first fed by the transformer, the second driven from the board
+  if (relay1) k.part('relay', relay1, [0.0, Y, R1], [k.clip(S.railClip, [0.0, Y + 0.03, R1 + 0.22], [0, 1, 0], 1, door), secondary, out1]);
   const relay2 = k.take('relay');
   const extra: Step[] = [];
+  const R2 = 0.2;
   if (relay2) {
-    const out2 = k.wire(S.contactor2Out, [[-0.08, 0.33, 0.3], [0.2, 0.42, 0.1], [0.4, 0.14, -0.05]], 'red', door, 0.03);
+    const out2 = k.wire(S.contactor2Out, [[0, RT, R2 - SHELF], [0.06, 0.4, 0.0], [0.3, 0.3, -0.03], [0.42, BT, -0.04]], 'red', door, 0.03, undefined, [true, false]);
     extra.push(out2);
-    k.part('relay', relay2, [0.0, Y, 0.2], [k.clip(S.railClip, [0.0, Y + 0.02, 0.4], [0, 1, 0], 1, door), out2]);
+    k.part('relay', relay2, [0.0, Y, R2], [k.clip(S.railClip, [0.0, Y + 0.03, R2 + 0.23], [0, 1, 0], 1, door), out2]);
   }
   // controller board and the heatsink on its regulator
-  k.box(0.62, 0.04, 0.5, 0.5, Y, -0.25, 'pcb');
-  const standoffs = [[-1, -1], [1, 1]].map(([sx, sz]) => k.screw(S.boardStandoff, [0.5 + sx * 0.3, Y + 0.04, -0.25 + sz * 0.22], [0, 1, 0], door));
-  k.mount('compute', [[0.5, Y + 0.04, -0.25], [0, 0, 0]], () => [...standoffs, out1, ...extra]);
-  k.box(0.4, 0.04, 0.4, 0.5, Y, 0.42, 'pcb');
-  k.box(0.26, 0.05, 0.26, 0.5, Y + 0.04, 0.42, 'chip');
-  k.mount('heatsink', [[0.5, Y + 0.09, 0.42], [0, 0, 0]], () => [k.clip(S.springClip, [0.78, Y + 0.45, 0.42], [0, 1, 0], 1, door)]);
-  // backup battery for the controller, strapped down in the free corner by the hinges
-  k.mount('battery', [[-0.45, Y, 0.58], [0, 0, 0]], () => [k.clip(S.batteryStrap, [-0.45, Y + 0.28, 0.58], [0, 1, 0], 1, door)]);
-  if (g >= 2) k.lamps(5, -0.4, 0.65, 0.5, 0.2);
+  k.box(0.54, 0.04, 0.64, BX, Y, BZ, 'pcb');
+  const standoffs = [[0.27, -0.52], [0.67, -0.04]].map(([x, z]) => k.screw(S.boardStandoff, [x, Y + 0.04, z], [0, 1, 0], door));
+  k.mount('compute', [[BX + 0.02, Y + 0.04, BZ], [0, 0, 0]], () => [...standoffs, out1, ...extra]);
+  const HZ = 0.42;
+  k.box(0.4, 0.04, 0.4, BX + 0.01, Y, HZ, 'pcb');
+  k.box(0.26, 0.05, 0.26, BX + 0.01, Y + 0.04, HZ, 'chip');
+  k.mount('heatsink', [[BX + 0.01, Y + 0.09, HZ], [0, 0, 0]], () => [k.clip(S.springClip, [BX + 0.01, Y + 0.4, HZ], [0, 1, 0], 1, door)]);
+  // backup battery for the controller, strapped down in front of the transformer
+  const AZ = 0.46;
+  k.mount('battery', [[-0.47, Y, AZ], [0, 0, 0]], () => [k.clip(S.batteryStrap, [-0.47, Y + 0.4, AZ], [0, 1, 0], 1, door)]);
+  // status lamps along the front edge of the plate
+  if (g >= 2) k.lamps(5, -0.4, Y, 0.655, 0.2);
 }
 
 // ---- starter machines (scrap fields) ---------------------------------------------------------------------

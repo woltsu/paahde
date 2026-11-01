@@ -1,8 +1,8 @@
 // The beginning's dead control cabinet (docs/levels/tutorial.md "The cabinet"), taken apart with the real disassembly mode:
 // a control_cabinet of a fixed seed, worked by one player alone (server/tutorial.ts keeps each player's session, never
 // saved). Of everything inside only its relay is there to take, and it comes out as the level's own item (tut_relay,
-// shared/items.ts): the other parts were taken long ago (they start out taken), and its steps pay no scrap. So the
-// economy never sees it. Kept apart from shared/levels/beginning.ts, which shared/levels.ts loads early.
+// shared/items.ts): the other parts were taken long ago (they start out taken, and what held only them started out
+// done: gone with them), and its steps pay no scrap. So the economy never sees it. Kept apart from shared/levels/beginning.ts, which shared/levels.ts loads early.
 import { machineParts } from '../machine.ts';
 import { stepList } from '../machineSteps.ts';
 import { CABINET } from './beginning.ts';
@@ -29,3 +29,17 @@ export const CABINET_GONE: readonly number[] = machineParts(CABINET.kind, CABINE
 
 /** Its step rules (shared/machineSteps.ts), as the server checks them. */
 export const cabinetSteps = () => stepList(CABINET.kind, CABINET_SEED, CABINET_LEVEL);
+
+/** The steps already done when you find it: all but the door and what holds the relay (the gone parts' bolts, screws,
+ *  clips and leads went with them), so the only things left to do are the ones that get the relay out. */
+export const CABINET_DONE: readonly number[] = (() => {
+  const { list, parts } = cabinetSteps();
+  const need = new Set<number>();
+  const walk = (i: number) => {
+    if (need.has(i)) return;
+    need.add(i);
+    for (const a of list[i].after) walk(a);
+  };
+  for (const i of parts[RELAY_INDEX]) walk(i);
+  return list.map((_, i) => i).filter((i) => !need.has(i));
+})();

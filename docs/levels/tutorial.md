@@ -243,8 +243,9 @@ it; the look and the telling. Where it differs from the design above:
   gates before it).
 - **The cabinet**: a `control_cabinet` of a fixed seed (`shared/levels/beginningCabinet.ts`: the first with one relay),
   each player's own session in server/tutorial.ts, never saved (a reconnect finds its steps undone, the relay out if
-  `GATE.control` says so). Its other parts start out taken (long gone), its steps pay no scrap; the relay comes out as
-  `tut_relay`. Its work site is the stage's (`Stage.workSite`, `Stage.site`), not the desert's machine sites.
+  `GATE.control` says so). Its other parts start out taken (long gone), and the steps that held only them start out done
+  (`CABINET_DONE`: their screws, clips and leads went with them), so all that is left is the door and the relay's rail clip
+  and two leads. Its steps pay no scrap; the relay comes out as `tut_relay`. Its work site is the stage's (`Stage.workSite`, `Stage.site`), not the desert's machine sites.
 - **No ramp** in the bay corridor (the floors are boxes; the sim has no slopes in a flat level). **The sub-floor**: a
   ladder of two fallen trays (a jump each) and a jump back up; no duct. The custodian's bag is a prop with its torch's
   light, not an item.
