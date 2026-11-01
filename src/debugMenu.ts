@@ -21,7 +21,7 @@ import { BEATS } from '../shared/levels/beginning.ts';
 import { LEVELS } from '../shared/levels.ts';
 import { ui } from './input';
 import { BOSS_KINDS, BOSSES, type BossKind } from '../shared/bosses.ts';
-import { isBuilding, isFixture, isGear } from '../shared/gear.ts';
+import { isGear } from '../shared/gear.ts';
 import { CLOTH, ITEMS, RETIRED, SCRAP, stackOf, WIRING } from '../shared/items.ts';
 import { TONE_CURVES, toneControl, type ToneCurve } from './post';
 import { summonLocalStorm } from './storm';
@@ -105,7 +105,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <div class="row"><button id="dbgMats" title="A full stack each of scrap, cloth and wiring, to build with">Materials: scrap, cloth, wiring</button></div>
 <div class="sub">Item</div>
 <div class="row"><input id="dbgItem" list="dbgItems" placeholder="search…" title="Any item, by name or id"></div>
-<datalist id="dbgItems">${Object.entries(ITEMS).filter(([k]) => !RETIRED.has(k) && !isBuilding(k) && !isFixture(k)).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}</datalist>
+<datalist id="dbgItems">${Object.entries(ITEMS).filter(([k]) => !RETIRED.has(k)).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}</datalist>
 <div class="row"><input id="dbgItemN" type="number" min="1" value="1" style="width:4em" title="How many (stackable items)">
 <select id="dbgItemTier" title="Gear: repaired with parts of this tier, or broken"><option value="-1">broken</option>${tiers.map((n, i) => `<option value="${i}"${i ? '' : ' selected'}>${n}</option>`).join('')}</select>
 <button id="dbgGive" class="go">Give</button></div></details>

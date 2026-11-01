@@ -12,7 +12,7 @@ import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
 import { packPlayerPose, PLAYER_VIEW_RADIUS, type PlayerAppearance } from '../shared/network.ts';
 import { podOf } from '../shared/pods.ts';
 import { PITCH_STEPS, quantizePitch } from '../shared/dig.ts';
-import { bottleSips, equipped, GEAR_KINDS, isBuilding, isFixture, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
+import { bottleSips, equipped, GEAR_KINDS, isBuilding, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { scrapKey, scrapTaken } from '../shared/scrap.ts';
 import { CLOTH, HOTBAR, ITEMS, levelOnlyItems, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
@@ -1339,7 +1339,8 @@ function onDebugGear(p: Player, tier: unknown) {
 }
 
 function onDebugGive(p: Player, kind: unknown, n: unknown, tier: unknown) {
-  if (typeof kind !== 'string' || !(kind in ITEMS) || RETIRED.has(kind) || isBuilding(kind) || isFixture(kind)) return;
+  // (Every item, even what's never carried in play: a building, a tower's fixture.)
+  if (typeof kind !== 'string' || !(kind in ITEMS) || RETIRED.has(kind)) return;
   const t = Number.isInteger(tier) ? (tier as number) : 0;
   if (GEAR_KINDS.includes(kind) && t >= 0) items.giveItem(p.browserId, { kind, parts: scrapParts(kind, TIERS[t] ?? 'scrap') });
   else items.give(p.browserId, kind, Math.max(1, Math.min(Number.isInteger(n) ? (n as number) : 1, stackOf(kind) * 10)));
