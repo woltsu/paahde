@@ -138,5 +138,13 @@ test('a second player rides on the back of the quad, carried with it, and gets o
   await until(() => !a.state().riding, 3000, 'rider off');
   await until(() => !b.state().pillion, 3000, 'passenger off with them');
   assert.equal(a.list().find((v) => v.id === quad.id).passenger, undefined);
+
+  // The debug menu's quads: a working one and a broken one in front of you.
+  const count = a.list().length;
+  a.ws.send(JSON.stringify({ t: 'debugBike', working: true, quad: true }));
+  a.ws.send(JSON.stringify({ t: 'debugBike', working: false, quad: true }));
+  await until(() => a.list().length === count + 2, 3000, 'debug quads');
+  const spawned = a.list().slice(-2);
+  assert.deepEqual(spawned.map((v) => [v.kind, v.up]), [['quad', true], ['quad', false]]);
   assert.equal(a.ws.readyState, WebSocket.OPEN, output);
 });

@@ -303,7 +303,7 @@ wss.on('connection', (ws) => {
     if (msg.t === 'debugGive' && p) return onDebugGive(p, msg.kind, msg.n, msg.tier);
     if (msg.t === 'debugHit' && p) return hurt(p, 'laser', KILL, [0, 3, 6]);
     if (msg.t === 'debugBike' && p) {
-      const f = p.state.facing, v = vehicleSrv.debugSpawn(p.state.x - Math.sin(f) * 3, p.state.z - Math.cos(f) * 3, f, msg.working === true);
+      const f = p.state.facing, v = vehicleSrv.debugSpawn(p.state.x - Math.sin(f) * 3, p.state.z - Math.cos(f) * 3, f, msg.working === true, msg.quad === true);
       sendShared(vehicleBox(v.id));
       if (v.up) sendShared(cargoBox(v.id));
       return;

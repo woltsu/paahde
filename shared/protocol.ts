@@ -154,8 +154,9 @@ export type ClientMsg =
   | { t: 'debugGive'; kind: string; n?: number; tier?: number }
   // Debug menu: a killing blow (a guardian's laser), to try the shield plate on.
   | { t: 'debugHit' }
-  // Debug menu: a motorcycle on the ground 3 m in front of you, broken (found parts) or `working` (stood up, Scrap parts).
-  | { t: 'debugBike'; working?: boolean }
+  // Debug menu: a motorcycle (a `quad`) on the ground 3 m in front of you, broken (found parts) or `working` (stood up,
+  // Scrap parts).
+  | { t: 'debugBike'; working?: boolean; quad?: boolean }
   | { t: 'debugVortexVisit' }
   | { t: 'debugSolarVisit' }
   | { t: 'debugTowerVisit' }

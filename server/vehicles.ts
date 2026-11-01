@@ -154,12 +154,13 @@ export class VehicleServer {
     });
   }
 
-  /** Debug menu: a motorcycle at `x`, `z` facing `heading`, broken (parts as found) or `working` (stood up with Scrap
-   *  parts, nobody's until ridden). Returns it. */
-  debugSpawn(x: number, z: number, heading: number, working: boolean): Vehicle {
+  /** Debug menu: a motorcycle (a `quad`) at `x`, `z` facing `heading`, broken (parts as found) or `working` (stood up
+   *  with Scrap parts, nobody's until ridden). Returns it. */
+  debugSpawn(x: number, z: number, heading: number, working: boolean, quad = false): Vehicle {
+    const kind = quad ? HOME : KIND;
     return this.db.tx(() => (working
-      ? this.add(x, z, heading, scrapParts(KIND), true, 'debug')
-      : this.add(x, z, heading, brokenParts(KIND, Math.random), false, 'debug')));
+      ? this.add(x, z, heading, scrapParts(kind), true, 'debug', undefined, undefined, kind)
+      : this.add(x, z, heading, brokenParts(kind, Math.random), false, 'debug', undefined, undefined, kind)));
   }
 
   /** Finds wanted lying broken at the crash sites at once (none in the lab: no desert). */

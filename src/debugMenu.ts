@@ -1,6 +1,6 @@
 // Debug menu: with `debug` in the URL (?debug), F3 (or `) toggles a small panel; without it the keys do nothing. Opening it frees the mouse so the controls can be clicked.
 // The panel is collapsible sections (Time, Spawn, Weather, Give, Travel, Camera & look, Player & world; which are open is
-// remembered per browser) and scrolls when taller than the screen. "Working bike" / "Broken bike" (Spawn) put a motorcycle 3 m in front of you.
+// remembered per browser) and scrolls when taller than the screen. "Working bike" / "Broken bike" (Spawn) put a motorcycle 3 m in front of you, "Working quad" / "Broken quad" a quad.
 // Time of day: a slider that holds the sky at that time (local view only), or, with "Apply to all players",
 // moves the shared server clock for everyone, production included. "Sandstorm here" summons one on you
 // (for everyone, after the usual warning); "Local sandstorm" sends one at you from just upwind at once, seen only by you;
@@ -36,7 +36,7 @@ export class DebugMenu {
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
-    fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {},
+    fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean, quad: boolean) => void = () => {},
     goLevel: (key: string) => void = () => {}) {
     const style = document.createElement('style');
     style.textContent = `
@@ -82,9 +82,11 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <label><input id="dbgLive" type="checkbox"> Follow shared clock</label>
 <label><input id="dbgShare" type="checkbox"> Apply to all players (server)</label></details>
 <details data-sec="spawn" open><summary>Spawn</summary>
-<div class="sub">Motorcycle</div>
+<div class="sub">Vehicles</div>
 <div class="grid"><button id="dbgBikeWorking" class="go" title="A working motorcycle 3 m in front of you, Scrap parts, yours once you ride it (for everyone)">Working bike</button>
-<button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken bike</button></div>
+<button id="dbgBikeBroken" title="A broken motorcycle 3 m in front of you, parts as found (for everyone)">Broken bike</button>
+<button id="dbgQuadWorking" class="go" title="A working quad 3 m in front of you, Scrap parts, yours once you ride it; seats a passenger (for everyone)">Working quad</button>
+<button id="dbgQuadBroken" title="A broken quad 3 m in front of you, parts as found (for everyone)">Broken quad</button></div>
 <div class="sub">Enemies</div>
 <div class="grid"><button id="dbgGuardian" title="The nearest guardian, brought 90 m from you (for everyone)">Guardian</button>
 <button id="dbgDrone" title="A searchlight drone over you for a minute, even by day (for everyone)">Drone</button>
@@ -157,9 +159,11 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);
-    p.querySelector('#dbgBikeBroken')!.addEventListener('click', () => spawnBike(false));
+    p.querySelector('#dbgBikeBroken')!.addEventListener('click', () => spawnBike(false, false));
+    p.querySelector('#dbgQuadBroken')!.addEventListener('click', () => spawnBike(false, true));
+    p.querySelector('#dbgQuadWorking')!.addEventListener('click', () => spawnBike(true, true));
     for (const b of p.querySelectorAll<HTMLElement>('[data-level]')) b.addEventListener('click', () => goLevel(b.dataset.level!));
-    p.querySelector('#dbgBikeWorking')!.addEventListener('click', () => spawnBike(true));
+    p.querySelector('#dbgBikeWorking')!.addEventListener('click', () => spawnBike(true, false));
     const item = p.querySelector<HTMLInputElement>('#dbgItem')!;
     const itemN = p.querySelector<HTMLInputElement>('#dbgItemN')!;
     const itemTier = p.querySelector<HTMLSelectElement>('#dbgItemTier')!;
