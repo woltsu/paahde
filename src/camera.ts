@@ -23,6 +23,10 @@ const PITCH_LIMIT = (85 * Math.PI) / 180;
 // Riding in first person the rider's body is drawn (headless) around the eye: a neck's range keeps the view out of it.
 const RIDE_YAW_LIMIT = (100 * Math.PI) / 180; // either side of the bike's heading
 const RIDE_PITCH_DOWN = (55 * Math.PI) / 180; // looking ahead over the bars; less over a shoulder (see limitRide)
+// On a ladder the climber's body is drawn round the eye too, closer: the head turns less and looks down less, or the view
+// goes through the shoulders and hood.
+const LADDER_YAW_LIMIT = (50 * Math.PI) / 180; // either side of the rungs
+const LADDER_PITCH_DOWN = (25 * Math.PI) / 180;
 const SPRINT_FOV_KICK = 9;
 /** Widest the view gets (sprinting); the sun's shadow cascades are fitted to it. */
 export const MAX_FOV = COMFORT_RANGES.fov[1] + SPRINT_FOV_KICK;
@@ -55,6 +59,8 @@ export type ViewPose = { x: number; y: number; z: number; vx: number; vy: number
   lean?: number;
   /** The bike's heading while riding (rad), for the neck limits. */
   heading?: number;
+  /** On a ladder: the way that faces its rungs (rad, as the yaw), for the neck limits (shared/sim.ts PlayerState.climb). */
+  ladder?: number;
   /** Crouched or sliding where that makes you short (Level.crouchUnder, shared/sim.ts CROUCH_HEIGHT): the eye goes lower
    *  with the body, under the tray and the blast door's edge. */
   short?: boolean };
@@ -101,7 +107,8 @@ export class FirstPersonCamera {
   /** Sideways offset (m) of the over-the-shoulder view, eased. */
   shoulder = 0;
   private boom = 0; // current boom length (m), eased toward BOOM or 0
-  private rideHeading = NaN; // set while riding in first person: the view is limited to a neck's range of it
+  private rideHeading = NaN; // set while riding or climbing in first person: the view is limited to a neck's range of it
+  private neck = { yaw: RIDE_YAW_LIMIT, down: RIDE_PITCH_DOWN }; // that range: the bike's, or the ladder's
 
   constructor(dom: HTMLElement) {
     try {
@@ -152,9 +159,10 @@ export class FirstPersonCamera {
   /** Pull yaw/pitch back inside the riding neck limits, all the way (t = 1) or part of it (easing in on mounting). */
   private limitRide(t: number) {
     const d = Math.atan2(Math.sin(this.yaw - this.rideHeading), Math.cos(this.yaw - this.rideHeading));
-    const turn = d + (Math.max(-RIDE_YAW_LIMIT, Math.min(RIDE_YAW_LIMIT, d)) - d) * t;
+    const { yaw: lim, down: most } = this.neck;
+    const turn = d + (Math.max(-lim, Math.min(lim, d)) - d) * t;
     this.yaw += turn - d;
-    const down = RIDE_PITCH_DOWN * (1 - (0.6 * Math.abs(turn)) / RIDE_YAW_LIMIT);
+    const down = most * (1 - (0.6 * Math.abs(turn)) / lim);
     if (this.pitch < -down) this.pitch += (-down - this.pitch) * t;
   }
 
@@ -182,7 +190,9 @@ export class FirstPersonCamera {
   update(p: ViewPose, dt: number) {
     const speed = Math.hypot(p.vx, p.vz);
     // On the bike in first person, keep the view to a neck's range (eased, so mounting or leaving third person doesn't snap).
-    this.rideHeading = p.riding && !this.thirdPerson && p.heading !== undefined ? p.heading : NaN;
+    const onLadder = p.ladder !== undefined && !this.thirdPerson;
+    this.rideHeading = onLadder ? p.ladder! : p.riding && !this.thirdPerson && p.heading !== undefined ? p.heading : NaN;
+    this.neck = onLadder ? { yaw: LADDER_YAW_LIMIT, down: LADDER_PITCH_DOWN } : { yaw: RIDE_YAW_LIMIT, down: RIDE_PITCH_DOWN };
     if (Number.isFinite(this.rideHeading)) this.limitRide(1 - Math.exp(-dt * 8));
     if (!this.freeLook || Number.isFinite(this.rideHeading) || this.zoom > 1) {
       const k = 1 - Math.exp(-dt * 7);
@@ -194,7 +204,7 @@ export class FirstPersonCamera {
 
     // Eye height: follow the feet quickly but smoothly; snap if far (respawn/teleport) or airborne. Riding, it is
     // the rider's head (already smooth): any lag here sinks the view into the body and bike on a fast climb.
-    if (!Number.isFinite(this.eyeY) || Math.abs(p.y - this.eyeY) > 3 || p.riding) this.eyeY = p.y;
+    if (!Number.isFinite(this.eyeY) || Math.abs(p.y - this.eyeY) > 3 || p.riding || p.ladder !== undefined) this.eyeY = p.y;
     else this.eyeY += (p.y - this.eyeY) * (1 - Math.exp(-dt * (p.grounded ? 22 : 40)));
 
     // Landing dip: a damped spring kicked by the impact speed.

@@ -103,7 +103,7 @@ import type { Tower } from './world/carts';
 import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
 import { openBoxes, TOWER_REACH_SPOT } from '../shared/storage.ts';
-import { DECK_STEP, GRAB_REACH, SPOT_ITEMS, SPOTS, spotNear, TOWER, towersNear } from '../shared/towers.ts';
+import { climbingOn, DECK_STEP, GRAB_REACH, SPOT_ITEMS, SPOTS, spotNear, TOWER, towersNear } from '../shared/towers.ts';
 import { windSpeed } from '../shared/power.ts';
 import { Chat } from './chat';
 import { nameGate } from './name';
@@ -327,6 +327,8 @@ function tower(id: number, bike: number, tow: number, x: number, y: number, z: n
 }
 const eye = new THREE.Vector3();
 const RIDE_EYE_AHEAD = 0.15;
+// On a ladder the same, less: the rungs are close (shared/towers.ts CLIMB_D).
+const LADDER_EYE_AHEAD = 0.1;
 const locator = new LocatorBar();
 const hud = new InventoryHud(net, renderer.domElement);
 const survival = new Survival(net);
@@ -620,7 +622,11 @@ renderer.setAnimationLoop((time) => {
   if (riding && me.eye(eye)) focus.set(eye.x - Math.sin(v.heading) * RIDE_EYE_AHEAD, eye.y - EYE_HEIGHT, eye.z - Math.cos(v.heading) * RIDE_EYE_AHEAD);
   else if (riding) focus.set(v.x, v.y, v.z);
   // On a ladder, the eye is the climber's too (leaning in to the rungs): your hands on them in front of you.
-  else if (s.climb && me.eye(eye)) focus.set(eye.x, eye.y - EYE_HEIGHT, eye.z);
+  // (Moved forward of the head, towards the rungs, so the shoulders and hood are behind it.)
+  else if (s.climb && me.eye(eye)) {
+    const f = climbingOn(v.x, v.y, v.z)?.facing ?? v.facing;
+    focus.set(eye.x - Math.sin(f) * LADDER_EYE_AHEAD, eye.y - EYE_HEIGHT, eye.z - Math.cos(f) * LADDER_EYE_AHEAD);
+  }
   // Dead: the camera backs off to third person and follows the body as it falls (the pivot a little above it).
   else if (me.downAt(focus)) focus.y += 0.5 - EYE_HEIGHT;
   else focus.copy(me.root.position);
@@ -653,7 +659,8 @@ renderer.setAnimationLoop((time) => {
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);
   orbit.rumble = stage.level === net.me.level ? (stage.rumble ?? 0) : 0;
-  orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding, heading: v.heading, lean: bikes.get(0)?.leanAngle, short: L.crouchUnder }, frameDt);
+  orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding, heading: v.heading, lean: bikes.get(0)?.leanAngle, short: L.crouchUnder,
+    ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined }, frameDt);
   bossFx.update(net, frameDt, orbit.camera);
   bossBar.update(frameDt, bossFx.bar);
   guardianFx.update(net, frameDt, orbit.camera, focus);
