@@ -28,6 +28,7 @@ import { heightAt } from '../../shared/terrain.ts';
 import { carrierSound } from '../carrierSound';
 import { guardianSound } from '../guardianSound';
 import { rifleSound } from '../rifleSound';
+import { glowsThroughDust } from '../post.ts';
 import { tyreDust } from '../tyreDust';
 import { mergePart, weakPoint, type BossCtx, type BossFxMsg, type BossView } from './bossParts';
 import { timeOfDay } from './dayNight';
@@ -229,6 +230,7 @@ export class CarrierView implements BossView {
     const along = uv().y;
     beamMat.colorNode = tint.mul(BEAM_GAIN);
     beamMat.opacityNode = facing.mul(pow(along, float(1.6)).mul(0.8).add(0.2)).mul(smoothstep(0, 0.15, along));
+    glowsThroughDust(beamMat);
     const cone = new THREE.Mesh(coneGeo, beamMat);
     cone.frustumCulled = false;
     cone.matrixAutoUpdate = false;
@@ -244,7 +246,9 @@ export class CarrierView implements BossView {
     (poolGeo.attributes.position as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
     const pool = new THREE.Mesh(poolGeo, poolMat);
     pool.frustumCulled = false;
-    const glare = new THREE.Sprite(glowMat(gtint.mul(GLARE_GAIN) as unknown as Node<'vec3'>));
+    const glareMat = glowMat(gtint.mul(GLARE_GAIN) as unknown as Node<'vec3'>);
+    glowsThroughDust(glareMat);
+    const glare = new THREE.Sprite(glareMat);
     glare.position.copy(lamp);
     glare.scale.setScalar(GLARE_SIZE);
     this.root.add(glare);

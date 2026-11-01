@@ -20,6 +20,7 @@ import { timeOfDay } from './dayNight';
 import type { DroneFrame } from './botFrames.ts';
 import { zaps } from './zaps.ts';
 import { tyreDust } from '../tyreDust.ts';
+import { glowsThroughDust } from '../post.ts';
 
 const SHOW_R = 900;
 /** The lamp, in the body frame. */
@@ -139,6 +140,7 @@ export class Drones {
     const along = uv().y; // 1 at the lamp, 0 at the far end
     beamMat.colorNode = tint.mul(BEAM_GAIN);
     beamMat.opacityNode = facing.mul(pow(along, float(1.6)).mul(0.8).add(0.2)).mul(smoothstep(0, 0.15, along));
+    glowsThroughDust(beamMat);
     const beam = new THREE.Mesh(coneGeo, beamMat);
     beam.frustumCulled = false;
     const poolMat = new THREE.MeshBasicNodeMaterial({
@@ -157,6 +159,7 @@ export class Drones {
     const g = float(1).sub(smoothstep(0, 1, length(uv().sub(0.5)).mul(2)));
     glareMat.colorNode = gtint.mul(GLARE_GAIN);
     glareMat.opacityNode = g.mul(g).mul(g);
+    glowsThroughDust(glareMat);
     const glare = new THREE.Sprite(glareMat);
     glare.position.copy(LAMP);
     glare.scale.setScalar(GLARE_SIZE);

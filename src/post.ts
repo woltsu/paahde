@@ -6,7 +6,7 @@ import { graphics } from './graphics.ts';
 import {
   Fn, abs, atan, cos, dot, exp, float, length, max, mix, mx_noise_float, pass, pow, renderOutput, saturate,
   smoothstep, step, uniform, uv, vec2, vec3, vec4, fract, sin, perspectiveDepthToViewZ, If, normalize, sqrt, min, log, rtt,
-  select, acesFilmicToneMapping, agxToneMapping, textureSize, floor,
+  select, acesFilmicToneMapping, agxToneMapping, textureSize, floor, mrt, output,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -262,6 +262,12 @@ export class Post {
     renderer.toneMappingExposure = 1;
 
     const scenePass = pass(scene, camera);
+    // Lights' glow (glowsThroughDust) also into a target of its own, added back after the dust: the vortex is marched to
+    // the scene's depth, which these never write, so it painted over a beam shining in front of it. Opaque things write
+    // none (and cover it), smoke in front fades it, as on the colour.
+    scenePass.setMRT(mrt({ output, glow: vec4(0) }).setBlendMode('glow', new THREE.BlendMode(THREE.MaterialBlending)).setClearColor('glow', 0, 0));
+    scenePass.getTexture('glow').type = THREE.UnsignedByteType;
+    const glow = scenePass.getTextureNode('glow');
     const color = scenePass.getTextureNode('output');
     const depth = scenePass.getTextureNode('depth');
     const viewZ = scenePass.getViewZNode();
@@ -469,6 +475,7 @@ export class Post {
       const lit = float(0).toVar(); // optical-depth-weighted brightness of the dust seen
       const seen = float(0).toVar(); // the optical depth those weights add up to
       const first = float(1e9).toVar(); // where the dust starts, for the haze in front of it
+      const vxTau = float(0).toVar(); // the vortex's share of tau (the lights' glow shows in front of it)
       const jitter = fract(sin(dot(p.mul(vec2(911.3, 577.7)), vec2(12.9898, 78.233))).mul(43758.5453)).toVar();
       const ground = [stormGround.x, stormGround.y, stormGround.z, stormGround.w];
       // In a shelter the dust only starts where the ray gets out: up past the sand's surface (the stairwell) and out
@@ -587,6 +594,7 @@ export class Post {
         lit.addAssign(vt.y.max(0).mul(exp(tau.mul(-STORM_K))));
         seen.addAssign(vt.z.max(0).mul(exp(tau.mul(-STORM_K))));
         tau.addAssign(vt0);
+        vxTau.assign(vt0);
         If(vt0.greaterThan(1e-3), () => { first.assign(min(first, vt.w)); });
       });
       // Poison gas (shared/gas.ts): a low layer over the dune floor (a plane through the floor under the camera, gasEnv)
@@ -644,9 +652,12 @@ export class Post {
       const gas = gasLit.mul(gLit.div(max(gSeen, 1e-4)));
       const both = dust.mul(seen).add(gas.mul(gSeen)).div(max(seen.add(gSeen), 1e-4));
       const far = float(1).sub(exp(first.mul(hazeDensity).negate()));
-      return vec4(mix(both, hazeColorFor(dir), far.mul(0.35)), trans);
+      // Premultiplied by how much it covers. The lights' glow is in the scene behind all the dust; taken as in front of
+      // the vortex (they're near, it's vast), it gets back what the vortex took from it.
+      const lights = glow.sample(p).rgb.mul(exp(tau.sub(vxTau).add(gTau).mul(-STORM_K)).sub(trans));
+      return vec4(mix(both, hazeColorFor(dir), far.mul(0.35)).mul(float(1).sub(trans)).add(lights), trans);
     })();
-    const storm = vec4(hazed.mul(dusted.w).add(dusted.xyz.mul(float(1).sub(dusted.w))), dusted.w);
+    const storm = vec4(hazed.mul(dusted.w).add(dusted.xyz), dusted.w);
 
     // --- Bloom (half-res mip chain). Threshold sits just above lit sand so the sun, its halo and
     // glints bloom, and bloom bleeds over the dune crests that occlude the sun.
@@ -882,4 +893,10 @@ export class Post {
 
     this.pipeline.render();
   }
+}
+
+/** A light's glow (an additive beam, glare) shows in front of the sand vortex: it's drawn into the scene behind all the
+ *  dust, and the vortex, marched to the depth behind it, covered it. Call once its colour and opacity are set. */
+export function glowsThroughDust(m: THREE.NodeMaterial) {
+  m.mrtNode = mrt({ glow: vec4((m.colorNode ?? vec3(1)) as N, (m.opacityNode ?? float(1)) as F) });
 }
