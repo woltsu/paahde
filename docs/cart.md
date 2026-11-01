@@ -30,8 +30,11 @@ a browser ID: never sent to other clients (each player is told which cart is `mi
 
 Whose is whose shows on the cart: it flies its owner's colour (`Vehicle.color`, their avatar's, a public value; the
 server reads it from the owner's player row, so it's right while they're offline, and sets it again on every join,
-`VehicleServer.recolor`) as a rag pennant on a whip mast at the bed's back left corner and a painted stripe down the
-box's lid (`src/world/carts.ts`, drawn in code over the model). The pennant streams back when towed and stirs parked.
+`VehicleServer.recolor`), sun-faded and dusty, as a torn strip of cloth knotted round the back left stabiliser's sleeve
+(the corner post) and a worn hand-painted stripe down the box's lid (`src/world/carts.ts`, drawn in code over the
+model). The rag hangs behind the post, clear of the benches, the canopy and the lid; it stirs in the wind
+(`windSpeed`, `windDir`) and streams back a little when towed. It's small: from a way off, your own cart is told by the
+locator bar.
 Your own parked cart is on the locator bar like your bikes (a box on a wheel with its tongue, in your colour), except
 when it stands linked to a bike of yours (the bike marks both).
 

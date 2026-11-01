@@ -9,14 +9,16 @@
 // level's on its own clock (FOLD: docs/cart.md's table), so a level raised while it's out unfolds its new pieces; from
 // level 1 it's levelled on its stabilisers and, once the poles are up, the canopy (shared/cart.ts canopyRig) is drawn
 // by src/world/tarps.ts, as the sim and the shade have it. Unfolding and packing are heard (src/cartSound.ts).
-// Each cart flies its owner's colour (Vehicle.color): a rag pennant on a whip mast at the back left corner, and a
-// painted stripe down the box's lid, so yours is told from the others by the pods from a way off.
+// Each cart wears its owner's colour (Vehicle.color), dyed down by the sun: a torn strip of cloth knotted round its
+// back left corner post that hangs and stirs in the wind (streaming back a little towed), and a worn hand-painted stripe
+// down the box's lid. (From a way off, your own is on the locator bar.)
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, canopyRig, COUPLER_Y, hitchPoint, HITCH_Y, isCart, TOW_LENGTH, towedPose, UNFOLD_S } from '../../shared/cart.ts';
 import { hangCart, newHang, turned, type Hang } from '../../shared/cartHang.ts';
 import { biome } from '../../shared/biomes.ts';
 import { cartSound } from '../cartSound';
+import { windDir } from './env.ts';
 import { TyreTrack } from '../footprints.ts';
 import { rigModel } from './tarps.ts';
 import { slopeAt } from '../../shared/sim.ts';
@@ -33,15 +35,27 @@ const STAND_RATE = 4;
 /** A cart whose tower drops out of sight for a moment (the state and the vehicles list arrive apart) stays where it
  *  was last drawn this long (s), then is hidden. */
 const HOLD_S = 0.6;
-/** The whip mast: its foot on the back left corner of the bed (cart coordinates, docs/cart.md) and how tall it is (m),
- *  leaning back a little. */
-const MAST = { x: -0.6, y: 0.86, z: 1.08, h: 2.4, lean: 0.06 };
-/** The pennant on it: along the mast at its top (m), how far it trails, in segments that ripple. */
-const FLAG = { h: 0.55, len: 1.15, segs: 6 };
-/** The paint's colour while the server hasn't said whose it is (an older server): a faded rag. */
+/** The corner post the rag is knotted round: the back left stabiliser's sleeve (cart coordinates, tools/blender/cart.py
+ *  STAB_X, STAB_Z; 84 mm square, its top at 0.94 m), and the knot's height on it. */
+const POST = { x: -0.5, z: 1.145, half: 0.042, knot: 0.88 };
+/** The rag: two ends hanging off the knot at the post's back, a long one and a short one: where each is tied (x, y, z),
+ *  how long (m) and wide, in segments (a chain that hangs, swings and is blown). */
+const RAGS = [
+  { x: -0.505, y: 0.875, z: 1.2, len: 0.46, w: 0.095, segs: 5 },
+  { x: -0.47, y: 0.885, z: 1.2, len: 0.14, w: 0.06, segs: 2 },
+];
+/** It never goes through what's in front of it: behind the post (its back face at z 1.187) and, under this height, the
+ *  packed stabiliser's foot plate (reaching z 1.215); never into the sand under the cart. */
+const RAG_BACK = 1.2, FOOT = { y: 0.5, z: 1.228 }, RAG_FLOOR = 0.06;
+/** How hard the air pushes the cloth (per m/s of air through it), and the most air it feels (m/s): a rag streams back
+ *  a little towed, not straight out. */
+const RAG_DRAG = 0.65, RAG_AIR = 15;
+/** Moved within this distance (m): further off it's a speck. */
+const RAG_NEAR = 70;
+/** The colour while the server hasn't said whose it is (an older server): undyed cloth. */
 const NO_COLOR = 0xb8a88a;
-const mastGeo = new THREE.CylinderGeometry(0.012, 0.022, MAST.h, 5).translate(0, MAST.h / 2, 0);
-const mastMat = new THREE.MeshStandardNodeMaterial({ color: 0x3a332d, roughness: 0.7, metalness: 0.5 });
+/** Sun-bleached and dusty: the owner's colour dyed down, towards this dust. */
+const DUST = new THREE.Color(0xa69a86);
 
 const DEG = Math.PI / 180;
 /** Each hinge node unfolded (docs/cart.md "As built"): its level, the share [from, to] of that level's unfolding it
@@ -83,10 +97,15 @@ type Shown = {
   canopy: THREE.Group | null; canopyKey: string;
   /** Towed: the two wheels' tyre tracks (left, right). */
   tracks: [TyreTrack, TyreTrack];
-  /** The owner's colour on the pennant and the lid (its own material), its colour now, the pennant's geometry (its
-   *  own: rippled each frame) and the ripple's phase. */
-  paint: THREE.MeshStandardNodeMaterial; color: number; flag: THREE.BufferGeometry; wave: number;
+  /** The owner's colour: the rag's dye and the lid's paint (its own materials), and the colour now. */
+  cloth: THREE.MeshStandardNodeMaterial; paint: THREE.MeshStandardNodeMaterial; color: number;
+  /** The rag's ends (each its own geometry, moved each frame), a phase for its flutter, and where the cart was and how
+   *  fast it went (world, for the air through the rag and its jolts). */
+  rags: Rag[]; wave: number; was: THREE.Vector3 | null; vel: THREE.Vector3;
 };
+/** One end of the rag: a chain of points (the cart's frame) and where they were (Verlet), its cut (each row's width and
+ *  the torn hem's teeth), and its strip of cloth. */
+type Rag = { spec: (typeof RAGS)[number]; p: THREE.Vector3[]; q: THREE.Vector3[]; widths: number[]; teeth: number[]; geo: THREE.BufferGeometry };
 
 let template: Promise<THREE.Object3D> | undefined;
 /** The cart model (shared by every clone): the glb if it loads, else the stand-in. */
@@ -158,48 +177,191 @@ function standIn(): THREE.Object3D {
   return root;
 }
 
-/** The pennant: a strip of `FLAG.segs` quads trailing back (+z) from the mast, tapering to a point. */
-function flagGeometry(): THREE.BufferGeometry {
-  const g = new THREE.BufferGeometry();
-  const n = FLAG.segs + 1;
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 2 * 3), 3));
-  const index: number[] = [];
-  for (let i = 0; i < FLAG.segs; i++) index.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
-  g.setIndex(index);
-  rippleFlag(g, 0, 0);
-  return g;
+/** Seeded dice (mulberry32): each cart's rag is torn and its stripe painted the same way for everyone. */
+function dice(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-/** The pennant at ripple phase `wave`, trailing `swing` rad off straight back (towed fast it streams back, parked it
- *  stirs in the breeze). */
-function rippleFlag(g: THREE.BufferGeometry, wave: number, swing: number) {
-  const a = g.getAttribute('position') as THREE.BufferAttribute;
-  for (let i = 0; i <= FLAG.segs; i++) {
-    const u = i / FLAG.segs, half = (FLAG.h / 2) * (1 - u * 0.85);
-    const along = u * FLAG.len;
-    const side = Math.sin(swing) * along + Math.sin(wave - u * 5) * 0.09 * u;
-    const back = Math.cos(swing) * along;
-    const droop = -u * u * 0.08;
-    a.setXYZ(i * 2, side, droop + half, back);
-    a.setXYZ(i * 2 + 1, side, droop - half, back);
+const hsl = { h: 0, s: 0, l: 0 };
+/** `hex` as dyed cloth or paint after a long time in the sun: `sat` of its saturation left, `dust` of the way to dust. */
+function faded(hex: number, sat: number, dust: number, out: THREE.Color): THREE.Color {
+  out.setHex(hex).getHSL(hsl);
+  out.setHSL(hsl.h, hsl.s * sat, Math.min(0.46, hsl.l));
+  return out.lerp(DUST, dust);
+}
+
+/** Columns across the rag (3 strips of cloth side by side: the hem torn unevenly across them). */
+const RAG_COLS = 4;
+
+/** One end of the rag: hanging straight down from its knot, torn by `rand`. */
+function newRag(spec: (typeof RAGS)[number], rand: () => number): Rag {
+  const n = spec.segs + 1, seg = spec.len / spec.segs;
+  const p = Array.from({ length: n }, (_, i) => new THREE.Vector3(spec.x, spec.y - i * seg, spec.z + 0.004 * i));
+  // Frayed sides: each row a little narrower or wider, thinning down; the hem's teeth hang on unevenly (m past the
+  // last row).
+  const widths = Array.from({ length: n }, (_, i) => spec.w * (i === 0 ? 0.8 : 0.78 + 0.3 * rand()) * (1 - (0.25 * i) / n));
+  const teeth = Array.from({ length: RAG_COLS }, () => (rand() - 0.25) * 0.09 * (spec.len / 0.46));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * RAG_COLS * 3), 3));
+  // Grimy where it's knotted, bleached and dusty towards the hem, each strip its own shade.
+  const col = new Float32Array(n * RAG_COLS * 3);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < RAG_COLS; j++) {
+      const u = i / (n - 1), k = 0.72 + 0.22 * u + 0.08 * (rand() - 0.5), dust = 0.08 * u;
+      col.set([k + dust, k + dust * 0.9, k + dust * 0.6], (i * RAG_COLS + j) * 3);
+    }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const index: number[] = [];
+  for (let i = 0; i < spec.segs; i++) {
+    for (let j = 0; j < RAG_COLS - 1; j++) {
+      const a = i * RAG_COLS + j, b = a + RAG_COLS;
+      index.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+  g.setIndex(index);
+  const r: Rag = { spec, p, q: p.map((v) => v.clone()), widths, teeth, geo: g };
+  shapeRag(r, 0, 0);
+  return r;
+}
+
+const tv = new THREE.Vector3(), av = new THREE.Vector3(), fv = new THREE.Vector3();
+
+/** The rag's strip of cloth along its chain, each row across it turned a little (up to `twist` rad, rippling at phase
+ *  `wave`) about the way it hangs. */
+function shapeRag(r: Rag, wave: number, twist: number) {
+  const a = r.geo.getAttribute('position') as THREE.BufferAttribute, n = r.p.length;
+  for (let i = 0; i < n; i++) {
+    tv.subVectors(r.p[Math.min(n - 1, i + 1)], r.p[Math.max(0, i - 1)]).normalize();
+    const tw = twist * (i / (n - 1)) * Math.sin(wave * 0.9 + i * 0.8);
+    av.set(Math.cos(tw), 0, Math.sin(tw));
+    av.addScaledVector(tv, -av.dot(tv)).normalize();
+    for (let j = 0; j < RAG_COLS; j++) {
+      fv.copy(r.p[i]).addScaledVector(av, (j / (RAG_COLS - 1) - 0.5) * r.widths[i]);
+      if (i === n - 1) fv.addScaledVector(tv, r.teeth[j]);
+      a.setXYZ(i * RAG_COLS + j, fv.x, fv.y, fv.z);
+    }
   }
   a.needsUpdate = true;
-  g.computeVertexNormals();
+  r.geo.computeVertexNormals();
+  r.geo.computeBoundingSphere();
 }
 
-/** A stripe painted down the middle of the lid (on its top, as a child of the `lid` node so it opens with it), sized
- *  from the lid as loaded. */
-function paintLid(model: THREE.Object3D, paint: THREE.Material) {
+const GRAVITY = 9.8;
+const vel = new THREE.Vector3(), push = new THREE.Vector3(), step = new THREE.Vector3();
+
+/** The rag over `dt` (s): hanging from its knot, blown by `wind` (the cart's frame: the air through it, m/s), pulled
+ *  against `jolt` (the cart's frame: its acceleration plus gravity's lift, m/s²; at rest (0, 9.8, 0)), fluttering at
+ *  phase `wave`; kept out of the post, the packed foot plate and the sand. */
+function swing(r: Rag, dt: number, wind: THREE.Vector3, jolt: THREE.Vector3, wave: number) {
+  const n = r.p.length, seg = r.spec.len / r.spec.segs;
+  const subs = Math.min(4, Math.ceil(dt / (1 / 90))), h = dt / subs;
+  if (h <= 0) return;
+  const speed = Math.min(RAG_AIR, wind.length());
+  for (let k = 0; k < subs; k++) {
+    for (let i = 1; i < n; i++) {
+      const p = r.p[i], q = r.q[i];
+      step.subVectors(p, q).multiplyScalar(0.985); // (damped: cloth)
+      // The air through it (less as it moves with it), a flutter that grows with the wind, gravity, the jolts.
+      vel.copy(step).divideScalar(h);
+      push.copy(wind).setLength(speed).sub(vel).multiplyScalar(RAG_DRAG).sub(jolt);
+      const fl = (0.5 + speed * 0.35) * (i / (n - 1));
+      push.x += fl * Math.sin(wave * 7.3 + i * 1.9) * 0.9;
+      push.z += fl * Math.sin(wave * 5.1 + i * 2.7) * 0.6;
+      q.copy(p);
+      p.add(step).addScaledVector(push, h * h);
+    }
+    for (let it = 0; it < 4; it++) {
+      for (let i = 1; i < n; i++) {
+        const a = r.p[i - 1], b = r.p[i];
+        step.subVectors(b, a);
+        const d = step.length() || 1e-6, c = (d - seg) / d;
+        if (i === 1) b.addScaledVector(step, -c);
+        else {
+          a.addScaledVector(step, c / 2);
+          b.addScaledVector(step, -c / 2);
+        }
+      }
+      for (let i = 1; i < n; i++) {
+        const p = r.p[i], back = p.y < FOOT.y ? FOOT.z : RAG_BACK;
+        if (p.z < back && Math.abs(p.x - POST.x) < 0.14) p.z = back;
+        if (p.y < RAG_FLOOR) p.y = RAG_FLOOR;
+      }
+    }
+  }
+}
+
+/** Two geometries joined into one (position and normal, unindexed). */
+function joined(a: THREE.BufferGeometry, b: THREE.BufferGeometry): THREE.BufferGeometry {
+  const na = a.index ? a.toNonIndexed() : a, nb = b.index ? b.toNonIndexed() : b;
+  const g = new THREE.BufferGeometry();
+  for (const k of ['position', 'normal']) {
+    const x = na.getAttribute(k).array as Float32Array, y = nb.getAttribute(k).array as Float32Array;
+    const out = new Float32Array(x.length + y.length);
+    out.set(x);
+    out.set(y, x.length);
+    g.setAttribute(k, new THREE.BufferAttribute(out, 3));
+  }
+  return g;
+}
+/** The knot round the post: a wrap of the cloth, a little askew, and the lump of the knot at its back, where the ends
+ *  hang from (every cart's). */
+const knotGeo = joined(
+  new THREE.BoxGeometry(POST.half * 2 + 0.014, 0.045, POST.half * 2 + 0.014).rotateZ(0.14).translate(POST.x, POST.knot, POST.z),
+  new THREE.IcosahedronGeometry(0.026, 0).scale(1.25, 0.85, 0.8).rotateZ(0.5).translate(POST.x - 0.012, POST.knot - 0.006, POST.z + POST.half + 0.01),
+);
+
+/** A stripe painted by hand down the middle of the lid (on its top, as a child of the `lid` node so it opens with it),
+ *  sized from the lid as loaded: a little crooked, its edges and ends ragged, chipped here and there and worn patchy,
+ *  each point laid on whatever it's painted over (dropped onto the lid). */
+function paintLid(model: THREE.Object3D, paint: THREE.Material, rand: () => number) {
   const lid = model.getObjectByName('lid');
   if (!lid) return;
   model.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(lid);
   if (b.isEmpty()) return;
   const at = lid.getWorldPosition(new THREE.Vector3()); // (packed, every node's rotation is identity: docs/cart.md)
-  const w = Math.min(0.26, (b.max.x - b.min.x) * 0.3), d = (b.max.z - b.min.z) * 0.92;
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), paint);
-  stripe.position.set((b.min.x + b.max.x) / 2 - at.x, b.max.y + 0.004 - at.y, (b.min.z + b.max.z) / 2 - at.z);
+  const w = Math.min(0.15, (b.max.x - b.min.x) * 0.2), d = (b.max.z - b.min.z) * 0.84;
+  const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+  const rows = 12, cols = 3, lean = (rand() - 0.5) * 0.05;
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0), from = new THREE.Vector3();
+  const pos: number[] = [], col: number[] = [];
+  for (let i = 0; i <= rows; i++) {
+    const u = i / rows, z = cz - d / 2 + d * u + (i === 0 || i === rows ? (rand() - 0.5) * 0.06 : 0);
+    const mid = cx + lean * (u - 0.5) + 0.006 * Math.sin(u * 9 + rand());
+    for (let j = 0; j <= cols; j++) {
+      const v = j / cols, x = mid + (v - 0.5) * w + (j === 0 || j === cols ? (rand() - 0.5) * 0.018 : 0);
+      ray.set(from.set(x, b.max.y + 0.1, z), down);
+      const hit = ray.intersectObject(lid, true)[0];
+      pos.push(x - at.x, (hit ? hit.point.y : b.max.y) + 0.0015 - at.y, z - at.z);
+      const k = 0.78 + 0.22 * rand();
+      col.push(k, k, k * 0.96);
+    }
+  }
+  const index: number[] = [];
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+      const edge = j === 0 || j === cols - 1 || i === 0 || i === rows - 1;
+      if (edge && rand() < 0.09) continue; // (chipped off)
+      const a = i * (cols + 1) + j, c = a + cols + 1;
+      index.push(a, c, a + 1, a + 1, c, c + 1); // (facing up)
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  const stripe = new THREE.Mesh(g, paint);
   stripe.receiveShadow = true;
+  stripe.userData.own = true; // (its geometry is this cart's: disposed with it)
   lid.add(stripe);
 }
 
@@ -214,8 +376,9 @@ export class CartView {
     loadCart();
   }
 
-  /** Every frame: the carts in `list` near `me`, parked or towed by one of `towers` (us first, then the others). */
-  update(dt: number, list: readonly Vehicle[], towers: readonly Tower[], me: { x: number; z: number }) {
+  /** Every frame: the carts in `list` near `me`, parked or towed by one of `towers` (us first, then the others), their
+   *  rags in a wind of `wind` m/s (shared/power.ts windSpeed) blowing the way env.ts windDir has it. */
+  update(dt: number, list: readonly Vehicle[], towers: readonly Tower[], me: { x: number; z: number }, wind = 4) {
     const seen = new Set<number>();
     for (const v of list) {
       if (!isCart(v)) continue;
@@ -234,7 +397,7 @@ export class CartView {
       if (!pose || (!t && Math.hypot(pose.x - me.x, pose.z - me.z) > VIEW)) continue;
       seen.add(v.id);
       let s = s0;
-      if (!s) this.shown.set(v.id, (s = this.build()));
+      if (!s) this.shown.set(v.id, (s = this.build(v.id)));
       if (t || parked(v)) s.lostS = 0;
       if (t) this.tow(s, t, dt);
       else if (pose !== s.last) {
@@ -243,40 +406,45 @@ export class CartView {
         this.place(s, pose);
       }
       this.pieces(s, v, dt, !!t);
-      this.colors(s, v, dt, !!t, Math.hypot(pose.x - me.x, pose.z - me.z) < 120);
+      this.rag(s, v, dt, wind, !!t, Math.hypot(pose.x - me.x, pose.z - me.z) < RAG_NEAR);
     }
     for (const [id, s] of this.shown) {
       if (seen.has(id)) continue;
       this.group.remove(s.obj);
       this.dropCanopy(s);
-      s.flag.dispose();
+      for (const r of s.rags) r.geo.dispose();
+      s.model?.traverse((o) => o.userData.own && (o as THREE.Mesh).geometry.dispose());
+      s.cloth.dispose();
       s.paint.dispose();
       this.shown.delete(id);
     }
   }
 
-  private build(): Shown {
+  private build(id: number): Shown {
     const obj = new THREE.Group();
     const tilt = new THREE.Group();
     tilt.rotation.order = 'YXZ';
     obj.add(tilt);
     this.group.add(obj);
-    const paint = new THREE.MeshStandardNodeMaterial({ color: NO_COLOR, roughness: 0.95, metalness: 0, side: THREE.DoubleSide });
+    // Cloth and paint: matte, lit like the rest of the cart, shaded by their vertex colours (grime, wear).
+    const cloth = new THREE.MeshStandardNodeMaterial({ color: NO_COLOR, roughness: 1, metalness: 0, side: THREE.DoubleSide, vertexColors: true });
+    const paint = new THREE.MeshStandardNodeMaterial({ color: NO_COLOR, roughness: 0.9, metalness: 0, vertexColors: true,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const rand = dice(id * 2654435761);
     const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0,
       coupler: new THREE.Vector3(0, COUPLER_Y, -TOW_LENGTH), hang: newHang(), slopeX: 0, slopeZ: 0,
       fold: [0, 0, 0], want: undefined, nodes: [], canopy: null, canopyKey: '', tracks: [new TyreTrack(), new TyreTrack()],
-      paint, color: NO_COLOR, flag: flagGeometry(), wave: Math.random() * 6 };
-    // The whip mast and its pennant, in the cart's frame (the model's: it sits in `tilt` unmoved).
-    const mast = new THREE.Group();
-    mast.position.set(MAST.x, MAST.y, MAST.z);
-    mast.rotation.x = MAST.lean;
-    const pole = new THREE.Mesh(mastGeo, mastMat);
-    pole.castShadow = true;
-    const flag = new THREE.Mesh(s.flag, paint);
-    flag.position.y = MAST.h - FLAG.h / 2 - 0.04;
-    flag.castShadow = true;
-    mast.add(pole, flag);
-    tilt.add(mast);
+      cloth, paint, color: -1, rags: RAGS.map((r) => newRag(r, rand)), wave: rand() * 50, was: null, vel: new THREE.Vector3() };
+    // The rag knotted round the corner post, in the cart's frame (the model's: it sits in `tilt` unmoved).
+    const knot = new THREE.Mesh(knotGeo, cloth);
+    knot.castShadow = true;
+    tilt.add(knot);
+    for (const r of s.rags) {
+      const m = new THREE.Mesh(r.geo, cloth);
+      m.castShadow = true;
+      m.frustumCulled = false; // (it moves: its bounds are refreshed only near)
+      tilt.add(m);
+    }
     loadCart().then((t) => {
       const m = t.clone(true);
       m.traverse((o) => {
@@ -296,7 +464,7 @@ export class CartView {
         return n ? [{ n, f, y0: n.position.y }] : [];
       });
       s.level = -1;
-      paintLid(m, paint);
+      paintLid(m, paint, dice(id * 40503 + 7));
       tilt.add(m);
     }, () => {});
     return s;
@@ -395,11 +563,42 @@ export class CartView {
     }
   }
 
-  /** The owner's colour, and the pennant rippling: streaming back when towed, stirring when parked. */
-  private colors(s: Shown, v: Vehicle, dt: number, towed: boolean, near: boolean) {
+  /** The owner's colour, sun-faded, and the rag (near): stirring in the wind parked, streaming back a little towed,
+   *  shaken by the bumps. */
+  private rag(s: Shown, v: Vehicle, dt: number, wind: number, towed: boolean, near: boolean) {
     const color = v.color ?? NO_COLOR;
-    if (color !== s.color) s.paint.color.setHex((s.color = color));
-    s.wave += dt * (towed ? 11 : 3.5);
-    if (near) rippleFlag(s.flag, s.wave, towed ? 0 : 0.35 * Math.sin(s.wave * 0.13));
+    if (color !== s.color) {
+      s.color = color;
+      faded(color, 0.5, 0.26, s.cloth.color);
+      faded(color, 0.6, 0.2, s.paint.color);
+    }
+    const pos = s.obj.getWorldPosition(wp);
+    if (!near || dt <= 0) {
+      s.was = null;
+      return;
+    }
+    // The cart's own speed and jolts (towed; a jump when it's first seen or put somewhere new is none).
+    jolt.set(0, 0, 0);
+    if (s.was && towed && pos.distanceTo(s.was) < 3) {
+      const v1 = air.subVectors(pos, s.was).divideScalar(dt);
+      jolt.subVectors(v1, s.vel).divideScalar(dt).clampLength(0, 25);
+      s.vel.lerp(v1, Math.min(1, dt * 20));
+    } else s.vel.set(0, 0, 0);
+    s.was = (s.was ?? new THREE.Vector3()).copy(pos);
+    // The air through the rag (the wind less the cart's speed) and what it feels pulling it (gravity, and the cart's
+    // jolts backwards), into the cart's frame (`tilt`).
+    air.set(windDir.value.x * wind, 0, windDir.value.y * wind).sub(s.vel);
+    jolt.y += GRAVITY;
+    s.tilt.getWorldQuaternion(turn).invert();
+    air.applyQuaternion(turn);
+    jolt.applyQuaternion(turn);
+    s.wave += dt;
+    const twist = Math.min(0.9, 0.25 + air.length() * 0.05);
+    for (const r of s.rags) {
+      swing(r, Math.min(dt, 1 / 20), air, jolt, s.wave);
+      shapeRag(r, s.wave * 3, twist);
+    }
   }
 }
+
+const wp = new THREE.Vector3(), air = new THREE.Vector3(), jolt = new THREE.Vector3(), turn = new THREE.Quaternion();

@@ -654,7 +654,7 @@ renderer.setAnimationLoop((time) => {
       const b = vehicleView.ball(c.hitched);
       if (b) towers.push({ id: -c.id, tow: c.id, x: c.x, y: c.y, z: c.z, heading: b.heading, hitch: c.heading, at: b.at, pitch: b.pitch });
     }
-    cartView.update(frameDt, vehicles, towers, focus);
+    cartView.update(frameDt, vehicles, towers, focus, windSpeed(net.worldTime(), stormAt(net.storms, focus.x, focus.z, net.serverTime())));
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);

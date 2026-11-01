@@ -268,8 +268,9 @@ Everything built is shared, and anyone can take a building down.
   canvas, billow), `cartCapsules` (parked carts are solid), `setCarts` (from `setVehicles`), `cartToWorld`; the hinge
   animation table `FOLD` in `src/world/carts.ts`, the sound `src/cartSound.ts`. Phase 3: level 2's sides are the
   workshop (above, Work stations); the pods' kit pays for the wrench and both levels. Test `tools/cart.test.mjs`.
-  Each cart flies its owner's colour (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a pennant
-  on a whip mast and a stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar
+  Each cart wears its owner's colour, faded (`Vehicle.color`, from their player row, `VehicleServer.recolor` on join): a
+  torn rag knotted round its back left corner post, swinging in the wind (a small Verlet chain), and a worn painted
+  stripe on the lid (`src/world/carts.ts`); your own parked one is on the locator bar
   (`src/world/vehicles.ts` `ownVehicleTargets`, shape `cart`)
 - `shared/garden.ts` — plant beds (stages, look target), owned by `server/garden.ts`; beds and UV lamps are placed
   things that stand on a shelter's floor only (not crafted for now)
