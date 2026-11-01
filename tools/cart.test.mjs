@@ -4,7 +4,10 @@
 // go, its box keeps what's in it wherever it went, and nobody else can tow it or let it go. Phase 2: parked it's solid;
 // unfolded at level 1 its canopy shades and holds you up like a tarp's; its owner unfolds and packs it (the cart key),
 // not while it's linked to a bike, and backing up to it unfolded packs and hitches it; the wrench raises its level from
-// the bag's materials, only its owner's, never past 2.
+// the bag's materials, only its owner's, never past 2. Phase 3: unfolded at level 2 its sides are a workbench and a
+// dismantling table (at any heading), packing is refused with a machine on the table, the wrench no longer builds the
+// benches or the chest (old ones still work and come down into their materials), and the pods' kit pays for the
+// beginning: wrench, the cart's two levels, a tarp and a bedroll, then the pod's machines taken apart on the cart.
 // Run with: node --test tools/cart.test.mjs
 import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
@@ -15,7 +18,16 @@ import { join } from 'node:path';
 import test from 'node:test';
 import WebSocket from 'ws';
 import { canopyRig, cartAxle, cartToWorld, couplerOf, HITCH_BACK, HITCH_MAX, hitchPoint, TOW_LENGTH, towedPose } from '../shared/cart.ts';
-import { CART_TABLE } from '../shared/tables.ts';
+import { CART_TABLE, HAND_TABLE, POD_LOOT, RETIRED_BUILD_TABLE } from '../shared/tables.ts';
+import { BUILDS, buildCost, isBuildable } from '../shared/crafting.ts';
+import { onTable, tableById } from '../shared/crash.ts';
+import { quantizePitch } from '../shared/dig.ts';
+import { machineParts } from '../shared/machine.ts';
+import { partAllowed, stepAllowed, stepList } from '../shared/machineSteps.ts';
+import { setPlaced } from '../shared/placed.ts';
+import { stations, stationTarget } from '../shared/stations.ts';
+import { openDb } from '../server/db.ts';
+import { LAB_SPAWN } from '../shared/lab.ts';
 import { inSun, sunDirection } from '../shared/shade.ts';
 import { canvasYAt } from '../shared/tarp.ts';
 import { heightAt } from '../shared/terrain.ts';
@@ -171,8 +183,10 @@ class Client {
   }
 }
 
-async function lab(t) {
+/** A lab world in a child process; `seed(dbPath)` may set its database up first. */
+async function lab(t, seed) {
   const dir = await mkdtemp(join(tmpdir(), 'paahde-cart-'));
+  if (seed) await seed(join(dir, 'world.db'));
   const child = fork(new URL('../server/world.ts', import.meta.url), {
     env: { ...process.env, WORLD_ID: 'lab', DADAJAM_LAB: '1', DB_PATH: join(dir, 'world.db'), TELEMETRY_PATH: join(dir, 'trace.jsonl') },
     execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
@@ -361,17 +375,18 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.missingMaterials);
   assert.equal(me.vehicle(cartId).level, 0);
   const need = (level, kind) => CART_TABLE[level].find((s) => s.kinds?.includes(kind))?.n ?? 0;
-  await answer({ t: 'debugGive', kind: 'cloth', n: need(1, 'cloth') + 1 });
+  assert.equal(need(2, 'wiring'), 0, 'level 2 takes no wiring (the beginning gets its first off the table it makes)');
+  await answer({ t: 'debugGive', kind: 'cloth', n: need(1, 'cloth') });
   await answer({ t: 'debugGive', kind: 'scrap', n: need(1, 'scrap') + need(2, 'scrap') });
   assert.equal(await answer({ t: 'upgradeCart', id: cartId }), undefined);
   await until(() => me.vehicle(cartId).level === 1, 3000, 'level 1');
-  assert.equal(count('cloth'), 1, 'its cloth spent');
+  assert.equal(count('cloth'), 0, 'its cloth spent');
   assert.equal(count('scrap'), need(2, 'scrap'), 'its scrap spent');
-  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.missingMaterials, 'level 2 wants wiring');
-  await answer({ t: 'debugGive', kind: 'wiring', n: need(2, 'wiring') });
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.missingMaterials, 'level 2 wants its cloth');
+  await answer({ t: 'debugGive', kind: 'cloth', n: need(2, 'cloth') });
   assert.equal(await answer({ t: 'upgradeCart', id: cartId }), undefined);
   await until(() => me.vehicle(cartId).level === 2, 3000, 'level 2');
-  assert.equal(count('scrap') + count('wiring'), 0);
+  assert.equal(count('scrap') + count('cloth'), 0);
   await answer({ t: 'debugGive', kind: 'scrap', n: 40 });
   assert.equal(await answer({ t: 'upgradeCart', id: cartId }), TEXT.notice.fullyBuilt, 'no level 3');
   assert.equal(count('scrap'), 40, 'nothing spent');
@@ -418,5 +433,217 @@ test('unfold and pack (owner only, not while linked), backing up to it unfolded 
   assert.equal(me.vehicle(cartId).open, false, 'unhitching leaves it packed');
   me.send({ t: 'unfoldCart', id: cartId, open: true });
   await until(() => me.vehicle(cartId).open === true, 3000, 'unfolded after unhitching');
+  assert.equal(me.ws.readyState, WebSocket.OPEN, output());
+});
+
+// ---- Phase 3: the workshop, the build menu, the beginning ----------------------------------------------------------------
+
+test('unfolded at level 2, a parked cart\'s sides are a workbench (left) and a dismantling table (right) at any heading', () => {
+  for (const heading of [0, 0.7, 2.4, -1.9]) {
+    const v = cartAt(3400, 3100, heading, { id: 7, level: 2, open: true });
+    setVehicles([v]);
+    const list = stations().filter((s) => s.cart === 7);
+    assert.deepEqual(list.map((s) => s.kind).sort(), ['disassembly', 'workbench']);
+    const bench = list.find((s) => s.kind === 'workbench'), table = list.find((s) => s.kind === 'disassembly');
+    const l = cartToWorld(v, -1.005, 0), r = cartToWorld(v, 1.005, 0);
+    assert.ok(Math.hypot(bench.x - l.x, bench.z - l.z) < 1e-9 && Math.hypot(table.x - r.x, table.z - r.z) < 1e-9);
+    assert.ok(Math.abs(table.y1 - (v.y + 0.88)) < 1e-9, 'flush with the deck');
+    // Its session table, turned with the cart: a point along it is on it, one off its outer edge isn't.
+    const t = tableById('cart7');
+    assert.ok(t && Math.abs(t.yaw - heading) < 1e-9 && Math.abs(t.w - 0.65) < 1e-9 && Math.abs(t.d - 2.16) < 1e-9);
+    const along = cartToWorld(v, 1.005, 0.95), off = cartToWorld(v, 1.45, 0.95);
+    assert.ok(onTable(t, along.x, along.z) && !onTable(t, off.x, off.z));
+    // Looked at from either side, a bit along it: the crosshair finds that side (an oriented box, not the world's axes).
+    for (const [sx, kind] of [[-1, 'workbench'], [1, 'disassembly']]) {
+      const at = cartToWorld(v, sx * 2.2, 0.6), aim = cartToWorld(v, sx * 1.0, 0.8);
+      const feet = { x: at.x, y: v.y, z: at.z };
+      const yaw = Math.atan2(-(aim.x - at.x), -(aim.z - at.z));
+      const pitch = Math.atan2(v.y + 0.7 - (v.y + 1.65), Math.hypot(aim.x - at.x, aim.z - at.z));
+      assert.equal(stationTarget(feet, quantizeYaw(yaw), quantizePitch(pitch))?.kind, kind, `heading ${heading}: ${kind}`);
+      // Looking past its end along the cart's length: no station.
+      const past = cartToWorld(v, sx * 1.0, 3.5);
+      const yaw2 = Math.atan2(-(past.x - at.x), -(past.z - at.z));
+      assert.equal(stationTarget(feet, quantizeYaw(yaw2), quantizePitch(pitch))?.kind, undefined, 'nothing past its end');
+    }
+  }
+  // Not a workshop packed, below level 2, or towed.
+  for (const extra of [{ open: false }, { level: 1 }, { rider: 3 }]) {
+    setVehicles([cartAt(3400, 3100, 0.3, { id: 7, level: 2, open: true, ...extra })]);
+    assert.equal(stations().filter((s) => s.cart === 7).length, 0, JSON.stringify(extra));
+    assert.equal(tableById('cart7'), undefined);
+  }
+  setVehicles([]);
+});
+
+test('the wrench no longer builds the workbench, dismantling table or chest; standing ones still work and give their materials back', () => {
+  for (const kind of ['workbench', 'dismantle_bench', 'storage_chest']) {
+    assert.ok(!(kind in BUILDS), `${kind} not in the build menu`);
+    assert.ok(isBuildable(kind), `${kind} still comes down with the wrench`);
+    assert.deepEqual(buildCost(kind), RETIRED_BUILD_TABLE[kind].map((s) => ({ kind: s.kinds[0], n: s.n })));
+  }
+  for (const kind of ['windmill', 'battery_station', 'power_pole', 'beacon_light', 'light_pole', 'well']) assert.ok(kind in BUILDS, kind);
+  setPlaced([{ id: 41, kind: 'workbench', x: 3500, y: heightAt(3500, 3100), z: 3100, rot: 1 }, { id: 42, kind: 'dismantle_bench', x: 3510, y: heightAt(3510, 3100), z: 3100, rot: 0 }]);
+  assert.deepEqual(stations().map((s) => [s.kind, s.placed]), [['workbench', 41], ['disassembly', 42]]);
+  assert.ok(tableById('bench42'));
+  setPlaced([]);
+});
+
+test('the pods\' kit pays for the wrench, the cart\'s levels 1 and 2, a tarp and a bedroll, with no wiring needed', () => {
+  const want = {};
+  for (const specs of [HAND_TABLE.wrench, CART_TABLE[1], CART_TABLE[2], HAND_TABLE.tarp, HAND_TABLE.bedroll]) {
+    for (const s of specs) want[s.kinds[0]] = (want[s.kinds[0]] ?? 0) + s.n;
+  }
+  assert.equal(want.wiring, undefined, 'nothing before the table needs wiring');
+  assert.deepEqual(Object.keys(want).sort(), ['cloth', 'scrap']);
+  assert.equal(POD_LOOT.kit.scrap, want.scrap);
+  assert.equal(POD_LOOT.kit.cloth, want.cloth);
+  assert.ok(POD_LOOT.kit.pod_console && POD_LOOT.kit.pod_powerbox);
+});
+
+/** A lab world whose database has an old workbench, dismantling table and chest standing by the spawn. */
+const OLD = { workbench: { x: -7, z: 2 }, dismantle_bench: { x: -7, z: -3 }, storage_chest: { x: -7, z: 6 } };
+const withOldBenches = (path) => {
+  const db = openDb(path);
+  for (const [kind, o] of Object.entries(OLD)) db.insertPlaced(kind, LAB_SPAWN.x + o.x, heightAt(LAB_SPAWN.x + o.x, LAB_SPAWN.z + o.z), LAB_SPAWN.z + o.z, 0, '');
+  db.close();
+};
+
+test('the beginning with the pods\' kit: wrench, cart shade, cart workshop, a tarp and a bedroll; the pod\'s machines taken apart on the cart; packing refused while one is on it', { timeout: 180_000 }, async (t) => {
+  const { port, peers, output } = await lab(t, withOldBenches);
+  const me = new Client(port, 'Newcomer'); peers.push(me);
+  await me.join();
+  const cartId = me.vehicles.mine.find((id) => me.vehicle(id).kind === 'cart');
+  const cart0 = me.vehicle(cartId);
+  const count = (kind) => me.items('bag').reduce((n, it) => n + (it?.kind === kind ? it.n : 0), 0);
+  const has = (pred) => me.items('bag').some((it) => it && pred(it.kind));
+  const answer = async (m, box = 'bag') => {
+    const n = me.messages.length;
+    me.send(m);
+    await until(() => me.messages.slice(n).some((x) => (x.t === 'items' && x.box === box) || x.t === 'notice'), 3000, `answer to ${m.t}`);
+    await sleep(80);
+    return me.messages.slice(n).find((x) => x.t === 'notice')?.text;
+  };
+
+  // Our bag (the lab's, full) emptied into the cart's box: from here on only what we're given.
+  // Round the cart by its front (clear of the tongue) to its side sx (−1 left, the workbench; +1 right, the table).
+  let side = 0;
+  const go = async (lx, lz) => { const p = cartToWorld(cart0, lx, lz); await me.walkTo(p.x, p.z, 0.4); };
+  const toSide = async (sx) => {
+    if (side && side !== sx) { await go(side * 2.4, -4.2); await go(sx * 2.4, -4.2); }
+    await go(sx * 1.9, 0.3);
+    side = sx;
+  };
+  // (The old benches stand west of the spawn: the cart's side facing them is the way there and back.)
+  const west = cartToWorld(cart0, 1, 0).x < cart0.x ? 1 : -1;
+  await toSide(1);
+  const box = `cargo${cartId}`;
+  for (let k = 0; k < 80; k++) {
+    const fi = me.items('bag').findIndex(Boolean);
+    if (fi < 0) break;
+    const n = me.messages.length;
+    me.send({ t: 'move', from: 'bag', fi, to: box, ti: -1 });
+    await until(() => me.messages.slice(n).some((m) => m.t === 'items' && m.box === 'bag'), 3000, 'stowed');
+  }
+  assert.ok(!me.items('bag').some(Boolean), 'an empty bag');
+  // The old benches still work: crafting at the old workbench, and the wrench takes them down into their materials.
+  const old = (kind) => me.messages.findLast((m) => m.t === 'placed')?.list?.find((p) => p.kind === kind);
+  await until(() => old('workbench'), 3000, 'the old benches');
+  const wb = old('workbench');
+  await me.walkTo(wb.x + 1.6, wb.z, 0.3);
+  await answer({ t: 'debugGive', kind: 'scrap', n: 3 });
+  assert.equal(count('scrap'), 3);
+  const gears = count('gear_scrap');
+  assert.equal(await answer({ t: 'craft', recipe: 'gear_scrap' }), undefined, 'crafted at the old workbench');
+  assert.equal(count('gear_scrap'), gears + 1);
+
+  // Back at the cart, only the kit.
+  side = 0;
+  await toSide(west);
+  for (const [kind, n] of Object.entries(POD_LOOT.kit)) await answer({ t: 'debugGive', kind, n });
+  assert.equal(count('scrap'), POD_LOOT.kit.scrap);
+
+  // The order: the wrench by hand, the cart's shade and workshop with it, the tarp and the bedroll by hand.
+  assert.equal(await answer({ t: 'craft', recipe: 'wrench' }), undefined);
+  assert.equal(count('wrench'), 1);
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), undefined);
+  await until(() => me.vehicle(cartId).level === 1, 3000, 'level 1');
+  assert.equal(await answer({ t: 'upgradeCart', id: cartId }), undefined);
+  await until(() => me.vehicle(cartId).level === 2, 3000, 'level 2');
+  assert.equal(await answer({ t: 'craft', recipe: 'tarp' }), undefined);
+  assert.equal(await answer({ t: 'craft', recipe: 'bedroll' }), undefined);
+  assert.equal(count('scrap') + count('cloth'), 0, 'the kit spent exactly');
+  assert.ok(count('tarp') && count('bedroll'));
+
+  // Packed, the workshop isn't a table yet: a machine can't go on it.
+  const at = `cart${cartId}`;
+  me.send({ t: 'crashUse', kind: 'pod_console', at });
+  await until(() => me.messages.some((m) => m.t === 'bench' && m.id === at), 3000, 'refused');
+  assert.equal(me.messages.findLast((m) => m.t === 'bench' && m.id === at).job, null);
+  assert.equal(count('pod_console'), 1, 'still in the bag');
+
+  // Unfolded: the pod's console and power box taken apart on its table, every step and part.
+  me.send({ t: 'unfoldCart', id: cartId, open: true });
+  await until(() => me.vehicle(cartId).open === true, 3000, 'unfolded');
+  const strip = async (kind) => {
+    me.send({ t: 'crashUse', kind, at });
+    await until(() => me.messages.findLast((m) => m.t === 'bench' && m.id === at)?.job?.kind === kind, 3000, `${kind} on the table`);
+    const job = me.messages.findLast((m) => m.t === 'bench' && m.id === at).job;
+    assert.equal(count(kind), 0, 'off the bag');
+    // A machine on it: the cart doesn't pack, nor hitch.
+    assert.equal(await me.notice({ t: 'unfoldCart', id: cartId, open: false }), TEXT.notice.benchInUse);
+    assert.equal(me.vehicle(cartId).open, true);
+    me.send({ t: 'siteJoin', id: at });
+    await until(() => me.messages.some((m) => m.t === 'siteState' && m.id === at), 3000, 'joined');
+    const rules = stepList(kind, job.seed, 1), done = new Set();
+    for (let more = true; more;) {
+      more = false;
+      for (let i = 0; i < rules.list.length; i++) {
+        if (!stepAllowed(rules, done, i)) continue;
+        me.send({ t: 'siteDone', id: at, i });
+        done.add(i);
+        more = true;
+      }
+    }
+    await sleep(200);
+    const parts = machineParts(kind, job.seed);
+    for (let i = 0; i < parts.length; i++) {
+      assert.ok(partAllowed(rules, done, i));
+      const n = me.messages.length;
+      me.send({ t: 'siteTake', id: at, i });
+      await until(() => me.messages.slice(n).some((m) => m.t === 'siteTook' && m.i === i), 3000, `part ${i}`);
+      assert.ok(me.messages.slice(n).find((m) => m.t === 'siteTook' && m.i === i).ok);
+    }
+    // The bare frame scrapped: the table is free.
+    const scrap = count('scrap');
+    me.send({ t: 'benchScrap', at });
+    await until(() => me.messages.findLast((m) => m.t === 'bench' && m.id === at)?.job === null, 3000, 'the table free');
+    await until(() => count('scrap') > scrap, 3000, 'the frame\'s scrap');
+  };
+  await strip('pod_console');
+  await strip('pod_powerbox');
+  assert.ok(count('wiring') >= 1, 'the first wiring');
+  assert.ok(has((k) => k.startsWith('battery_')), 'the bike\'s battery');
+
+  // At the cart's workbench side: the bike's bearing hammered out of the frames' scrap.
+  await toSide(-1);
+  assert.ok(count('scrap') >= 2, `scrap for a bearing (${count('scrap')})`);
+  assert.equal(await answer({ t: 'craft', recipe: 'bearing_scrap' }), undefined, 'crafted at the cart\'s workbench');
+  assert.ok(has((k) => k === 'bearing_scrap'));
+
+  // Free again, it packs: the stations go, and crafting there is refused.
+  me.send({ t: 'unfoldCart', id: cartId, open: false });
+  await until(() => me.vehicle(cartId).open === false, 3000, 'packed');
+  await answer({ t: 'debugGive', kind: 'scrap', n: 2 });
+  assert.equal(await answer({ t: 'craft', recipe: 'bearing_scrap' }), TEXT.notice.tooFar, 'no workbench packed');
+
+  // The old benches come down with the wrench into what they took (the chest is empty).
+  await toSide(west);
+  for (const kind of ['workbench', 'dismantle_bench', 'storage_chest']) {
+    const q = old(kind);
+    await me.walkTo(q.x + 1.8, q.z, 0.3);
+    const before = Object.fromEntries(RETIRED_BUILD_TABLE[kind].map((s) => [s.kinds[0], count(s.kinds[0])]));
+    assert.equal(await answer({ t: 'unplace', id: q.id }), undefined, `${kind} taken down`);
+    for (const s of RETIRED_BUILD_TABLE[kind]) assert.equal(count(s.kinds[0]), before[s.kinds[0]] + s.n, `${kind}: ${s.kinds[0]} back`);
+  }
   assert.equal(me.ws.readyState, WebSocket.OPEN, output());
 });
