@@ -20,7 +20,7 @@ import { foundData, type Drop } from '../shared/lootRoll.ts';
 import { ENEMIES } from '../shared/enemies.ts';
 import { allBeaten, BOSS_KINDS, BOSS_LIVES, BOSS_SEND_R, BOSSES, bossBit, receiverBoss, RELICS, type BossKind } from '../shared/bosses.ts';
 import { boxSize, OWN_BOXES } from '../shared/storage.ts';
-import { crashTaken, isTableId, tableId } from '../shared/crash.ts';
+import { cartTableId, crashTaken, isTableId, tableId } from '../shared/crash.ts';
 import { BEDROLL, CHEST, placed, TABLE } from '../shared/placed.ts';
 import { canyonFloorNear } from '../shared/canyons.ts';
 import { indoors, overShelter, shelterAt, sheltersNear } from '../shared/shelters.ts';
@@ -117,6 +117,8 @@ const newWorld = db.getSetting('pods_landed') === undefined; // read before pods
 bunkerGone(db, items, placedThings, beaten); // once: what was in the old bunker comes out (before the vehicles and the garden)
 podsLanded(db, items, placedThings); // once: nothing left in the pods' way, the first bike by them (before the vehicles)
 const vehicleSrv = new VehicleServer(db, items); // before the loot: it turns motorcycles dropped as items into vehicles
+// A cart doesn't pack (nor so hitch) while a machine is on its dismantling side (a job there: docs/cart.md).
+vehicleSrv.packBlocked = (id) => (crash.busyTable(cartTableId(id)) ? TEXT.notice.benchInUse : null);
 const wiring = new WireServer(db, items); // after the placed list: it drops wires to things gone
 const garden = new GardenServer(db);
 const loot = new LootServer(db);

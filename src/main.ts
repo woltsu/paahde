@@ -9,7 +9,7 @@ import { BENCH, CALM, LAB, WORLD_ID } from '../shared/world.ts';
 import { bedTarget, EMPTY, GROWN, SPROUTS } from '../shared/garden.ts';
 import { BEDROLL, bedLit, isPlaceable, placed } from '../shared/placed.ts';
 import { stationTarget } from '../shared/stations.ts';
-import { isTableId, tableId } from '../shared/crash.ts';
+import { isTableId } from '../shared/crash.ts';
 import { FirstPersonCamera } from './camera';
 import { addCrosshair } from './crosshair';
 import { ShieldFx } from './shieldFx';
@@ -814,7 +814,7 @@ renderer.setAnimationLoop((time) => {
   const wreck = here && !station && !bed && !target && !debris && !site ? wrecks.nearest(net.me.x, net.me.z) : null;
   const sitePrompt = site ? (small ? TEXT.prompt.pickUp(junkSpec(site.site.kind).label) : TEXT.prompt.disassemble(junkSpec(site.site.kind).label))
     : wreck ? TEXT.prompt.pickUp(SALVAGE[wreck.kind].label) : null;
-  const tableAt = station?.kind === 'disassembly' ? tableId(station.placed) : null;
+  const tableAt = station?.kind === 'disassembly' ? station.id : null;
   const table = tableAt ? machines.tableMenu(tableAt, net.boxes.bag) : null;
   const use = !station ? null : station.kind === 'workbench' ? TEXT.prompt.useWorkbench : TEXT.prompt.useTable;
   // A dead player's pack (shared/corpse.ts) lying here: F opens it next to the bag, like a chest.

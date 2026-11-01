@@ -8,7 +8,7 @@
 // are taken apart on a dismantling table (put up with the wrench), whose job is the server's too and is seen by everyone.
 import * as THREE from 'three/webgpu';
 import {
-  CARRY_KINDS, crashTaken, CRASH_REACH, isTableId, seeded, siteSpent, sitesNear, tableById, type CrashSite, type Table,
+  CARRY_KINDS, crashTaken, CRASH_REACH, isTableId, onTable, seeded, siteSpent, sitesNear, tableById, type CrashSite, type Table,
 } from '../../shared/crash.ts';
 import type { BenchJob } from '../../shared/protocol.ts';
 import { hasItem, type Slots } from '../../shared/items.ts';
@@ -327,11 +327,13 @@ interface Job {
  *  carried machines that can be put on it. */
 export type TableMenu = { job: string | null; scrap: number; kinds: { kind: JunkKind; label: string }[] };
 
-/** Machines carried home are taken apart on a dismantling table (shared/crash.ts tables: each one put up with the
- *  wrench). The job is the server's ('bench' messages, per table): everyone sees the machine on the table and
+const UP = new THREE.Vector3(0, 1, 0);
+
+/** Machines carried home are taken apart on a dismantling table (shared/crash.ts tables: an unfolded level-2 cart's
+ *  right side, or one put up with the wrench in an older world). The job is the server's ('bench' messages, per table): everyone sees the machine on the table and
  *  its progress, and anyone at the table can work on it. A machine on the table is scaled down to fit it, and you
- *  stand closer. The table's place comes from shared/crash.ts tableById (a placed one's from the placed list), looked
- *  up again until it is known. */
+ *  stand closer. The table's place comes from shared/crash.ts tableById (a placed one's from the placed list, a cart's from the
+ *  vehicles list), looked up again until it is known. */
 export class Bench {
   readonly id: string;
   private scene: THREE.Object3D;
@@ -358,7 +360,7 @@ export class Bench {
   ground = (x: number, z: number) => {
     const t = this.table;
     if (!t) return heightAt(x, z);
-    return Math.abs(x - t.x) < t.w / 2 && Math.abs(z - t.z) < t.d / 2 ? t.top : t.floor;
+    return onTable(t, x, z) ? t.top : t.floor;
   };
 
   menu(bag: Slots | undefined): TableMenu {
@@ -419,7 +421,8 @@ export class Bench {
   private place() {
     const junk = this.job?.junk, t = this.table;
     if (!junk || !t) return;
-    junk.root.quaternion.identity();
+    // Turned with the table (a cart's stands at any heading), so a long machine lies along it.
+    junk.root.quaternion.setFromAxisAngle(UP, t.yaw);
     junk.root.position.set(t.x, t.top, t.z);
     if (!junk.root.parent) this.scene.add(junk.root);
     const off = lowestOffset(junk.root);

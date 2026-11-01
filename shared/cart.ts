@@ -220,14 +220,27 @@ export function canopyRig(v: Vehicle): TarpRig {
   return { ...f, corners, poles: [], guys };
 }
 
+// ---- The workshop (level 2) --------------------------------------------------------------------------------------------
+
+/** The deck's top over the ground (m): the fold-out benches are flush with it. */
+export const CART_DECK_Y = 0.88;
+/** Each fold-out side's middle, this far out to either side of the axle's middle (cart space x: −, the workbench
+ *  `side_l`; +, the dismantling table `side_r`), and its half sizes across (x, 0.65 m deep) and along (z, 2.16 m). */
+export const CART_BENCH_X = 1.005, CART_BENCH_HX = 0.325, CART_BENCH_HZ = 1.08;
+/** Is cart `v` a workshop now: parked, unfolded, level 2 (shared/stations.ts lists its sides)? */
+export const isWorkshop = (v: Vehicle) => isCart(v) && parked(v) && !!v.open && (v.level ?? 0) >= 2;
+let workshops: readonly Vehicle[] = [];
+/** The carts that are workshops now (setCarts), a new array whenever that changes. */
+export const cartWorkshops = (): readonly Vehicle[] => workshops;
+
 // ---- Solid while parked -------------------------------------------------------------------------------------------------
 
 /** Its pieces as capsules along its length (cart space: centre x, z, half length, radius, top over the ground, m). The
  *  bed and the wheels, the box on it; packed at level 2 the upright sides make the bed's walls (docs/cart.md: 1.53);
  *  unfolded at level 2 the benches either side, flush with the deck. The tongue is low enough to step over. */
-const BED = { x: 0, z: 0, half: 0.4, r: 0.7, top: 0.88 }, WALLS = 1.53;
+const BED = { x: 0, z: 0, half: 0.4, r: 0.7, top: CART_DECK_Y }, WALLS = 1.53;
 const BOX = { x: 0, z: -0.125, half: 0.2, r: 0.42, top: 1.3 };
-const BENCHES = [-1, 1].map((sx) => ({ x: sx * 1.005, z: 0, half: 0.755, r: 0.325, top: 0.88 }));
+const BENCHES = [-1, 1].map((sx) => ({ x: sx * CART_BENCH_X, z: 0, half: CART_BENCH_HZ - CART_BENCH_HX, r: CART_BENCH_HX, top: CART_DECK_Y }));
 
 /** A parked cart's capsules (world). */
 export function cartCapsules(v: Vehicle): Capsule[] {
@@ -243,8 +256,8 @@ export function cartCapsules(v: Vehicle): Capsule[] {
 /** What the vehicles list makes solid, as last set (a key of the parked carts' poses and states). */
 let lastCarts = '';
 
-/** The vehicles list changed (shared/vehicles.ts setVehicles): the parked carts' capsules (shared/capsules.ts) and the
- *  unfolded ones' canopies (shared/tarp.ts), only when a cart's changed. */
+/** The vehicles list changed (shared/vehicles.ts setVehicles): the parked carts' capsules (shared/capsules.ts), the
+ *  unfolded ones' canopies (shared/tarp.ts) and the workshops (cartWorkshops), only when a cart's changed. */
 export function setCarts(list: readonly Vehicle[]) {
   const carts = list.filter((v) => isCart(v) && parked(v));
   const key = carts.map((v) => `${v.id},${v.x},${v.y},${v.z},${v.heading},${v.level ?? 0},${v.open ? 1 : 0}`).join(';');
@@ -252,6 +265,7 @@ export function setCarts(list: readonly Vehicle[]) {
   lastCarts = key;
   setCartCapsules(carts.flatMap(cartCapsules));
   setCanopyRigs(carts.filter((v) => v.open && (v.level ?? 0) >= 1).map(canopyRig));
+  workshops = carts.filter(isWorkshop);
 }
 
 /** Where the ray o + t·d first enters the box lo..hi (t ≥ 0), or null. */
