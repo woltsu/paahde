@@ -7,7 +7,7 @@
 import { BUILDS, CART_UPGRADES, countMatching, type Recipe } from '../shared/crafting.ts';
 import type { Slots } from '../shared/items.ts';
 import { ctl, isBound } from './bindings';
-import { ui } from './input';
+import { onCloseMenus, ui } from './input';
 import { itemIcon, itemLabel } from './inventory';
 import { TEXT } from '../shared/text.ts';
 
@@ -62,6 +62,7 @@ export class BuildMenu {
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement && this.isOpen) this.close(false);
     });
+    onCloseMenus(() => this.close(false));
   }
 
   get isOpen() {

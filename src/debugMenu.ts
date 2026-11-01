@@ -19,7 +19,7 @@
 import { isBound } from './bindings';
 import { BEATS } from '../shared/levels/beginning.ts';
 import { LEVELS } from '../shared/levels.ts';
-import { ui } from './input';
+import { onCloseMenus, ui } from './input';
 import { BOSS_KINDS, BOSSES, type BossKind } from '../shared/bosses.ts';
 import { isGear } from '../shared/gear.ts';
 import { CLOTH, ITEMS, RETIRED, SCRAP, stackOf, WIRING } from '../shared/items.ts';
@@ -288,6 +288,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 
     // Only reachable when the page URL has `debug` (same switch as the console handle in main.ts).
     if (!location.search.includes('debug')) return;
+    onCloseMenus(() => (p.style.display = 'none'));
     addEventListener('keydown', (e) => {
       if (!isBound('debug', e.code)) return;
       e.preventDefault();

@@ -1,6 +1,6 @@
 // The disassembly table's menu (F at the table): with a machine on it, scrap it (click twice); with the table
 // free, every machine carried in the bag to put on it. The mouse is freed like the inventory (ui.inventoryOpen).
-import { ui } from './input';
+import { onCloseMenus, ui } from './input';
 import { ctl, isBound } from './bindings';
 import { TEXT } from '../shared/text.ts';
 
@@ -56,6 +56,7 @@ export class BenchMenu {
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement && this.isOpen) this.close(false);
     });
+    onCloseMenus(() => this.close(false));
   }
 
   get isOpen() {

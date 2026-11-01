@@ -11,7 +11,7 @@ import type { WorldStats } from '../shared/protocol.ts';
 import { kbd } from './bindings';
 import { CLOCK_SVG, GROUP_SVG, HOURGLASS_SVG as HOURGLASS } from './landing';
 import { getBrowserId } from './profile';
-import { capture, setFullscreen, tools, ui } from './input';
+import { capture, closeMenus, setFullscreen, tools, ui } from './input';
 import { openMinigame } from './minigameMenu';
 import { TEXT } from '../shared/text.ts';
 import { MENU_CSS, bindOptions, optionsHtml, statsPref } from './options';
@@ -152,6 +152,15 @@ ${optionsHtml()}</div>
 
     // Capture phase, so this sees the inventory still open when its own Esc handler is about to close it.
     addEventListener('keydown', (e) => {
+      // Esc over the inventory, chest, workbench or build menu closes it and opens this menu in one press (the mouse is
+      // already free); no other handler sees the press, or it would take the mouse back. The pad's synthetic Esc (B,
+      // src/padCursor.ts, src/uiNavigation.ts) only closes them, back into the game.
+      if (e.code === 'Escape' && ui.inventoryOpen && e.isTrusted && !e.repeat && !tools.frozen && !this.open) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        ui.escClosedAt = performance.now(); // the lock change some browsers send after it doesn't toggle this again
+        return this.toggle(true);
+      }
       if (e.code === 'Escape' && ui.inventoryOpen) ui.escClosedAt = performance.now(); // the inventory, chest or workbench takes this Esc
       if (e.code !== 'Escape' || e.repeat || document.pointerLockElement || ui.inventoryOpen || performance.now() - ui.escClosedAt < 400 || tools.frozen) return; // Esc leaves the disassembly (src/teardown)
       if (document.getElementById('name') || document.getElementById('play')) return; // Esc there skips the name (src/name.ts) or leaves the minigame
@@ -199,6 +208,7 @@ ${optionsHtml()}</div>
   }
 
   private toggle(open: boolean) {
+    if (open) closeMenus(); // nothing stays open under it
     if (open && !this.open) void this.showServer();
     this.el.classList.toggle('open', open);
     // Opened by the leave-site prompt (src/input.ts): say why it came and how fullscreen avoids it, this once.

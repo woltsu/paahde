@@ -34,7 +34,7 @@ import { canDropAt, type Loot } from '../shared/loot.ts';
 import { isPlaceable } from '../shared/placed.ts';
 import { vehicleById } from '../shared/vehicles.ts';
 import { ctl, hintKeys, isBound, kbd } from './bindings';
-import { takePickup, ui } from './input';
+import { onCloseMenus, takePickup, ui } from './input';
 import type { Net } from './net';
 import { uiScale } from './uiScale';
 import { uiSound } from './uiSound';
@@ -404,6 +404,7 @@ export class InventoryHud {
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement && ui.inventoryOpen) this.toggle(false, false);
     });
+    onCloseMenus(() => this.toggle(false, false));
   }
 
   /** Open: free the mouse (staying fullscreen, see src/input.ts) and draw. Close: capture it again. */

@@ -7,7 +7,7 @@
 import { CHAT_MAX, type DeathCause, type Obituary } from '../shared/protocol.ts';
 import type { Net } from './net';
 import { isBound } from './bindings';
-import { tools, ui } from './input';
+import { onCloseMenus, tools, ui } from './input';
 import { TEXT } from '../shared/text.ts';
 
 /** How long a line stays up (ms), fading out over the last second. */
@@ -85,6 +85,7 @@ export class Chat {
     });
     // Clicking back into the game (or anywhere else) drops the line.
     this.input.addEventListener('blur', () => this.toggle(false));
+    onCloseMenus(() => this.toggle(false));
   }
 
   get open() {

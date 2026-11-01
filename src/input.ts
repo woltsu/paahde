@@ -13,6 +13,11 @@ export const tools = { frozen: false, slot: -1, getOff: false, grab: false, enga
 /** `escClosedAt`: when Esc last closed the inventory/chest/workbench, so the same press (or the lock change after it) doesn't open the Esc menu (src/menu.ts). */
 /** `closeAsked`: the browser just asked before closing the tab (Ctrl+W while windowed), so the Esc menu says why. */
 export const ui = { inventoryOpen: false, debugFreed: false, escClosedAt: -Infinity, closeAsked: false };
+/** Every overlay over the game (inventory, chest, workbench, build menu, chat, F3 panel) closes itself here, quietly
+ *  (not taking the mouse back): the Esc menu (src/menu.ts) closes them all as it opens. */
+const closers: (() => void)[] = [];
+export const onCloseMenus = (close: () => void) => void closers.push(close);
+export const closeMenus = () => closers.forEach((close) => close());
 // While the pointer is locked the game owns the keyboard: swallow browser shortcuts (Tab, F-keys, Alt, Ctrl+S...).
 // Esc frees the mouse (the browser does that itself), and then keys behave normally again.
 const captured = () => !!document.pointerLockElement;
