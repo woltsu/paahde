@@ -13,6 +13,7 @@ import { groundAt, onFlat } from './ground.ts';
 import { END_FADE, footprints, streaks } from './footprints.ts';
 import { footsteps } from './footsteps.ts';
 import { tyreDust } from './tyreDust.ts';
+import { ladderFacing } from '../shared/towers.ts';
 import { SHADOW_ONLY_LAYER } from './world/env.ts';
 import { viewCull } from './world/viewCull.ts';
 
@@ -110,6 +111,8 @@ export class Avatar {
   private poseInterval = 0;
   private model: AvatarModel;
   private facing = NaN;
+  /** Height last frame while on a ladder (NaN off one): how fast it climbs, for the legs. */
+  private ladderY = NaN;
   private stepDist = 0;
   private foot = 1;
   /** The look's body proportions (shared/look.ts bodyScale): the stride and the tag's height follow them. */
@@ -293,6 +296,11 @@ export class Avatar {
       this.poseInterval = pose.down || distance < 40 ? 0 : distance < 100 ? 1 / 30 : 1 / 15;
     }
     if (this.fall(pose, dt)) return;
+    // On a radio tower's ladder (shared/towers.ts): turned to the rungs, stepping as it goes up or down.
+    const rungs = !pose.ride && !this.levelFloor ? ladderFacing(pose.x, pose.y, pose.z) : null;
+    const rose = dt > 0 && Number.isFinite(this.ladderY) ? Math.abs(pose.y - this.ladderY) / dt : 0;
+    this.ladderY = rungs === null ? NaN : pose.y;
+    if (rungs !== null) pose = { ...pose, facing: rungs, speed: Math.min(4, rose * 1.4), vx: 0, vz: 0, grounded: true, look: 0 };
     if (pose.ride) {
       this.facing = pose.facing; // so getting off turns from here, not from where we got on
       this.streakX = NaN;

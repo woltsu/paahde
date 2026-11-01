@@ -757,6 +757,10 @@ const en = {
     /** First time out on a mud flat (shared/biomes.ts), by day and by night. */
     mudflatDay: 'A dried-up lake. The ground is even hotter than the air.',
     mudflatNight: "A dried-up lake. I wouldn't want to cross this by day.",
+    towerDay: "That's a long way up.",
+    towerNight: "A long way up. Longer in the dark.",
+    towerTop: 'I can see for miles from up here.',
+    towerVoice: "Somebody's talking. I can't make out a word.",
     stormWarning: "That beeping can't be good. I'd better get under a roof.",
     storm: ["Damn it, I can't see a thing!", "There's sand in my everything."],
     stormFront: ["That's a wall of sand. I need rock between me and it.", 'Oh hell, here it comes. I need a cliff or a roof, right now.'],

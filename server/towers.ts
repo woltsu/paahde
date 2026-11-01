@@ -10,7 +10,7 @@
 // Everyone is told which towers are alive ('towers').
 import { towerBox } from '../shared/boxes.ts';
 import { GEAR, repaired } from '../shared/gear.ts';
-import { chargeOf, makeItem, parsePart, partAt, setPart, type Item } from '../shared/items.ts';
+import { chargeOf, makeItem, parsePart, partAt, partKind, setPart, type Item } from '../shared/items.ts';
 import { towerParts } from '../shared/lootRoll.ts';
 import { mulberry32 } from '../shared/noise.ts';
 import { ORIGIN } from '../shared/origin.ts';
@@ -106,6 +106,20 @@ export class TowerServer {
     if (save || flat) this.items.change('', [box], () => setPart(it, BATTERY, { kind: b.kind, data: { ...b.data, charge: left } }));
     else setPart(it, BATTERY, { kind: b.kind, data: { ...b.data, charge: left } });
     if (save || flat) this.sendShared(box);
+  }
+
+  /** Debug menu: every missing part of the nearest tower fitted (Scrap) and its battery charged. Returns the boxes changed. */
+  debugFix(x: number, z: number): string[] {
+    const t = towersNear(x, z, 20000).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+    if (!t) return [];
+    this.made.set(t.id, t);
+    const boxes = SPOTS.map((_, i) => towerBox(t.id, i));
+    const its = SPOTS.map((_, i) => this.fixture(t, i));
+    this.items.change('', boxes, () => its.forEach((it) => GEAR[it.kind].slots.forEach((s, i) => {
+      if (!it.parts?.[i]) setPart(it, i, { kind: 'part' in s ? partKind(s.part, 'scrap') : s.scrap[0] });
+      if (it.kind === 'tower_radio' && i === BATTERY) setPart(it, i, { kind: it.parts![i]!, data: { charge: 1 } });
+    })));
+    return boxes;
   }
 
   /** The fixtures' boxes made so far (for the join message). Fitting parts goes through the usual moves (server/world.ts

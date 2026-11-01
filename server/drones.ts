@@ -5,7 +5,9 @@
 // Drones belong to a crash site: at night they turn up over the crawler and guardian ground someone is near, and go
 // when everyone has left. The scrap fields (level 0) near the start have none. A few more drones roam the open desert
 // day and night (ROAMERS), drifting in near someone now and then on long legs, and flying off again after a few
-// minutes.
+// minutes. Each radio tower (shared/towers.ts) is kept by TOWER_DRONES, day and night, circling it half way up from when
+// someone comes within TOWER_NEAR_R; shot down they stay down (no refill) until everyone has gone past TOWER_LEAVE_R, and
+// the next visit finds them back.
 import { KNOCK_MIN, knockDecay, knockSpeed, type Pusher } from '../shared/knockback.ts';
 import { ORIGIN } from '../shared/origin.ts';
 import { crashSite } from '../shared/crashsites.ts';
@@ -18,6 +20,7 @@ import { CORE_R, vortexCentre, vortexEnvelope, type Vortex } from '../shared/vor
 import { DRONE_HIT, DRONE_HP, DRONE_WRECK_S, RANGE, shotPasses } from '../shared/rifle.ts';
 import { sunElevation } from '../shared/sun.ts';
 import { heightAt } from '../shared/terrain.ts';
+import { towersNear } from '../shared/towers.ts';
 import { type BotPlayer, type Kill, r2, r3, rand, SEND_R, SITE_LEAVE_R, SITE_NEAR_R, sitesNear, wrap } from './bots.ts';
 
 /** Drones over a site at night, all drones at most; they come in from DRONE_FROM (m) and patrol within DRONE_AREA.
@@ -45,6 +48,15 @@ const ROAM_FROM: [number, number] = [300, 420];
 const ROAM_MIN = 3 * 60_000, ROAM_MAX = 6 * 60_000;
 const ROAM_LEG: [number, number] = [120, 350];
 const ROAM_START_KEEP_OUT = 250;
+/** Radio towers' drones: a tower's site is TOWER_SITE − its id. TOWER_DRONES come when someone is TOWER_NEAR_R (m) from
+ *  it, circle it TOWER_RING (m) out at TOWER_ALT (m) over the sand, and are forgotten (they come back whole next time)
+ *  once nobody is within TOWER_LEAVE_R. */
+const TOWER_SITE = -1_000_000;
+const TOWER_DRONES = 2;
+const TOWER_NEAR_R = 500, TOWER_LEAVE_R = 700;
+const TOWER_RING: [number, number] = [25, 70];
+const TOWER_ALT = 55;
+const isTowerSite = (site: number) => site <= TOWER_SITE;
 
 type Drone = {
   id: number; x: number; y: number; z: number; yaw: number;
@@ -101,6 +113,8 @@ export class DroneServer {
   /** Crash site id → when its next replacement drone comes (server ms; 0 none due); a site not in it gets all its drones
    *  at once. Forgotten once everyone has left the site (SITE_LEAVE_R) or the night is over. */
   private refill = new Map<number, number>();
+  /** The radio towers whose drones have come (shot down, they don't come again), by id, until everyone has left. */
+  private towerKept = new Map<number, { x: number; z: number }>();
 
   /**
    * Flies the drones by dt s at server time `now` (ms), time of day `tod`, through `storms`; `exposed` are the players
@@ -136,6 +150,7 @@ export class DroneServer {
       }
     } else this.refill.clear();
     if (!front) this.roam(dt, now, exposed);
+    if (!front) this.keepTowers(players, exposed);
     const v = { x: 0, y: 0, z: 0 };
     for (const d of this.drones) {
       if (d.downAt >= 0) {
@@ -152,7 +167,7 @@ export class DroneServer {
       const dark = nearStorm(storms, d.x, d.z, now);
       if (dark) d.lock = d.seek = -1;
       if (dark || d.leaving || now > d.huntUntil) d.hunt = -1;
-      let speed = DRONE_SPEED, tx = d.tx, tz = d.tz, alt = DRONE_ALT;
+      let speed = DRONE_SPEED, tx = d.tx, tz = d.tz, alt = isTowerSite(d.site) ? TOWER_ALT : DRONE_ALT;
       const prey = d.lock >= 0 ? byId.get(d.lock) : undefined;
       if (prey || d.leaving) d.seek = -1;
       if (prey) d.hunt = -1;
@@ -428,6 +443,20 @@ export class DroneServer {
     this.drones.push(d);
   }
 
+  /** Radio towers someone has come near get their drones, once: until everyone has left, none come back. */
+  private keepTowers(players: BotPlayer[], exposed: BotPlayer[]) {
+    for (const [id, t] of this.towerKept) {
+      if (!players.some((p) => Math.hypot(p.x - t.x, p.z - t.z) < TOWER_LEAVE_R)) this.towerKept.delete(id);
+    }
+    for (const p of exposed) {
+      for (const t of towersNear(p.x, p.z, TOWER_NEAR_R)) {
+        if (this.towerKept.has(t.id)) continue;
+        this.towerKept.set(t.id, { x: t.x, z: t.z });
+        for (let i = 0; i < TOWER_DRONES && this.drones.length < MAX_DRONES; i++) this.spawn(t.x, t.z, TOWER_SITE - t.id, Infinity, DRONE_FROM);
+      }
+    }
+  }
+
   private point(d: Drone) {
     if (d.site === ROAM) {
       // A long leg somewhere ahead-ish, clear of the start.
@@ -439,7 +468,7 @@ export class DroneServer {
       }
       return;
     }
-    const a = rand(-Math.PI, Math.PI), r = rand(20, DRONE_AREA);
+    const a = rand(-Math.PI, Math.PI), r = isTowerSite(d.site) ? rand(...TOWER_RING) : rand(20, DRONE_AREA);
     d.tx = d.hx + Math.sin(a) * r;
     d.tz = d.hz + Math.cos(a) * r;
   }

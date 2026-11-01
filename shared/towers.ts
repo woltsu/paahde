@@ -32,7 +32,7 @@ import { LAB } from './world.ts';
 /** Grid cell size (m): at most one tower per cell. */
 export const TOWER_CELL = 1800;
 /** The odds a cell holds a tower. */
-const TOWER_ODDS = 0.45;
+const TOWER_ODDS = 0.5;
 /** No towers this close to the origin (m). */
 export const TOWER_MIN_R = 800;
 
@@ -63,8 +63,8 @@ export const MAST_R = 0.28;
 export const PAD_R = 13, PAD_BLEND = 16;
 /** A tower reaches at most this far from its axis (m). */
 export const TOWER_REACH = PAD_R + PAD_BLEND;
-/** A tower stays this far inside its cell (m). */
-const CELL_MARGIN = TOWER_REACH + 40;
+/** A tower stays this far inside its cell (m): two in neighbouring cells stand at least twice this apart. */
+const CELL_MARGIN = 400;
 /** Most cut or fill the pad may need (m of ground height range under it). */
 const MAX_RANGE = 4;
 
@@ -327,6 +327,14 @@ export function towerLadder(x: number, y: number, z: number): { bottom: number; 
   const h = y - t.y;
   if (h < -0.5 || h > TOWER.height + 0.3) return null;
   return { bottom: t.y, top: t.y + TOWER.height };
+}
+
+/** On a ladder at world (x, y, z) (off its foot): the facing (as PlayerState.facing) that looks at its rungs, else null. */
+export function ladderFacing(x: number, y: number, z: number): number | null {
+  const lad = towerLadder(x, y, z), t = lad && towerAt(x, z);
+  if (!lad || !t || y < lad.bottom + 0.05) return null;
+  // The rungs are on the column's side towards the axis: look along -u, (-sin f, -cos f) = (-ux, -uz).
+  return Math.atan2(t.ux, t.uz);
 }
 
 /** What a shot meets at world (x, y, z) at a tower: true in a leg, the mast or the cabinet, null elsewhere. */

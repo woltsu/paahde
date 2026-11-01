@@ -336,6 +336,10 @@ wss.on('connection', (ws) => {
       p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false, facing: Math.atan2(ox, oz) };
       return;
     }
+    if (msg.t === 'debugTowerFix' && p) {
+      for (const box of towers.debugFix(p.state.x, p.state.z)) sendShared(box);
+      return;
+    }
     if (msg.t === 'debugWeather' && p) {
       storms.off = msg.off === true;
       return;

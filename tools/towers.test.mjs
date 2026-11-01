@@ -17,6 +17,7 @@ test('radio towers stand here and there, on padded ground, clear of the rest', (
   assert.ok(towers.length >= 4, `the deterministic world has towers within 6 km (${towers.length})`);
   for (const t of towers) {
     assert.ok(Math.hypot(t.x - ORIGIN.x, t.z - ORIGIN.z) >= TOWER_MIN_R);
+    for (const o of towers) if (o !== t) assert.ok(Math.hypot(o.x - t.x, o.z - t.z) >= 800, 'towers stand apart');
     assert.equal(crashSitesNear(t.x, t.z, TOWER_REACH).length, 0, 'no crash site on a tower');
     assert.ok(sheltersNear(t.x, t.z, TOWER_REACH + 30).every((s) => Math.hypot(s.x - t.x, s.z - t.z) > TOWER_REACH), 'no shelter on a tower');
     assert.equal(solarFarmsNear(t.x, t.z, 600).length, 0, 'not on a solar farm');
@@ -149,4 +150,26 @@ test('fixing a tower: its fixtures are made as you come near, open where they ar
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('a couple of drones keep a tower: shot down they stay down until everyone has left, and are back next time', async () => {
+  const { DroneServer } = await import('../server/drones.ts');
+  const t = towers[0];
+  const srv = new DroneServer();
+  const at = (x, z) => ({ id: 1, x, y: heightAt(x, z), z, safe: false });
+  const tick = (p, n = 1) => {
+    for (let i = 0; i < n; i++) srv.tick(0.1, 1000 + i * 100, 0.5, [p], [p], new Map([[1, p]]), [], () => {});
+  };
+  const mine = () => srv.drones.filter((d) => d.site <= -1_000_000 && d.downAt < 0 && !d.leaving);
+  tick(at(t.x + 900, t.z));
+  assert.equal(mine().length, 0, 'none from far off');
+  const near = at(t.x + 300, t.z);
+  tick(near);
+  assert.equal(mine().length, 2, 'two come');
+  for (const d of mine()) d.downAt = 1000; // shot down
+  tick(near, 600);
+  assert.equal(mine().length, 0, 'none come back while you stay');
+  tick(at(t.x + 1500, t.z), 5);
+  tick(near);
+  assert.equal(mine().length, 2, 'back once you have left and come again');
 });

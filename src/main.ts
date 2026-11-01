@@ -62,6 +62,7 @@ import { biome } from '../shared/biomes.ts';
 import { indoors, inShelter } from '../shared/shelters.ts';
 import { waterAt, WELL, wellAt, wellSpec } from '../shared/wells.ts';
 import { wellSound } from './wellSound';
+import { towerSound } from './towerSound';
 import { pickupSound } from './pickupSound';
 import { DynamicResolution } from './resolution';
 import { graphics, onGraphics } from './graphics';
@@ -100,7 +101,8 @@ import type { Tower } from './world/carts';
 import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
 import { openBoxes, TOWER_REACH_SPOT } from '../shared/storage.ts';
-import { SPOT_ITEMS, spotNear } from '../shared/towers.ts';
+import { SPOT_ITEMS, SPOTS, spotNear, TOWER, towersNear } from '../shared/towers.ts';
+import { windSpeed } from '../shared/power.ts';
 import { Chat } from './chat';
 import { nameGate } from './name';
 import { prologue } from './prologue';
@@ -700,6 +702,11 @@ renderer.setAnimationLoop((time) => {
   }
   const ear = orbit.camera.position;
   wellSound.update(L.things ? placedView.nearestWell(ear, 30) : null, ear, survival.fillingWell !== null);
+  // The radio towers (src/towerSound.ts): the wind in the lattice, a live one's radio muttering, also through a receiver
+  // or jammer in hand. How clearly it hears: its fixtures' mean quality (shared/gear.ts).
+  towerSound.update(ear, net.towersAlive, playerHands.held === 'jammer' || playerHands.held === 'receiver',
+    windSpeed(net.worldTime(), stormAt(net.storms, ear.x, ear.z, net.serverTime())),
+    (id) => SPOTS.reduce((a, _, i) => a + Math.max(0, quality(net.boxes[towerBox(id, i)]?.[0])), 0) / (SPOTS.length * 3), L.things);
   // What F can reach: the desert's stations, beds, scrap, machines, loot, chests, bikes, only where its things are.
   const here = net.connected && L.things;
   // F: use the work station in view, else tend the plant bed in view (planted beds can't be touched
@@ -848,6 +855,8 @@ renderer.setAnimationLoop((time) => {
     atPump: L.things && !!waterAt(m.x, m.y, m.z), dryWell: L.things ? dryWell(m) : null, mudflat: L.things && biome('mudflat', m.x, m.z) > 0.7, heat: survival.heatLevel, rising: w.rising, shade: w.shade, sips: w.sips, maxSips: w.maxSips,
     storm: storm.level, stormWarning: storm.warning, frontComing: storm.frontComing, choking: storm.choking, lee: storm.lee, gasComing: gas.coming, gassed: gas.gassing, riding: s.riding, boss: bossFx.combat,
     bag: net.boxes.bag ?? [], dead: survival.dead || net.down !== null, atPod: L.things && nearPod(m.x, m.z, 4),
+    underTower: L.things && towersNear(m.x, m.z, 14).some((t) => m.y < t.y + 3),
+    towerTop: L.things && towersNear(m.x, m.z, 8).some((t) => m.y > t.y + TOWER.height - 0.5), towerVoice: towerSound.hearing,
     beat: stage.level === m.level && stage.beat ? { ...stage.beat(m), gates: m.gates } : null });
   const vehicleKey = vehicle ? `${vehicle.v.id}:${vehicle.v.up}` : null;
   if (vehicleKey !== seenVehicle) {

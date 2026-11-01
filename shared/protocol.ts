@@ -153,6 +153,7 @@ export type ClientMsg =
   | { t: 'debugVortexVisit' }
   | { t: 'debugSolarVisit' }
   | { t: 'debugTowerVisit' }
+  | { t: 'debugTowerFix' }
   | { t: 'debugHeat'; off: boolean }
   // Debug menu: no random sandstorms in this world (shared by everyone) while on.
   | { t: 'debugWeather'; off: boolean }

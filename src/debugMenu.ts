@@ -34,7 +34,7 @@ export class DebugMenu {
   private panel = document.createElement('div');
 
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
-  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
+  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean) => void = () => {},
     goLevel: (key: string) => void = () => {}) {
@@ -112,7 +112,8 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <details data-sec="travel"><summary>Travel</summary>
 <div class="grid"><button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">To vortex</button>
 <button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">To solar farm</button>
-<button id="dbgTowerVisit" title="Put you by the foot of the nearest radio tower's ladder">To radio tower</button></div>
+<button id="dbgTowerVisit" title="Put you by the foot of the nearest radio tower's ladder">To radio tower</button>
+<button id="dbgTowerFix" title="Fit every missing part of the nearest radio tower (Scrap) and charge its battery: it comes alive">Fix radio tower</button></div>
 <div class="sub">Level</div>
 <div class="grid">${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
 <div class="sub">Beginning beat</div>
@@ -152,6 +153,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     p.querySelector('#dbgVortexVisit')!.addEventListener('click', () => summonStorm('vortexVisit'));
     p.querySelector('#dbgSolarVisit')!.addEventListener('click', () => summonStorm('solarVisit'));
     p.querySelector('#dbgTowerVisit')!.addEventListener('click', () => summonStorm('towerVisit'));
+    p.querySelector('#dbgTowerFix')!.addEventListener('click', () => summonStorm('towerFix'));
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);

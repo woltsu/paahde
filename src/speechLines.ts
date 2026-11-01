@@ -56,6 +56,10 @@ export type SpeechState = {
   dead: boolean;
   /** By a crashed pod, like the one we came down in (shared/pods.ts). */
   atPod: boolean;
+  /** At a radio tower's foot (shared/towers.ts); on its top deck; hearing a live one's radio (src/towerSound.ts). */
+  underTower: boolean;
+  towerTop: boolean;
+  towerVoice: boolean;
   /** In the beginning (docs/levels/tutorial.md): its beat (shared/levels/beginning.ts BEATS), its gates and the thing in
    *  front of us (src/levels/beginning: the tray, the gap, the cabinet, the window); null elsewhere. */
   beat: { n: number; gates: number; near: 'tray' | 'gap' | 'cabinet' | 'window' | null } | null;
@@ -202,6 +206,11 @@ export const LINES: Line[] = [
   { id: 'pod', on: 'tick', when: (s) => !s.dead && s.atPod && s.day, say: TEXT.speech.podDay },
   { id: 'pod', on: 'tick', when: (s) => !s.dead && s.atPod, say: TEXT.speech.podNight },
   { id: 'shelter', on: 'tick', when: (s) => s.shelter, say: TEXT.speech.shelter },
+  // A radio tower: under it, on top of it by day, and its radio coming alive.
+  { id: 'tower', on: 'tick', when: (s) => !s.dead && s.underTower && s.day, say: TEXT.speech.towerDay },
+  { id: 'tower', on: 'tick', when: (s) => !s.dead && s.underTower, say: TEXT.speech.towerNight },
+  { id: 'towerTop', on: 'tick', when: (s) => !s.dead && s.towerTop && s.day, say: TEXT.speech.towerTop },
+  { id: 'towerVoice', priority: 1, queueFor: 20_000, on: 'tick', when: (s) => !s.dead && s.towerVoice, say: TEXT.speech.towerVoice },
   { id: 'mudflat', on: 'tick', when: (s) => !s.dead && s.mudflat && s.day, say: TEXT.speech.mudflatDay },
   { id: 'mudflat', on: 'tick', when: (s) => !s.dead && s.mudflat, say: TEXT.speech.mudflatNight },
 

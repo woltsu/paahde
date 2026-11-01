@@ -669,10 +669,11 @@ export class Net {
 
   /** Debug menu: a sandstorm where we stand, for everyone; `front`: a mega-storm front over everyone at once; 'gas':
    *  poison gas creeping in over everyone. */
-  summonStorm(front: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' = false) {
+  summonStorm(front: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix' = false) {
     if (front === 'vortexVisit') return this.send({ t: 'debugVortexVisit' });
     if (front === 'solarVisit') return this.send({ t: 'debugSolarVisit' });
     if (front === 'towerVisit') return this.send({ t: 'debugTowerVisit' });
+    if (front === 'towerFix') return this.send({ t: 'debugTowerFix' });
     this.send({ t: 'storm', ...(front === 'gas' ? { gas: true } : front === 'vortex' ? { vortex: true } : front ? { front } : {}) });
   }
 
