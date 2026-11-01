@@ -15,6 +15,7 @@ import { BAG_SLOTS, BIKE_COLS, BIKE_ROWS, CHEST_COLS, CHEST_ROWS, coverage, grid
 import { CHEST, placed, PLACED_REACH, placedReach } from './placed.ts';
 import type { PlayerState } from './sim.ts';
 import { vehicleById, vehiclesNear } from './vehicles.ts';
+import { isCart } from './cart.ts';
 import { nearStation } from './stations.ts';
 import { TEXT } from './text.ts';
 
@@ -40,7 +41,10 @@ const SIZES: Record<BoxKind, (box: string) => number> = {
   corpse: (box) => (corpseId(box) >= 0 ? CHEST_COLS * CHEST_ROWS : 0),
   bld: (box) => (building(box) ? 1 : 0),
   veh: (box) => (vehicleById(vehicleId(box)) ? 1 : 0),
-  cargo: (box) => (vehicleById(cargoId(box))?.up ? BIKE_COLS * BIKE_ROWS : 0),
+  cargo: (box) => {
+    const v = vehicleById(cargoId(box));
+    return !v?.up ? 0 : isCart(v) ? CHEST_COLS * CHEST_ROWS : BIKE_COLS * BIKE_ROWS; // (a cart's box is a chest's size)
+  },
 };
 
 /**
@@ -82,7 +86,7 @@ const LABELS: Record<BoxKind, (box: string) => string> = {
   corpse: () => TEXT.boxes.corpse,
   bld: (box) => ITEMS[building(box)?.kind ?? '']?.label ?? '',
   veh: (box) => ITEMS[vehicleById(vehicleId(box))?.kind ?? '']?.label ?? '',
-  cargo: () => TEXT.boxes.cargo,
+  cargo: (box) => (isCart(vehicleById(cargoId(box))) ? TEXT.items.cart : TEXT.boxes.cargo),
 };
 
 /** Boxes open to a player standing at `s` besides the bag, nearest chest first. */
@@ -101,10 +105,11 @@ export function openBoxes(s: PlayerState, slack = 0): BoxId[] {
     .filter((b) => b.d < PLACED_REACH + slack)
     .sort((a, b) => a.d - b.d);
   for (const b of near2) out.push(`bld${b.p.id}`);
-  // Vehicles in reach that nobody rides: their parts, and a working one's cargo.
+  // Vehicles in reach that nobody rides: their parts, and a working one's cargo (a cart's box: it has no parts to fit,
+  // and none while it's towed).
   if (!s.riding) {
     for (const v of vehiclesNear(s, slack)) {
-      out.push(`veh${v.id}`);
+      if (!isCart(v)) out.push(`veh${v.id}`);
       if (v.up) out.push(`cargo${v.id}`);
     }
   }

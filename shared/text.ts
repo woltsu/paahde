@@ -37,6 +37,7 @@ const en = {
     canteen: 'Water bottle',
     spyglass: 'Telescope',
     motorcycle: 'Motorcycle',
+    cart: 'Cart',
     backpack: 'Backpack',
     storm_detector: 'Storm detector',
     wristpad: 'Wrist computer',
@@ -106,6 +107,7 @@ const en = {
    *  key or button names (src/bindings.ts hintKeys). */
   gearUse: {
     motorcycle: (k: HintKeys) => `Get on with ${k.interact}, off with ${k.bike}.`,
+    cart: () => 'Holds whatever you put in it, wherever it goes.',
     spyglass: (k: HintKeys) => `Hold ${k.use} to look through it, and use ${k.zoom} to zoom.`,
     canteen: (k: HintKeys) => `Hold ${k.use} to drink. You can fill it up at any pump.`,
     backpack: () => 'Gives your bag more room past the hotbar.',
@@ -159,6 +161,8 @@ const en = {
     repair: (what: string) => `Repair ${lower(what)}`,
     /** A working one: F gets on. */
     getOn: 'Get on',
+    /** Your own cart's tongue, hitched to a bike (shared/cart.ts): F lets it go. */
+    unhitch: 'Unhitch',
     /** The beginning's pod, its panel lit (docs/levels/tutorial.md). */
     getIn: 'Get in',
     plantSeeds: 'Plant seeds',

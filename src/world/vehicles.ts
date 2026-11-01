@@ -65,7 +65,7 @@ const LOCATE_ID = -500_000_000;
  *  ridden: where it stood is no use then. */
 export function ownVehicleTargets(mine: ReadonlySet<number>, color: number): LocatorTarget[] {
   if (!mine.size) return [];
-  return vehicles.flatMap((v) => (mine.has(v.id) && parked(v) ? [{ id: LOCATE_ID - v.id, color, x: v.x, y: v.y + 1, z: v.z, shape: 'bike' as const }] : []));
+  return vehicles.flatMap((v) => (mine.has(v.id) && parked(v) && v.kind !== 'cart' ? [{ id: LOCATE_ID - v.id, color, x: v.x, y: v.y + 1, z: v.z, shape: 'bike' as const }] : []));
 }
 
 export class VehicleView {
@@ -81,6 +81,7 @@ export class VehicleView {
   update(list: Vehicle[], mine: ReadonlySet<number>, me: { x: number; y: number; z: number }, riding: (id: number) => boolean) {
     const want = new Map<number, Vehicle>();
     for (const v of list) {
+      if (v.kind === 'cart') continue; // (src/world/carts.ts)
       if (v.rider !== undefined && riding(v.rider)) continue;
       if (Math.hypot(v.x - me.x, v.z - me.z) > VIEW) continue;
       want.set(v.id, v);

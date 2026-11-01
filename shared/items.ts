@@ -26,6 +26,8 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   canteen: { label: TEXT.items.canteen, stack: 1, size: [1, 2] },
   spyglass: { label: TEXT.items.spyglass, stack: 1, size: [2, 1] },
   motorcycle: { label: TEXT.items.motorcycle, stack: 1, size: [4, 2] },
+  // The cart (shared/cart.ts): a vehicle like the motorcycle, never carried; its item (its level) stays in its box.
+  cart: { label: TEXT.items.cart, stack: 1, size: [4, 2] },
   backpack: { label: TEXT.items.backpack, stack: 1, size: [2, 2] },
   storm_detector: { label: TEXT.items.storm_detector, stack: 1, size: [1, 2] },
   wristpad: { label: TEXT.items.wristpad, stack: 1 },
@@ -167,8 +169,9 @@ export type Item = { id: number; kind: string; n: number; parts?: (string | null
  * `color`: a beacon's light, by its index in BEACON_COLORS (shared/placed.ts); the first when not set.
  * `fitted`: gear's (a building's, a vehicle's) fitted parts' own data, by part slot like `parts`: a part keeps its
  *   data while it's fitted. Always move parts with partAt / setPart, never `parts` alone.
+ * `level`: a cart's level (shared/cart.ts, docs/cart.md: 1 shade, 2 workshop); 0 when not set.
  */
-export type ItemData = { worn?: number; charge?: number; color?: number; fitted?: (ItemData | null)[] };
+export type ItemData = { worn?: number; charge?: number; color?: number; fitted?: (ItemData | null)[]; level?: number };
 
 /** `data` as an item's field to spread into it: a copy (its fitted parts' too), or nothing when there's none. */
 export const withData = (data: ItemData | null | undefined): { data?: ItemData } =>

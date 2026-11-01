@@ -37,7 +37,7 @@ export const CACHE_PARTS = PART_IDS.filter((p) => !CACHES.noParts.includes(p));
 export const RARE_PARTS = PART_IDS.filter((p) => !RARE_FINDS.noParts.includes(p));
 /** Broken gear a cache can hold (not the jammer or the receivers; the guns have their own odds: CACHES.contents.pistol
  *  and .rifle). */
-export const CACHE_GEAR = GEAR_KINDS.filter((k) => !(k in GUNS) && k !== JAMMER && !receiverBoss(k) && !GEAR[k].built);
+export const CACHE_GEAR = GEAR_KINDS.filter((k) => !(k in GUNS) && k !== JAMMER && !receiverBoss(k) && !GEAR[k].built && k !== 'cart');
 
 const between = (rand: Rand, a: number, b: number) => a + rand() * (b - a);
 export const pick = <T>(a: readonly T[], rand: Rand) => a[Math.floor(rand() * a.length)];
@@ -161,6 +161,21 @@ export function arrivalBikeSpot(pod: number, taken: { x: number; z: number }[]):
     }
   }
   return last && { ...last, heading: 0.6 };
+}
+
+/** Where a player's cart stands (shared/cart.ts, server/vehicles.ts arriveCart): by their pod as their bike does
+ *  (arrivalBikeSpot, clear of `taken`: the vehicles and placed things there now, the bike laid out just before among
+ *  them); with no pods (the dev lab), round where you start, behind you, ARRIVAL_BIKE_GAP from everything taken. */
+export function cartSpot(pod: number, taken: { x: number; z: number }[]): { x: number; z: number; heading: number } {
+  const at = arrivalBikeSpot(pod, taken);
+  if (at) return at;
+  const free = (x: number, z: number) => taken.every((t) => Math.hypot(t.x - x, t.z - z) >= ARRIVAL_BIKE_GAP + 1);
+  for (const d of [7, 11, 15, 19]) for (let i = 0; i < 12; i++) {
+    const a = Math.ceil(i / 2) * (i % 2 ? 0.45 : -0.45);
+    const x = LAB_SPAWN.x + Math.sin(a) * d, z = LAB_SPAWN.z + Math.cos(a) * d;
+    if (clearSand(x, z) && free(x, z)) return { x, z, heading: Math.PI + a };
+  }
+  return { x: LAB_SPAWN.x + 6, z: LAB_SPAWN.z + 6, heading: Math.PI };
 }
 
 /** Where a find of FINDS level `level` lies: among the debris of a crash site of that level (`sites`: the ones finds lie

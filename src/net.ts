@@ -87,6 +87,9 @@ export type RemotePlayer = {
   pitch: number; // camera pitch in radians (negative = looking down)
   riding: boolean; // on the sand bike; facing is then the bike's heading
   nose: number; // the bike's pitch (PlayerState.nose)
+  /** The cart they tow (PlayerState.tow: its vehicle id, 0 none) and its heading (PlayerState.hitch, shared/cart.ts). */
+  tow: number;
+  hitch: number;
   jumpHeld: boolean; // Space down: a wheelie while riding
   vy: number;
   /** Kind of the item in their hand (selected hotbar slot), null for none; the gear they wear (wornGear bits). */
@@ -552,6 +555,11 @@ export class Net {
     if (this.connected) this.send({ t: 'mount', id });
   }
 
+  /** Let our cart `id` go from the bike it's linked to (shared/cart.ts); the server answers 'vehicles' or a 'notice'. */
+  unhitch(id: number) {
+    if (this.connected) this.send({ t: 'unhitch', id });
+  }
+
   tend(bed: number) {
     if (this.connected) this.send({ t: 'tend', bed });
   }
@@ -683,6 +691,7 @@ export class Net {
       heading: a.riding === b.riding ? lerpAngle(a.heading, b.heading, alpha) : b.heading, // mounting sets it
       facing: lerpAngle(a.facing, b.facing, alpha),
       nose: a.riding === b.riding ? a.nose + (b.nose - a.nose) * alpha : b.nose,
+      hitch: a.tow === b.tow ? lerpAngle(a.hitch, b.hitch, alpha) : b.hitch, // hitching sets it
     };
   }
 
@@ -1003,6 +1012,7 @@ export class Net {
       sliding: server.sliding, crouching: server.crouching, slideCool: server.slideCool, slideSpent: server.slideSpent,
       riding: server.riding, bikeHeld: server.bikeHeld, heading: server.heading, bike: server.bike,
       nose: server.nose ?? 0, noseSpin: server.noseSpin ?? 0, level: server.level ?? 0, gates: server.gates ?? 0,
+      tow: server.tow ?? 0, hitch: server.hitch ?? 0,
     };
     for (const p of this.pending) s = step(s, p.input, p.yaw, p.drag, this.legPosts, p.pull);
     this.errorX += this.me.x - s.x;
@@ -1013,7 +1023,8 @@ export class Net {
     this.snapNext = false;
     // Move the previous tick with the correction, so view() between them doesn't jump either.
     const p = this.prev;
-    this.prev = { ...p, x: p.x + s.x - this.me.x, y: p.y + s.y - this.me.y, z: p.z + s.z - this.me.z, heading: p.heading + s.heading - this.me.heading };
+    this.prev = { ...p, x: p.x + s.x - this.me.x, y: p.y + s.y - this.me.y, z: p.z + s.z - this.me.z, heading: p.heading + s.heading - this.me.heading,
+      tow: s.tow, hitch: p.tow === s.tow ? p.hitch + s.hitch - this.me.hitch : s.hitch };
     this.me = s;
   }
 
@@ -1034,7 +1045,8 @@ export class Net {
         id: pb.id, color: pb.color, look: pb.look ?? 0,
         x: pa.x + (pb.x - pa.x) * t, y: pa.y + (pb.y - pa.y) * t, z: pa.z + (pb.z - pa.z) * t,
         facing: lerpAngle(pa.facing, pb.facing, t), speed: Math.hypot(pick.vx, pick.vz), vx: pick.vx, vz: pick.vz, grounded: pick.grounded, sliding: pick.sliding ?? false, crouching: pick.crouching ?? false,
-        riding: pick.riding ?? false, nose: (pa.nose ?? 0) + ((pb.nose ?? 0) - (pa.nose ?? 0)) * t, jumpHeld: pick.jumpHeld ?? false, vy: pick.vy, item: pick.item ?? null, gear: pick.gear ?? 0, tiers: pick.tiers ?? 0, bike: pick.bike ?? 0, drinking: pick.hands === 2, filling: pick.hands === 3, grinding: pick.hands === 5 ? 2 : pick.hands === 4 ? 1 : 0,
+        riding: pick.riding ?? false, nose: (pa.nose ?? 0) + ((pb.nose ?? 0) - (pa.nose ?? 0)) * t,
+        tow: pick.tow ?? 0, hitch: (pa.tow ?? 0) === (pb.tow ?? 0) ? lerpAngle(pa.hitch ?? 0, pb.hitch ?? 0, t) : (pick.hitch ?? 0), jumpHeld: pick.jumpHeld ?? false, vy: pick.vy, item: pick.item ?? null, gear: pick.gear ?? 0, tiers: pick.tiers ?? 0, bike: pick.bike ?? 0, drinking: pick.hands === 2, filling: pick.hands === 3, grinding: pick.hands === 5 ? 2 : pick.hands === 4 ? 1 : 0,
         aiming: pick.aim === 1 || this.justFired(pb.id),
         pitch: pitchFromQ(pa.pitch ?? 32768) * (1 - t) + pitchFromQ(pb.pitch ?? 32768) * t, down: pb.down ?? null,
       });

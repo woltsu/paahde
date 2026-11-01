@@ -113,6 +113,26 @@ Unfolded, both bench tops are at y 0.88 (flush with the deck), |x| 0.68 .. 1.33 
 trestles' feet on the ground at |x| ≈ 1.30, z ±0.98. The workbench's tools sit near its outer edge, the table's middle
 is clear. Packed, the sides are the cart's walls (top 1.53), so hiding them below level 2 leaves the bed open-sided.
 
+## As built (phase 1, November 2026)
+
+- `shared/cart.ts`: `TOW_LENGTH` 2.4 m (axle to coupler), `HITCH_BACK` 0.95 m (bike centre to hitch point), `HITCH_MAX`
+  100°, hitching within `HITCH_REACH` 0.8 m going backwards 0.3–3 m/s (`backingUpTo`; standing still, as after getting
+  on beside it, doesn't hitch). `towHitch` is the step, `towedPose`/`cartAxle` the pose, `couplerOf`, `atTongue`,
+  `cartTarget` (bed or tongue under the crosshair), `cartLevel`, `CART_LEVEL_NODES` (level 1: `pole_a`, `pole_b`, their
+  tips, `legs`; level 2: `side_l`, `side_r`, `leg_l`, `leg_r`).
+- `Vehicle` gets `hitched` (bike id), `open` and `level` (from the item, for drawing); columns `hitched`, `open`. A
+  towed cart has `rider` set to the tower's public id, like a ridden bike, so it's not `parked` and its box is shut.
+- The cart's item box `veh<id>` isn't listed open (no parts to fit); its box `cargo<id>` is CHEST_COLS × CHEST_ROWS,
+  labelled with the cart's name.
+- Server: `arriveCart` (grant `cart`, every join; the lab too, by the spawn: `shared/lootRoll.ts` `cartSpot`),
+  `tryHitch` (after every step, server/world.ts `offBike`), `unhitch` (message `unhitch`), `mount` tows a linked cart of
+  the rider's own and lets anyone else's go, `release` parks the towed cart at `towedPose` of the state it got off in.
+- The client draws a towed cart from the tower's state: ours from the prediction (`net.view` interpolates `hitch`),
+  others' from their pose tuple (indices 12, 13: `tow`, `hitch`). The stand swings down (`rotation.x` +90°, the table
+  above) while it's not linked to a bike. `src/world/carts.ts` loads `cart.glb`, falling back to a stand-in built in code
+  to the same contract if it fails to load (a coupler not at z = −TOW_LENGTH is warned about in the console).
+- Not yet: the cart on the locator bar, a rattle (`src/cartSound.ts`), speech.
+
 ## Phases
 
 1. Cart and towing, level 0 with its box: sim, server, drawing, hitching. Tests: towing deterministic (server and client

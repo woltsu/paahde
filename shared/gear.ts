@@ -50,6 +50,8 @@ const RECEIVER = { better: 'how steady its needle', use: TEXT.gearUse.receiver }
 export const GEAR: Record<string, GearSpec> = {
   motorcycle: { slots: [P('motor'), P('battery'), P('bearing')], vehicle: true, better: 'top speed and acceleration',
     use: TEXT.gearUse.motorcycle },
+  // The cart (shared/cart.ts, docs/cart.md): towed behind the bike, no part slots; its level is its item's (ItemData.level).
+  cart: { slots: [], vehicle: true, better: 'nothing', use: TEXT.gearUse.cart },
   spyglass: { slots: [P('gear'), P('bearing')], better: 'zoom', use: TEXT.gearUse.spyglass },
   canteen: { slots: [P('valve'), CLOTH], better: 'how many sips it holds',
     use: TEXT.gearUse.canteen },

@@ -2,6 +2,30 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-01 — The cart, phase 1: towed behind the bike, its box
+
+- **Why:** the portable camp (docs/cart.md) replaces the built benches and chest; phase 1 is the cart itself, towing
+  and its box (level 0). No unfolding, upgrades, canopy or benches yet.
+- **What:** a vehicle kind `cart` (`GEAR.cart`, no part slots; its level in its item's `ItemData.level`), one per player,
+  standing by their pod (server/vehicles.ts `arriveCart`, a grant: new players at once, existing ones on their next
+  join; in the lab by the spawn), theirs. F on it parked opens its box `cargo<id>` (chest size, shared by everyone); it
+  rides along and can't be opened while towed.
+- **Towing (shared/sim.ts, shared/cart.ts):** `PlayerState.tow` (the cart's id) and `hitch` (its heading); the hitch
+  point is 0.95 m behind the bike, the axle 2.4 m behind that, following it each tick (new axle = H − L·unit(H − old
+  axle)), at most 100° off the bike's line. Back the bike up slowly (0.3–3 m/s) with its hitch point within 0.8 m of
+  your own parked cart's coupler and the server hitches it (`tryHitch`, after each step). Getting off parks both, the
+  cart behind, still linked (`Vehicle.hitched`, a column); getting back on tows it again; F on its tongue on foot lets
+  it go. Someone else getting on the bike it's linked to lets it go: only the owner tows. Dying or leaving parks both.
+  Poses carry `tow` and `hitch` (protocol 5), so others draw it.
+- **Reverse fix:** the brake held a bike at a standstill on any slope that rolls it forward (it braked to 0 every tick
+  and never got to reversing); it now reverses below 0.15 m/s forward. Backing up is how the cart hitches.
+- **Drawing (src/world/carts.ts):** `public/models/cart.glb` when it's there (its node contract in docs/cart.md), else a
+  stand-in built in code with the same nodes and pivots; wheels spin with the ground covered, the stand swings down
+  when unhitched, a level's pieces hidden below it. Not on the locator bar yet.
+- **Test:** `tools/cart.test.mjs` (bit-identical towing and the replay from the sent state; the axle at the tongue's
+  length, the jackknife clamp, reversing; in a real world: hitch by backing up, ride off, park and remount linked, the
+  box keeps its things, nothing goes in while towed, unhitch at the tongue, a stranger can't unhitch or tow it).
+
 ## 2026-10-29 — The tarp: a shelter strung between two poles, made by hand
 
 - **Why:** the user wanted to put the tarp up without a wrench, from what lies by the pods, and didn't like the pyramid

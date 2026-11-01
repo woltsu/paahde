@@ -1,5 +1,5 @@
 // Vehicles: things standing in the world that are repaired and ridden where they are, never carried (shared/gear.ts
-// `vehicle`): so far the motorcycle. One per player lies broken on its side by the crashed pod (shared/tables.ts
+// `vehicle`): the motorcycle, and the cart towed behind it (shared/cart.ts, docs/cart.md). One per player lies broken on its side by the crashed pod (shared/tables.ts
 // HOME_BIKE) and a few out at the crash sites (FINDS.motorcycle); F on a broken one opens its part slots next to the bag (its
 // item is in the shared box `veh<id>`, shared/gear.ts vehicleBox, parts fitted like a building's) and, with every slot
 // filled, Repair stands it up. F on a working one gets on (the server starts the mount, shared/sim.ts; the bike key or
@@ -13,9 +13,12 @@ import type { PlayerState } from './sim.ts';
 /** A vehicle: kind (a GEAR kind with `vehicle`), where it stands (y: the ground under it) and its heading (same
  *  convention as PlayerState.heading: forward is (-sin, -cos)), `up` once repaired (standing on its wheels; broken
  *  ones lie on their side), the parts fitted in it (its tier and look) and `rider`: the public id of whoever is
- *  getting on or riding it (it isn't drawn here then: the rider's state is the bike). */
+ *  getting on or riding it (it isn't drawn here then: the rider's state is the bike), or towing it (a cart: the rider's
+ *  PlayerState.tow is it, its pose shared/cart.ts towedPose). A cart's own: `hitched`, the bike (vehicle id) it's linked
+ *  to (towed, or parked behind it), `open` (unfolded: docs/cart.md, always false for now) and `level` (its item's
+ *  ItemData.level). */
 export type Vehicle = { id: number; kind: string; x: number; y: number; z: number; heading: number; up: boolean;
-  parts: (string | null)[]; rider?: number };
+  parts: (string | null)[]; rider?: number; hitched?: number; open?: boolean; level?: number };
 
 /** F reaches a vehicle within this far (m, horizontally from the feet to the edge of its footprint). */
 export const VEHICLE_REACH = 3.2;
@@ -66,7 +69,7 @@ export function vehicleTarget(feet: { x: number; y: number; z: number }, yaw: nu
   for (const v of list) {
     // Only one F can use: in reach as its boxes are (openBoxes, vehiclesNear). The crosshair alone reaches a little
     // further, and F there opened the bag without the bike.
-    if (!parked(v) || !inReach(feet, v)) continue;
+    if (!parked(v) || !inReach(feet, v) || v.kind === 'cart') continue; // (carts: shared/cart.ts cartTarget)
     // Into its frame: x to its right, z backwards (its forward is -z), y up from the ground under it.
     const rx = Math.cos(v.heading), rz = -Math.sin(v.heading), bx = Math.sin(v.heading), bz = Math.cos(v.heading);
     const ox = ex - v.x, oz = ez - v.z;

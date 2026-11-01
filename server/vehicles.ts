@@ -7,11 +7,19 @@
 // is parked where they are. Keeps shared/vehicles.ts's list in step and broadcasts it when it changes. Each one is
 // the player's who stood it up (one stood up before there were owners: whoever rides it first); each player is told
 // which are theirs (`mine` in the 'vehicles' message, never who owns the others: the owner is a browser ID).
+//
+// Carts (shared/cart.ts, docs/cart.md): one per player, standing by their pod (arriveCart(), once, a grant: existing
+// players get theirs on their next join), theirs from the start. Backing the bike you ride slowly up to your own parked
+// cart's coupler hitches it (tryHitch(), each tick: the state is set as mount() sets it, the client reconciles). It stays
+// linked to that bike (`hitched`): getting off parks both, the cart behind (release()); getting back on tows it again
+// (mount()); F on its tongue on foot lets it go (unhitch()). Someone else getting on the bike it's linked to lets it go
+// too: only its owner tows it. Its box cargo<id> rides along.
 import { cargoBox, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bikeLevel, GEAR, isVehicle, partsOf, repaired, scrapParts } from '../shared/gear.ts';
 import { partKind, type ItemData } from '../shared/items.ts';
 import { coreCrashSites } from '../shared/crashsites.ts';
-import { arrivalBikeSpot, brokenParts, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
+import { arrivalBikeSpot, brokenParts, cartSpot, findSpot, foundData, homeBikeSpot, nearPiles } from '../shared/lootRoll.ts';
+import { atTongue, backingUpTo, CART, cartLevel, hitchHeading, isCart, towedPose } from '../shared/cart.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
 import type { PlayerState } from '../shared/sim.ts';
 import { FINDS, HOME_BIKE } from '../shared/tables.ts';
@@ -35,6 +43,8 @@ const MIGRATED = 'vehicles';
 const HOME_GIVEN = 'home_bike_given';
 /** A player's grant (db markGrant) that says their own broken motorcycle has been laid out (arrive()). */
 const ARRIVAL_GRANT = 'arrival_bike';
+/** A player's grant that says their cart has been laid out by their pod (arriveCart()). */
+const CART_GRANT = 'cart';
 const KIND = 'motorcycle';
 
 export class VehicleServer {
@@ -56,7 +66,8 @@ export class VehicleServer {
     if (db.getSetting(MIGRATED) === undefined) this.migrate();
     const rows = db.loadVehicles().filter((r) => isVehicle(r.kind));
     // The list first (shared/storage.ts opens the boxes by it), then each one's parts from its box.
-    setVehicles(rows.map((r) => ({ id: r.id, kind: r.kind, x: r.x, y: r.y, z: r.z, heading: r.heading, up: r.up, parts: [] })));
+    setVehicles(rows.map((r) => ({ id: r.id, kind: r.kind, x: r.x, y: r.y, z: r.z, heading: r.heading, up: r.up, parts: [],
+      ...(isCart(r) ? { open: r.open, ...(r.hitched !== null && rows.some((b) => b.id === r.hitched) ? { hitched: r.hitched } : {}) } : {}) })));
     for (const r of rows) {
       this.src.set(r.id, r.src);
       if (r.owner) this.owner.set(r.id, r.owner);
@@ -69,10 +80,10 @@ export class VehicleServer {
     this.changed = false;
   }
 
-  /** The vehicle as its box has it: the parts fitted now. */
+  /** The vehicle as its box has it: the parts fitted now (a cart's level). */
   private withParts(v: Vehicle): Vehicle {
     const it = this.items.slots('', vehicleBox(v.id))[0];
-    return { ...v, parts: it ? partsOf(it) : [] };
+    return { ...v, parts: it ? partsOf(it) : [], ...(isCart(v) ? { level: cartLevel(it) } : {}) };
   }
 
   private set(list: Vehicle[]) {
@@ -85,12 +96,12 @@ export class VehicleServer {
   }
 
   /** A new vehicle (in the table, its item in its box with `parts`). Call inside a transaction. */
-  private add(x: number, z: number, heading: number, parts: (string | null)[], up: boolean, src: string, y = heightAt(x, z), data?: ItemData): Vehicle {
-    const id = this.db.insertVehicle(KIND, x, y, z, heading, up, src);
-    const v: Vehicle = { id, kind: KIND, x, y, z, heading, up, parts: [...parts] };
+  private add(x: number, z: number, heading: number, parts: (string | null)[], up: boolean, src: string, y = heightAt(x, z), data?: ItemData, kind = KIND): Vehicle {
+    const id = this.db.insertVehicle(kind, x, y, z, heading, up, src);
+    const v: Vehicle = { id, kind, x, y, z, heading, up, parts: [...parts], ...(kind === CART ? { open: false, level: data?.level ?? 0 } : {}) };
     this.src.set(id, src);
     this.set([...vehicles, v]); // (its box opens with it: shared/storage.ts boxSize)
-    this.items.stowNew(vehicleBox(id), KIND, parts, data);
+    this.items.stowNew(vehicleBox(id), kind, parts, data);
     return v;
   }
 
@@ -122,6 +133,22 @@ export class VehicleServer {
       }
       const at = arrivalBikeSpot(pod, [...vehicles, ...placed]);
       return at ? this.add(at.x, at.z, at.heading, this.homeParts(), false, 'arrival').id : null;
+    });
+  }
+
+  /**
+   * Player `browserId` (any join) has a cart standing by their pod `pod`, theirs, level 0 and its box empty: laid out
+   * once (a grant), so a new player's is there from the start and an existing player's comes on their next join. In the
+   * lab, by its spawn (shared/lootRoll.ts cartSpot). Returns the new one's id, if one was laid out.
+   */
+  arriveCart(browserId: string, pod: number): number | null {
+    if (this.db.hasGrant(browserId, CART_GRANT)) return null;
+    return this.db.tx(() => {
+      this.db.markGrant(browserId, CART_GRANT);
+      const at = cartSpot(pod, [...vehicles, ...placed]);
+      const v = this.add(at.x, at.z, at.heading, [], true, 'arrival', undefined, undefined, CART);
+      this.own(v.id, browserId);
+      return v.id;
     });
   }
 
@@ -244,7 +271,7 @@ export class VehicleServer {
    */
   mount(rider: number, browserId: string, s: PlayerState, id: unknown): PlayerState | string {
     const v = vehicles.find((q) => q.id === id);
-    if (!v) return TEXT.notice.alreadyGone;
+    if (!v || v.kind !== KIND) return TEXT.notice.alreadyGone;
     if (s.riding || this.ridden(rider)) return TEXT.notice.getOffFirst;
     if (!parked(v)) return TEXT.notice.someoneOnIt;
     if (!inReach(s, v, REACH_SLACK)) return TEXT.notice.tooFar;
@@ -252,15 +279,70 @@ export class VehicleServer {
     if (!v.up || !bike) return TEXT.notice.broken;
     this.update(v.id, { rider });
     if (!this.owner.has(v.id)) this.own(v.id, browserId);
+    // A cart linked to it: towed again if it's theirs; someone else's is let go where it stands.
+    const cart = this.cartOn(v.id);
+    const tow = cart && parked(cart) && this.owner.get(cart.id) === browserId ? cart : undefined;
+    if (tow) this.update(tow.id, { rider });
+    else if (cart) this.hitch(cart.id, undefined);
     return {
       ...s, x: v.x, y: v.y, z: v.z, vx: 0, vy: 0, vz: 0, sliding: false, crouching: false,
-      riding: true, heading: v.heading, bike, nose: 0, noseSpin: 0,
+      riding: true, heading: v.heading, bike, nose: 0, noseSpin: 0, tow: tow?.id ?? 0, hitch: tow?.heading ?? 0,
     };
   }
 
-  /** The vehicle player `rider` is riding, if any. */
+  /** The cart linked to bike `bike` (vehicle id), if any. */
+  private cartOn(bike: number): Vehicle | undefined {
+    return vehicles.find((c) => isCart(c) && c.hitched === bike);
+  }
+
+  /** Cart `id` linked to bike `bike` from now on (undefined: to none). */
+  private hitch(id: number, bike: number | undefined) {
+    this.db.hitchVehicle(id, bike ?? null);
+    this.update(id, { hitched: bike });
+  }
+
+  /**
+   * Each tick, for player `rider` (browser ID `browserId`) at `s` riding a bike that tows nothing: backing it slowly up
+   * to their own parked cart's coupler hitches it (shared/cart.ts backingUpTo; not one unfolded, nor one linked to a bike
+   * being ridden). Returns their state towing it (as mount() returns theirs riding), or null.
+   */
+  tryHitch(rider: number, browserId: string, s: PlayerState): PlayerState | null {
+    if (!s.riding || s.tow || !s.grounded) return null;
+    const bike = this.ridden(rider);
+    if (!bike || this.cartOn(bike.id)) return null;
+    for (const c of vehicles) {
+      if (!isCart(c) || !parked(c) || c.open || this.owner.get(c.id) !== browserId || !backingUpTo(s, c)) continue;
+      const linked = c.hitched === undefined ? undefined : vehicles.find((b) => b.id === c.hitched);
+      if (linked && !parked(linked)) continue;
+      const hitch = hitchHeading(s, c);
+      if (hitch === null) continue;
+      this.hitch(c.id, bike.id);
+      this.update(c.id, { rider });
+      return { ...s, tow: c.id, hitch };
+    }
+    return null;
+  }
+
+  /** Player `browserId` at `s` (on foot) lets their cart `id` go from the bike it's linked to, F on its tongue. Returns
+   *  true, or why not. */
+  unhitch(browserId: string, s: PlayerState, id: unknown): true | string {
+    const c = vehicles.find((q) => q.id === id);
+    if (!c || !isCart(c)) return TEXT.notice.alreadyGone;
+    if (this.owner.get(c.id) !== browserId) return TEXT.notice.notYours;
+    if (s.riding || !parked(c)) return TEXT.notice.getOffFirst;
+    if (!atTongue(s, c, REACH_SLACK)) return TEXT.notice.tooFar;
+    if (c.hitched !== undefined) this.hitch(c.id, undefined);
+    return true;
+  }
+
+  /** The bike player `rider` is riding, if any. */
   ridden(rider: number): Vehicle | undefined {
-    return vehicles.find((v) => v.rider === rider);
+    return vehicles.find((v) => v.rider === rider && v.kind === KIND);
+  }
+
+  /** The cart player `rider` is towing, if any. */
+  private towed(rider: number): Vehicle | undefined {
+    return vehicles.find((v) => v.rider === rider && isCart(v));
   }
 
   /**
@@ -268,6 +350,14 @@ export class VehicleServer {
    * stays where it stood.
    */
   release(rider: number, s?: PlayerState) {
+    // The cart they tow first: parked behind the bike, where the state has it (shared/cart.ts towedPose), still linked.
+    const c = this.towed(rider);
+    if (c && !s) this.update(c.id, { rider: undefined });
+    else if (c && s) {
+      const at = towedPose(s), y = heightAt(at.x, at.z);
+      this.db.moveVehicle(c.id, at.x, y, at.z, at.heading);
+      this.update(c.id, { x: at.x, y, z: at.z, heading: at.heading, rider: undefined });
+    }
     const v = this.ridden(rider);
     if (!v) return;
     if (!s) return this.update(v.id, { rider: undefined });

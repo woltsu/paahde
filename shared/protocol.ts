@@ -20,7 +20,7 @@ import type { BossKind, BossSnap } from './bosses.ts';
 import type { ChunkData, PlayerAppearance, PlayerPose } from './network.ts';
 
 /** Wire/schema compatibility, independent of the build SHA. Bump when old clients cannot safely play. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export type ClientMsg =
   // First message after connecting. browserId is a random UUID kept in localStorage.
@@ -71,6 +71,9 @@ export type ClientMsg =
   // (shared/sim.ts). Answered with 'vehicles', or a 'notice'.
   | { t: 'repairVehicle'; id: number }
   | { t: 'mount'; id: number }
+  // Let your own cart `id` go from the bike it's linked to (shared/cart.ts): on foot, at its tongue. Answered with
+  // 'vehicles', or a 'notice'. (Hitching has no message: backing the bike up to it does, server/vehicles.ts tryHitch.)
+  | { t: 'unhitch'; id: number }
   // Craft a recipe at the workbench (shared/crafting.ts RECIPES id): reach checked, ingredients used up from
   // the bag, answered with 'items' (got: what was made) or a 'notice'.
   | { t: 'craft'; recipe: string }

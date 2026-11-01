@@ -45,6 +45,7 @@ import { bunkerGone } from './bunkerGone.ts';
 import { podsLanded } from './podsLanded.ts';
 import { VehicleServer } from './vehicles.ts';
 import { vehicles } from '../shared/vehicles.ts';
+import { CART } from '../shared/cart.ts';
 import { PowerServer } from './power.ts';
 import { WireServer } from './wires.ts';
 import { ItemServer } from './items.ts';
@@ -264,6 +265,7 @@ wss.on('connection', (ws) => {
     if (msg.t === 'build' && p) return onBuild(p, msg.kind, msg.x, msg.z, msg.rot);
     if (msg.t === 'beaconColor' && p) return onBeaconColor(p, msg.id, msg.color);
     if (msg.t === 'mount' && p) return onMount(p, msg.id);
+    if (msg.t === 'unhitch' && p) return onUnhitch(p, msg.id);
     if (msg.t === 'repairVehicle' && p) return onRepairVehicle(p, msg.id);
     if (msg.t === 'wire' && p) return onWire(p, msg.slot, msg.a, msg.b);
     if (msg.t === 'craft' && p) return onCraft(p, msg.recipe);
@@ -427,6 +429,12 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   // Their own broken bike by their pod (before the list goes out to them; the others are told now).
   const bike = row?.name ? null : vehicleSrv.arrive(browserId, podOf(browserId));
   if (bike !== null) sendShared(vehicleBox(bike));
+  // And their cart (shared/cart.ts), once: a new player's from the start, an existing player's on this join.
+  const cart = vehicleSrv.arriveCart(browserId, podOf(browserId));
+  if (cart !== null) {
+    sendShared(vehicleBox(cart));
+    sendShared(cargoBox(cart));
+  }
   const p: Player = {
     id: nextId++, browserId, color, look: isLook(wantedLook) ? wantedLook : 0, state, yaw: 0, pitch: quantizePitch(0), inputs: new InputQueue(), terrainView: newTerrainView(), syncing: true, terrainStreaming: false, readyWanted: false, appearances: new Map(),
     pickups: pickupLimit(), lastTend: { at: 0 }, input: 0,
@@ -627,9 +635,21 @@ function onMount(p: Player, id: unknown) {
   p.state = r; // the client takes it with the next snapshot (src/net.ts reconcile)
 }
 
-/** After a step (`before`: the state it started from): off the bike (the bike key): it's parked where they got off. */
+/** After a step (`before`: the state it started from): off the bike (the bike key): it's parked where they got off
+ *  (and the cart they tow behind it). Still on it, towing nothing: backing it up to their own cart hitches it. */
 function offBike(p: Player, before: PlayerState) {
   if (before.bike && !p.state.bike) vehicleSrv.release(p.id, before.riding ? p.state : undefined);
+  else if (p.state.riding && !p.state.tow) {
+    const towing = vehicleSrv.tryHitch(p.id, p.browserId, p.state);
+    if (towing) p.state = towing; // the client takes it with the next snapshot (src/net.ts reconcile)
+  }
+}
+
+/** On foot at their cart's tongue: F lets it go from the bike (server/vehicles.ts unhitch). */
+function onUnhitch(p: Player, id: unknown) {
+  if (p.down || !p.ready) return;
+  const r = vehicleSrv.unhitch(p.browserId, p.state, id);
+  if (r !== true) send(p.ws, { t: 'notice', text: r });
 }
 
 /** What casts shade on players besides the world (shared/shade.ts): everyone standing (shorter crouched) or riding
@@ -649,7 +669,8 @@ function shadeCasters(now: number): Caster[] {
   }
   for (const v of vehicles) {
     if (v.rider !== undefined) continue;
-    if (v.up) casters.push({ x: v.x, z: v.z, ax: -Math.sin(v.heading), az: -Math.cos(v.heading), half: 0.55, r: 0.35, y0: -Infinity, y1: v.y + 1 });
+    if (v.kind === CART) casters.push({ x: v.x, z: v.z, ax: -Math.sin(v.heading), az: -Math.cos(v.heading), half: 0.9, r: 0.75, y0: -Infinity, y1: v.y + 1 });
+    else if (v.up) casters.push({ x: v.x, z: v.z, ax: -Math.sin(v.heading), az: -Math.cos(v.heading), half: 0.55, r: 0.35, y0: -Infinity, y1: v.y + 1 });
     else casters.push({ x: v.x, z: v.z, ax: 1, az: 0, half: 0, r: 0.7, y0: -Infinity, y1: v.y + 0.6 });
   }
   return casters;
@@ -1613,7 +1634,7 @@ function onTelemetry(p: Player, ev: unknown, sum: unknown) {
 const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
 function round(s: PlayerState): PlayerState {
   const r = round4;
-  return { ...s, x: r(s.x), y: r(s.y), z: r(s.z), vx: r(s.vx), vy: r(s.vy), vz: r(s.vz), facing: r(s.facing), heading: r(s.heading), nose: r(s.nose), noseSpin: r(s.noseSpin) };
+  return { ...s, x: r(s.x), y: r(s.y), z: r(s.z), vx: r(s.vx), vy: r(s.vy), vz: r(s.vz), facing: r(s.facing), heading: r(s.heading), nose: r(s.nose), noseSpin: r(s.noseSpin), hitch: r(s.hitch) };
 }
 
 function send(ws: WebSocket, msg: ServerMsg): boolean {

@@ -27,7 +27,7 @@ export function clientMessage(v: unknown): v is ClientMsg {
     case 'place': return int(m.slot, 0, 4095) && pos('x', 'z') && int(m.rot, 0, 3);
     case 'build': return str(m.kind) && Object.hasOwn(BUILDS, m.kind) && pos('x', 'z') && int(m.rot, 0, 3);
     case 'wire': return int(m.slot, 0, 4095) && int(m.a) && int(m.b);
-    case 'unplace': case 'spawnToggle': case 'repairVehicle': case 'mount': case 'lootTake': return int(m.id);
+    case 'unplace': case 'spawnToggle': case 'repairVehicle': case 'mount': case 'unhitch': case 'lootTake': return int(m.id);
     case 'beaconColor': return int(m.id) && int(m.color, 0, 255);
     case 'craft': return str(m.recipe) && (Object.hasOwn(RECIPES, m.recipe) || Object.hasOwn(HAND_RECIPES, m.recipe));
     case 'setEpoch': return m.epoch === null || num(m.epoch, -8.64e15, 8.64e15);

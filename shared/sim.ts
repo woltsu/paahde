@@ -13,7 +13,8 @@
 // - Soft sand: you build up and lose speed a bit slowly (momentum), and hard landings bog you down briefly.
 // - Rock (shared/rocks.ts) holds: bare rock up to ROCK_CLIMB_TAN doesn't slide; steeper rock is a wall you
 //   can't walk up, only jump onto. Off its edge you fall or slide.
-// - Sand bike (a motorcycle standing in the world, shared/vehicles.ts): see stepBike() below.
+// - Sand bike (a motorcycle standing in the world, shared/vehicles.ts): see stepBike() below. Towing a cart behind it
+//   (shared/cart.ts): `tow` and `hitch`, the cart's axle following the bike's hitch point each tick (towHitch).
 // - Levels (shared/levels.ts): the ground, solids and ceiling come from level(s.level), the desert's or another's; a level
 //   with flat floors has no slopes, slip faces or rock, and no weather or walkers reach one without them.
 import { LAB_SPAWN } from './lab.ts';
@@ -24,6 +25,7 @@ import { DESERT, inBox, level, STEP_UP, type Level, type LevelId } from './level
 import { WIND } from './dunes.ts';
 import { heightAt, onRock } from './terrain.ts';
 import { tarpSlope } from './tarp.ts';
+import { towHitch } from './cart.ts';
 
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
@@ -127,6 +129,12 @@ export type PlayerState = {
   /** A bit per door or obstacle the server has opened in this level (its gated solids, shared/levels/boxes.ts): read by its
    *  collision, so step() stays a function of state and input. Only the server sets bits; 0 again on any level change. */
   gates: number;
+  /** The cart being towed (its vehicle id, shared/cart.ts), 0 none: only while riding. Set by the server (hitching,
+   *  getting on a bike with it linked); 0 again on getting off. */
+  tow: number;
+  /** The towed cart's heading (radians, same convention as heading); its axle is derived (shared/cart.ts cartAxle).
+   *  Kept on getting off, so where the cart is parked follows from the state. */
+  hitch: number;
 };
 
 // Input is a bitmask so it is tiny on the wire and trivially comparable.
@@ -157,7 +165,7 @@ export function spawnState(x = spawnPoint().x, z = spawnPoint().z, y = heightAt(
     x, y, z, vx: 0, vy: 0, vz: 0, facing,
     grounded: true, airJumps: AIR_JUMPS, jumpHeld: false, landTicks: 0,
     sliding: false, crouching: false, slideCool: 0, slideSpent: false, riding: false, bikeHeld: false, heading: 0, bike: 0,
-    nose: 0, noseSpin: 0, level: lvl, gates: 0,
+    nose: 0, noseSpin: 0, level: lvl, gates: 0, tow: 0, hitch: 0,
   };
 }
 
@@ -436,6 +444,7 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   return {
     x, y, z, vx, vy, vz, facing, grounded, airJumps, jumpHeld: jumpDown, landTicks, sliding, crouching, slideCool,
     slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0, level: s.level, gates,
+    tow: 0, hitch: s.hitch ?? 0,
   };
 }
 
@@ -453,6 +462,7 @@ export const BIKE_RADIUS = 0.6;
 // quality: bikeTopSpeed / bikeEngine in shared/gear.ts.
 const BIKE_BRAKE = 22;
 const BIKE_REVERSE = 4; // top reverse speed (m/s)
+const BIKE_CRAWL = 0.15; // below this (m/s, forward) the brake reverses
 const BIKE_ROLL = 1.2; // rolling resistance in sand (m/s²)
 const BIKE_DRAG = 0.006; // air drag (per m, times v²)
 
@@ -529,7 +539,9 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
     const grip = slip ? BIKE_SLIP_POWER : 1, brake = BIKE_BRAKE * grip;
     const power = (landTicks > 0 ? 0.4 : 1) * grip;
     if (throttle > 0) vf += (vf < 0 ? brake : engine * power * Math.max(0, 1 - vf / top)) * DT;
-    else if (throttle < 0) vf = vf > 0 ? Math.max(0, vf - brake * DT) : Math.max(-BIKE_REVERSE, vf - engine * 0.5 * grip * DT);
+    // (Brakes down to a crawl, then reverse: braking right down to 0 held it there on any slope that rolls it forward,
+    // so it never backed up there, and backing up to the cart is how it's hitched.)
+    else if (throttle < 0) vf = vf > BIKE_CRAWL ? Math.max(0, vf - brake * DT) : Math.max(-BIKE_REVERSE, vf - engine * 0.5 * grip * DT);
     const resist = (BIKE_ROLL + BIKE_DRAG * vf * vf) * DT;
     vf = vf > 0 ? Math.max(0, vf - resist) : Math.min(0, vf + resist);
     // The storm's push, before the tyres: mostly a head- or tailwind, they hold most of the sideways part.
@@ -620,10 +632,13 @@ function stepBike(s: PlayerState, L: Level, input: number, bikeDown: boolean, st
     if (vy > 0) vy = 0;
   }
   h = Math.atan2(Math.sin(h), Math.cos(h));
+  // The cart behind: its axle follows the hitch point (shared/cart.ts).
+  const tow = s.tow ?? 0;
+  const hitch = tow ? towHitch(s.x, s.z, s.heading, s.hitch, x, z, h) : s.hitch ?? 0;
   return {
     x, y, z, vx, vy, vz, facing: h, grounded, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks,
     sliding: false, crouching: false, slideCool: s.slideCool, slideSpent: s.slideSpent, riding: true, bikeHeld: bikeDown, heading: h, bike: s.bike,
-    nose, noseSpin, level: s.level, gates: s.gates ?? 0,
+    nose, noseSpin, level: s.level, gates: s.gates ?? 0, tow, hitch,
   };
 }
 

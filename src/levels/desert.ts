@@ -31,6 +31,7 @@ import { MachineSites } from '../world/crash.ts';
 import { Wrecks } from '../world/wrecks.ts';
 import { LootView } from '../world/loot.ts';
 import { VehicleView } from '../world/vehicles.ts';
+import { CartView } from '../world/carts.ts';
 import { CorpseView } from '../world/corpses.ts';
 import { EntranceView } from '../world/entrance.ts';
 import { setLevelShade } from '../world/materialLighting.ts';
@@ -70,6 +71,8 @@ export class DesertStage implements Stage {
   /** Things lying about (loot, standing and lying motorcycles, packs): the desert's until levels have their own. */
   lootView!: LootView;
   vehicleView!: VehicleView;
+  /** The carts (shared/cart.ts), parked and towed. */
+  cartView!: CartView;
   corpseView!: CorpseView;
   /** The datacenter's door (shared/levels/entrance.ts), and its hum. */
   entrance!: EntranceView;
@@ -127,6 +130,7 @@ export class DesertStage implements Stage {
     await slice();
     d.lootView = new LootView(root, d.scrap);
     d.vehicleView = new VehicleView(root);
+    d.cartView = new CartView(root);
     d.corpseView = new CorpseView(root);
     root.add(footprints.mesh, tyreprints.mesh, streaks.mesh, tyreDust.mesh);
     d.entrance = new EntranceView(root);

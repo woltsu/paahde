@@ -328,7 +328,14 @@ export function openDb(path: string) {
   if (!(db.prepare('SELECT name FROM pragma_table_info(?)').all('vehicles') as { name: string }[]).some((c) => c.name === 'owner')) {
     db.exec('ALTER TABLE vehicles ADD COLUMN owner TEXT');
   }
-  const allVehicles = db.prepare('SELECT id, kind, x, y, z, heading, up, src, owner FROM vehicles ORDER BY id');
+  // A cart's (shared/cart.ts): hitched, the bike (vehicle id) it's linked to, NULL none; open, unfolded (docs/cart.md).
+  if (!(db.prepare('SELECT name FROM pragma_table_info(?)').all('vehicles') as { name: string }[]).some((c) => c.name === 'hitched')) {
+    db.exec('ALTER TABLE vehicles ADD COLUMN hitched INTEGER');
+    db.exec('ALTER TABLE vehicles ADD COLUMN open INTEGER NOT NULL DEFAULT 0');
+  }
+  const allVehicles = db.prepare('SELECT id, kind, x, y, z, heading, up, src, owner, hitched, open FROM vehicles ORDER BY id');
+  const hitchVehicle = db.prepare('UPDATE vehicles SET hitched = ? WHERE id = ?');
+  const openVehicle = db.prepare('UPDATE vehicles SET open = ? WHERE id = ?');
   const insertVehicle = db.prepare('INSERT INTO vehicles (kind, x, y, z, heading, up, src) VALUES (?, ?, ?, ?, ?, ?, ?)');
   const moveVehicle = db.prepare('UPDATE vehicles SET x = ?, y = ?, z = ?, heading = ? WHERE id = ?');
   const standVehicle = db.prepare('UPDATE vehicles SET up = 1 WHERE id = ?');
@@ -493,8 +500,12 @@ export function openDb(path: string) {
     /** Players saved inside the world rectangle [x0, z0, x1, z1] are at (x, z) from now on; returns how many. */
     movePlayers: (r: number[], x: number, z: number) =>
       Number(db.prepare('UPDATE players SET x = ?, z = ? WHERE x > ? AND x < ? AND z > ? AND z < ?').run(x, z, r[0], r[2], r[1], r[3]).changes),
-    loadVehicles: () => (allVehicles.all() as { id: number; kind: string; x: number; y: number; z: number; heading: number; up: number; src: string; owner: string | null }[])
-      .map((r) => ({ ...r, up: r.up === 1 })),
+    loadVehicles: () => (allVehicles.all() as { id: number; kind: string; x: number; y: number; z: number; heading: number; up: number; src: string; owner: string | null; hitched: number | null; open: number }[])
+      .map((r) => ({ ...r, up: r.up === 1, open: r.open === 1 })),
+    /** Cart `id` is linked to bike `bike` (vehicle id) from now on, or to none (null). */
+    hitchVehicle: (id: number, bike: number | null) => hitchVehicle.run(bike, id),
+    /** Cart `id` unfolded (docs/cart.md), or packed. */
+    openVehicle: (id: number, open: boolean) => openVehicle.run(open ? 1 : 0, id),
     /** New vehicle row; returns its id. */
     insertVehicle: (kind: string, x: number, y: number, z: number, heading: number, up: boolean, src: string) =>
       Number(insertVehicle.run(kind, x, y, z, heading, up ? 1 : 0, src).lastInsertRowid),

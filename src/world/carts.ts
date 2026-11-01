@@ -1,0 +1,195 @@
+// Carts (shared/cart.ts, docs/cart.md) in the world: parked where they stand (shared/vehicles.ts), or towed behind a
+// bike, where the tower's state puts them (shared/cart.ts towedPose: our own predicted state, or a remote player's
+// interpolated pose, which carries `tow` and `hitch`). The model is public/models/cart.glb (tools/blender/cart.py) to
+// the node contract in docs/cart.md; until it's there (or if it fails to load) a stand-in built here with the same
+// nodes and pivots, so swapping the glb in changes nothing else. The wheels spin with the ground covered, the stand
+// under the tongue swings down when it's let go of the bike (no `hitched`), and the pieces of a level not reached
+// (shared/cart.ts CART_LEVEL_NODES) are hidden.
+import * as THREE from 'three/webgpu';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { CART_HALF_TRACK, CART_LEVEL_NODES, CART_WHEEL_R, isCart, TOW_LENGTH, towedPose } from '../../shared/cart.ts';
+import { slopeAt } from '../../shared/sim.ts';
+import { heightAt } from '../../shared/terrain.ts';
+import { parked, type Vehicle } from '../../shared/vehicles.ts';
+
+/** Drawn within this distance (m). */
+const VIEW = 350;
+/** The stand swung down onto the ground while it's not linked to a bike (rad about its pivot's x; the model's rest pose,
+ *  packed, has it lying back under the tongue: docs/cart.md). */
+const STAND_DOWN = Math.PI / 2;
+/** How fast the stand swings (per s). */
+const STAND_RATE = 4;
+/** A cart whose tower drops out of sight for a moment (the state and the vehicles list arrive apart) stays where it
+ *  was last drawn this long (s), then is hidden. */
+const HOLD_S = 0.6;
+
+/** Who's towing: an id, where they are and their bike's heading, and the cart's (PlayerState.hitch). */
+export type Tower = { id: number; tow: number; x: number; z: number; heading: number; hitch: number };
+
+type Pose = { x: number; y: number; z: number; heading: number };
+type Shown = {
+  obj: THREE.Group; tilt: THREE.Group; model: THREE.Object3D | null; level: number;
+  wheels: THREE.Object3D[]; stand: THREE.Object3D | null; standAngle: number;
+  last: Pose | null; lostS: number; spin: number;
+};
+
+let template: Promise<THREE.Object3D> | undefined;
+/** The cart model (shared by every clone): the glb if it loads, else the stand-in. */
+function loadCart(): Promise<THREE.Object3D> {
+  return (template ??= new GLTFLoader().loadAsync('./models/cart.glb').then((g) => {
+    const c = g.scene.getObjectByName('coupler');
+    if (c) {
+      const p = c.getWorldPosition(new THREE.Vector3());
+      if (Math.abs(p.z + TOW_LENGTH) > 0.05) console.warn(`cart.glb: coupler at z ${p.z.toFixed(2)}, the towing has ${-TOW_LENGTH} (shared/cart.ts TOW_LENGTH)`);
+    }
+    return g.scene as THREE.Object3D;
+  }, () => standIn()));
+}
+
+/** A model to the node contract (docs/cart.md), built from boxes and cylinders: origin on the ground under the axle's
+ *  middle, forward -z, each node pivoted at its hinge. */
+function standIn(): THREE.Object3D {
+  const mat = (color: number, roughness = 0.85, metalness = 0.3) => new THREE.MeshStandardNodeMaterial({ color, roughness, metalness });
+  const metal = mat(0x7d5a43), dark = mat(0x3a332d, 0.7, 0.5), wood = mat(0x8a7255, 0.95, 0), rubber = mat(0x1f1d1b, 0.95, 0);
+  const box = (w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z = 0) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    b.position.set(x, y, z);
+    return b;
+  };
+  const node = (name: string, x = 0, y = 0, z = 0, ...kids: THREE.Object3D[]) => {
+    const g = new THREE.Group();
+    g.name = name;
+    g.position.set(x, y, z);
+    if (kids.length) g.add(...kids); // (an empty node: add() with nothing complains)
+    return g;
+  };
+  const root = new THREE.Group();
+  const R = CART_WHEEL_R;
+  // The bed (2.2 m) on its frame, the axle, and the lidded box on it.
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, CART_HALF_TRACK * 2, 8), dark);
+  axle.rotation.z = Math.PI / 2;
+  axle.position.y = R;
+  root.add(node('body', 0, 0, 0,
+    box(1.3, 0.08, 2.2, wood, 0, 0.56, 0),
+    box(0.08, 0.14, 2.2, metal, -0.62, 0.5, 0), box(0.08, 0.14, 2.2, metal, 0.62, 0.5, 0),
+    box(1.3, 0.14, 0.08, metal, 0, 0.5, -1.1), box(1.3, 0.14, 0.08, metal, 0, 0.5, 1.1),
+    axle,
+    box(1.1, 0.42, 1.1, metal, 0, 0.81, 0.35),
+  ));
+  // The box's lid, hinged along its back edge.
+  root.add(node('lid', 0, 1.02, 0.9, box(1.14, 0.05, 1.14, metal, 0, 0.025, -0.55)));
+  for (const [name, x] of [['wheel_l', -CART_HALF_TRACK], ['wheel_r', CART_HALF_TRACK]] as const) {
+    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.16, 18), rubber);
+    tyre.rotation.z = Math.PI / 2;
+    const hub = box(0.18, 0.12, 0.12, metal);
+    root.add(node(name, x, R, 0, tyre, hub));
+  }
+  // The tongue from the bed's front to the coupler at its tip; the stand under it.
+  const tongueLen = TOW_LENGTH - 1.1;
+  root.add(node('tongue', 0, 0.48, -1.1, box(0.09, 0.09, tongueLen, metal, 0, 0, -tongueLen / 2)));
+  const coupler = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), dark);
+  root.add(node('coupler', 0, 0.48, -TOW_LENGTH, coupler));
+  root.add(node('stand', 0, 0.48, -2.0, box(0.05, 0.05, 0.46, dark, 0, 0, 0.23), box(0.16, 0.16, 0.03, dark, 0, 0, 0.46))); // (lying back)
+  // A level's pieces (hidden until it's reached): the canopy's poles folded along the bed, the fold-out sides upright
+  // as walls with their legs, the corner stabilisers.
+  for (const [name, x] of [['pole_a', -0.55], ['pole_b', 0.55]] as const) {
+    root.add(node(name, x, 0.64, 1.0, box(0.04, 0.04, 2.0, wood, 0, 0, -1.0), node(`${name}_tip`, 0, 0, -2.0)));
+  }
+  for (const [name, leg, x] of [['side_l', 'leg_l', -0.66], ['side_r', 'leg_r', 0.66]] as const) {
+    root.add(node(name, x, 0.56, 0, box(0.04, 0.5, 2.1, wood, 0, 0.25, 0)));
+    root.add(node(leg, x, 0.56, 0, box(0.04, 0.04, 0.5, dark, 0, 0, 0)));
+  }
+  root.add(node('legs', 0, 0.5, 0, ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => box(0.05, 0.3, 0.05, dark, sx * 0.6, -0.15, sz * 1.0)))));
+  return root;
+}
+
+const tmpSlope = { gx: 0, gz: 0 };
+
+export class CartView {
+  private group = new THREE.Group();
+  private shown = new Map<number, Shown>();
+
+  constructor(scene: THREE.Object3D) {
+    scene.add(this.group);
+    loadCart();
+  }
+
+  /** Every frame: the carts in `list` near `me`, parked or towed by one of `towers` (us first, then the others). */
+  update(dt: number, list: readonly Vehicle[], towers: readonly Tower[], me: { x: number; z: number }) {
+    const seen = new Set<number>();
+    for (const v of list) {
+      if (!isCart(v)) continue;
+      const t = towers.find((o) => o.tow === v.id);
+      let pose: Pose | null = null;
+      if (t) {
+        const p = towedPose(t);
+        pose = { x: p.x, y: heightAt(p.x, p.z), z: p.z, heading: p.heading };
+      } else if (parked(v)) pose = { x: v.x, y: v.y, z: v.z, heading: v.heading };
+      const s0 = this.shown.get(v.id);
+      if (!pose && s0?.last && s0.lostS < HOLD_S) {
+        s0.lostS += dt;
+        pose = s0.last;
+      }
+      if (!pose || Math.hypot(pose.x - me.x, pose.z - me.z) > VIEW) continue;
+      seen.add(v.id);
+      let s = s0;
+      if (!s) this.shown.set(v.id, (s = this.build()));
+      if (t || parked(v)) s.lostS = 0;
+      this.place(s, v, pose, dt);
+    }
+    for (const [id, s] of this.shown) {
+      if (seen.has(id)) continue;
+      this.group.remove(s.obj);
+      this.shown.delete(id);
+    }
+  }
+
+  private build(): Shown {
+    const obj = new THREE.Group();
+    const tilt = new THREE.Group();
+    tilt.rotation.order = 'YXZ';
+    obj.add(tilt);
+    this.group.add(obj);
+    const s: Shown = { obj, tilt, model: null, level: -1, wheels: [], stand: null, standAngle: 0, last: null, lostS: 0, spin: 0 };
+    loadCart().then((t) => {
+      const m = t.clone(true);
+      m.traverse((o) => {
+        o.castShadow = o.receiveShadow = true;
+        o.userData.shared = true; // its geometry is every cart's: never disposed
+      });
+      s.model = m;
+      s.wheels = ['wheel_l', 'wheel_r'].flatMap((n) => m.getObjectByName(n) ?? []);
+      s.stand = m.getObjectByName('stand') ?? null;
+      s.level = -1;
+      tilt.add(m);
+    }, () => {});
+    return s;
+  }
+
+  private place(s: Shown, v: Vehicle, p: Pose, dt: number) {
+    // The wheels roll with the ground covered along its heading.
+    if (s.last) {
+      const d = -(p.x - s.last.x) * Math.sin(p.heading) - (p.z - s.last.z) * Math.cos(p.heading);
+      if (Math.abs(d) < 5) s.spin -= d / CART_WHEEL_R;
+    }
+    s.last = p;
+    s.obj.position.set(p.x, p.y, p.z);
+    s.obj.rotation.y = p.heading;
+    // Along the slope and across it.
+    const g = slopeAt(p.x, p.z, tmpSlope);
+    s.tilt.rotation.x = Math.atan(-g.gx * Math.sin(p.heading) - g.gz * Math.cos(p.heading));
+    s.tilt.rotation.z = Math.atan(g.gx * Math.cos(p.heading) - g.gz * Math.sin(p.heading));
+    for (const w of s.wheels) w.rotation.x = s.spin;
+    const want = v.hitched !== undefined ? 0 : STAND_DOWN;
+    s.standAngle += (want - s.standAngle) * Math.min(1, dt * STAND_RATE);
+    if (s.stand) s.stand.rotation.x = s.standAngle;
+    const level = v.level ?? 0;
+    if (s.model && s.level !== level) {
+      s.level = level;
+      for (const [name, at] of Object.entries(CART_LEVEL_NODES)) {
+        const n = s.model.getObjectByName(name);
+        if (n) n.visible = level >= at;
+      }
+    }
+  }
+}

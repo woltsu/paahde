@@ -95,6 +95,8 @@ import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { lootPrompt } from './world/loot';
 import { ownVehicleTargets } from './world/vehicles';
 import { vehicles, vehicleTarget } from '../shared/vehicles.ts';
+import { cartTarget } from '../shared/cart.ts';
+import type { Tower } from './world/carts';
 import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
 import { openBoxes } from '../shared/storage.ts';
@@ -152,7 +154,7 @@ const fly = new FlyCam(renderer.domElement); // F3 → Fly camera, for shooting 
 // The desert (src/levels/desert.ts): the terrain, sky, sun, pods, shelters, crash sites, walkers, bosses ..., all under
 // its root. Other levels are stages too, built on the first visit; the active one owns the scene's look and lights.
 const desert = await DesertStage.build(scene, orbit.camera, renderer.domElement);
-const { sky, terrain, placedView, wireView, scrap, crashSites, dust, blownSand, machines, wrecks, guardianFx, bossFx, teardown, lootView, vehicleView, corpseView } = desert;
+const { cartView, sky, terrain, placedView, wireView, scrap, crashSites, dust, blownSand, machines, wrecks, guardianFx, bossFx, teardown, lootView, vehicleView, corpseView } = desert;
 sky.renderer = renderer;
 const crashSound = new CrashSound();
 await slice();
@@ -608,6 +610,10 @@ renderer.setAnimationLoop((time) => {
   if (L.things) {
     lootView.update(frameDt, net.loot, focus);
     vehicleView.update(vehicles, net.myVehicles, focus, (id) => (id === net.id ? net.me.riding : others.find((o) => o.id === id)?.riding ?? false));
+    // Carts (shared/cart.ts): ours where our prediction has it, others' from their poses.
+    const towers: Tower[] = others.flatMap((o) => (o.tow ? [{ id: o.id, tow: o.tow, x: o.x, z: o.z, heading: o.facing, hitch: o.hitch }] : []));
+    if (s.tow) towers.unshift({ id: net.id, tow: s.tow, x: v.x, z: v.z, heading: v.heading, hitch: v.hitch });
+    cartView.update(frameDt, vehicles, towers, focus);
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);
@@ -713,6 +719,11 @@ renderer.setAnimationLoop((time) => {
     ? vehicleTarget(net.me, orbit.yaw, orbit.pitch) : null;
   const ridePrompt = !vehicle ? null : !vehicle.v.up ? TEXT.prompt.repair(itemLabel(vehicle.v.kind))
     : vehicle.rear ? TEXT.prompt.open(TEXT.boxes.cargo) : TEXT.prompt.getOn;
+  // A cart (shared/cart.ts): F on our own's tongue, linked to a bike, lets it go; anywhere else on it opens its box.
+  const cart = here && !net.down && !onBike && !station && !building && !vehicle
+    ? cartTarget(net.me, orbit.yaw, orbit.pitch, vehicles) : null;
+  const unhitch = !!cart && cart.tongue && cart.v.hitched !== undefined && net.myVehicles.has(cart.v.id);
+  const cartPrompt = !cart ? null : unhitch ? TEXT.prompt.unhitch : net.boxes[cargoBox(cart.v.id)] ? TEXT.prompt.open(itemLabel(cart.v.kind)) : null;
   const bed = here && !station ? bedTarget(net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), placed) : null;
   const bedState = bed ? net.garden.get(bed.id) : undefined;
   const bedStage = bed ? (bedState?.stage ?? EMPTY) : -1;
@@ -771,7 +782,7 @@ renderer.setAnimationLoop((time) => {
   for (const d of L.doors()) if (Math.hypot(s.x - (d.trigger[0] + d.trigger[1]) / 2, s.z - (d.trigger[4] + d.trigger[5]) / 2) < 60) levels.prefetch(d.to);
   // What the level asks F for first (the beginning's pod hatch).
   const levelAct = net.connected && !net.down && stage.level === net.me.level ? (stage.interact?.(net.me, net.boxes.bag) ?? null) : null;
-  const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
+  const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? rollPrompt ?? ridePrompt ?? cartPrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));
   const extra = [growing, wirePrompt, placing.prompt].filter(Boolean).join(' ');
@@ -801,6 +812,10 @@ renderer.setAnimationLoop((time) => {
       else if (vehicle.rear) hud.open(cargoBox(vehicle.v.id));
       else net.mount(vehicle.v.id);
     }
+    else if (cartPrompt && cart) {
+      if (unhitch) net.unhitch(cart.v.id);
+      else hud.open(cargoBox(cart.v.id));
+    }
     else if (tend && bed) net.tend(bed.id);
     else if (target) {
       if (net.pickup(target)) pickupSound.play();
@@ -816,7 +831,7 @@ renderer.setAnimationLoop((time) => {
     } else if (wreck) net.crashTake(wreck.id);
     else if (pack || chest) hud.open();
   }
-  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
+  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || rollPrompt !== null || ridePrompt !== null || cartPrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
   survival.update(frameDt, net.me, targeted, interact && !targeted, clockText(sky.day.tod));
   const w = net.water;
   const m = net.me;

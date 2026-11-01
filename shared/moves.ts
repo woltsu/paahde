@@ -3,7 +3,9 @@
 // only once repaired), nothing put down past the bag's open rows (the backpack sets them; taking it off leaves what's
 // there stranded, not lost) and only where it fits in a grid, and parts only into the matching slots of the item on
 // the workbench or in a building's or vehicle's box (fitPart / unfitPart).
-import { boxKind, fittedBox, takeOnly, type BoxKind } from './boxes.ts';
+import { boxKind, cargoId, fittedBox, takeOnly, type BoxKind } from './boxes.ts';
+import { isCart } from './cart.ts';
+import { vehicleById } from './vehicles.ts';
 import { bagShape, EQUIP_SLOTS, fitsSlot, GEAR, isGear, isVehicle, repaired } from './gear.ts';
 import {
   BIKE_COLS, BIKE_ROWS, CHEST_COLS, CHEST_ROWS, fitsAt, freeSlots, gridShape, makeItem, moveItem, partAt, setPart, sizeOf, strandedAt, withData,
@@ -25,7 +27,7 @@ const SHAPES: Record<BoxKind, (box: string, boxes: Boxes) => Shape> = {
   bench: () => freeSlots(1),
   bld: () => freeSlots(1),
   veh: () => freeSlots(1),
-  cargo: () => gridShape(BIKE_COLS, BIKE_ROWS),
+  cargo: (box) => (isCart(vehicleById(cargoId(box))) ? gridShape(CHEST_COLS, CHEST_ROWS) : gridShape(BIKE_COLS, BIKE_ROWS)), // (a cart's: a chest's)
   store: () => gridShape(CHEST_COLS, CHEST_ROWS),
   corpse: grown,
 };
