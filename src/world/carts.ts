@@ -376,9 +376,15 @@ function paintLid(model: THREE.Object3D, paint: THREE.Material, rand: () => numb
     const mid = cx + lean * (u - 0.5) + 0.006 * Math.sin(u * 9 + rand());
     for (let j = 0; j <= cols; j++) {
       const v = j / cols, x = mid + (v - 0.5) * w + (j === 0 || j === cols ? (rand() - 0.5) * 0.018 : 0);
-      ray.set(from.set(x, b.max.y + 0.1, z), down);
-      const hit = ray.intersectObject(lid, true)[0];
-      pos.push(x - at.x, (hit ? hit.point.y : b.max.y) + 0.0015 - at.y, z - at.z);
+      // The highest of what's under it out to half a row either way: where it crosses a patch's edge it bridges over
+      // it rather than sloping down into the patch's top at a graze (a seam that shimmered in the depth buffer).
+      let y = -Infinity;
+      for (const dz of [-0.5, 0, 0.5]) {
+        ray.set(from.set(x, b.max.y + 0.1, z + dz * d / rows), down);
+        const hit = ray.intersectObject(lid, true)[0];
+        if (hit) y = Math.max(y, hit.point.y);
+      }
+      pos.push(x - at.x, (y > -Infinity ? y : b.max.y) + 0.0015 - at.y, z - at.z);
       const k = 0.78 + 0.22 * rand();
       col.push(k, k, k * 0.96);
     }

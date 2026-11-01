@@ -112,9 +112,16 @@ TONGUE_PIVOT = (0, 0.79, -HZ)
 COUPLER = (0, 0.54, -HZ - 1.3)
 STAND_PIVOT = (0, 0.50, -2.0)
 # The leaves: a board nested in each side panel under its top that slides out of its outer edge once the side is down
-# (LEAF_OUT), rising flush with the top (LEAF_RISE); the trestle hangs under the leaf's outer edge.
-LEAF_W, LEAF_T, LEAF_OUT, LEAF_RISE, LEAF_Z = 0.6, 0.03, 0.55, 0.02, 1.0
+# (LEAF_OUT), rising flush with the top (LEAF_RISE); the trestle hangs under the leaf's outer edge. Out, the leaf starts
+# at the side's outer edge (LEAF_W = LEAF_OUT: never overlapping its frame, whose top it would z-fight); packed, it lies
+# wholly inside the panel, between the skin's outer face and the top's (its 2 cm, 0.84 .. 0.86 across the panel's
+# 0.83 .. 0.88, and the table's plate 1.5 cm thick so the leaf's slats are under its top too): no face of it shares a
+# plane with the panel's (the cart's walls flickered where the leaf's underside lay in the skin's outer face).
+LEAF_W, LEAF_T, LEAF_OUT, LEAF_RISE, LEAF_Z = 0.55, 0.02, 0.55, 0.02, 1.0
+LEAF_LIP = 0.005                     # the leaf's iron rim hangs this far under its bottom
 OUTER = HX + SIDE_H + LEAF_OUT       # the unfolded bench's outer edge (|x| 1.88)
+LEAF_PIVOT = (OUTER - 0.3, DECK - 0.015)  # its node's origin (unfolded; docs/cart.md's pivot, kept as the leaf thinned)
+LEG_PIN = DECK - 0.05                # the trestle's hinge pin (unfolded), its pivot
 # The work lamps (level 2): a caged bulb on a bent arm clamped to each pole, swung out over its bench (pole_a's over the
 # workbench, pole_b's over the table). LAMP_AT: the clamp's distance up the pole from its hinge; LAMP_BULB: pole_b's
 # bulb unfolded (cart coordinates; pole_a's is it turned half round).
@@ -453,7 +460,8 @@ def build_pole_top(sx, sz):
     mb = kit.MB()
     x, z0 = sx * POLE_X, sz * POLE_Z
     z1 = z0 - sz * POLE_L
-    mb.cyl((x, POLE_Y, z1 + sz * TOP_L), (x, POLE_Y, z1), 0.019, 'Steel', seg=8)
+    mb.cyl((x, POLE_Y, z1 + sz * TOP_L), (x, POLE_Y, z1 + sz * 0.005), 0.019, 'Steel', seg=8)  # (its end in the cap,
+    #   off the plane of the lower section's mouth)
     mb.cyl((x, POLE_Y, z1 + sz * 0.03), (x, POLE_Y, z1 - sz * 0.02), 0.03, 'Hazard', seg=8)  # cap at the tip
     return mb
 
@@ -541,7 +549,7 @@ def side_panel(mb, s, top_mats):
     zz = SIDE_Z
     fr = 0.04
     bx(mb, s * x0, s * (x0 + fr), yb, yt, -zz, zz, 'Iron')
-    bx(mb, s * (x1 - fr), s * x1, yb, yt, -zz, zz, 'Iron')
+    bx(mb, s * (x1 - fr), s * (x1 - 0.002), yb, yt, -zz, zz, 'Iron')  # (a hair short: the leaf's rim tops it packed)
     for sz in (-1, 1):
         bx(mb, s * (x0 + fr), s * (x1 - fr), yb, yt, min(sz * zz, sz * (zz - fr)), max(sz * zz, sz * (zz - fr)),
            'Iron')
@@ -584,11 +592,11 @@ def workbench_top(mb, s, xa, xb, y0, y1, zz):
 def table_top(mb, s, xa, xb, y0, y1, zz):
     """Steel slats across a plate, the middle left clear for a machine; hazard stripes, a vise and a bolt tray on the
     outer edge."""
-    bx(mb, s * xa, s * xb, y0, y0 + 0.01, -zz, zz, 'Iron')
+    bx(mb, s * xa, s * xb, y0, y0 + 0.015, -zz, zz, 'Iron')  # (over the leaf packed in the panel: LEAF_T)
     n = 13
     for k in range(n):
         z = -zz + 0.04 + k * (2 * zz - 0.08) / (n - 1)
-        bx(mb, s * xa, s * xb, y0 + 0.01, y1, z - 0.04, z + 0.04, 'Steel')
+        bx(mb, s * xa, s * xb, y0 + 0.015, y1, z - 0.04, z + 0.04, 'Steel')
     xo = HX + SIDE_H
     top = y1
     vz = 0.86
@@ -624,10 +632,10 @@ def build_leaf(s):
         for k in range(n):
             z = -zz + 0.04 + k * (2 * zz - 0.08) / (n - 1)
             bx(mb, s * x0, s * (x1 - 0.03), y0 + 0.008, y1, z - 0.04, z + 0.04, 'Steel')
-    bx(mb, s * (x1 - 0.03), s * x1, y0 - 0.01, y1, -zz, zz, 'Iron')  # the edge, a pull in its middle
+    bx(mb, s * (x1 - 0.03), s * x1, y0 - LEAF_LIP, y1, -zz, zz, 'Iron')  # the edge, a pull in its middle
     bx(mb, s * x1, s * (x1 + 0.02), y0 + 0.004, y1 - 0.01, -0.12, 0.12, 'Iron')
     for sz in (-1, 1):
-        bx(mb, s * x0, s * x1, y0 - 0.01, y1, min(sz * zz, sz * (zz - 0.03)), max(sz * zz, sz * (zz - 0.03)), 'Iron')
+        bx(mb, s * x0, s * x1, y0 - LEAF_LIP, y1, min(sz * zz, sz * (zz - 0.03)), max(sz * zz, sz * (zz - 0.03)), 'Iron')
     if s > 0:
         xo = x1
         for k in range(9):
@@ -656,7 +664,7 @@ def build_leg(s):
         bx(mb, s * (x0 - 0.04), s * (x1 + 0.04), 0.0, 0.02, z - 0.06, z + 0.06, 'Iron')  # foot
     bx(mb, s * x0, s * x1, 0.36, 0.40, -0.955, 0.955, 'Steel')  # cross bar
     mb.beam((s * (x0 + 0.02), 0.40, -0.9), (s * (x0 + 0.02), yt - 0.04, -0.3), 0.025, 'Steel')  # brace
-    mb.cyl((s * x0, yt - 0.02, -1.0), (s * x0, yt - 0.02, 1.0), 0.016, 'Steel', seg=6)  # its hinge pin
+    mb.cyl((s * x0, LEG_PIN, -0.995), (s * x0, LEG_PIN, 0.995), 0.016, 'Steel', seg=6)  # its hinge pin (in the leaf's ends)
     return mb
 
 
@@ -689,9 +697,9 @@ def build():
         sp = (s * HX, DECK, 0)
         n['side_' + name] = node('side_' + name, build_side(s), sp, root, chain=[('side_' + name, sp)])
         chain = [('side_' + name, sp), ('leaf_' + name, None)]
-        fp = packed_of((s * (OUTER - LEAF_W / 2), DECK - LEAF_T / 2, 0), chain)
+        fp = packed_of((s * LEAF_PIVOT[0], LEAF_PIVOT[1], 0), chain)
         n['leaf_' + name] = node('leaf_' + name, build_leaf(s), fp, n['side_' + name], chain=chain)
-        lp = packed_of((s * (OUTER - 0.07), DECK - LEAF_T - 0.02, 0), chain)
+        lp = packed_of((s * (OUTER - 0.07), LEG_PIN, 0), chain)
         n['leg_' + name] = node('leg_' + name, build_leg(s), lp, n['leaf_' + name], chain=chain + [('leg_' + name, lp)])
     n['legs'] = node('legs', build_legs(), (0, 0, 0), root)
     return root, n

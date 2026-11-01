@@ -2799,3 +2799,27 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
 - **Tests:** tools/towers.test.mjs (placement, pad, spacing; climbing up and down, decks, letting go; solids and spots;
   fixtures made, opened where fitted, alive, drained, dead again; the drones not coming back). The economy simulator
   shows no change.
+
+## The cart's walls stopped flickering
+
+From play: "the side of the base cart flickers a bit". The leaves (`leaf_l`, `leaf_r`), nested in the side panels
+packed, shared planes with them: each leaf's iron underside lay exactly in the wall's outer skin (the whole outside of
+both walls, ~1.1 m² each), the table leaf's slats in the plate between the right wall's slats (inside the cart), and its
+rim in the wall's top; unfolded, the leaf's first 5 cm lay under the side's outer frame with their tops in one plane (a
+strip across both benches). A scan of the glb (faces facing the same way within 1 mm whose footprints overlap, packed
+and with `FOLD` applied) found those plus the trestles' hinge pins flush with the leaves' ends and the pole tops' ends
+in the plane of the poles' mouths (inside the caps). Within one node `stationkit`'s `separate_coplanar` already pushes
+such faces 1.5 mm apart; across nodes nothing did.
+
+- `tools/blender/cart.py`: a leaf is 0.55 wide (starting at the side's outer edge, so out it never lies on the frame)
+  and 2 cm thick with a 5 mm rim, so packed it lies wholly inside the panel (0.84 .. 0.86 of the panel's 0.83 .. 0.88);
+  the table's plate is 1.5 cm (over the packed leaf's slats), the side's outer frame bar 2 mm short of the edge (the
+  leaf's rim tops it packed), the pins ±0.995, the pole tops end 5 mm inside their caps. Pivots, turns and slides as
+  they were (docs/cart.md's table): the leaf's and leg's pivots are pinned (`LEAF_PIVOT`, `LEG_PIN`).
+- The lid's painted stripe (src/world/carts.ts `paintLid`) took each point's height from one ray, so between a row on
+  the lid and one on the rust patch it sloped into the patch's top at a graze; it takes the highest under it half a
+  row either way now, bridging the patch's edge.
+- The scan finds nothing within 1 mm in either pose. The camera is 0.05 .. 6000 m, a plain (not logarithmic or
+  reversed) depth buffer: a 1.5 mm separation holds to some 30 m, so faces that would fight are hidden or kept apart
+  by more, not offset. Checked in headless Chrome: both walls packed and unfolded at 4 and 15 m, and frames a 2 cm
+  camera move apart.
