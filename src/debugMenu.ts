@@ -112,7 +112,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <details data-sec="travel"><summary>Travel</summary>
 <div class="grid"><button id="dbgVortexVisit" title="Put you 600 m from the nearest sand vortex, just outside its pull">To vortex</button>
 <button id="dbgSolarVisit" title="Put you at the edge of the nearest solar farm's heliostat field, facing its tower">To solar farm</button>
-<button id="dbgTowerVisit" title="Put you by the foot of the nearest radio tower's ladder">To radio tower</button>
+<button id="dbgTowerVisit" title="Put you at the foot of the nearest radio tower's ladder, facing it (F climbs)">To radio tower</button>
 <button id="dbgTowerFix" title="Fit every missing part of the nearest radio tower (Scrap) and charge its battery: it comes alive">Fix radio tower</button></div>
 <div class="sub">Level</div>
 <div class="grid">${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>

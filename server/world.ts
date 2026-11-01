@@ -25,7 +25,7 @@ import { BEDROLL, CHEST, placed, TABLE } from '../shared/placed.ts';
 import { canyonFloorNear } from '../shared/canyons.ts';
 import { indoors, overShelter, shelterAt, sheltersNear } from '../shared/shelters.ts';
 import { FIELD, solarFarmsNear } from '../shared/solarfarms.ts';
-import { LADDER, towersNear, towerToWorld } from '../shared/towers.ts';
+import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
@@ -331,11 +331,11 @@ wss.on('connection', (ws) => {
       return;
     }
     if (msg.t === 'debugTowerVisit' && p && !p.down && !p.state.riding) {
-      // By the foot of the nearest radio tower's ladder, facing it.
+      // At the foot of the nearest radio tower's ladder, a step back from it, facing its rungs (F climbs).
       const t = towersNear(p.state.x, p.state.z, 20000).sort((a, b) => Math.hypot(a.x - p.state.x, a.z - p.state.z) - Math.hypot(b.x - p.state.x, b.z - p.state.z))[0];
       if (!t) return;
-      const [ox, oz] = towerToWorld(t, LADDER.at + 4, 0), x = t.x + ox, z = t.z + oz;
-      p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false, facing: Math.atan2(ox, oz) };
+      const [ox, oz] = towerToWorld(t, RUNG_A + CLIMB_D + 0.8, 0), x = t.x + ox, z = t.z + oz;
+      p.state = { ...p.state, x, z, y: heightAt(x, z) + 0.5, vx: 0, vy: 0, vz: 0, grounded: false, facing: Math.atan2(t.ux, t.uz), climb: false };
       return;
     }
     if (msg.t === 'debugTowerFix' && p) {

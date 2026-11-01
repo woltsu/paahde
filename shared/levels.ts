@@ -9,7 +9,7 @@
 import { collideOutdoor } from './capsules.ts';
 import { collideShelter, sandHidden, shelterCeiling } from './shelters.ts';
 import { collideSolar, solarCeiling } from './solarfarms.ts';
-import { collideTowers, towerGround, towerLadder } from './towers.ts';
+import { collideTowers, towerGround, towerLadder, type Ladder } from './towers.ts';
 import { collideCrash } from './crashsites.ts';
 import { collideMachines } from './machineBoxes.ts';
 import { collideJetWrecks } from './jetcrash.ts';
@@ -49,8 +49,9 @@ export type Level = {
   /** Push a mover out of the level's solids (it may stand on the low ones): the highest support top, or -Infinity.
    *  (prevX, prevZ): where it was a tick ago. */
   collide(c: Mover, y: number, prevY: number, radius: number, height: number, stepUp: number, prevX: number, prevZ: number, gates?: number): number;
-  /** A ladder at (x, y, z) a player there climbs (shared/sim.ts): its foot and top, or null. None: the level has none. */
-  ladder?(x: number, y: number, z: number): { bottom: number; top: number } | null;
+  /** The ladder (shared/towers.ts Ladder) within `reach` of where one hangs on it, for a player at (x, y, z) to grab or
+   *  climb (shared/sim.ts), or null. None: the level has none. */
+  ladder?(x: number, y: number, z: number, reach: number): Ladder | null;
   /** Lowest ceiling over (x, z) for a mover of this height (jumping into a roof). */
   ceiling(x: number, z: number, prevY: number, height: number, radius: number, gates?: number): number;
   /** Is one of its solids within r of (x, y, z)? The third-person camera's boom pulls in short of them (src/camera.ts). In

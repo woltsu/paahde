@@ -9,10 +9,15 @@ looks broken, the empty mounts look empty, and once it's alive it hums, blinks a
 
 Everything below is built (code map: `shared/towers.ts`; devlog "Radio towers"), with these differences from the plan:
 
-- **Placement:** 50% of 1.8 km cells, each tower 400 m inside its cell, so two stand at least 800 m apart.
+- **Placement:** 25% of 1.8 km cells (fewer than first built: they're meant to be rare), each tower 400 m inside its cell, so two stand at least 800 m apart.
 - **The ladder** runs straight up the middle of the lattice (1 m off the axis, towards the first leg), not up a leg, through
-  hatches in the decks. Climbing needs no `PlayerState.climb`: being in the ladder's column is the state, so nothing new
-  goes over the wire; others on it are drawn facing the rungs, legs stepping. Hands on the rungs in first person: not yet.
+  hatches in the decks (walked over as floor; only a climber goes through). F grabs it from within 1.3 m
+  (`PlayerState.climb`, an input bit for one tick), and you hang facing the rungs 0.42 m behind them; W and S climb at
+  1.8 m/s (a bit over a minute to the top), F steps off at a deck or its foot or else lets go, W at the top steps out onto
+  the top deck, Space pushes off. The body climbs in diagonal pairs (right hand with left foot), each limb two rungs a step
+  by IK (hands round the rungs, the balls of the feet on them, knees to the ladder), worked out from the height alone
+  so every client agrees; in first person your own headless body is drawn, as on the bike, so you see your hands on the
+  rungs. Each hand or foot landing clanks on the steel (synthesised, −31 LUFS climbing steadily).
 - **The antenna feed** takes a coil and a length of wiring.
 - **Power:** the radio's own battery only; no connector to a grid yet.
 - **Not done:** the camera sway at the top, icons of the fixtures' own (they borrow the control cabinet's, a motor's and

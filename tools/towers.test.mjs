@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  CABINET, DECKS, LADDER, PAD_R, spotAt, SPOTS, spotNear, TOWER, TOWER_MIN_R, TOWER_REACH, towerGround, towerLadder,
+  CABINET, CLIMB_D, CLIMB_SPEED, DECK_STEP, DECKS, PAD_R, RUNG_A, spotAt, SPOTS, spotNear, TOWER, TOWER_MIN_R, TOWER_REACH, towerGround, towerLadder,
   towersNear, towerSolid, towerToWorld,
 } from '../shared/towers.ts';
 import { ORIGIN } from '../shared/origin.ts';
@@ -9,7 +9,7 @@ import { heightAt } from '../shared/terrain.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { sheltersNear } from '../shared/shelters.ts';
 import { solarFarmsNear } from '../shared/solarfarms.ts';
-import { BACK, FORWARD, JUMP, LEFT, quantizeYaw, RIGHT, spawnState, step } from '../shared/sim.ts';
+import { BACK, FORWARD, GRAB, JUMP, LEFT, quantizeYaw, spawnState, step } from '../shared/sim.ts';
 
 const towers = towersNear(ORIGIN.x, ORIGIN.z, 6000);
 
@@ -34,53 +34,68 @@ function run(s, input, yaw, ticks) {
   return s;
 }
 
-test('the ladder: climb to the top, stand on the decks, come back down', () => {
+test('the ladder: F grabs it, W and S climb, F steps off at a deck or lets go, Space pushes off', () => {
   const t = towers[0];
-  // The ladder's column, and in front of it on the sand.
-  const [cx, cz] = towerToWorld(t, LADDER.at, 0);
-  const at = { x: t.x + cx, z: t.z + cz };
-  let s = spawnState(at.x, at.z, t.y);
-  assert.ok(towerLadder(s.x, s.y, s.z), 'in the column at its foot');
-  // W climbs; nothing held, you hang where you are.
-  s = run(s, FORWARD, 0, 60 * 5);
-  assert.ok(s.y > t.y + 10, `climbed (${(s.y - t.y).toFixed(1)} m)`);
-  const hang = s.y;
+  const near = (k) => towerLadder(t.x + towerToWorld(t, RUNG_A + CLIMB_D, 0)[0], t.y + k, t.z + towerToWorld(t, RUNG_A + CLIMB_D, 0)[1], 0.1);
+  const hang = near(0);
+  // On the sand a metre from where you'd hang: walking about does nothing to it; W doesn't climb.
+  let s = spawnState(hang.x + 0.8, hang.z, t.y);
+  s = run(s, FORWARD, 0, 30);
+  assert.ok(!s.climb, 'walking into it is not climbing');
+  s = spawnState(hang.x + 0.8, hang.z, t.y);
+  s = run(s, GRAB, 0, 1);
+  assert.ok(s.climb, 'F grabs it');
+  assert.equal(s.x, hang.x, 'onto the climbing line');
+  assert.equal(s.z, hang.z);
+  // W climbs at CLIMB_SPEED; nothing held, you hang where you are.
+  s = run(s, FORWARD, 1.3, 60 * 5);
+  assert.ok(Math.abs(s.y - (t.y + 5 * CLIMB_SPEED)) < 0.05, `climbed (${(s.y - t.y).toFixed(2)} m)`);
+  const y = s.y;
   s = run(s, 0, 0, 60);
-  assert.equal(s.y, hang, 'hangs still');
-  // To the top (it stops there).
-  s = run(s, FORWARD, 0, 60 * 60);
-  assert.equal(s.y, t.y + TOWER.height, 'at the top deck');
-  // Step off sideways onto the top deck, and stand there.
-  const yawSide = 0;
-  s = run(s, RIGHT, yawSide, 60);
-  assert.equal(towerLadder(s.x, s.y, s.z), null, 'off the ladder');
-  s = run(s, 0, 0, 60);
-  assert.equal(s.y, t.y + TOWER.height, 'standing on the top deck');
-  assert.ok(s.grounded);
-  // The rail keeps you on it: walk a long way one way.
-  for (const yaw of [0, 2.1, 4.2]) {
-    const r = run(s, FORWARD, yaw, 60 * 4);
-    assert.equal(r.y, t.y + TOWER.height, 'still on the deck after walking into the rail');
-  }
-  // Back into the hatch: S goes down; stop at the dish deck and step off.
-  s = run(s, LEFT, yawSide, 60);
-  assert.ok(towerLadder(s.x, s.y, s.z), 'back on the ladder');
-  const toDish = (TOWER.height - DECKS[1]) / 2.6;
-  s = run(s, BACK, 0, Math.round(toDish * 60));
-  assert.ok(Math.abs(s.y - (t.y + DECKS[1])) < 0.2, `near the dish deck (${(s.y - t.y).toFixed(2)})`);
-  s = run(s, RIGHT, 0, 60);
+  assert.equal(s.y, y, 'hangs still');
+  assert.ok(s.climb && s.x === hang.x && s.z === hang.z, 'still on it, where one hangs');
+  // F away from a deck lets go: you fall to the sand.
+  s = run(s, GRAB, 0, 1);
+  assert.ok(!s.climb, 'let go');
+  s = run(s, 0, 0, 60 * 3);
+  assert.ok(s.grounded && Math.abs(s.y - t.y) < 0.01, `down on the pad (${(s.y - t.y).toFixed(2)})`);
+  // Up to the rest deck, F there steps off onto it.
+  s = run(s, GRAB, 0, 1);
+  s = run(s, FORWARD, 0, Math.round((DECKS[0] / CLIMB_SPEED) * 60));
+  assert.ok(Math.abs(s.y - (t.y + DECKS[0])) < DECK_STEP, `level with the rest deck (${(s.y - t.y).toFixed(2)})`);
+  s = run(s, GRAB, 0, 1);
   s = run(s, 0, 0, 30);
-  assert.equal(s.y, t.y + DECKS[1], 'standing on the dish deck');
-  // Let go of the ladder (from a fresh grip, 60 m up): you drop onto the rest deck under it (no fall damage).
-  s = spawnState(at.x, at.z, t.y + 60);
+  assert.ok(!s.climb && s.grounded && s.y === t.y + DECKS[0], 'standing on the rest deck');
+  // The hatch is floor to walk on: walk over where the ladder comes through, and stay up.
+  const [ax, az] = [s.x, s.z];
+  s = run(s, FORWARD, Math.atan2(-(hang.x - ax), -(hang.z - az)), 10);
+  assert.ok(Math.hypot(s.x - hang.x, s.z - hang.z) < 0.6, 'over the hatch');
+  assert.equal(s.y, t.y + DECKS[0], 'over the hatch, still on the deck');
+  // Grab it again from the deck and go all the way up: at the top W steps out onto the top deck.
+  s = run(s, GRAB, 0, 1);
+  assert.ok(s.climb, 'grabbed from the deck');
+  s = run(s, FORWARD, 0, Math.round(((TOWER.height - DECKS[0]) / CLIMB_SPEED) * 60) + 30);
+  assert.ok(!s.climb, 'stepped out at the top');
+  s = run(s, 0, 0, 30);
+  assert.equal(s.y, t.y + TOWER.height, 'standing on the top deck');
+  // The rail keeps you on it.
+  for (const yaw of [0, 2.1, 4.2]) assert.equal(run(s, FORWARD, yaw, 60 * 4).y, t.y + TOWER.height, 'still on the deck after walking into the rail');
+  // Down again: back to the hatch, grab, S; Space pushes off; you land on the dish deck under you (no fall
+  // damage).
+  for (let i = 0; i < 120 && Math.hypot(s.x - hang.x, s.z - hang.z) > 0.8; i++) s = run(s, FORWARD, Math.atan2(-(hang.x - s.x), -(hang.z - s.z)), 1);
+  s = run(s, GRAB, 0, 1);
+  s = run(s, BACK, 0, 60 * 15);
+  assert.ok(s.climb && s.y < t.y + 100 && s.y > t.y + DECKS[1], `on it going down (${s.climb} ${(s.y - t.y).toFixed(2)})`);
+  s = run(s, 0, 0, 2);
   s = run(s, JUMP, 0, 1);
-  assert.equal(towerLadder(s.x, s.y, s.z), null, 'let go of it');
-  s = run(s, 0, 0, 60 * 8);
-  assert.ok(s.grounded && s.y === t.y + DECKS[0], `fell and landed on the rest deck (${(s.y - t.y).toFixed(2)})`);
-  // Over the rail (jumped) and off the deck's edge to the sand.
-  s = run(s, FORWARD | JUMP, Math.PI, 30);
-  s = run(s, FORWARD, Math.PI, 60 * 10);
-  assert.ok(s.grounded && s.y < t.y + 1, `down on the sand (${(s.y - t.y).toFixed(2)})`);
+  assert.ok(!s.climb, 'pushed off');
+  s = run(s, 0, 0, 60 * 6);
+  assert.ok(s.grounded && s.y === t.y + DECKS[1], `landed on the dish deck under it (${(s.y - t.y).toFixed(2)})`);
+  // From the foot S steps you off.
+  s = spawnState(hang.x, hang.z, t.y);
+  s = run(s, GRAB, 0, 1);
+  s = run(s, BACK, 0, 2);
+  assert.ok(!s.climb && s.grounded, 'S at its foot steps off');
 });
 
 test('the legs and cabinet are solid; the spots for fitting parts are on the decks', () => {

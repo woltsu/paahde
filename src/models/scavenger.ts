@@ -26,6 +26,8 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { LegIk, lowestAnkles, type Ground } from './legIk';
 import { Ragdoll, type RagdollGround } from './ragdoll';
 import { CrouchGait } from './crouchGait';
+import { LEFT_FOOT, LEFT_HAND, limbAt, RIGHT_FOOT, RIGHT_HAND } from './climbCycle';
+import { CLIMB_D, RUNG } from '../../shared/towers.ts';
 import type { RidePose } from '../players';
 import { carriedBit, tierIn, type TierSlot, wornBit } from '../../shared/gearBits.ts';
 import { applyTier } from '../tierLook';
@@ -64,6 +66,10 @@ export type ScavengerPose = {
   plant?: boolean;
   /** Seated on a bike: hips on the seat, hands on the grips and feet on the pegs by IK, over the Idle clip. */
   ride?: RidePose;
+  /** On a ladder (shared/towers.ts), facing its rungs (the root stands where a climber hangs: shared/towers.ts CLIMB_D
+   *  behind them): `h` the feet's height over its foot, `top` the highest a hand goes (m over its foot). The hands and
+   *  feet go rung by rung (src/models/climbCycle.ts) by IK, over the Idle clip. */
+  ladder?: { h: number; top: number };
   /** Drinking from the canteen in hand (setOutfit): raised to the mouth and tipped up. */
   drinking?: boolean;
   /** A gun in hand (setOutfit) raised to aim along `pitch`; otherwise it is carried at the low ready. */
@@ -610,7 +616,7 @@ export class ScavengerModel {
     const climbing = moving && !pose.crouching ? clamp(pose.climb ?? 0, 0, 0.8) : 0;
     this.climb += (climbing - this.climb) * (1 - Math.exp(-dt * 5));
     const mix = TRUDGE_MIX * clamp((this.climb - TRUDGE_FROM) / (TRUDGE_FULL - TRUDGE_FROM), 0, 1);
-    if (pose.ride) this.play('Idle');
+    if (pose.ride || pose.ladder) this.play('Idle');
     else if (!pose.grounded) this.play('Jump');
     else if (pose.powerSlide) this.play('Powerslide', 0.12);
     else if (pose.sliding) this.play('Slide');
@@ -661,7 +667,7 @@ export class ScavengerModel {
     }
     this.head?.scale.setScalar(this.headless ? 1e-3 : this.body.head / this.body.neck);
     this.proportion();
-    if (!pose.ride) this.walkStyle();
+    if (!pose.ride && !pose.ladder) this.walkStyle();
     this.runArms(speed);
     // After the running arms: sliding in from a run, the slide's arms take over as the Run clip fades.
     this.slideT += ((power ? 1 : 0) - this.slideT) * (1 - Math.exp(-dt * (power ? 9 : 6)));
@@ -669,9 +675,10 @@ export class ScavengerModel {
     else this.slideClock = 0;
     this.sip += ((pose.drinking ? 1 : 0) - this.sip) * (1 - Math.exp(-dt * 8));
     const loose = !pose.grounded || !!pose.sliding || !!pose.powerSlide;
-    if (this.canteen) this.canteen.visible = this.item === 'canteen' && !pose.ride;
+    const busy = !!pose.ride || !!pose.ladder; // both hands on something: nothing held shows
+    if (this.canteen) this.canteen.visible = this.item === 'canteen' && !busy;
     if (this.canteen?.visible) this.holdCanteen(this.canteen, loose);
-    if (this.held) this.held.visible = !pose.ride;
+    if (this.held) this.held.visible = !busy;
     this.aimT += ((pose.aiming && !loose && !pose.digging ? 1 : 0) - this.aimT) * (1 - Math.exp(-dt * 12));
     // A jammer raised is jamming: its lamp blinks, for everyone to see (src/jammer.ts has the user's own).
     const lamp = this.held?.userData.lamp as THREE.MeshBasicNodeMaterial | undefined;
@@ -697,6 +704,7 @@ export class ScavengerModel {
     else if (this.held?.visible && this.item === 'spyglass') this.holdScope(this.held, loose || !!pose.digging, pitch);
     else if (this.held?.visible) this.holdItem(this.held, loose || !!pose.digging);
     if (pose.ride) return this.ride(pose.ride);
+    if (pose.ladder) return this.climbLadder(pose.ladder);
     // Plant the feet: lock while the clip has them down (not when sliding: the sand moves with you).
     const clip = this.current?.getClip().name ?? '';
     let lock = pose.grounded && !pose.sliding && !pose.powerSlide && pose.plant !== false ? (this.minAnkle.get(clip) ?? null) : null;
@@ -1135,6 +1143,56 @@ export class ScavengerModel {
     }
   }
 
+  /**
+   * On a ladder: the hips back from the rungs at a climber's height over the feet, leaning in a little; each hand round
+   * its rung (fingers over the top, wrist behind and above it, elbows out and down), each foot's ball on its rung (the
+   * ankle behind and above it, knees towards the ladder, toes through). The rungs each limb is on come from the height
+   * (src/models/climbCycle.ts); a limb moving swings back off the ladder in an arc, its hand open. Measured from the
+   * body's own legs and arms, so every body (human, dwarf, gnome) climbs the same ladder.
+   */
+  private climbLadder(c: { h: number; top: number }) {
+    if (!this.hips || !this.spine || this.arms.length < 2 || this.legs.length < 2) return;
+    this.tilt.rotation.set(0, 0, 0);
+    this.root.updateMatrixWorld(true);
+    const parent = this.root.parent!;
+    // In the parent's space (the climber's: feet at the origin on the climbing line, the rungs CLIMB_D ahead along -Z):
+    // the standing body's hip height and shoulder height, as the Idle clip has them.
+    const at = (o: THREE.Object3D, v: THREE.Vector3) => parent.worldToLocal(o.getWorldPosition(v));
+    const hipY = at(this.hips, _s0).y - Math.min(at(this.legs[0][2], _t).y, at(this.legs[1][2], _o).y) + ANKLE_OVER_RUNG;
+    const shoulderY = at(this.arms[1][0], _p).y - at(this.hips, _t).y + hipY;
+    // The hands go a whole number of rungs over the feet: a little over the shoulders.
+    const up = Math.max(2, Math.round((shoulderY + 0.05) / RUNG)) * RUNG;
+    const limbs = [0, 1, 2, 3].map((i) => limbAt(i, c.h, up, c.top));
+    const rungZ = -CLIMB_D;
+    // The hips: over the lower foot's rung by most of the legs' length, back from the rungs; swaying a little towards the
+    // side whose hand holds while the other moves.
+    const feet = (limbs[RIGHT_FOOT].y + limbs[LEFT_FOOT].y) / 2 - c.h;
+    const sway = (limbs[LEFT_HAND].lift - limbs[RIGHT_HAND].lift) * 0.03;
+    const toRoot = _im.copy(this.root.matrix).invert();
+    _t.set(sway, feet + hipY * HIP_BEND, rungZ + HIP_BACK).applyMatrix4(toRoot);
+    this.tilt.position.add(_t.sub(this.root.worldToLocal(this.hips.getWorldPosition(_p))));
+    this.root.updateMatrixWorld(true);
+    // Lean the chest in towards the rungs; the head comes back up to look at them (the look pitch is on top).
+    rotateAboutRoot(this.root, this.spine, X_AXIS, -LEAN_IN);
+    if (this.neck) rotateAboutRoot(this.root, this.neck, X_AXIS, LEAN_IN * 0.7);
+    this.root.updateMatrixWorld(true);
+    const world = (x: number, y: number, z: number) => this.root.localToWorld(_t.set(x, y, z).applyMatrix4(toRoot));
+    for (let i = 0; i < 2; i++) {
+      const side = i === 0 ? -1 : 1;
+      // Arms: 0 left, 1 right; limbs: 0 right hand, 1 left hand.
+      const hand = limbs[i === 0 ? LEFT_HAND : RIGHT_HAND], arm = this.arms[i];
+      const hx = side * HAND_X, hy = hand.y - c.h, hz = rungZ + hand.lift * HAND_LIFT;
+      reach(arm[0], arm[1], arm[2], world(hx - side * 0.02, hy + 0.05, hz + 0.07).clone(),
+        _pole.set(side, -0.8, 0.35).transformDirection(this.root.matrixWorld));
+      aim(arm[2], arm[3], world(hx, hy - 0.03, hz - 0.06));
+      this.close(i, hand.move > 0 ? OPEN : RUNG_FIST);
+      const foot = limbs[i === 0 ? LEFT_FOOT : RIGHT_FOOT], leg = this.legs[i];
+      const fx = side * FOOT_X, fy = foot.y - c.h + ANKLE_OVER_RUNG + foot.lift * FOOT_RAISE, fz = rungZ + ANKLE_BEHIND + foot.lift * FOOT_LIFT;
+      reach(leg[0], leg[1], leg[2], world(fx, fy, fz).clone(), _pole.set(side * 0.25, 0.4, -1).transformDirection(this.root.matrixWorld));
+      aim(leg[2], leg[3], world(fx, fy - 0.07, fz - 0.2));
+    }
+  }
+
   dispose() {
     this.disposed = true;
     this.releaseMerged?.();
@@ -1450,6 +1508,16 @@ const _gt = new THREE.Vector3();
 const _gc = new THREE.Vector3();
 const _gm = new THREE.Matrix4();
 const _im = new THREE.Matrix4();
+// Climbing a ladder (climbLadder), in metres of the climber's space: the ankle over and behind the rung its ball is on;
+// the feet's and hands' half spread (inside the rails: shared/towers.ts RUNG_HALF); the hips behind the rungs and how
+// much of the standing hip height they keep (the knees bent); the chest's lean in (rad); a moving hand's and foot's
+// swing back off the ladder at the top of its arc, and the foot's lift; the fingers round a rung and open.
+const ANKLE_OVER_RUNG = 0.07, ANKLE_BEHIND = 0.12;
+const FOOT_X = 0.12, HAND_X = 0.17;
+const HIP_BACK = 0.36, HIP_BEND = 0.9;
+const LEAN_IN = 0.12;
+const HAND_LIFT = 0.12, FOOT_LIFT = 0.14, FOOT_RAISE = 0.06;
+const RUNG_FIST = [1.1, 1.0, 1.0], OPEN = [0.25, 0.2, 0.1];
 const _gs = new THREE.Vector3();
 const _gb = new THREE.Vector3();
 /** Each skeleton's inverse bind matrices as loaded (ScavengerModel.thickenSkins scales its own copies from these). */

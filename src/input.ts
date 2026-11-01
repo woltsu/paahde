@@ -1,12 +1,12 @@
 import { isBound, norm, setDevice, slots, type Action } from './bindings';
 import { graphics } from './graphics';
-import { BACK, BIKE, CROUCH, FORWARD, JUMP, LEFT, RIGHT, SLIDE } from '../shared/sim.ts';
+import { BACK, BIKE, CROUCH, FORWARD, GRAB, JUMP, LEFT, RIGHT, SLIDE } from '../shared/sim.ts';
 
 const keys = new Set<string>();
 let pickupPressed = false;
 /** slot: the selected hotbar slot (-1 none).
  *  frozen: the disassembly mode (src/teardown) owns the keyboard and mouse, so the player stands still. */
-export const tools = { frozen: false, slot: -1, getOff: false, engaged: false, spinning: false };
+export const tools = { frozen: false, slot: -1, getOff: false, grab: false, engaged: false, spinning: false };
 /* engaged: the crosshair is on something the disassembly (src/teardown) works, so the use button is its, not the hand's. */
 /** The Tab inventory is open (src/inventory.ts): it frees the mouse but we stay fullscreen with the keyboard locked. */
 /** `debugFreed`: the F3 panel just freed the mouse (src/debugMenu.ts), so losing it doesn't open the Esc menu (src/menu.ts). */
@@ -151,8 +151,8 @@ export function actionHeld(a: Action): boolean {
 
 export function readInput(): number {
   let input = 0;
-  const getOff = tools.getOff;
-  tools.getOff = false;
+  const getOff = tools.getOff, grab = tools.grab;
+  tools.getOff = tools.grab = false;
   if (tools.frozen) return input;
   if (actionHeld('forward')) input |= FORWARD;
   if (actionHeld('back')) input |= BACK;
@@ -166,6 +166,8 @@ export function readInput(): number {
   // The bike key (Z or 9 by default): get off the motorcycle (shared/sim.ts); a press of F while
   // riding too (`getOff`, one tick, from src/main.ts: F also gets on).
   if (actionHeld('bike') || getOff) input |= BIKE;
+  // F at a radio tower's ladder: grab it, or on it step off or let go (shared/sim.ts GRAB; one tick, from src/main.ts).
+  if (grab) input |= GRAB;
   return input;
 }
 

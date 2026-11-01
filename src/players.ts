@@ -13,7 +13,9 @@ import { groundAt, onFlat } from './ground.ts';
 import { END_FADE, footprints, streaks } from './footprints.ts';
 import { footsteps } from './footsteps.ts';
 import { tyreDust } from './tyreDust.ts';
-import { ladderFacing } from '../shared/towers.ts';
+import { climbingOn, TOWER } from '../shared/towers.ts';
+import { limbAt } from './models/climbCycle.ts';
+import { climbSound } from './climbSound.ts';
 import { SHADOW_ONLY_LAYER } from './world/env.ts';
 import { viewCull } from './world/viewCull.ts';
 
@@ -35,6 +37,8 @@ export type AvatarPose = {
   down?: [number, number, number] | null;
   /** The head turned this far from where the body faces (rad, + = left): the local player's free look (Alt). */
   look?: number;
+  /** On a radio tower's ladder (shared/sim.ts PlayerState.climb): drawn on its rungs, wherever x/z/facing say. */
+  climb?: boolean;
 };
 
 /** A seated rider's contact points and body English, in the avatar root's space (forward is -z). */
@@ -66,6 +70,8 @@ export type ModelPose = {
   /** Sand height under the feet, when standing on sand (not scrap): lets the model plant its feet. */
   ground?: (x: number, z: number) => number;
   ride?: RidePose;
+  /** On a ladder: the feet's height over its foot and the highest a hand goes (src/models/scavenger.ts climbLadder). */
+  ladder?: { h: number; top: number };
   drinking?: boolean;
   aiming?: boolean;
   /** Where the eyes look relative to the body's facing (rad, + = to the left): nonzero when the body faces
@@ -111,8 +117,8 @@ export class Avatar {
   private poseInterval = 0;
   private model: AvatarModel;
   private facing = NaN;
-  /** Height last frame while on a ladder (NaN off one): how fast it climbs, for the legs. */
-  private ladderY = NaN;
+  /** On a ladder: which of the hands and feet (src/models/climbCycle.ts) were moving last frame (landing: a clank). */
+  private limbMoving = [false, false, false, false];
   private stepDist = 0;
   private foot = 1;
   /** The look's body proportions (shared/look.ts bodyScale): the stride and the tag's height follow them. */
@@ -296,11 +302,23 @@ export class Avatar {
       this.poseInterval = pose.down || distance < 40 ? 0 : distance < 100 ? 1 / 30 : 1 / 15;
     }
     if (this.fall(pose, dt)) return;
-    // On a radio tower's ladder (shared/towers.ts): turned to the rungs, stepping as it goes up or down.
-    const rungs = !pose.ride && !this.levelFloor ? ladderFacing(pose.x, pose.y, pose.z) : null;
-    const rose = dt > 0 && Number.isFinite(this.ladderY) ? Math.abs(pose.y - this.ladderY) / dt : 0;
-    this.ladderY = rungs === null ? NaN : pose.y;
-    if (rungs !== null) pose = { ...pose, facing: rungs, speed: Math.min(4, rose * 1.4), vx: 0, vz: 0, grounded: true, look: 0 };
+    // On a radio tower's ladder (shared/sim.ts PlayerState.climb): facing its rungs, the hands and feet on them
+    // (src/models/scavenger.ts climbLadder), each landing on a rung with a clank (src/climbSound.ts).
+    const on = pose.climb && !pose.ride ? climbingOn(pose.x, pose.y, pose.z) : null;
+    if (on) {
+      this.root.position.set(pose.x, pose.y, pose.z);
+      this.facing = this.root.rotation.y = on.facing;
+      this.streakX = NaN;
+      const h = pose.y - on.pad;
+      for (let i = 0; i < 4; i++) {
+        const moving = limbAt(i, h, 1.5, Infinity).move > 0;
+        if (this.limbMoving[i] && !moving) climbSound.land(i < 2, pose.x, pose.y + (i < 2 ? 1.5 : 0), pose.z, this.remote);
+        this.limbMoving[i] = moving;
+      }
+      this.animate({ speed: 0, grounded: true, pitch: pose.pitch, ladder: { h, top: TOWER.height + 0.9 } }, dt);
+      return;
+    }
+    this.limbMoving.fill(false);
     if (pose.ride) {
       this.facing = pose.facing; // so getting off turns from here, not from where we got on
       this.streakX = NaN;

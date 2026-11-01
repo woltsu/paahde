@@ -2662,20 +2662,28 @@ the pad's LB/RB at the ends of the hotbar (its 1–5 hide), Menu on the Esc menu
   foot and 4 m at the top deck, 120 m up, X-braced in bays that shorten towards the top, a banded mast with an aviation
   lamp to 142 m. Three grating decks with rails (a rest deck at 40 m, the dish deck at 80 m with the drum-covered dishes
   round it and the big dish on its pivot, the top deck at 120 m ringed with panel antennas), a caged ladder straight up
-  the middle through hatches in the decks, the radio's cabinet at the foot. One per 1.8 km cell (50%), each 400 m inside
+  the middle through hatches in the decks, the radio's cabinet at the foot. One per 1.8 km cell (25%; first 50%, too many), each 400 m inside
   its cell so two are at least 800 m apart; of 14 spots in the cell, the highest even enough to pad (a dune's crest, a
-  low rise of rock). About 13 within 8 km of the start in the worlds tried, the first 800–1100 m out.
+  low rise of rock). About 8–15 within 8 km of the start in the worlds tried, 1–3 within 3 km.
 - **Drawing:** the frame (lattice, decks, rails, ladder, mast) is one set of geometry shared by every tower, built in
   code (src/world/towers.ts); the dishes and panels are seeded per tower (some gone, some hanging). Its members are
   pushed out along their normals with distance (a vertex shader, by the main camera's distance so the shadow pass
   agrees) to about a pixel, so a tower still stands on the horizon from kilometres off; the lamp is scaled up the same
   way. Shadows only within 900 m.
-- **Climbing:** the ladder's column is `Level.ladder` (the desert's: shared/levels.ts), read in shared/sim.ts
-  `stepLadder`: in it you hang with no gravity, W climbs and S goes down (2.6 m/s, about a minute to the top), A/D move
-  you along it and out of the column, onto a deck where one is beside you; Space lets go, pushed off backwards. At its
-  foot only W climbs, so you walk past it. Deterministic and stateless (it's where you are), so no new PlayerState
-  field. The decks are ground for feet over them (`towerGround`), with the hatch open; no fall damage, as anywhere.
-  Others on it are turned to the rungs, legs stepping (src/players.ts).
+- **Climbing:** first built as a column you walked into (W up, no grab), which looked wrong: the climber floated a
+  metre off the rungs walking in place. Now F grabs the ladder (`GRAB`, an input bit sent on one tick only, or a frame of
+  several ticks grabs and lets go at once; `PlayerState.climb`, carried in the owner's state and the remote pose's
+  flags). `Level.ladder` (shared/towers.ts `towerLadder`) says where a climber hangs: on the climbing line facing the
+  rungs, CLIMB_D behind them. shared/sim.ts `stepClimb`: W/S at 1.8 m/s, F steps off at a deck or the foot (else lets
+  go), W at the top steps out onto the top deck, Space pushes off; nothing collides while on it. The hatches are floor
+  for anyone not climbing. The body (src/models/scavenger.ts `climbLadder`, over Idle like the bike's ride): hips back
+  from the rungs at most of the standing hip height over the feet, the chest leaning in, hands round rungs (wrist over and
+  behind, elbows out and down, fingers closed) and the balls of the feet on rungs (knees towards the ladder) by two-bone
+  IK; which rung each limb is on comes from the height alone (src/models/climbCycle.ts: diagonal pairs, each limb two
+  rungs a step, three points always on), with a lift arc off the ladder as a limb moves, its hand open. The hands go a
+  whole number of rungs over the feet, from the body's own shoulder height, so a dwarf or a gnome climbs the same rungs.
+  First person draws your own headless body with the eye at its head, as on the bike: your hands on the rungs.
+  Sound: src/climbSound.ts, a knock and the rung's ring for each hand or foot landing (−31 LUFS climbing steadily).
 - **Fixing:** three fixtures, gear that stands in the world (`fixture` in shared/gear.ts): the radio in the cabinet
   (relay, compute, battery), the dish drive on the dish deck (motor), the antenna feed on the top deck (coil, wiring),
   each in a box of its own (`twr<tower×4+spot>`) opened with F where it's fitted, so fixing it means carrying parts up.

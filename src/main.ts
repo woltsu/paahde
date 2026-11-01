@@ -1,7 +1,7 @@
 import { viewCull } from './world/viewCull';
 import { buildingBox, cargoBox, towerBox, vehicleBox } from '../shared/boxes.ts';
 import * as THREE from 'three/webgpu';
-import { BACK, DT, FORWARD, isSlipFace, quantizeYaw } from '../shared/sim.ts';
+import { BACK, DT, FORWARD, GRAB, isSlipFace, quantizeYaw } from '../shared/sim.ts';
 import { EYE_HEIGHT, quantizePitch } from '../shared/dig.ts';
 import { scrapTarget } from '../shared/scrap.ts';
 import { allBeaten } from '../shared/bosses.ts';
@@ -103,7 +103,7 @@ import type { Tower } from './world/carts';
 import { corpseTargets } from './world/corpses';
 import { corpsesNear } from '../shared/corpse.ts';
 import { openBoxes, TOWER_REACH_SPOT } from '../shared/storage.ts';
-import { SPOT_ITEMS, SPOTS, spotNear, TOWER, towersNear } from '../shared/towers.ts';
+import { DECK_STEP, GRAB_REACH, SPOT_ITEMS, SPOTS, spotNear, TOWER, towersNear } from '../shared/towers.ts';
 import { windSpeed } from '../shared/power.ts';
 import { Chat } from './chat';
 import { nameGate } from './name';
@@ -285,6 +285,7 @@ setTimeout(() => (coverTimedOut = true), 30_000);
 const myLook = storedLook();
 orbit.stride = bodyScale(unpackLook(myLook)).stride;
 const me = new Avatar(0xffffff);
+if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { me });
 me.setShadowOnly(true); // first person: your body casts a shadow but is not drawn
 let bodyHidden = true;
 const myModel = new ScavengerModel();
@@ -541,8 +542,9 @@ renderer.setAnimationLoop((time) => {
   }
   pollPad(frameDt, orbit, renderer.domElement, net.boxes.bag);
   const input = !net.isReady || fly.active || stage.frozen?.(net.me) ? 0 : readInput(); // standing still until named (or in the pod going down)
-  while (accumulator >= DT) {
-    net.tick(input, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch));
+  // (F at a ladder is one press: its bit goes out on the frame's first tick only, or it would grab and let go at once.)
+  for (let once = input; accumulator >= DT; once &= ~GRAB) {
+    net.tick(once, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch));
     accumulator -= DT;
   }
 
@@ -574,7 +576,7 @@ renderer.setAnimationLoop((time) => {
     me.update(
       { x: v.x, y: v.y, z: v.z, facing: v.facing, speed: Math.hypot(s.vx, s.vz), vx: s.vx, vz: s.vz, grounded: s.grounded, powerSlide: s.sliding, crouching: s.crouching,
       pitch: orbit.pitch, drinking: playerHands.drinking, aiming: aiming || net.justFired(net.id), down: net.down,
-      look: orbit.freeYaw },
+      look: orbit.freeYaw, climb: s.climb },
       frameDt,
     );
   }
@@ -616,6 +618,8 @@ renderer.setAnimationLoop((time) => {
   // shoulders and hood are behind it in first person: you see your hands on the grips. The camera adds EYE_HEIGHT.
   if (riding && me.eye(eye)) focus.set(eye.x - Math.sin(v.heading) * RIDE_EYE_AHEAD, eye.y - EYE_HEIGHT, eye.z - Math.cos(v.heading) * RIDE_EYE_AHEAD);
   else if (riding) focus.set(v.x, v.y, v.z);
+  // On a ladder, the eye is the climber's too (leaning in to the rungs): your hands on them in front of you.
+  else if (s.climb && me.eye(eye)) focus.set(eye.x, eye.y - EYE_HEIGHT, eye.z);
   // Dead: the camera backs off to third person and follows the body as it falls (the pivot a little above it).
   else if (me.downAt(focus)) focus.y += 0.5 - EYE_HEIGHT;
   else focus.copy(me.root.position);
@@ -627,7 +631,7 @@ renderer.setAnimationLoop((time) => {
     }
   }
   telescope.update(frameDt, spyglassZoom(Math.max(0, quality(inHand))));
-  const hands = !s.riding && !net.down && !fly.active; // the tools work
+  const hands = !s.riding && !s.climb && !net.down && !fly.active; // the tools work (not with both hands on a ladder)
   const fire = rifle.update(frameDt, { speed: Math.hypot(s.vx, s.vz), grounded: s.grounded, crouching: !!(s.crouching || s.sliding) }, hands);
   viewCull.begin();
   if (L.things) {
@@ -659,10 +663,12 @@ renderer.setAnimationLoop((time) => {
   jammer.update(frameDt, hands && !storm.toolsDown); // dead in a storm's static (storm.update is later: last frame's)
   jammer.others(others, orbit.camera.position); // others' jammers: their static
   receiver.update(frameDt, inHand, hands, storm.toolsDown);
-  // T: third person. On the bike the body is drawn in first person too (hands on the bars), minus the head.
-  const bodyShown = orbit.showBody || riding || fly.active;
+  // T: third person. On the bike the body is drawn in first person too (hands on the bars), minus the head; on a ladder
+  // too (hands on the rungs).
+  const holding = riding || !!s.climb;
+  const bodyShown = orbit.showBody || holding || fly.active;
   if (bodyShown === bodyHidden) me.setShadowOnly((bodyHidden = !bodyShown));
-  me.setHeadless(riding && !orbit.showBody && !fly.active);
+  me.setHeadless(holding && !orbit.showBody && !fly.active);
   viewmodel.root.visible = bodyHidden;
   viewmodel.setColor(net.color);
   viewmodel.update(frameDt, { speed: Math.hypot(s.vx, s.vz), grounded: s.grounded, sliding: s.sliding });
@@ -824,13 +830,20 @@ renderer.setAnimationLoop((time) => {
   for (const d of L.doors()) if (Math.hypot(s.x - (d.trigger[0] + d.trigger[1]) / 2, s.z - (d.trigger[4] + d.trigger[5]) / 2) < 60) levels.prefetch(d.to);
   // What the level asks F for first (the beginning's pod hatch).
   const levelAct = net.connected && !net.down && stage.level === net.me.level ? (stage.interact?.(net.me, net.boxes.bag) ?? null) : null;
-  const fPrompt = levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? fixturePrompt ?? rollPrompt ?? ridePrompt ?? cartPrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
+  // A radio tower's ladder (shared/towers.ts): F grabs it in reach; on it, F steps off at a deck or its foot, or lets go
+  // (shared/sim.ts GRAB). On it, that's all F does.
+  const climbing = !!s.climb;
+  const ladder = here && !net.down && !onBike && (climbing || !use) ? L.ladder?.(s.x, s.y, s.z, climbing ? 0.3 : GRAB_REACH) ?? null : null;
+  const ladderPrompt = !ladder ? null : !climbing ? TEXT.prompt.climb
+    : ladder.decks.some((d) => Math.abs(d - s.y) < DECK_STEP) || s.y <= ladder.bottom + DECK_STEP ? TEXT.prompt.stepOff : TEXT.prompt.letGo;
+  const fPrompt = climbing ? ladderPrompt : levelAct?.prompt ?? doorPrompt ?? piecePrompt ?? use ?? buildingPrompt ?? fixturePrompt ?? ladderPrompt ?? rollPrompt ?? ridePrompt ?? cartPrompt ?? tend ?? target ?? debrisPrompt ?? findPrompt ?? sitePrompt ?? packPrompt;
   // A wiring coil in hand: stringing power lines between connectors (src/wiring.ts).
   const wirePrompt = wiring.update(survival.slot, net.me, quantizeYaw(orbit.yaw), quantizePitch(orbit.pitch), !net.down && !fly.active, (t) => hud.toast(t));
   const extra = [growing, wirePrompt, placing.prompt, foldPrompt].filter(Boolean).join(' ');
   hud.setTarget(fPrompt && extra && typeof fPrompt === 'string' ? `${kbd('interact')}${fPrompt} ${extra}` : (fPrompt ?? (extra || null)));
   const interact = takePickup() && !fly.active;
-  if (interact && levelAct) levelAct.act();
+  if (interact && ladderPrompt && (climbing || fPrompt === ladderPrompt)) tools.grab = true;
+  else if (interact && levelAct) levelAct.act();
   else if (interact && atDoor) net.enter();
   else if (interact && onBike) tools.getOff = true; // (src/input.ts: the bike key's input, one tick)
   else if (interact && piecePrompt) {
@@ -874,7 +887,7 @@ renderer.setAnimationLoop((time) => {
     } else if (wreck) net.crashTake(wreck.id);
     else if (pack || chest) hud.open();
   }
-  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || fixturePrompt !== null || rollPrompt !== null || ridePrompt !== null || cartPrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
+  const targeted = levelAct !== null || doorPrompt !== null || piecePrompt !== null || use !== null || buildingPrompt !== null || fixturePrompt !== null || ladderPrompt !== null || rollPrompt !== null || ridePrompt !== null || cartPrompt !== null || tend !== null || target !== null || debrisPrompt !== null || findPrompt !== null || sitePrompt !== null || packPrompt !== null;
   survival.update(frameDt, net.me, targeted, interact && !targeted, clockText(sky.day.tod));
   const w = net.water;
   const m = net.me;

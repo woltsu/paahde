@@ -169,6 +169,9 @@ const en = {
     repair: (what: string) => `Repair ${lower(what)}`,
     /** A working one: F gets on. */
     getOn: 'Get on',
+    climb: 'Climb',
+    stepOff: 'Step off',
+    letGo: 'Let go',
     /** Your own cart's tongue, hitched to a bike (shared/cart.ts): F lets it go. */
     unhitch: 'Unhitch',
     /** Your own cart let go of the bike, looking at it: its level's pieces out, or folded away again. */

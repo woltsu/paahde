@@ -26,7 +26,7 @@ import { WIND } from './dunes.ts';
 import { heightAt, onRock } from './terrain.ts';
 import { tarpSlope } from './tarp.ts';
 import { towHitch } from './cart.ts';
-import { CLIMB_SIDE, CLIMB_SPEED } from './towers.ts';
+import { CLIMB_SPEED, DECK_STEP, GRAB_REACH, type Ladder } from './towers.ts';
 
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
@@ -136,6 +136,9 @@ export type PlayerState = {
   /** The towed cart's heading (radians, same convention as heading); its axle is derived (shared/cart.ts cartAxle).
    *  Kept on getting off, so where the cart is parked follows from the state. */
   hitch: number;
+  /** On a ladder (a radio tower's: shared/towers.ts), hanging where Level.ladder says one hangs on it: grabbed with F
+   *  (GRAB), let go of with F or Space. Absent: false. */
+  climb?: boolean;
 };
 
 // Input is a bitmask so it is tiny on the wire and trivially comparable.
@@ -148,7 +151,8 @@ export const CROUCH = 32; // Ctrl / C: crouch
 // 64 and 128 were dig and pile (no digging now): free.
 export const SLIDE = 256; // Shift: speed slide
 export const BIKE = 512; // Z / 9 (or F while riding): get off the motorcycle
-export const INPUT_MASK = 1023;
+export const GRAB = 1024; // F at a ladder: grab it; on it, F again steps off at a deck or lets go (one tick, src/input.ts)
+export const INPUT_MASK = 2047;
 
 // Camera yaw is sent with every input, quantized to 16 bits so client and server agree exactly.
 export const YAW_STEPS = 65536;
@@ -279,9 +283,12 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
     dx /= len;
     dz /= len;
   }
-  // On a ladder (a radio tower's, shared/towers.ts): W up, S down. At its foot only W climbs: anything else walks.
-  const lad = L.ladder?.(s.x, s.y, s.z);
-  if (lad && (fwd > 0 || s.y > lad.bottom + 0.05)) return stepLadder(s, L, lad, fwd, strafe, yaw, input);
+  // A ladder (a radio tower's, shared/towers.ts): F grabs it from in reach, and you hang on it till you let go.
+  if (s.climb || (input & GRAB) !== 0) {
+    const lad = L.ladder?.(s.x, s.y, s.z, s.climb ? CLIMB_HOLD : GRAB_REACH);
+    if (lad) return stepClimb(s, L, lad, fwd, yaw, input);
+    if (s.climb) s = { ...s, climb: false };
+  }
 
   let landTicks = s.landTicks > 0 ? s.landTicks - 1 : 0;
   let speed = WALK_SPEED;
@@ -453,31 +460,43 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
 }
 
 // --- Ladder ----------------------------------------------------------------------------------------
-// In a ladder's column (Level.ladder: a radio tower's, shared/towers.ts) you hang on it, no gravity: W climbs, S goes
-// down, A/D move you along it (CLIMB_SIDE), out of the column at last: onto a deck where one is beside you
-// (shared/towers.ts towerGround), else you drop. Space lets go: pushed off backwards, out of the column. Nothing else
-// collides in the column. Grounded while on it (you're holding on: no fall, no landing).
-const LET_GO = 1.1; // m out of the column on letting go
-const LET_GO_SPEED = 1.2;
+// On a ladder (PlayerState.climb; Level.ladder: a radio tower's, shared/towers.ts) you hang where a climber does on it,
+// facing its rungs, no gravity: W climbs, S goes down (CLIMB_SPEED). At its foot S steps off onto the ground, at its top
+// W steps you out onto the top deck. F (GRAB) steps off onto a deck you're level with, anywhere else it lets go (you
+// drop, onto the deck below if there is one); Space pushes you off backwards. Grabbing (F in reach) snaps you onto it.
+// Nothing collides while you're on it, and the deck you pass isn't ground (it is again when you leave). Grounded on it:
+// you're holding on (no fall, no landing). The body's limbs follow the height (src/models/scavenger.ts climb).
+/** Still on the ladder while within this of where one hangs (m): the server moving you off it (a teleport) lets go. */
+const CLIMB_HOLD = 0.3;
+const PUSH_OFF = 2.5; // m/s back off it on Space, and up
 
-function stepLadder(s: PlayerState, L: Level, lad: { bottom: number; top: number }, fwd: number, strafe: number, yaw: number, input: number): PlayerState {
+function stepClimb(s: PlayerState, L: Level, lad: Ladder, fwd: number, yaw: number, input: number): PlayerState {
   const gates = L.tick ? L.tick(s.gates ?? 0) : s.gates ?? 0;
   const jumpDown = (input & JUMP) !== 0;
-  const bikeDown = (input & BIKE) !== 0;
-  const base = {
+  const base: PlayerState = {
     ...s, facing: yaw, airJumps: AIR_JUMPS, jumpHeld: jumpDown, landTicks: 0, sliding: false, crouching: false,
-    slideSpent: false, slideCool: s.slideCool > 0 ? s.slideCool - 1 : 0, riding: false, bikeHeld: bikeDown, nose: 0, noseSpin: 0, gates,
+    slideSpent: false, slideCool: s.slideCool > 0 ? s.slideCool - 1 : 0, riding: false, bikeHeld: (input & BIKE) !== 0,
+    nose: 0, noseSpin: 0, gates, vx: 0, vy: 0, vz: 0, grounded: true, climb: true,
   };
-  if (jumpDown && !s.jumpHeld) {
-    // Backwards is (sin yaw, cos yaw).
-    const bx = Math.sin(yaw), bz = Math.cos(yaw);
-    return { ...base, x: s.x + bx * LET_GO, z: s.z + bz * LET_GO, vx: bx * LET_GO_SPEED, vy: LET_GO_SPEED, vz: bz * LET_GO_SPEED, grounded: false };
+  const off = (x: number, y: number, z: number): PlayerState => ({ ...base, x, y, z, climb: false });
+  const y0 = Math.min(lad.top, Math.max(lad.bottom, s.y));
+  if (!s.climb) return { ...base, x: lad.x, y: y0, z: lad.z }; // grabbed: onto it, where you were
+  if ((input & GRAB) !== 0) {
+    const deck = lad.decks.find((d) => Math.abs(d - s.y) < DECK_STEP);
+    if (deck !== undefined) return off(lad.offX, deck, lad.offZ);
+    if (s.y <= lad.bottom + DECK_STEP) return off(lad.x, lad.bottom, lad.z);
+    return { ...off(lad.x, s.y, lad.z), grounded: false }; // let go
   }
-  const vy = fwd * CLIMB_SPEED;
-  const y = Math.min(lad.top, Math.max(lad.bottom, s.y + vy * DT));
-  // Along it: the camera's right, (cos yaw, -sin yaw).
-  const vx = Math.cos(yaw) * strafe * CLIMB_SIDE, vz = -Math.sin(yaw) * strafe * CLIMB_SIDE;
-  return { ...base, x: s.x + vx * DT, y, z: s.z + vz * DT, vx, vy: y === s.y ? 0 : vy, vz, grounded: true };
+  if (jumpDown && !s.jumpHeld) {
+    // Pushed off backwards, away from the rungs: along (sin f, cos f) for the facing f that looks at them.
+    const bx = Math.sin(lad.facing), bz = Math.cos(lad.facing);
+    return { ...off(lad.x + bx * 0.3, s.y, lad.z + bz * 0.3), vx: bx * PUSH_OFF, vy: PUSH_OFF, vz: bz * PUSH_OFF, grounded: false };
+  }
+  const y = s.y + fwd * CLIMB_SPEED * DT;
+  if (y <= lad.bottom && fwd < 0) return off(lad.x, lad.bottom, lad.z);
+  if (y >= lad.top && fwd > 0) return off(lad.offX, lad.top, lad.offZ);
+  const yc = Math.min(lad.top, Math.max(lad.bottom, y));
+  return { ...base, x: lad.x, y: yc, z: lad.z, vy: (yc - s.y) / DT };
 }
 
 // --- Sand bike -----------------------------------------------------------------------------------

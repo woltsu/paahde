@@ -167,8 +167,10 @@ when you find it stale.
 - `shared/towers.ts` — radio towers (docs/radiotowers.md): 120 m lattice telecom towers on high ground, one per 1.8 km
   cell (none within 800 m of the origin, at least 800 m apart, off the biomes with `towers: false`, `empty` ones and the
   solar farms), on a pad (`withTowerPad`) the shelters, crash sites, scrap and wrecks keep off (`towerWithin`). Legs,
-  mast, deck rails and cabinet collide (`collideTowers`), the three decks are desert ground (`towerGround`), the ladder's
-  column is the desert's `Level.ladder` (`towerLadder`; climbing is shared/sim.ts `stepLadder`), legs and cabinet stop
+  mast, deck rails and cabinet collide (`collideTowers`), the three decks are desert ground (`towerGround`), the ladder is
+  the desert's `Level.ladder` (`towerLadder`: where a climber hangs on it; F grabs it, `PlayerState.climb`, shared/sim.ts
+  `stepClimb`; the body's hands and feet rung by rung in src/models/scavenger.ts `climbLadder` from
+  src/models/climbCycle.ts, the clank of each in src/climbSound.ts), legs and cabinet stop
   shots (`towerSolid`). Three fixtures where parts are fitted (`SPOTS`, `SPOT_ITEMS`: the radio at the cabinet, the dish
   drive on the dish deck, the antenna feed on the top deck), each gear (`fixture`, shared/gear.ts) in a box of its own
   (`twr<tower×4+spot>`, shared/boxes.ts `towerBox`); `server/towers.ts` makes them as players come near

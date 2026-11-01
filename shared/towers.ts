@@ -32,7 +32,7 @@ import { LAB } from './world.ts';
 /** Grid cell size (m): at most one tower per cell. */
 export const TOWER_CELL = 1800;
 /** The odds a cell holds a tower. */
-const TOWER_ODDS = 0.5;
+const TOWER_ODDS = 0.25;
 /** No towers this close to the origin (m). */
 export const TOWER_MIN_R = 800;
 
@@ -50,10 +50,21 @@ const DECK_OUT = 1.2, TOP_OUT = 3.4;
 /** Rails round a deck's edge: height over the floor, radius. */
 export const RAIL = { h: 1.1, r: 0.05 };
 /** The ladder: its column's middle (m out from the tower's axis, towards the first leg) and the column's half width
- *  (the hatches in the decks are the same square). */
+ *  (the hatches in the decks are the same square: drawn open, walked over as floor). */
 export const LADDER = { at: 1.05, half: 0.55 };
-/** Up and down the ladder, and sideways on it (m/s). */
-export const CLIMB_SPEED = 2.6, CLIMB_SIDE = 1.4;
+/** The rungs: the plane they're in (tower-local a, the column's side towards the axis), their spacing up from the pad
+ *  (the first RUNG up), their half width between the rails. */
+export const RUNG_A = LADDER.at - LADDER.half + 0.05, RUNG = 0.3, RUNG_HALF = 0.22;
+/** A climber hangs this far (m) behind the rungs, facing them (their body's middle: feet on the rungs, hips back). */
+export const CLIMB_D = 0.42;
+/** Up and down the ladder (m/s): two rungs a step, three steps a second. */
+export const CLIMB_SPEED = 1.8;
+/** F grabs the ladder from this far (m) from where a climber hangs, standing at its foot or on a deck. */
+export const GRAB_REACH = 1.3;
+/** Level enough with a deck or the ladder's foot (m, feet) to step off there with F (shared/sim.ts). */
+export const DECK_STEP = 0.7;
+/** Stepping off onto a deck: this far (m) to the climber's left of where they hang, clear of the hatch. */
+const STEP_OFF = 0.95;
 /** The radio cabinet at the foot: its middle (m from the axis, away from the ladder), half width and half depth, height. */
 export const CABINET = { at: -3.2, hw: 0.8, hd: 0.45, h: 2.1 };
 /** The mast's radius. */
@@ -235,11 +246,6 @@ function inTriangle(a: number, b: number, R: number): boolean {
   return a >= -ri && 0.5 * a + (SQRT3 / 2) * b <= ri && 0.5 * a - (SQRT3 / 2) * b <= ri;
 }
 
-/** In the ladder's column (local)? */
-function inColumn(a: number, b: number): boolean {
-  return Math.abs(a - LADDER.at) <= LADDER.half && Math.abs(b) <= LADDER.half;
-}
-
 /** The capsules (tower-local, heights over the pad): the legs in short straight pieces, the mast, the deck rails, the
  *  cabinet. The same for every tower. */
 const FRAME: Capsule[] = (() => {
@@ -303,12 +309,12 @@ export function collideTowers(p: { x: number; z: number; vx: number; vz: number 
 }
 
 /** The deck under world (x, z) for feet that were at prevY (on it or above it), as ground (world height), or
- *  -Infinity. The hatch where the ladder comes through is open. */
+ *  -Infinity. (The hatch where the ladder comes through is floor to walk on: only a climber goes through it, and the
+ *  sim doesn't ask the ground while climbing.) */
 export function towerGround(x: number, z: number, prevY: number): number {
   const t = frameAt(x, z, 0);
   if (!t) return -Infinity;
   const [a, b] = local(t, x, z);
-  if (inColumn(a, b)) return -Infinity;
   const feet = prevY - t.y;
   for (let k = DECKS.length - 1; k >= 0; k--) {
     const y = DECKS[k];
@@ -317,24 +323,30 @@ export function towerGround(x: number, z: number, prevY: number): number {
   return -Infinity;
 }
 
-/** The ladder at world (x, y, z): its foot and top (world heights) while (x, z) is in its column and y on its length,
- *  else null. */
-export function towerLadder(x: number, y: number, z: number): { bottom: number; top: number } | null {
+/** A ladder as the sim climbs it (shared/levels.ts Level.ladder): where a climber hangs on it (world x, z), the way
+ *  they face (as PlayerState.facing), its foot and top and the decks it passes (world heights), and where stepping off
+ *  at a deck puts you (world x, z). */
+export type Ladder = { x: number; z: number; facing: number; bottom: number; top: number; decks: readonly number[]; offX: number; offZ: number };
+
+/** The ladder within `reach` (m, across) of where a climber hangs on it, at feet height y on its length, else null. */
+export function towerLadder(x: number, y: number, z: number, reach: number): Ladder | null {
   const t = frameAt(x, z, 0);
   if (!t) return null;
-  const [a, b] = local(t, x, z);
-  if (!inColumn(a, b)) return null;
   const h = y - t.y;
-  if (h < -0.5 || h > TOWER.height + 0.3) return null;
-  return { bottom: t.y, top: t.y + TOWER.height };
+  if (h < -0.6 || h > TOWER.height + 0.6) return null;
+  const [a, b] = local(t, x, z), da = a - (RUNG_A + CLIMB_D);
+  if (da * da + b * b > reach * reach) return null;
+  const [hx, hz] = towerToWorld(t, RUNG_A + CLIMB_D, 0), [ox, oz] = towerToWorld(t, RUNG_A + CLIMB_D, STEP_OFF);
+  // Facing the rungs: along -u, (-sin f, -cos f) = (-ux, -uz).
+  return { x: t.x + hx, z: t.z + hz, facing: Math.atan2(t.ux, t.uz), bottom: t.y, top: t.y + TOWER.height,
+    decks: DECKS.map((d) => t.y + d), offX: t.x + ox, offZ: t.z + oz };
 }
 
-/** On a ladder at world (x, y, z) (off its foot): the facing (as PlayerState.facing) that looks at its rungs, else null. */
-export function ladderFacing(x: number, y: number, z: number): number | null {
-  const lad = towerLadder(x, y, z), t = lad && towerAt(x, z);
-  if (!lad || !t || y < lad.bottom + 0.05) return null;
-  // The rungs are on the column's side towards the axis: look along -u, (-sin f, -cos f) = (-ux, -uz).
-  return Math.atan2(t.ux, t.uz);
+/** The ladder a climber at world (x, y, z) hangs on (shared/sim.ts PlayerState.climb), for drawing them on it: its
+ *  tower's pad height (the rungs are RUNG apart up from it) and the way they face. Null if there's none there. */
+export function climbingOn(x: number, y: number, z: number): { pad: number; facing: number } | null {
+  const l = towerLadder(x, y, z, 0.2), t = l && towerAt(x, z);
+  return l && t ? { pad: t.y, facing: l.facing } : null;
 }
 
 /** What a shot meets at world (x, y, z) at a tower: true in a leg, the mast or the cabinet, null elsewhere. */
