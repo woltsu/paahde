@@ -54,7 +54,14 @@ export type Enemy = {
   falls?: [number, number];
   /** How heavy it is (kg): how far a hit knocks it (shared/knockback.ts). */
   mass: number;
+  /** Its hull's armour: a gun's hit on it bites only if the gun's `pierce` (shared/rifle.ts GUNS) is at least this;
+   *  a weak point goes round it (shared/rifle.ts bites). 0: thin-skinned, any gun hurts it. */
+  armor: number;
 };
+
+/** Armour by how thick the hull: thin (drones, spiderlings, jets: any gun bites), and the walkers', the harvester's
+ *  and the bosses' plate (only the graviton pistol goes through; the rest must find the weak points). */
+export const ARMOR = { thin: 0, plate: 10 } as const;
 
 export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | 'spiderling' | BossKind;
 
@@ -68,6 +75,7 @@ const boss = (kind: BossKind): Enemy => ({
   fight: { seconds: odds(120, 900, 900), win: odds(0, 0.2, 0.75), death: odds(0.9, 0.7, 0.6), quality: 0.25 },
   drops: (rand) => bossDrops(kind, rand),
   mass: 1e6,
+  armor: ARMOR.plate,
 });
 
 /** A site's crawlers killed are back this long (s) after everyone has left it (server/guardians.ts swarm). */
@@ -84,6 +92,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(40, 60, 40, 50), win: odds(0, 0.85, 0.97, 0.6), death: odds(0.2, 0.08, 0.03, 0.15), quality: 0.2 },
     drops: (rand) => killDrops('crawler', rand),
     mass: 100,
+    armor: ARMOR.plate,
   },
   // The giant guardians: GUARDIANS (6) roam guardian ground's sites (server/guardians.ts), crossing your path out there now and then.
   guardian: {
@@ -92,6 +101,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(50, 150, 100), win: odds(0, 0.45, 0.85), death: odds(0.35, 0.2, 0.08), quality: 0.2 },
     drops: (rand) => killDrops('guardian', rand),
     mass: 40_000,
+    armor: ARMOR.plate,
   },
   // Searchlight drones: two keep each crawler- and guardian-ground site by night (DRONES_PER_SITE), and a few roam the open
   // desert day and night, drifting in on whoever is out (ROAMERS, ROAM_EVERY_S).
@@ -101,6 +111,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(30, 45, 30), win: odds(0, 0.75, 0.93), death: odds(0.15, 0.06, 0.03), jammer: 0.95, quality: 0.2 },
     drops: (rand) => killDrops('drone', rand),
     mass: 40,
+    armor: ARMOR.thin,
   },
   // Jets fly over every 4–10 min (server/jets.ts GAP_MIN_MS..GAP_MAX_MS); bring one down with the rifle (3 hits) or the
   // jammer and it comes down some way off, its wreck a crash site (shared/jetcrash.ts). They don't shoot back.
@@ -111,6 +122,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     drops: (rand, ctx) => jetDrops(ctx?.jet ?? 'drone', !!ctx?.soft, rand),
     falls: [150, 700],
     mass: 4000,
+    armor: ARMOR.thin,
   },
   // The harvester rises out of a mud flat near whoever is out by one, every 4–10 min (server/harvesters.ts GAP_MIN_MS..GAP_MAX_MS),
   // and runs them over; three cores in its maw to shoot out.
@@ -120,6 +132,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(40, 240, 150), win: odds(0, 0.3, 0.85), death: odds(0.25, 0.15, 0.06), quality: 0.2 },
     drops: (rand) => harvesterDrops(rand),
     mass: 2e6,
+    armor: ARMOR.plate,
   },
   // The solar farms' nests (shared/nest.ts): NEST_N (30) spiderlings each, clinging to the mirrors by the tower, most of
   // them on you by the time you're in among them (server/nests.ts); the ones killed are back PACK_BACK_S after everyone
@@ -131,6 +144,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(2, 6, 4, 5), win: odds(0, 0.95, 0.985, 0.94), death: odds(0.5, 0.6, 0.6, 0.6), quality: 0.25 },
     drops: (rand) => spiderlingDrops(rand),
     mass: 8,
+    armor: ARMOR.thin,
   },
   worm: boss('worm'),
   carrier: boss('carrier'),

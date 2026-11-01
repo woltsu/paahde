@@ -68,6 +68,12 @@ export const GEAR: Record<string, GearSpec> = {
   laser_pistol: { slots: [WIRING, P('heatsink'), SCRAP], better: 'how fast it recharges', use: TEXT.gearUse.laser_pistol },
   laser_rifle: { slots: [WIRING, P('battery'), P('heatsink'), SCRAP], better: 'how fast it recharges',
     use: TEXT.gearUse.laser_rifle },
+  // The blaster: a coil to throw the burst, a cell to charge it, a heat sink, wiring and plate.
+  blaster: { slots: [WIRING, P('coil'), P('battery'), P('heatsink'), SCRAP], better: 'how fast it recharges',
+    use: TEXT.gearUse.blaster },
+  // The graviton pistol: never found in the world (shared/rifle.ts GRAVITON); a compute unit to shape the field, a coil
+  // and a uranium cell to drive it.
+  graviton_pistol: { slots: [P('compute'), P('coil'), CELL], better: 'how fast it recharges', use: TEXT.gearUse.graviton_pistol },
   // The jammer (shared/jammer.ts): a compute unit to find the drones' link, wiring for the antenna, a cell to drive it.
   jammer: { slots: [P('compute'), WIRING, P('battery')], better: 'how fast it locks on',
     use: TEXT.gearUse.jammer },

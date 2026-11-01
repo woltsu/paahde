@@ -29,7 +29,7 @@ import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
-import { GUNS, PISTOL } from '../shared/rifle.ts';
+import { GRAVITON, GUNS, PISTOL } from '../shared/rifle.ts';
 import { inCone, JAM_BLEED, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { THROW_MS, THROWABLE } from '../shared/throw.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_SLACK } from '../shared/mace.ts';
@@ -1373,7 +1373,8 @@ function onDrop(p: Player, box: unknown, slot: unknown) {
 // equipment slots (if free).
 function onDebugGear(p: Player, tier: unknown) {
   const t = TIERS[Number.isInteger(tier) ? (tier as number) : 0] ?? 'scrap';
-  for (const kind of GEAR_KINDS.filter((k) => !standsInWorld(k))) {
+  // (Not the graviton pistol, shared/rifle.ts GRAVITON: the end of the game, given only by name.)
+  for (const kind of GEAR_KINDS.filter((k) => !standsInWorld(k) && k !== GRAVITON)) {
     const parts = scrapParts(kind, t);
     if (!items.equip(p.browserId, { kind, parts })) items.giveItem(p.browserId, { kind, parts });
   }

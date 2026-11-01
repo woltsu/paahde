@@ -95,6 +95,8 @@ export const ITEMS: Record<string, { label: string; stack: number; tier?: Tier; 
   // The guns (shared/rifle.ts) and the jammer are gear: found broken, repaired at the workbench.
   laser_rifle: { label: TEXT.items.laser_rifle, stack: 1, size: [4, 1] },
   laser_pistol: { label: TEXT.items.laser_pistol, stack: 1, size: [2, 1] },
+  blaster: { label: TEXT.items.blaster, stack: 1, size: [4, 1] },
+  graviton_pistol: { label: TEXT.items.graviton_pistol, stack: 1, size: [2, 1] },
   jammer: { label: TEXT.items.jammer, stack: 1, size: [2, 1] },
   // A tool you make (an electric motor, a battery and scrap): grinds the seams of a machine's shell open (src/teardown).
   grinder: { label: TEXT.items.grinder, stack: 1, size: [2, 1] },
@@ -121,7 +123,7 @@ const ORDER = Object.keys(ITEMS);
 export const RETIRED = new Set(['shovel', 'metal_detector']);
 
 /** Used from the hotbar (held in hand): Store all leaves these in the bag. Placeables (shared/placed.ts) stay too. */
-export const TOOLS = new Set(['canteen', 'spyglass', 'laser_rifle', 'laser_pistol', 'jammer', 'grinder', 'wrench', 'scrap_mace',
+export const TOOLS = new Set(['canteen', 'spyglass', 'laser_rifle', 'laser_pistol', 'blaster', 'graviton_pistol', 'jammer', 'grinder', 'wrench', 'scrap_mace',
   'receiver_carrier', 'receiver_queen', 'receiver_colossus', 'receiver_worm']);
 
 /** Every item fits a grid this many rows tall once turned (its smaller side): the smallest backpack's rows
