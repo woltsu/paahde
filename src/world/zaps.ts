@@ -19,13 +19,17 @@ import { uAt, ustarFrom10, wind } from './wind.ts';
  * - blaster: thick and hot, a yellow-white core in an orange glow that lingers a little.
  * - graviton: a black thread in a violet haze that ripples outward along it (`ripple`), lasting longest; its core is
  *   drawn over the glow (`dark`), not added to it.
+ * - piercer: a slug, not a beam: a hair-thin, blinding blue-white streak, dead straight and gone almost at once, leaving
+ *   an ionised trail (`trail`) in cold blue that widens, frays and shimmers in the air for a second or more.
  * The muzzle flash: a light thrown ahead of the gun (so it lights the sand, not just the hands) and a soft glow at the
  * tip, about `flashAngle` rad across as seen from the camera (capped at `flashMax` m), `flash` coloured.
  */
-export type BeamKind = 'rifle' | 'blaster' | 'graviton';
+export type BeamKind = 'rifle' | 'blaster' | 'graviton' | 'piercer';
 type BeamStyle = {
   life: number; coreR: number; glowR: number; coreR0: number; glowR0: number; coreSlope: number; glowSlope: number;
   core: THREE.Color; glow: THREE.Color; dark: boolean; ripple: number;
+  /** A lingering trail: the core is gone in the first few % of `life`, the glow stays, widening by `trail` × over it. */
+  trail?: number;
   flash: THREE.Color; flashS: number; flashI: number; flashAngle: number; flashMax: number;
 };
 const BEAMS: Record<BeamKind, BeamStyle> = {
@@ -43,6 +47,11 @@ const BEAMS: Record<BeamKind, BeamStyle> = {
     life: 0.45, coreR: 0.03, glowR: 0.2, coreR0: 0.003, glowR0: 0.01, coreSlope: 0.02, glowSlope: 0.07,
     core: new THREE.Color(0.012, 0, 0.03), glow: new THREE.Color(1.3, 0.3, 3.2), dark: true, ripple: 1,
     flash: new THREE.Color(0xa070ff), flashS: 0.1, flashI: 90, flashAngle: 0.14, flashMax: 0.4,
+  },
+  piercer: {
+    life: 1.6, coreR: 0.008, glowR: 0.05, coreR0: 0.0015, glowR0: 0.004, coreSlope: 0.006, glowSlope: 0.02,
+    core: new THREE.Color(14, 16, 22), glow: new THREE.Color(0.55, 0.9, 2.4), dark: false, ripple: 0, trail: 2.5,
+    flash: new THREE.Color(0xcfe4ff), flashS: 0.09, flashI: 220, flashAngle: 0.2, flashMax: 0.55,
   },
 };
 const FLASH_AHEAD = 0.6;
@@ -134,7 +143,7 @@ export class SpritePool {
 class Zaps {
   readonly root = new THREE.Group();
   private beams: Beam[] = [];
-  private free: Record<BeamKind, Beam[]> = { rifle: [], blaster: [], graviton: [] };
+  private free: Record<BeamKind, Beam[]> = { rifle: [], blaster: [], graviton: [], piercer: [] };
   /** The one light for every shot's flash (the muzzle, or a blast: `light`); no other is added. */
   private flash = new THREE.PointLight(0x7fe8ff, 0, 30, 2);
   private flashAge = 1;
@@ -211,20 +220,29 @@ class Zaps {
     const group = new THREE.Group();
     // Graviton: swells travel out along the beam, the glow pulsing wider and brighter with them.
     const swell = (d: Node<'float'>) => d.mul(1.8).sub(time.mul(26)).sin().mul(0.5).add(0.5);
+    // Piercer's trail: the ionised air spreads and frays, lumps drifting along it.
+    const fray = (d: Node<'float'>) => mx_noise_float(vec3(d.mul(0.8).sub(time.mul(0.6)), time.mul(1.7), 3.1));
     const wave = st.ripple
       ? (d: Node<'float'>) => swell(d).mul(0.9 * st.ripple).add(0.6).add(mx_noise_float(vec3(d.mul(0.7), time.mul(9), 0)).mul(0.25))
+      : st.trail ? (d: Node<'float'>) => time.mul(st.trail! / st.life).add(1).mul(fray(d).mul(0.3).add(1))
       : undefined;
     const core = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: st.dark ? THREE.NormalBlending : THREE.AdditiveBlending, depthWrite: false });
     core.positionNode = taper(len, st.coreR0, st.coreSlope, st.coreR);
     if (st.dark) {
       core.colorNode = vec3(st.core.r, st.core.g, st.core.b);
       core.opacityNode = fade.mul(0.95);
-    } else core.colorNode = vec3(st.core.r, st.core.g, st.core.b).mul(fade);
+    } else if (st.trail) core.colorNode = vec3(st.core.r, st.core.g, st.core.b).mul(pow(fade, float(8)));
+    else core.colorNode = vec3(st.core.r, st.core.g, st.core.b).mul(fade);
     const glow = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     glow.positionNode = taper(len, st.glowR0, st.glowSlope, st.glowR, wave);
     glow.colorNode = vec3(st.glow.r, st.glow.g, st.glow.b);
     const rim = pow(abs(dot(normalView, positionViewDirection)), float(1.5)).mul(fade).mul(0.9);
-    glow.opacityNode = st.ripple ? rim.mul(swell(positionGeometry.z.mul(len)).mul(1.2).add(0.35)) : rim;
+    if (st.trail) {
+      // A flash with the slug, then the trail thinning out: (1 − t) under the noise, broken up more as it ages.
+      const along = positionGeometry.z.mul(len), age = time.div(st.life);
+      const lumps = fray(along).mul(age.mul(0.9).add(0.25)).add(1).clamp(0, 1.5);
+      glow.opacityNode = pow(abs(dot(normalView, positionViewDirection)), float(1.5)).mul(fade.sqrt().mul(0.55).mul(lumps).add(pow(fade, float(8)).mul(1.6)));
+    } else glow.opacityNode = st.ripple ? rim.mul(swell(positionGeometry.z.mul(len)).mul(1.2).add(0.35)) : rim;
     [glow, core].forEach((m, i) => {
       const mesh = new THREE.Mesh(beamGeo, m);
       mesh.frustumCulled = false; // the shader sets its length
@@ -344,6 +362,8 @@ class Zaps {
         return false;
       }
       b.fade.value = (1 - t) * (1 - t);
+      // A trail hangs in the air where the slug went: it follows the kicking gun only while the streak is there.
+      if (BEAMS[b.kind].trail && b.age > 0.08) b.from = undefined;
       const a = b.from?.(_v);
       if (a) this.place(b, a);
       return true;

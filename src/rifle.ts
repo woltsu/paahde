@@ -4,7 +4,11 @@
 // faster; and it reaches only PISTOL_RANGE. The blaster is heavy: no scope, slow to raise onto its sights, it swims more
 // than the rifle, kicks and jolts hard, shakes the view and the pad, and its cell takes long to whine back up; its
 // beam bursts where it stops (src/world/blasts.ts, sounds src/gunSound.ts). The graviton pistol is held like the
-// pistol but eerily steady, barely kicks, and the view draws in on each shot; where its beam ends space caves in.
+// pistol but eerily steady, barely kicks, and the view draws in on each shot; where its beam ends space caves in. The
+// piercer is scoped like the rifle but slowest of all to the eye; braced it is steady, on the move its weight wanders
+// and settles slowly; it kicks hardest of all, and its slug leaves a lingering blue-white trail and punches through a
+// walker's plate in a spray of molten metal (src/world/zaps.ts, src/world/blasts.ts); its capacitors whine up through
+// the long reload (src/gunSound.ts).
 // Where the drawn gun's muzzle is comes from src/viewmodel.ts `muzzle` (main.ts); a gun it doesn't know yet shoots
 // from a little ahead of the eye.
 //
@@ -40,7 +44,7 @@ import * as kills from './kills';
 import { rifleSound } from './rifleSound';
 import { rumble } from './gamepad';
 import { tyreDust } from './tyreDust';
-import { BLASTER, GRAVITON, GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { BLASTER, GRAVITON, GUNS, PIERCER, PISTOL, RIFLE } from '../shared/rifle.ts';
 import { gunCooldown, quality } from '../shared/gear.ts';
 import { heightAt, normalAt, shotGround } from '../shared/terrain.ts';
 import { groundAt, onFlat, solidAt } from './ground.ts';
@@ -81,12 +85,17 @@ const SPRING_DT = 1 / 120;
  * share (+ pulled in, − thrown wide). `rumble`: the pad's strong and weak motors and ms.
  * - blaster: heavy and two-handed: slow up, swims more than the rifle aimed, a big kick and a hard jolt.
  * - graviton: held like the pistol but eerily steady, barely kicks; the world seems to draw in on each shot.
+ * - piercer: long and heavy, scoped: slowest of all to the eye; settled and braced (still, crouched) it is barely less
+ *   steady than the rifle, but anything else makes its weight wander (`wander`: × the unsteadiness past settled) and it
+ *   takes its time to settle again (`settle`: the rate the sway eases, /s). The biggest kick and jolt of any, the view
+ *   shaken and thrown wide for an instant, a long hard rumble.
  */
 const FEEL = {
-  rifle: { kind: RIFLE, scope: true, sight: 1, raise: ADS_S, sway: 1, hip: 0.022, move: 0.05, climb: 0.028, side: 0.007, jolt: 1, shake: 0, punch: 0, rumble: [0.6, 0.8, 140] },
-  pistol: { kind: PISTOL, scope: false, sight: 1.3, raise: ADS_S, sway: 1.7, hip: 0.035, move: 0.06, climb: 0.045, side: 0.012, jolt: 1, shake: 0, punch: 0, rumble: [0.2, 0.6, 90] },
-  blaster: { kind: BLASTER, scope: false, sight: 1.15, raise: 0.42, sway: 1.4, hip: 0.03, move: 0.07, climb: 0.075, side: 0.02, jolt: 1.5, shake: 0.3, punch: -0.05, rumble: [1, 1, 260] },
-  graviton: { kind: GRAVITON, scope: false, sight: 1.35, raise: 0.22, sway: 0.3, hip: 0.012, move: 0.02, climb: 0.016, side: 0.002, jolt: 0.6, shake: 0.12, punch: 0.1, rumble: [0.9, 0.15, 420] },
+  rifle: { kind: RIFLE, scope: true, sight: 1, raise: ADS_S, sway: 1, wander: 1, settle: 2, hip: 0.022, move: 0.05, climb: 0.028, side: 0.007, jolt: 1, shake: 0, punch: 0, rumble: [0.6, 0.8, 140] },
+  pistol: { kind: PISTOL, scope: false, sight: 1.3, raise: ADS_S, sway: 1.7, wander: 1, settle: 2, hip: 0.035, move: 0.06, climb: 0.045, side: 0.012, jolt: 1, shake: 0, punch: 0, rumble: [0.2, 0.6, 90] },
+  blaster: { kind: BLASTER, scope: false, sight: 1.15, raise: 0.42, sway: 1.4, wander: 1, settle: 2, hip: 0.03, move: 0.07, climb: 0.075, side: 0.02, jolt: 1.5, shake: 0.3, punch: -0.05, rumble: [1, 1, 260] },
+  graviton: { kind: GRAVITON, scope: false, sight: 1.35, raise: 0.22, sway: 0.3, wander: 1, settle: 2, hip: 0.012, move: 0.02, climb: 0.016, side: 0.002, jolt: 0.6, shake: 0.12, punch: 0.1, rumble: [0.9, 0.15, 420] },
+  piercer: { kind: PIERCER, scope: true, sight: 1, raise: 0.6, sway: 1.15, wander: 1.9, settle: 1.1, hip: 0.04, move: 0.08, climb: 0.09, side: 0.016, jolt: 2, shake: 0.4, punch: -0.06, rumble: [1, 0.7, 340] },
 };
 type Gun = keyof typeof FEEL;
 const isGun = (h: string): h is Gun => h in FEEL;
@@ -110,6 +119,10 @@ body.gunSights #crosshair { display: none; }
 #rifleCharge.blaster { width: 26px; margin-left: -13px; height: 3px; }
 #rifleCharge.blaster i { background: rgba(255, 178, 104, 0.8); }
 #rifleCharge.graviton i { background: rgba(196, 160, 255, 0.8); }
+#rifleCharge.piercer { width: 30px; margin-left: -15px; height: 2px; }
+#rifleCharge.piercer i { background: rgba(214, 232, 255, 0.85); }
+#rifleScope.piercer .cell { background: rgba(200, 220, 255, 0.15); }
+#rifleScope.piercer .cell i { background: #dceaff; }
 body.rifleScoped #rifleCharge, body.down #rifleCharge { display: none; }
 `;
 
@@ -221,11 +234,14 @@ export class Rifle {
       _d.divideScalar(len);
       if (!this.remoteMuzzle(m.by, _o)) _o.set(m.x, m.y - 0.15, m.z).addScaledVector(_d, 0.8);
       const ear = this.view.camera.position;
-      const heavy = m.gun === BLASTER ? 'blaster' : m.gun === GRAVITON ? 'graviton' : null;
+      const heavy = m.gun === BLASTER ? 'blaster' : m.gun === GRAVITON ? 'graviton' : m.gun === PIERCER ? 'piercer' : null;
       zaps.beam(_o.x, _o.y, _o.z, m.ex, m.ey, m.ez, _o.distanceTo(ear) < 60, undefined, heavy ?? 'rifle');
       if (heavy === 'blaster') gunSound.blasterShot(_o, ear);
       else if (heavy === 'graviton') gunSound.gravitonShot(_o, ear);
-      else rifleSound.shot(_o, ear, m.gun === PISTOL);
+      else if (heavy === 'piercer') {
+        gunSound.piercerShot(_o, ear);
+        if (_o.distanceTo(ear) < 150) blasts.piercerMuzzle(_o.x, _o.y, _o.z, _d.x, _d.y, _d.z, true);
+      } else rifleSound.shot(_o, ear, m.gun === PISTOL);
       zaps.burst(m.ex, m.ey, m.ez, -_d.x, -_d.y, -_d.z, 10);
       const sand = !onFlat() && heightAt(m.ex, m.ez) > m.ey - 0.3;
       _e.set(m.ex, m.ey, m.ez);
@@ -285,8 +301,8 @@ export class Rifle {
     const gasp = this.time < this.gaspUntil ? 1 + 1.5 * ((this.gaspUntil - this.time) / GASP_S) : 1;
     const stance = pose.crouching ? 0.6 : 1;
     const want = stance * (1 + 2.2 * Math.min(2, pace) + 2.5 * this.winded) * gasp * (this.held > 0 ? 0.18 : 1);
-    this.unsteady += (want - this.unsteady) * (1 - Math.exp(-dt * 2));
-    const u = this.unsteady * feel.sway;
+    this.unsteady += (want - this.unsteady) * (1 - Math.exp(-dt * feel.settle));
+    const u = (this.unsteady + Math.max(0, this.unsteady - 1) * (feel.wander - 1)) * feel.sway;
     // The phase advances at the breathing rate. Not sin(time × rate): with the rate changing (getting winded, getting
     // your breath back) that swept the phase by time × Δrate, minutes into a game a jitter of tens of Hz on the view.
     this.breath = (this.breath + dt * BREATH_HZ * Math.PI * 2 * (1 + this.winded * 1.5)) % (Math.PI * 2);
@@ -314,6 +330,8 @@ export class Rifle {
     this.chargeEl.classList.toggle('on', recharging);
     this.chargeEl.classList.toggle('blaster', this.gun === 'blaster');
     this.chargeEl.classList.toggle('graviton', this.gun === 'graviton');
+    this.chargeEl.classList.toggle('piercer', this.gun === 'piercer');
+    this.el.classList.toggle('piercer', this.gun === 'piercer');
     if (recharging) this.chargeFill.style.transform = `scaleX(${Math.max(0, charge)})`;
     if (scoped) {
       this.zoomEl.textContent = `${this.zoom.toFixed(1)}×`;
@@ -397,13 +415,17 @@ export class Rifle {
       ? _m.copy(_o).addScaledVector(_d, 0.8).addScaledVector(_u.set(0, 1, 0).applyQuaternion(_q), -0.07)
       : _m.copy(_o).addScaledVector(_d, 0.6).addScaledVector(_r.set(1, 0, 0).applyQuaternion(_q), 0.2).add(_u.set(0, -0.25, 0)));
     // It starts at the drawn muzzle as the gun kicks and the view climbs.
-    const heavy = this.gun === 'blaster' || this.gun === 'graviton' ? this.gun : null;
+    const heavy = this.gun === 'blaster' || this.gun === 'graviton' || this.gun === 'piercer' ? this.gun : null;
     zaps.beam(m.x, m.y, m.z, _e.x, _e.y, _e.z, true, this.muzzle, heavy ?? 'rifle');
     if (heavy === 'blaster') gunSound.blasterShot();
     else if (heavy === 'graviton') gunSound.gravitonShot();
-    else rifleSound.shot(null, null, this.gun === 'pistol');
+    else if (heavy === 'piercer') {
+      gunSound.piercerShot();
+      blasts.piercerMuzzle(m.x, m.y, m.z, _d.x, _d.y, _d.z, !this.scoped);
+    } else rifleSound.shot(null, null, this.gun === 'pistol');
     rumble(feel.rumble[0], feel.rumble[1], feel.rumble[2]);
     if (heavy === 'blaster') gunSound.recharge(cooldown / 1000 - 0.12);
+    else if (heavy === 'piercer') gunSound.piercerCharge(cooldown / 1000 - 0.25);
     else rifleSound.recharge(cooldown / 1000 - 0.08);
     if (boss) {
       const lens = boss.index >= 0 && boss.index < MINION;
@@ -459,9 +481,10 @@ export class Rifle {
 
   /**
    * Where a heavy gun's beam stopped (at _e, along `d`, heard from `ear`), on `on`: the blaster bursts (src/world/blasts.ts),
-   * the graviton's end caves in (not in the air). Your own shots and others' alike.
+   * the graviton's end caves in, the piercer's slug punches through or kicks up the sand (those two not in the air).
+   * Your own shots and others' alike.
    */
-  private heavyImpact(gun: 'blaster' | 'graviton', on: 'sand' | 'hard' | 'enemy' | 'air', d: THREE.Vector3, ear: THREE.Vector3) {
+  private heavyImpact(gun: 'blaster' | 'graviton' | 'piercer', on: 'sand' | 'hard' | 'enemy' | 'air', d: THREE.Vector3, ear: THREE.Vector3) {
     // The surface faces back along the beam; the sand by its slope.
     if (on === 'sand') normalAt(_e.x, _e.z, _n);
     else if (on === 'hard' && onFlat() && Math.abs(_e.y - groundAt(_e.x, _e.z, _e.y + 0.1)) < 0.3) _n.set(0, 1, 0);
@@ -469,7 +492,12 @@ export class Rifle {
     if (gun === 'blaster') {
       blasts.blaster(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z, on);
       gunSound.blast(_e, ear, on === 'sand');
-    } else if (on !== 'air') {
+    } else if (on === 'air') {
+      // Spent at its reach: nothing to see or hear there.
+    } else if (gun === 'piercer') {
+      blasts.piercer(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z, d.x, d.y, d.z, on);
+      gunSound.piercerImpact(_e, ear, on);
+    } else {
       blasts.graviton(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z);
       gunSound.gravitonImpact(_e, ear);
     }

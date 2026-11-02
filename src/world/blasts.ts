@@ -6,18 +6,22 @@
 //   ground or a wall.
 // - The graviton pistol's end point: a black hole with a violet halo that swells for an instant and then caves in on
 //   itself, sucking violet motes in from all round, and a violet ring breaking outward as it closes.
-// Both shake the view by how near they are (`shake`, read by src/camera.ts `rumble` through main.ts).
+// - The piercer's slug: at the muzzle a quick pale shock ring, the brake's smoke and the sand kicked up under a low
+//   barrel; where it stops, punched through a walker's plate, sparks out of both sides and a spray of molten metal
+//   (most of it blown on through), a puff of sand on the dunes, sparks, dust and a small scorch on rock and concrete.
+// They shake the view by how near they are (`shake`, read by src/camera.ts `rumble` through main.ts).
 //
 // Pools, made once (no materials per shot): FIREBALLS, RINGS, SCORCHES and HOLES meshes each with its own uniforms,
-// and one instanced sprite pool for the motes.
+// and instanced sprite pools for the motes and the molten metal.
 import * as THREE from 'three/webgpu';
 import { abs, dot, float, length, mix, mx_noise_float, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { BLAST_R } from '../../shared/rifle.ts';
 import { tyreDust } from '../tyreDust.ts';
+import { groundAt } from '../ground.ts';
 import { SpritePool, zaps } from './zaps.ts';
 
-const FIREBALLS = 4, RINGS = 6, SCORCHES = 10, HOLES = 3, MOTES = 256;
+const FIREBALLS = 4, RINGS = 6, SCORCHES = 10, HOLES = 3, MOTES = 256, MOLTEN = 160;
 /** The fireball: lives FIRE_S, swells to FIRE_R m across (radius). */
 const FIRE_S = 0.55, FIRE_R = BLAST_R * 0.7;
 /** The shock ring: out to the burst's reach in RING_S. */
@@ -52,6 +56,7 @@ class Blasts {
   private scorches: Slot[] = [];
   private holes: (Slot & { rim: THREE.Mesh; ring: boolean; at: THREE.Vector3; normal: THREE.Vector3 })[] = [];
   private motes: SpritePool;
+  private molten: SpritePool;
 
   constructor() {
     this.root.name = 'Blasts';
@@ -128,6 +133,15 @@ class Blasts {
       m.scaleNode = vec2(d.y, d.y);
     }, true);
     this.root.add(this.motes.sprite);
+    // Molten metal torn out by the piercer's slug: white-yellow drops cooling to orange and dull red, lying glowing a
+    // moment where they land.
+    this.molten = new SpritePool(MOLTEN, (m, d) => {
+      const r = disc(), heat = d.x;
+      m.colorNode = vec3(6, 3.4, 1.2).mul(heat.mul(heat).mul(heat)).add(vec3(2.2, 0.55, 0.08).mul(heat));
+      m.opacityNode = float(1).sub(smoothstep(0.25, 1, r)).mul(smoothstep(0, 0.12, heat));
+      m.scaleNode = vec2(d.y, d.y);
+    }, true);
+    this.root.add(this.molten.sprite);
   }
 
   /** The camera the shake is measured from. */
@@ -212,6 +226,73 @@ class Blasts {
     this.shakeFrom(x, y, z, 0.5);
   }
 
+  /**
+   * The piercer going off at its muzzle (x, y, z), fired along (dx, dy, dz): a quick pale shock ring round the barrel,
+   * the brake's smoke thrown out to the sides, and the sand under it kicked up when the muzzle is low over it.
+   * `drawn`: the gun is drawn there (not looking through the scope, where ring and smoke would blind you).
+   */
+  piercerMuzzle(x: number, y: number, z: number, dx: number, dy: number, dz: number, drawn: boolean) {
+    const d = _b.set(dx, dy, dz).normalize();
+    if (drawn) {
+      const r = this.take(this.rings);
+      r.color.value.setRGB(1.2, 1.6, 2.4);
+      r.life = 0.14;
+      r.size = 0.9;
+      this.flat(r.mesh, x, y, z, d, 0.25);
+      // Out of the brake's ports, left and right of the barrel.
+      _n.set(-d.z, 0, d.x).normalize();
+      for (const side of [-1, 1]) for (let i = 0; i < 2; i++) {
+        zaps.puff(x + _n.x * side * 0.2 + d.x * 0.1, y + 0.05, z + _n.z * side * 0.2 + d.z * 0.1, 0.25 + Math.random() * 0.2, 0.6);
+      }
+    }
+    const g = groundAt(x, z, y);
+    if (y - g < 1.8) {
+      // The blast off the sand: a low ring of dust round where the barrel points down to.
+      const k = 1 - (y - g) / 1.8;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + Math.random() * 0.5, v = (2 + Math.random() * 2.5) * k;
+        tyreDust.emit(x + d.x * 0.6, g + 0.1, z + d.z * 0.6, Math.cos(a) * v + d.x * 2, 0.4 + Math.random() * 0.8, Math.sin(a) * v + d.z * 2, 0.5 + Math.random() * 0.4, 1.5 + Math.random());
+      }
+    }
+  }
+
+  /**
+   * Where the piercer's slug stopped, at (x, y, z) on a surface facing (nx, ny, nz), having come along (dx, dy, dz).
+   * `on`: a walker's plate punched through (sparks back out of the hole and out the far side, a spray of molten metal,
+   * a white flash), the sand (a puff and a spurt of it), or rock or concrete (sparks and dust). Nothing in the air.
+   */
+  piercer(x: number, y: number, z: number, nx: number, ny: number, nz: number, dx: number, dy: number, dz: number, on: 'sand' | 'hard' | 'enemy') {
+    const n = _b.set(nx, ny, nz).normalize();
+    if (on === 'enemy') {
+      zaps.light(x + n.x * 0.5, y + n.y * 0.5, z + n.z * 0.5, 0xd8e8ff, 420, 16, 0.18);
+      zaps.burst(x, y, z, n.x, n.y, n.z, 30, 2);
+      zaps.burst(x, y, z, dx, dy, dz, 24, 2.5); // through and out the other side
+      for (let i = 0; i < 26; i++) {
+        // Most of it blown on through, the rest back out of the hole.
+        const through = i < 17, s = (through ? 7 : 4) + Math.random() * 7;
+        const ax = through ? dx : n.x, ay = through ? dy : n.y, az = through ? dz : n.z;
+        this.molten.add(x, y, z, (ax + (Math.random() - 0.5) * 0.9) * s, (ay + (Math.random() - 0.3) * 0.9) * s, (az + (Math.random() - 0.5) * 0.9) * s,
+          0.05 + Math.random() * 0.07, 1.2 + Math.random() * 1.4);
+      }
+      zaps.puff(x, y, z, 0.8, 1.2);
+      this.shakeFrom(x, y, z, 0.2);
+    } else if (on === 'sand') {
+      zaps.burst(x, y + 0.05, z, n.x, n.y, n.z, 6);
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 2.5;
+        tyreDust.emit(x, y + 0.1, z, Math.cos(a) * v + dx * 2, 2 + Math.random() * 4, Math.sin(a) * v + dz * 2, 0.5 + Math.random() * 0.6, 1.8 + Math.random() * 1.5);
+      }
+      for (let i = 0; i < 3; i++) tyreDust.emit(x, y + 0.2, z, (Math.random() - 0.5), 5 + Math.random() * 4, (Math.random() - 0.5), 0.7 + Math.random() * 0.4, 2 + Math.random());
+    } else {
+      zaps.light(x + n.x * 0.4, y + n.y * 0.4, z + n.z * 0.4, 0xd8e8ff, 200, 10, 0.12);
+      zaps.burst(x, y, z, n.x, n.y, n.z, 26, 1.8);
+      for (let i = 0; i < 5; i++) tyreDust.emit(x + n.x * 0.2, y + n.y * 0.2, z + n.z * 0.2, (n.x + Math.random() - 0.5) * 2, (n.y + Math.random()) * 2, (n.z + Math.random() - 0.5) * 2, 0.4 + Math.random() * 0.4, 1.5 + Math.random());
+      const s = this.take(this.scorches);
+      s.size = 0.25;
+      this.flat(s.mesh, x, y, z, n, 0.02);
+    }
+  }
+
   /** Every frame (after the shots of this frame). */
   update(dt: number) {
     this.shake *= Math.exp(-dt * 4.5);
@@ -281,6 +362,22 @@ class Blasts {
       mp.pos[v + 2] += mp.vel[v + 2] * dt;
       mp.data[i * 2] = Math.min(1, t * 3) * (1 - t * t * 0.5);
       mp.data[i * 2 + 1] = mp.size[i];
+    });
+    const ml = this.molten;
+    ml.update(dt, (i, t) => {
+      const v = i * 3;
+      const g = groundAt(ml.pos[v], ml.pos[v + 2], ml.pos[v + 1]);
+      if (ml.pos[v + 1] > g + 0.01) {
+        ml.vel[v + 1] -= 9.8 * dt;
+        const k = Math.exp(-dt * 0.8);
+        ml.vel[v] *= k;
+        ml.vel[v + 2] *= k;
+        ml.pos[v] += ml.vel[v] * dt;
+        ml.pos[v + 1] = Math.max(g, ml.pos[v + 1] + ml.vel[v + 1] * dt);
+        ml.pos[v + 2] += ml.vel[v + 2] * dt;
+      } else ml.pos[v + 1] = g + 0.01; // landed: lies glowing in the sand
+      ml.data[i * 2] = (1 - t) * (1 - 0.3 * t);
+      ml.data[i * 2 + 1] = ml.size[i] * (1 - 0.4 * t);
     });
   }
 }
