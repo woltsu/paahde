@@ -2,7 +2,7 @@
 // for the item in the hand (the selected hotbar slot) and for the wrist computer and storm detector when
 // equipped (the backpack is part of the glb). Small boxes and cylinders, like the loot on the sand
 // (src/world/loot.ts); parts use the disassembly part models (src/teardown/junk.ts). The guns use their own models
-// (GUN_MODELS: public/models/rifle.glb, pistol.glb, blaster.glb, graviton.glb from tools/models/<name>.py), the jammer
+// (GUN_MODELS: public/models/rifle.glb, pistol.glb, blaster.glb, graviton.glb, piercer.glb from tools/models/<name>.py), the jammer
 // src/models/jammer.ts, the receivers src/models/receiver.ts.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -110,6 +110,12 @@ const HELD: Record<string, (loaded: () => void) => THREE.Object3D> = {
     g.rotation.set(-0.45, Math.PI, 0);
     return g;
   },
+  // The piercer: in both hands like the rifle, its long rails down towards the sand.
+  piercer: (loaded) => {
+    const g = gunModel('piercer', loaded);
+    g.rotation.set(-0.25, Math.PI, 0);
+    return g;
+  },
   // Held like the pistol (src/models/jammer.ts is built in its frame), antenna forward.
   jammer: () => {
     const { obj: g, lamp } = jammerModel();
@@ -153,10 +159,11 @@ export const GUN_MODELS: Record<string, { url: string; bore: number; tip: number
   laser_pistol: { url: './models/pistol.glb', bore: 0.064, tip: 0.205 },
   blaster: { url: './models/blaster.glb', bore: 0.094, tip: 0.592 },
   graviton_pistol: { url: './models/graviton.glb', bore: 0.06, tip: 0.2 },
+  piercer: { url: './models/piercer.glb', bore: 0.1, tip: 0.905 },
 };
 
 /**
- * A gun's model (GUN_MODELS): materials named after it ('Rifle', 'Pistol', 'Blaster', 'Graviton') and its emissive
+ * A gun's model (GUN_MODELS): materials named after it ('Rifle', 'Pistol', 'Blaster', 'Graviton', 'Piercer') and its emissive
  * '<Name>Glow'. Empty until loaded (then `loaded` is called); each copy has its own geometry, so disposeModel() can free
  * it. A child 'Muzzle' marks the tip of the bore, where its shots start (heldMuzzle).
  */

@@ -1286,6 +1286,15 @@ const BLASTER: GunHold = {
   elbow: V(0.7, -0.6, 0.6), aimElbow: V(1, -0.9, 0.3),
   twist: -0.45, support: 0.27,
 };
+/** The piercer: the heaviest thing carried. Low across the hips, the long rails sloping down to the front left, the left
+ *  hand braced under the handguard further out; aiming, the stock lower in the shoulder (its scope sits high) and the
+ *  torso turned further into it. */
+const PIERCER: GunHold = {
+  ready: V(-0.55, -0.52, -0.6).normalize(), readyUp: V(0.25, 1, -0.3), readyAt: V(-0.03, -0.41, -0.2),
+  aimFrom: V(-0.06, -0.11, 0.03), aimOut: 0.28,
+  elbow: V(0.7, -0.8, 0.5), aimElbow: V(1, -1, 0.3),
+  twist: -0.55, support: 0.29,
+};
 const PISTOL: GunHold = {
   ready: V(-0.05, -0.75, -0.6).normalize(), readyUp: V(0, 0.6, -0.75), readyAt: V(0.07, -0.5, -0.12),
   aimFrom: V(-0.04, -0.02, 0), aimOut: 0.56,
@@ -1316,7 +1325,7 @@ const MACE_STROKE: StrokeKey[] = [
   { t: 1, dir: MACE.ready, at: MACE.readyAt, turn: 0, lean: 0 },
 ];
 const GUN_HOLD: Record<string, GunHold> = {
-  laser_rifle: RIFLE, laser_pistol: PISTOL, blaster: BLASTER, graviton_pistol: PISTOL, jammer: PISTOL, grinder: PISTOL, wrench: PISTOL, scrap_mace: MACE, ...Object.fromEntries(Object.values(RECEIVERS).map((k) => [k, PISTOL])),
+  laser_rifle: RIFLE, laser_pistol: PISTOL, blaster: BLASTER, piercer: PIERCER, graviton_pistol: PISTOL, jammer: PISTOL, grinder: PISTOL, wrench: PISTOL, scrap_mace: MACE, ...Object.fromEntries(Object.values(RECEIVERS).map((k) => [k, PISTOL])),
 };
 
 /** Speed slide (slidePose): extra lean back (rad) and where the trailing left hand touches the sand (root space,

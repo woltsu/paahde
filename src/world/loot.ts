@@ -120,6 +120,7 @@ const FIND_MODELS: Record<string, { url: string; rot?: [number, number, number] 
   laser_rifle: { url: './models/rifle.glb', rot: [0, 0, Math.PI / 2] },
   laser_pistol: { url: './models/pistol.glb', rot: [0, 0, Math.PI / 2] },
   blaster: { url: './models/blaster.glb', rot: [0, 0, Math.PI / 2] },
+  piercer: { url: './models/piercer.glb', rot: [0, 0, Math.PI / 2] },
   graviton_pistol: { url: './models/graviton.glb', rot: [0, 0, Math.PI / 2] },
   ...Object.fromEntries(['backpack', 'storm_detector', 'wristpad', 'jammer', 'grinder', ...Object.values(RECEIVERS)]
     .map((k) => [k, { url: `./models/finds/${k}.glb` }])),

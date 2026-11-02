@@ -8,7 +8,7 @@ Writes public/models/finds/<kind>.glb for the gear that had only a code-built st
 storm detector, wrist computer, jammer, grinder), the boss receivers (receiver_<boss>) and what's torn out of the crashed pod
 (pod_console, pod_powerbox: carried machines, taken apart on the bench as src/teardown/junk.ts builds them), each already in the pose it lies in on the sand; src/world/loot.ts
 sits it on the ground. The water bottle, telescope, the guns and motorcycle keep their models
-(public/models/canteen.glb, telescope.glb, rifle.glb, pistol.glb, blaster.glb, graviton.glb, sandbike.glb): they are imported here only to
+(public/models/canteen.glb, telescope.glb, rifle.glb, pistol.glb, blaster.glb, graviton.glb, piercer.glb, sandbike.glb): they are imported here only to
 render their icons.
 
 Icons: public/icons/items/<kind>.png for every piece of gear, at the item's grid shape (shared/items.ts sizes, two
@@ -72,7 +72,7 @@ MATERIALS = {
 # Grid cells (w, h) per kind: shared/items.ts ITEMS sizes. The icon has this shape.
 CELLS = {
     'canteen': (1, 2), 'spyglass': (2, 1), 'motorcycle': (4, 3), 'quad': (4, 3), 'backpack': (2, 2), 'storm_detector': (1, 2),
-    'wristpad': (1, 1), 'laser_rifle': (4, 1), 'laser_pistol': (2, 1), 'blaster': (4, 1), 'graviton_pistol': (2, 1),
+    'wristpad': (1, 1), 'laser_rifle': (4, 1), 'laser_pistol': (2, 1), 'blaster': (4, 1), 'piercer': (4, 1), 'graviton_pistol': (2, 1),
     'jammer': (2, 1), 'grinder': (2, 1), 'shield': (2, 2), 'receiver_carrier': (2, 1), 'receiver_queen': (2, 1), 'receiver_colossus': (2, 1),
     'receiver_worm': (2, 1), 'pod_console': (3, 2), 'pod_powerbox': (2, 2),
 }
@@ -637,6 +637,7 @@ IMPORTED = {
     'laser_rifle': ('rifle.glb', (0, 0, D90), SIDE),
     'laser_pistol': ('pistol.glb', (0, 0, D90), SIDE),
     'blaster': ('blaster.glb', (0, 0, D90), SIDE),
+    'piercer': ('piercer.glb', (0, 0, D90), SIDE),
     'graviton_pistol': ('graviton.glb', (0, 0, D90), SIDE),
     'motorcycle': ('sandbike.glb', (0, 0, -D90 + 0.35), Vector((0.3, -1, 0.35)).normalized()),
     'quad': ('quadbike.glb', (0, 0, -D90 + 0.5), Vector((0.3, -1, 0.45)).normalized()),
@@ -755,7 +756,7 @@ def main():
         for o in bpy.data.objects:
             o.hide_render = False
         lay = {'canteen': (-D90, 0, 0), 'spyglass': (0, 0, 0), 'laser_rifle': (0, D90, 0), 'laser_pistol': (0, D90, 0),
-               'blaster': (0, D90, 0), 'graviton_pistol': (0, D90, 0),
+               'blaster': (0, D90, 0), 'piercer': (0, D90, 0), 'graviton_pistol': (0, D90, 0),
                'motorcycle': (0, 1.3, 0), 'quad': (0, 0, 0)}
         xs = 0.0
         for kind, obj in roots.items():
