@@ -437,6 +437,12 @@ Everything built is shared, and anyone can take a building down.
   (server/guardians.ts, drones.ts, jets.ts, harvesters.ts, nests.ts, bosses.ts) and sets off the blaster's `burst`
   in each of them (`GuardianServer.pointAt`: the weak points where the server reckons them); tests
   `tools/weapons.test.mjs`
+- The heavy guns as fired: their feel (`FEEL` in `src/rifle.ts`: raise time, sway, kick, view jolt, shake, zoom punch,
+  pad rumble); their beams are `zaps.beam` kinds (`BEAMS` in `src/world/zaps.ts`, pooled per kind); the blaster's
+  burst (fireball, shock ring to BLAST_R, sand thrown up, scorch) and the graviton's caving-in end point in
+  `src/world/blasts.ts` (pooled; lit through `zaps.light`, the shots' one light; `blasts.shake` shakes the view via
+  src/camera.ts `rumble`); sounds `src/gunSound.ts` (levels in docs/audio.md, the `blaster`/`graviton` scenarios of
+  `tools/audio-bench.ts`)
 - `shared/jammer.ts` — the jammer (gear, found broken and repaired): hold it 3.5 s on a jet or drone in its cone and it
   glides down whole; the lock is added up by `onJam` (server/world.ts), aimed and heard in `src/jammer.ts`, model
   `src/models/jammer.ts`

@@ -2893,3 +2893,28 @@ such faces 1.5 mm apart; across nodes nothing did.
   on all three bodies in the models lab (`?item=blaster`, `?item=graviton_pistol&aim`). Neither is carried on the body
   when not in hand.
 - **Loot and icons:** both lie on the sand as their own models; icons from tools/blender/finds.py.
+
+## The heavy guns' feel, look and sound
+
+The blaster and the graviton pistol as they are fired, for the shooter and everyone near ('zap' carries the gun).
+
+- **Feel** (`src/rifle.ts` `FEEL`): the blaster comes up slowly (0.42 s) onto low-zoom sights, swims 1.4× the rifle
+  aimed, climbs 0.075 rad and jolts 1.5× on the spring, shakes the view a little, widens it for an instant and rumbles
+  the pad hard; its recharge bar is wider and amber. The graviton pistol is pistol-quick but eerily steady (0.3× sway),
+  barely kicks, and the view draws in (a zoom punch) with a long low rumble; its bar is violet. In levels a shot now
+  stops at walls too (`floorShot` asks the level's solids), so the blaster bursts on them.
+- **Beams** (`src/world/zaps.ts` `BEAMS`): the blaster's thick, yellow-white in orange, lingering 0.3 s; the graviton's
+  a black thread in a violet haze with swells running out along it. Beams are pooled per kind (materials made once,
+  the rifle's too), and the muzzle flash takes the beam's colour.
+- **Impacts** (`src/world/blasts.ts`): the blaster bursts where it stops (a churning fireball, a shock ring out to
+  BLAST_R on the surface struck, sparks, smoke, a ring and column of sand on the dunes, a scorch on sand or walls); the
+  graviton's end swells into a black ball in a flickering violet halo, motes falling in, and caves in with a violet
+  ring. Both light the scene through the shots' one existing light (`zaps.light`: no light is added, so a level's
+  light pool stays its only lights) and shake the view by distance (`blasts.shake` into the camera's `rumble`, scaled
+  by the comfort motion setting).
+- **Sound** (`src/gunSound.ts`, synthesised): the blaster's shot (sub thump, low punch, a diving electric snarl), its
+  burst (crack, boom, rumble, debris, falling sand; placed and echoed), a grinding recharge whine with a latch; the
+  graviton's shot (a sub drop under a ring-modulated high tear) and impact (an inhale cut dead, a thud, a low hum).
+  Levelled in the full browser mix (docs/audio.md "The heavy guns").
+- **Not looked at in a browser**: the test Chrome's game tab kept reloading or crashing on this machine (several dev
+  servers running), so the visuals are checked by types and build only; the sounds were captured and measured.
