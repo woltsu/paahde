@@ -426,11 +426,17 @@ Everything built is shared, and anyone can take a building down.
 
 ## Weapons and tools
 
-- `shared/rifle.ts` — the laser rifle and the cheaper one-handed laser pistol (`GUNS`; gear found broken and repaired,
-  shared/gear.ts; model `tools/models/pistol.py`), the walkers' red weak points (all shot: it dies) and drone hits;
-  aim, sway, recoil, scope and the hitscan in `src/rifle.ts`, beam/sparks/smoke `src/world/zaps.ts`, sounds
-  `src/rifleSound.ts`, targets and the collapse in `src/world/guardians.ts`, checked by `GuardianServer.shoot`
-  (server/guardians.ts) and `DroneServer.shoot` (server/drones.ts)
+- `shared/rifle.ts` — the guns (`GUNS`: the laser rifle, the cheaper one-handed laser pistol, the heavy blaster whose
+  beam bursts where it stops, and the never-found graviton pistol; gear found broken and repaired, shared/gear.ts; model
+  `tools/models/pistol.py`), armour (`bites`: a hull's plate, shared/enemies.ts `armor`, turns every gun but the
+  graviton pistol, which kills anything it touches; weak points and thin-skinned things are always hurt), the walkers'
+  red weak points (a guardian's take `GUARDIAN_POINT_HP` hits, cracked and blinking after the first; all broken: it
+  dies), drone hits and the burst's `blastDamage`; aim, sway, recoil, scope and the hitscan in `src/rifle.ts`,
+  beam/sparks/smoke `src/world/zaps.ts`, sounds `src/rifleSound.ts`, targets, cracks and the collapse in
+  `src/world/guardians.ts`; `onFire` (server/world.ts) checks the shot, hands the gun to the struck enemy's `shoot`
+  (server/guardians.ts, drones.ts, jets.ts, harvesters.ts, nests.ts, bosses.ts) and sets off the blaster's `burst`
+  in each of them (`GuardianServer.pointAt`: the weak points where the server reckons them); tests
+  `tools/weapons.test.mjs`
 - `shared/jammer.ts` — the jammer (gear, found broken and repaired): hold it 3.5 s on a jet or drone in its cone and it
   glides down whole; the lock is added up by `onJam` (server/world.ts), aimed and heard in `src/jammer.ts`, model
   `src/models/jammer.ts`

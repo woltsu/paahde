@@ -831,13 +831,13 @@ export class GuardianServer {
   /**
    * A blaster's burst (shared/rifle.ts BLASTER, gun.blast) at (x, y, z) by player `by`: every whole weak point of a live
    * walker within `r` m takes `dmg(d)` (d: its distance from the burst; the plate around it takes nothing), and the
-   * crawlers within it are thrown away from it. `skip`: the walker the beam itself struck (its hit counted already).
+   * crawlers within it are thrown away from it (a point the beam itself broke is gone already: not hit twice).
    * The weak points are where the server reckons them (pointAt). Returns the kills, and whether it did any harm.
    */
-  burst(by: BotPlayer, x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number, skip = -1): { hit: boolean; kills: Kill[] } {
+  burst(by: BotPlayer, x: number, y: number, z: number, r: number, dmg: (d: number) => number, now: number): { hit: boolean; kills: Kill[] } {
     const out: { hit: boolean; kills: Kill[] } = { hit: false, kills: [] };
     for (const g of this.guardians) {
-      if (g.deadAt >= 0 || g.id === skip) continue;
+      if (g.deadAt >= 0) continue;
       const sc = KINDS[g.kind].scale;
       // Nothing of it within reach (the legs splay REST_R + a step out).
       if (Math.hypot(g.x - x, g.z - z) > (REST_R + STEP_DIST + FEMUR) * sc + r) continue;

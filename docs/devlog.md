@@ -2835,3 +2835,43 @@ such faces 1.5 mm apart; across nodes nothing did.
   reversed) depth buffer: a 1.5 mm separation holds to some 30 m, so faces that would fight are hidden or kept apart
   by more, not offset. Checked in headless Chrome: both walls packed and unfolded at 4 and 15 m, and frames a 2 cm
   camera move apart.
+
+## Armour, the blaster and the graviton pistol
+
+- **Armour:** every enemy has hull `armor` (shared/enemies.ts `ARMOR`: thin for drones, spiderlings and jets, plate for
+  the walkers, the harvester and the bosses) and every gun a `pierce` and `damage` (shared/rifle.ts `GUNS`); a hit
+  bites (`bites`) if it is on a weak point or pierces the hull. The rifle, the pistol and the blaster hurt the
+  thin-skinned ones and only weak points of the rest; a body hit on plate only angers (as before). `onFire`
+  (server/world.ts) hands `GUNS[kind]` to every enemy's `shoot`, which deals its damage (drones `DRONE_HP` 2, jets
+  `JET_HP` 3, harvester cores `CORE_HP` 4 in the gun's damage; the spiderlings keep `NEST_DAMAGE` by weapon so the
+  rifle still kills one in one and the pistol in two). Ranges are each gun's own.
+- **Guardian weak points take two hits** (`GUARDIAN_POINT_HP`; crawlers' still break at one, the mace's blows as
+  before): the server counts hits per point (`hits`), and 'bots' `g` carries a `cracked` mask (G_STRIDE 14). A cracked
+  lens blinks (src/world/guardians.ts `crackedMat`, sputtering like the harvester's hit cores); our own hit cracks or
+  shatters it at once as the server will (`hitLocal`: the blaster breaks one in one).
+- **The blaster** (found broken on guardian ground, `FINDS` level 2, and in the solar farms' stashes): its beam bursts
+  where it stops, on what it struck, on the sand or rock (within 6 m of `heightAt`: low walls, wrecks) or in a shelter;
+  a beam ending in the open air claims nothing and bursts nowhere. Everything damageable within `BLAST_R` (4.5 m) takes
+  `blastDamage`: the gun's whole damage (2) within half of it, one hit out to the rim (a spiderling or drone at the rim
+  lives, a guardian's point cracks). Drones, jets, spiderlings, harvester cores and the walkers' weak points; plated
+  hulls, the bosses (their lenses are only where the client draws them) and players take nothing, so nobody is hurt by
+  their own burst. Crawlers and drones in it are thrown away from it. The thing the beam struck takes only its direct
+  hit (a jet, a spiderling, a core skip the burst; a point or drone it broke is gone anyway).
+- **Where the weak points are, server side:** the knees are client IK, so `GuardianServer.pointAt` redoes that IK from
+  what the server has (the body `BODY_H` over its feet's average, the hip sockets turned with the yaw, the ankle over
+  the server's foot, the knee bent up and out the same way, the lens taken at the knee) and puts the belly and the
+  crawlers' flanks in the untilted body frame: good to a metre or two, well inside a burst. Chosen over the client
+  listing the points it saw in the burst: nothing new to trust or validate in the message, and other players' bursts
+  agree with the server for everyone.
+- **The graviton pistol** (no loot table holds it: the lab and the debug menu) kills whatever it touches: a body hit on
+  a walker breaks every point, on a harvester (`hi` -1) or a boss (`bi` -1, both now claimed by the client) kills it if
+  the shot ends on its hull; drones, jets, spiderlings, minions too. Only a gun that pierces the plate does anything
+  with those hull claims.
+- **Economy:** the simulator's `Weapon` has `blaster` (much better against crawler packs, drones, spiderlings, guardians
+  and the harvester, a little worse at jets and bosses than the rifle), and fights pick the best gun carried for each
+  enemy; the guardian's rifle and pistol odds are a little worse for the two-hit points. The graviton pistol never
+  drops, so it isn't simulated.
+- **Tests:** tools/weapons.test.mjs (plate turns the lasers, the graviton pistol kills a guardian, harvester and boss
+  through the hull; two rifle hits a guardian point, one blaster; a crawler's still one; bursts at a knee, in the sand
+  among spiderlings and crawlers, beside a drone; the harvester's hull untouched by a burst; the blaster through a real
+  world server's 'fire').

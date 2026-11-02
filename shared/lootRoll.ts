@@ -13,7 +13,7 @@ import { chargeOf, CLOTH, partKind, SCRAP, setFitted, WIRING, type ItemData } fr
 import type { CrashSite, SiteLevel } from './crashsites.ts';
 import { SCRAP_CELL, scrapPieces } from './scrap.ts';
 import { PART_IDS, partOf, pickTier } from './parts.ts';
-import { GUNS, PISTOL, RIFLE } from './rifle.ts';
+import { BLASTER, GUNS, PISTOL, RIFLE } from './rifle.ts';
 import { rocksNear } from './rocks.ts';
 import { POD_LOOT_SPOTS, POD_MACHINE_SPOT, PODS, podLootSpot } from './pods.ts';
 import { nearPod, onPodGround, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
@@ -103,12 +103,12 @@ export function foundData(kind: string, parts: readonly (string | null)[] | unde
 export const randomReceiver = (rand: Rand) => pick(Object.values(RECEIVERS), rand);
 
 /** What a cache or stash holds, picked by its table's odds (CACHES, SHELTER_STASHES, SOLAR_STASHES). */
-export function stashContents(t: { contents: Record<'part' | 'scrap' | 'cloth' | 'pistol' | 'rifle' | 'gear' | 'receiver', number>; tierWeights: TierWeights }, rand: Rand): Drop {
+export function stashContents(t: { contents: Record<'part' | 'scrap' | 'cloth' | 'pistol' | 'rifle' | 'blaster' | 'gear' | 'receiver', number>; tierWeights: TierWeights }, rand: Rand): Drop {
   const what = pickOdds(t.contents, rand);
   if (what === 'part') return { kind: partKind(pick(CACHE_PARTS, rand), pickTier(t.tierWeights, rand)) };
   if (what === 'scrap') return { kind: SCRAP };
   if (what === 'cloth') return { kind: CLOTH };
-  const kind = what === 'pistol' ? PISTOL : what === 'rifle' ? RIFLE : what === 'receiver' ? randomReceiver(rand) : pick(CACHE_GEAR, rand);
+  const kind = what === 'pistol' ? PISTOL : what === 'rifle' ? RIFLE : what === 'blaster' ? BLASTER : what === 'receiver' ? randomReceiver(rand) : pick(CACHE_GEAR, rand);
   return broken(kind, rand);
 }
 export const cacheContents = (rand: Rand) => stashContents(CACHES, rand);

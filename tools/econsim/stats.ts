@@ -13,7 +13,7 @@ export type Results = {
 
 /** Milestones in the order a player meets them (others follow, sorted by when they're reached). */
 const ORDER = [
-  'gear:backpack', 'gear:canteen', 'gear:laser_pistol', 'gear:motorcycle', 'gear:spyglass', 'gear:shield', 'gear:laser_rifle', 'q2:laser_rifle',
+  'gear:backpack', 'gear:canteen', 'gear:laser_pistol', 'gear:motorcycle', 'gear:spyglass', 'gear:shield', 'gear:laser_rifle', 'q2:laser_rifle', 'gear:blaster',
   'gear:jammer', 'kill:crawler', 'kill:drone', 'kill:jet', 'kill:guardian', 'kill:harvester', 'gear:receiver_colossus', 'boss:colossus', 'gear:receiver_queen', 'boss:queen', 'gear:receiver_carrier', 'boss:carrier',
   'gear:receiver_worm', 'boss:worm', 'won', 'game_over', 'first_death',
 ];

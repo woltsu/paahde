@@ -282,6 +282,9 @@ export const FINDS: Record<string, { n: number; level: SiteLevel }> = {
   // The guns (shared/rifle.ts): the pistol near home, as common as the bottle (its heat sink is hammered out of scrap,
   // its wiring comes off the pod), so the first gun comes early; the rifle out on crawler ground, for the guardians.
   laser_pistol: { n: 8, level: 0 }, laser_rifle: { n: 8, level: 1 },
+  // The blaster (shared/rifle.ts BLASTER), after the rifle: out on guardian ground, where the packs and the drones are
+  // thickest. (The graviton pistol is in no table at all: never found.)
+  blaster: { n: 4, level: 2 },
   // The jammer (shared/jammer.ts): out where the roaming drones and the jets first come after you.
   jammer: { n: 5, level: 1 },
   // The receivers that call the bosses (shared/bosses.ts): out on guardian ground.
@@ -334,11 +337,11 @@ export const RARE_FINDS = { n: 10, noParts: ['impeller', ...ROTORS] as PartId[],
 export const BROKEN_GEAR = { filled: 0.5, tierWeights: { scrap: 7, basic: 3 } satisfies TierWeights };
 
 /** Caches lying out in the desert: how many at once, and what is inside
- *  (relative odds: a part, some scrap, some cloth, a broken laser pistol or rifle, a piece of other broken gear, a broken boss
+ *  (relative odds: a part, some scrap, some cloth, a broken laser pistol, rifle or blaster, a piece of other broken gear, a broken boss
  *  receiver: any of shared/bosses.ts RECEIVERS). */
 export const CACHES = {
   n: 60,
-  contents: { part: 0.57, scrap: 0.15, cloth: 0.1, pistol: 0.04, rifle: 0.03, gear: 0.11, receiver: 0.01 },
+  contents: { part: 0.57, scrap: 0.15, cloth: 0.1, pistol: 0.04, rifle: 0.03, blaster: 0, gear: 0.11, receiver: 0.01 },
   /** A cache part: any part but these, at these tiers. */
   noParts: ['uranium', 'impeller', ...ROTORS] as PartId[],
   tierWeights: { scrap: 5, basic: 3, quality: 1.2, space: 0.25 } satisfies TierWeights,
@@ -349,16 +352,17 @@ export const CACHES = {
  *  richer: more gear, better parts. */
 export const SHELTER_STASHES = {
   perShelter: { small: 2, deep: 3, long: 3 } satisfies Record<ShelterKind, number>,
-  contents: { part: 0.36, scrap: 0.06, cloth: 0.1, pistol: 0.1, rifle: 0.06, gear: 0.29, receiver: 0.03 },
+  contents: { part: 0.36, scrap: 0.06, cloth: 0.1, pistol: 0.1, rifle: 0.06, blaster: 0, gear: 0.29, receiver: 0.03 },
   tierWeights: { scrap: 1, basic: 3, quality: 2.5, space: 0.6 } satisfies TierWeights,
 };
 
 /** Stashes left at the solar farms (shared/solarfarms.ts): how many lie at each farm (in its control shed, at the tower's
  *  foot, under its broken heliostats; a taken one comes back at whichever farm is shortest), and what they are: the
- *  richest out there, far from the start and kept by a nest of spiderlings (shared/nest.ts). The farms' own stuff runs to the electrics. */
+ *  richest out there, far from the start and kept by a nest of spiderlings (shared/nest.ts), the one stash a broken
+ *  blaster turns up in. The farms' own stuff runs to the electrics. */
 export const SOLAR_STASHES = {
   perFarm: 6,
-  contents: { part: 0.48, scrap: 0.06, cloth: 0.04, pistol: 0.07, rifle: 0.07, gear: 0.24, receiver: 0.04 },
+  contents: { part: 0.46, scrap: 0.06, cloth: 0.04, pistol: 0.06, rifle: 0.07, blaster: 0.03, gear: 0.24, receiver: 0.04 },
   tierWeights: { scrap: 0.5, basic: 2, quality: 3, space: 1 } satisfies TierWeights,
 };
 

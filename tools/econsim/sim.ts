@@ -37,13 +37,13 @@ import { CORPSE_S, World, type Poi, type Source, type Thing } from './world.ts';
  *  and the chest its box: the wrench, then the cart's levels 1 and 2 (CART_GOALS) in their place. */
 const GOALS = [
   'wrench', 'cart1', 'cart2', 'dismantle_bench', 'workbench', 'canteen', 'bedroll', 'scrap_mace', 'backpack', 'laser_pistol', 'motorcycle', 'storage_chest', 'spyglass', 'shield', 'laser_rifle', 'storm_detector', 'jammer', 'wristpad',
-  'grinder', 'receiver_colossus', 'boss:colossus', 'receiver_queen', 'boss:queen', 'receiver_carrier', 'boss:carrier', 'receiver_worm', 'boss:worm',
+  'grinder', 'blaster', 'receiver_colossus', 'boss:colossus', 'receiver_queen', 'boss:queen', 'receiver_carrier', 'boss:carrier', 'receiver_worm', 'boss:worm',
   'windmill', 'battery_station', 'well',
 ] as const;
 /** Worn gear: its equipment slot. */
 const WORN: Partial<Record<string, EquipSlot>> = { backpack: 'back', shield: 'armor', storm_detector: 'belt', wristpad: 'wrist' };
 /** Carried in the hotbar when there's one. */
-const CARRIED = ['canteen', 'laser_rifle', 'laser_pistol', 'jammer', 'spyglass'];
+const CARRIED = ['canteen', 'blaster', 'laser_rifle', 'laser_pistol', 'jammer', 'spyglass'];
 /** Gear whose quality is a milestone of its own (q2: quality 2+, Quality-grade parts throughout). */
 const QUALITY_MILESTONES = ['laser_rifle', 'motorcycle', 'backpack', 'canteen'];
 /** Scrap-tier metal parts the workbench hammers out of scrap (shared/tables.ts RECIPE_TABLE). */
@@ -213,21 +213,23 @@ export class Sim {
   private best(kind: string): Item | null {
     return this.gearOf(kind).filter(repaired).sort((a, b) => quality(b) - quality(a))[0] ?? null;
   }
-  /** The best gun carried and its quality; the jammer's quality, null without one. */
-  private weapon(): { w: Weapon; q: number; jam: number | null } {
+  /** The guns carried (best first) and their quality, else the mace or bare hands; the jammer's quality, null without one. */
+  private weapon(): { guns: { w: Weapon; q: number }[]; jam: number | null } {
     const jammer = this.carried('jammer');
     const jam = jammer ? quality(jammer) : null;
-    for (const k of ['laser_rifle', 'laser_pistol'] as const) {
+    const guns: { w: Weapon; q: number }[] = [];
+    for (const [k, w] of [['blaster', 'blaster'], ['laser_rifle', 'rifle'], ['laser_pistol', 'pistol']] as const) {
       const g = this.carried(k);
-      if (g) return { w: k === 'laser_rifle' ? 'rifle' : 'pistol', q: quality(g), jam };
+      if (g) guns.push({ w, q: quality(g) });
     }
     // The scrap mace (made by hand, shared/mace.ts): taken along once there is one (it isn't gear, so isn't packed).
-    if (this.gearOf(MACE).length) return { w: 'mace', q: 0, jam };
-    return { w: 'none', q: 0, jam };
+    if (!guns.length) guns.push({ w: this.gearOf(MACE).length ? 'mace' : 'none', q: 0 });
+    return { guns, jam };
   }
+  /** The fight with `kind` with whichever carried gun suits it best (the blaster for packs, the rifle for jets...). */
   private odds(kind: EnemyKind) {
-    const { w, q, jam } = this.weapon();
-    return fightOdds(kind, w, q, jam);
+    const { guns, jam } = this.weapon();
+    return guns.map(({ w, q }) => fightOdds(kind, w, q, jam)).reduce((a, b) => (b.win > a.win ? b : a));
   }
   private carried(kind: string): Item | null {
     if (kind === 'motorcycle') return this.ride[0];

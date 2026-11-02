@@ -10,7 +10,7 @@ import type { JetKind } from './jetbreak.ts';
 import { bossDrops, harvesterDrops, jetDrops, killDrops, spiderlingDrops, type Drop, type Rand } from './lootRoll.ts';
 
 /** The best gun you carry, else the scrap mace (shared/mace.ts). */
-export type Weapon = 'none' | 'mace' | 'pistol' | 'rifle';
+export type Weapon = 'none' | 'mace' | 'pistol' | 'rifle' | 'blaster';
 
 export type Fight = {
   /** How long one takes (s). */
@@ -65,14 +65,15 @@ export const ARMOR = { thin: 0, plate: 10 } as const;
 
 export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | 'spiderling' | BossKind;
 
-/** The mace is no better than bare hands but against crawlers, the one thing it can reach. */
-const odds = (none: number, pistol: number, rifle: number, mace = none): Record<Weapon, number> => ({ none, mace, pistol, rifle });
+/** The mace is no better than bare hands but against crawlers, the one thing it can reach; the blaster (shared/rifle.ts
+ *  BLASTER: a burst that breaks a weak point in one, a slow recharge, no scope) is the rifle unless said. */
+const odds = (none: number, pistol: number, rifle: number, mace = none, blaster = rifle): Record<Weapon, number> => ({ none, mace, pistol, rifle, blaster });
 
 /** A boss: called with its receiver, a long fight that wants the rifle. */
 const boss = (kind: BossKind): Enemy => ({
   n: [1, 1],
   meet: [{ at: 'call' }],
-  fight: { seconds: odds(120, 900, 900), win: odds(0, 0.2, 0.75), death: odds(0.9, 0.7, 0.6), quality: 0.25 },
+  fight: { seconds: odds(120, 900, 900), win: odds(0, 0.2, 0.75, 0, 0.72), death: odds(0.9, 0.7, 0.6), quality: 0.25 },
   drops: (rand) => bossDrops(kind, rand),
   mass: 1e6,
   armor: ARMOR.plate,
@@ -89,7 +90,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   crawler: {
     n: [1, 4],
     meet: [{ at: 'site', levels: [0.5, 1, 2], odds: 1, backS: PACK_BACK_S }, { at: 'roam', where: 'open', perMin: 0.2, night: true }],
-    fight: { seconds: odds(40, 60, 40, 50), win: odds(0, 0.85, 0.97, 0.6), death: odds(0.2, 0.08, 0.03, 0.15), quality: 0.2 },
+    fight: { seconds: odds(40, 60, 40, 50, 20), win: odds(0, 0.85, 0.97, 0.6, 0.995), death: odds(0.2, 0.08, 0.03, 0.15, 0.01), quality: 0.2 },
     drops: (rand) => killDrops('crawler', rand),
     mass: 100,
     armor: ARMOR.plate,
@@ -98,7 +99,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   guardian: {
     n: [1, 1],
     meet: [{ at: 'site', levels: [2], spread: 6 }, { at: 'roam', where: 'guardianGround', perMin: 0.04, hunt: true }],
-    fight: { seconds: odds(50, 150, 100), win: odds(0, 0.45, 0.85), death: odds(0.35, 0.2, 0.08), quality: 0.2 },
+    fight: { seconds: odds(50, 200, 150, 50, 90), win: odds(0, 0.38, 0.8, 0, 0.88), death: odds(0.35, 0.23, 0.1, 0.35, 0.07), quality: 0.2 },
     drops: (rand) => killDrops('guardian', rand),
     mass: 40_000,
     armor: ARMOR.plate,
@@ -108,7 +109,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   drone: {
     n: [1, 2],
     meet: [{ at: 'site', levels: [0.5, 1, 2], odds: 1, night: true }, { at: 'roam', where: 'open', perMin: 0.08 }],
-    fight: { seconds: odds(30, 45, 30), win: odds(0, 0.75, 0.93), death: odds(0.15, 0.06, 0.03), jammer: 0.95, quality: 0.2 },
+    fight: { seconds: odds(30, 45, 30, 30, 20), win: odds(0, 0.75, 0.93, 0, 0.97), death: odds(0.15, 0.06, 0.03, 0.15, 0.02), jammer: 0.95, quality: 0.2 },
     drops: (rand) => killDrops('drone', rand),
     mass: 40,
     armor: ARMOR.thin,
@@ -118,7 +119,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   jet: {
     n: [1, 1],
     meet: [{ at: 'roam', where: 'overhead', perMin: 1 / 7 }],
-    fight: { seconds: odds(0, 0, 20), win: odds(0, 0, 0.4), death: odds(0, 0, 0), jammer: 0.7, quality: 0.2 },
+    fight: { seconds: odds(0, 0, 20), win: odds(0, 0, 0.4, 0, 0.3), death: odds(0, 0, 0), jammer: 0.7, quality: 0.2 },
     drops: (rand, ctx) => jetDrops(ctx?.jet ?? 'drone', !!ctx?.soft, rand),
     falls: [150, 700],
     mass: 4000,
@@ -129,7 +130,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   harvester: {
     n: [1, 1],
     meet: [{ at: 'roam', where: 'mudflat', perMin: 1 / 7, hunt: true }],
-    fight: { seconds: odds(40, 240, 150), win: odds(0, 0.3, 0.85), death: odds(0.25, 0.15, 0.06), quality: 0.2 },
+    fight: { seconds: odds(40, 240, 150, 40, 90), win: odds(0, 0.3, 0.85, 0, 0.9), death: odds(0.25, 0.15, 0.06, 0.25, 0.05), quality: 0.2 },
     drops: (rand) => harvesterDrops(rand),
     mass: 2e6,
     armor: ARMOR.plate,
@@ -141,7 +142,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
   spiderling: {
     n: [18, 30],
     meet: [{ at: 'farm', backS: PACK_BACK_S }],
-    fight: { seconds: odds(2, 6, 4, 5), win: odds(0, 0.95, 0.985, 0.94), death: odds(0.5, 0.6, 0.6, 0.6), quality: 0.25 },
+    fight: { seconds: odds(2, 6, 4, 5, 2), win: odds(0, 0.95, 0.985, 0.94, 0.995), death: odds(0.5, 0.6, 0.6, 0.6, 0.6), quality: 0.25 },
     drops: (rand) => spiderlingDrops(rand),
     mass: 8,
     armor: ARMOR.thin,

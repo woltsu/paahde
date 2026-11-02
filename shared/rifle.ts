@@ -1,10 +1,16 @@
-// The laser rifle: gear (shared/gear.ts), found broken out on crawler ground and repaired at the workbench, held from the hotbar, the one thing that can fight
-// the walkers (shared/guardians.ts). Each walker carries glowing red weak points; a hit breaks one, and once every
-// one of them is broken it dies: it collapses where it stands (src/world/guardians.ts), smoking, and drops parts.
+// The guns (GUNS): the laser rifle, the laser pistol, the blaster and the graviton pistol. Gear (shared/gear.ts), found
+// broken and repaired at the workbench (the graviton pistol never found), held from the hotbar, the things that can
+// fight the walkers (shared/guardians.ts). Each walker carries glowing red weak points; a crawler's breaks at a hit, a
+// guardian's cracks (blinking) and breaks at the second (GUARDIAN_POINT_HP), and once every one of them is broken it
+// dies: it collapses where it stands (src/world/guardians.ts), smoking, and drops parts. Their hulls are plate
+// (shared/enemies.ts armor): only weak points are hurt, but by the graviton pistol (bites), which kills whatever it
+// touches. Drones, jets and spiderlings are thin-skinned: any gun hurts them.
 //
 // Hits are found by the shooter's client against what it draws (the legs are client-side IK, so only it knows where a
-// knee is); the server checks the shot is plausible (rifle in hand, rate, range, aimed near that walker) and breaks
-// the target for everyone. Client: src/rifle.ts (aiming, sway, recoil, the shot), src/world/zaps.ts (beam, sparks).
+// knee is); the server checks the shot is plausible (the gun in hand, rate, range, ending at what it claims) and deals
+// the gun's damage for everyone (server/world.ts onFire). The blaster's burst (blast, blastDamage) is the server's
+// own: everything damageable round where the beam stopped, its weak points where the server reckons them
+// (server/guardians.ts pointAt). Client: src/rifle.ts (aiming, sway, recoil, the shot), src/world/zaps.ts (beam, sparks).
 import { CRAWLER, type Kind } from './guardians.ts';
 import type { Pusher } from './knockback.ts';
 
