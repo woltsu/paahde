@@ -12,7 +12,7 @@ const seconds = Number(opt('seconds', '20'));
 const scenarios = opt('scenarios', 'exploration,storm,combat,multiplayer').split(',');
 const volumes = opt('volumes', '0.4,1').split(',').map(Number);
 const componentGroups = opt('components')?.split(';').map((g) => g.split(',')) ?? [null];
-if (!(seconds >= 1 && seconds <= 60) || scenarios.some((s) => !['exploration', 'storm', 'combat', 'multiplayer'].includes(s))
+if (!(seconds >= 1 && seconds <= 60) || scenarios.some((s) => !['exploration', 'storm', 'combat', 'multiplayer', 'blaster', 'graviton'].includes(s))
   || volumes.some((v) => !Number.isFinite(v) || v <= 0 || v > 1)
   || componentGroups.some((g) => g?.some((c) => !['ambience', 'music', 'shots', 'steps', 'booms', 'tells', 'drones', 'crawler'].includes(c))))
   throw new Error('Invalid seconds, scenarios, volumes or components');

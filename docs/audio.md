@@ -124,6 +124,26 @@ motor, the hatch's thud; src/levels/beginning/pod.ts times them over 3.2 s), the
 −31.1 LUFS integrated over 4.5 s at master volume 0.4, momentary at most −28.0 (the clunk and the hiss), true peak
 −11.2 dBTP (−3.3 at volume 1). One-shots a little over the bay's bed, as foley should be.
 
+## The heavy guns (2 November 2026)
+
+`src/gunSound.ts` (the blaster's shot, burst and recharge; the graviton pistol's shot and impact) was levelled with the
+capture tool above: two scenarios in `tools/audio-bench.ts`, `blaster` and `graviton`, are the combat fixture with
+that gun fired at its cooldown (1.4 s, 0.6 s) in place of the rifle, every shot striking 25 m off (the blaster's burst
+on sand, its recharge whine running). Chrome on macOS, 48 kHz, `--seconds 20` (isolations 12):
+
+| Capture | Default 0.4: LUFS | Default: dBTP | Reference 1: LUFS | Reference: dBTP |
+| --- | ---: | ---: | ---: | ---: |
+| Combat (rifle), for comparison | −23.8 | −7.1 | −16.0 | −2.5 |
+| Blaster, full mix | −23.9 | −6.2 | −16.2 | −2.3 |
+| Graviton, full mix | −22.8 | −9.1 | −15.1 | −2.8 |
+| Blaster's sounds alone (`--components shots`) | −25.2 | −10.1 | | |
+| Graviton's sounds alone | −25.0 | −12.3 | | |
+
+The first gains (`LEVEL` in src/gunSound.ts about 2.8× today's) put the blaster's sounds alone at −16.0 LUFS (−1.8
+dBTP, the limiter working) and the full mix at −17.3; they were brought down to sit at about the rifle fire's share
+(−27.7 alone at 2.5 shots/s) plus the few dB a heavier, slower gun earns. Peak voices 9 (blaster) and 13 (graviton),
+no drops. Captures: `/tmp/a73d-audio-3`, `/tmp/a73d-audio-c3` (local).
+
 ## Limits of these numbers
 
 These are scripted scenes using the game's actual sound entry points, not recordings of a complete multiplayer
