@@ -2875,3 +2875,21 @@ such faces 1.5 mm apart; across nodes nothing did.
   through the hull; two rifle hits a guardian point, one blaster; a crawler's still one; bursts at a knee, in the sand
   among spiderlings and crawlers, beside a drone; the harvester's hull untouched by a burst; the blaster through a real
   world server's 'fire').
+
+## Blaster and graviton pistol: models and holds
+
+- **Models:** tools/models/blaster.py (public/models/blaster.glb, ~8.9k tris): an industrial cutting laser built into a
+  carbine, chipped yellow machine paint, a polymer stock, a carry handle with iron sights (no scope), a capacitor drum
+  with glowing windows down the left, a square cell, a shroud of steel bands over a glowing core and copper winding,
+  big square fins and a flared emitter bell; amber glow. tools/models/graviton.py (graviton.glb, ~4.5k tris): not human
+  work, a sleek dark teardrop body with violet seams and a glowing coil, three swept prongs holding an emitter ring and
+  a floating core. Same frames, bake and '<Name>Glow' material as the rifle and pistol, so the tier look and the charge
+  pulse work on them.
+- **First person:** hands.py BlasterIdle / BlasterWalk / BlasterAim (two hands like the rifle, carried lower, aimed up
+  to the iron sights: the hands stay in view) and GravitonIdle / GravitonWalk / GravitonAim (as the pistol's). The guns
+  aren't baked into hands.glb: the game draws their own glbs on `BlasterMount` / `GravitonMount`, and `muzzle()` gives
+  the `<Gun>Muzzle` marker. A blaster shot kicks harder than the rifle's, a graviton shot barely at all (viewmodel KICK).
+- **Third person:** the blaster held like the rifle (left hand further out), the graviton pistol like the pistol; checked
+  on all three bodies in the models lab (`?item=blaster`, `?item=graviton_pistol&aim`). Neither is carried on the body
+  when not in hand.
+- **Loot and icons:** both lie on the sand as their own models; icons from tools/blender/finds.py.

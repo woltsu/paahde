@@ -449,6 +449,11 @@ Everything built is shared, and anyone can take a building down.
   crawler's flank lenses; swung and tested against the walkers as drawn in `src/mace.ts`, held and swung in the hands'
   MaceIdle / MaceSwing clips on `MaceMount` (tools/models/hands.py) and by the avatar (`MACE`, `MACE_STROKE` in
   src/models/scavenger.ts), model `src/models/mace.ts`, checked by `onSwing` (server/world.ts) and `GuardianServer.smash`
+- `tools/models/blaster.py`, `tools/models/graviton.py` — the blaster's and the graviton pistol's models
+  (public/models/blaster.glb, graviton.glb; src/models/outfit.ts `GUN_MODELS`): held in the hands' Blaster* / Graviton*
+  clips on `BlasterMount` / `GravitonMount` (src/viewmodel.ts, muzzle from the `<Gun>Muzzle` markers), by the avatar
+  (`BLASTER` / `PISTOL` in src/models/scavenger.ts GUN_HOLD), on the sand (src/world/loot.ts), icons by
+  tools/blender/finds.py
 - `tools/models/hands.py` — first-person hands + held-item clips (docs/viewmodel-hands.md)
 - `tools/blender/icons.py`, `tools/icons/` — inventory icons for what has no Blender model of its own (scrap, cloth, the
   wrench, the carried machines, dumped from their three.js models); every icon's look and size: `docs/icons.md`
