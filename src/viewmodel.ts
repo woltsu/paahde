@@ -28,6 +28,11 @@
 // is held with the jammer's Idle / Walk clips; its needle and lamp follow `playerHands.receiver`. So is the wrench
 // (src/models/wrench.ts), on the same mount. The scrap mace (src/models/mace.ts) sits on its own `MaceMount`, in both
 // fists: MaceIdle / MaceWalk (shouldered up the right of the view), and MaceSwing from `playerHands.swingAt`.
+// The blaster (`held` 'blaster'): BlasterIdle / BlasterWalk in both hands like the rifle, and BlasterAim up to its
+// iron sights (no scope: the hands stay in view); the graviton pistol: GravitonIdle / GravitonWalk / GravitonAim as the
+// pistol's. Their models (public/models/blaster.glb, graviton.glb; src/models/outfit.ts GUN_MODELS) are drawn on the
+// `BlasterMount` / `GravitonMount` nodes; their `BlasterMuzzle` / `GravitonMuzzle` markers are the muzzle(). Without
+// their clips they fall back to the rifle's and the pistol's.
 // Obsolete shovel and detector geometry/clips are stripped at export; legacy files still hide their nodes. Scrap in hand (`held` 'scrap'): ScrapIdle / ScrapWalk on `ScrapChunk`, and ScrapThrow from `playerHands.throwAt`, the piece
 // hidden from the release (THROW_RELEASE) until the hand is back with the next one.
 //
@@ -44,6 +49,7 @@ import { grinderModel } from './models/grinder';
 import { wrenchModel } from './models/wrench';
 import { maceModel } from './models/mace';
 import { applyTier } from './tierLook';
+import { gunModel } from './models/outfit';
 import { RECEIVER_LAMP, receiverModel } from './models/receiver';
 import type { BossKind } from '../shared/bosses.ts';
 
@@ -66,6 +72,10 @@ const DRAW_IN = [-0.075, -0.14];
 const DRAW_S = 0.3;
 /** The recoil spring's longest step (s): a slow frame taken whole would make it swing ever harder. */
 const SPRING_DT = 1 / 120;
+/** How hard a shot kicks the gun in hand (the spring's velocity): the blaster shoves, the graviton pistol barely moves. */
+const KICK: Partial<Record<Held, number>> = { blaster: 15, graviton: 5 };
+/** The guns drawn from their own models on the hands' mounts (tools/models/hands.py): what's held, item kind, node prefix. */
+const MOUNTED_GUNS: [Held, string, string][] = [['blaster', 'blaster', 'Blaster'], ['graviton', 'graviton_pistol', 'Graviton']];
 
 const params = new URLSearchParams(location.search);
 const forcedHold = params.get('hold') as Held | null;
@@ -89,6 +99,8 @@ export class ViewModel {
   private rifleGlow: THREE.MeshStandardMaterial[] = [];
   private pistol: THREE.Object3D | null = null;
   private pistolMuzzle: THREE.Object3D | null = null;
+  /** The blaster and the graviton pistol on their mounts, with their muzzles. */
+  private mounted = new Map<Held, { obj: THREE.Object3D; muzzle: THREE.Object3D | null }>();
   private jammer: ReturnType<typeof jammerModel> | null = null;
   private grinder: ReturnType<typeof grinderModel> | null = null;
   private wrench: THREE.Object3D | null = null;
@@ -139,19 +151,7 @@ export class ViewModel {
       mesh.castShadow = false; // the shadow-only body already casts the player's shadow
       mesh.receiveShadow = false; // it would sit inside that body and always be in its shadow
       mesh.frustumCulled = false; // skinned bounds don't follow the animation; it's always in view anyway
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const own = mats.map((m) => {
-        if (!(m as THREE.MeshStandardMaterial).isMeshStandardMaterial) return m;
-        const c = (m as THREE.MeshStandardMaterial).clone();
-        // The renderer's material adapter copies this node to its MeshStandardNodeMaterial.
-        (c as THREE.MeshStandardMaterial & { colorNode: THREE.Node }).colorNode = materialColor.mul(handShade);
-        if (m.name === 'PlayerTint') {
-          c.userData.noTier = true;
-          this.tint.push(c);
-        }
-        return c;
-      });
-      mesh.material = Array.isArray(mesh.material) ? own : own[0];
+      this.ownMaterials(mesh);
     });
     this.canteen = model.getObjectByName('Canteen') ?? null;
     this.telescope = model.getObjectByName('Telescope') ?? null;
@@ -205,17 +205,25 @@ export class ViewModel {
       gr.traverse((o) => (o.frustumCulled = false));
       gmount.parent.add(gr);
     }
-    for (const gun of [this.rifle, this.pistol]) gun?.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        if (m.name === 'RifleGlow' || m.name === 'PistolGlow') {
-          m.userData.base = (m as THREE.MeshStandardMaterial).emissiveIntensity || 1;
-          m.userData.noTier = true; // it shows the cell's charge
-          this.rifleGlow.push(m as THREE.MeshStandardMaterial);
-        }
-      }
-    });
+    for (const gun of [this.rifle, this.pistol]) if (gun) this.findGlow(gun);
+    // The blaster and the graviton pistol: their own models on their mounts, lit like the hands once loaded.
+    for (const [held, kind, pre] of MOUNTED_GUNS) {
+      const mount = model.getObjectByName(pre + 'Mount');
+      if (!mount) continue;
+      const g = gunModel(kind, () => {
+        g.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.castShadow = mesh.receiveShadow = false;
+          mesh.frustumCulled = false;
+          this.ownMaterials(mesh);
+        });
+        this.findGlow(g);
+      });
+      g.visible = false;
+      mount.add(g);
+      this.mounted.set(held, { obj: g, muzzle: model.getObjectByName(pre + 'Muzzle') ?? g.getObjectByName('Muzzle') ?? null });
+    }
     this.draws = ['TelescopeDraw1', 'TelescopeDraw2'].map((n) => model.getObjectByName(n)).filter((o) => !!o);
     this.setDrawn(0);
     this.mixer = new THREE.AnimationMixer(model);
@@ -224,6 +232,38 @@ export class ViewModel {
     this.setColor(this.color);
     this.applyHeld();
     this.play('Idle', 0);
+  }
+
+  /** Give a mesh its own copies of its materials, shaded like the hands (and the player's colour on 'PlayerTint'). */
+  private ownMaterials(mesh: THREE.Mesh) {
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const own = mats.map((m) => {
+      if (!(m as THREE.MeshStandardMaterial).isMeshStandardMaterial) return m;
+      const c = (m as THREE.MeshStandardMaterial).clone();
+      // The renderer's material adapter copies this node to its MeshStandardNodeMaterial.
+      (c as THREE.MeshStandardMaterial & { colorNode: THREE.Node }).colorNode = materialColor.mul(handShade);
+      if (m.name === 'PlayerTint') {
+        c.userData.noTier = true;
+        this.tint.push(c);
+      }
+      return c;
+    });
+    mesh.material = Array.isArray(mesh.material) ? own : own[0];
+  }
+
+  /** A gun's emissive '<Name>Glow' materials, pulsed with the cell's charge. */
+  private findGlow(gun: THREE.Object3D) {
+    gun.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (m.name.endsWith('Glow') && !this.rifleGlow.includes(m as THREE.MeshStandardMaterial)) {
+          m.userData.base = (m as THREE.MeshStandardMaterial).emissiveIntensity || 1;
+          m.userData.noTier = true; // it shows the cell's charge
+          this.rifleGlow.push(m as THREE.MeshStandardMaterial);
+        }
+      }
+    });
   }
 
   setColor(hex: number) {
@@ -241,6 +281,7 @@ export class ViewModel {
     if (this.telescope) this.telescope.visible = this.shown === 'telescope';
     if (this.rifle) this.rifle.visible = this.shown === 'rifle';
     if (this.pistol) this.pistol.visible = this.shown === 'pistol';
+    for (const [held, g] of this.mounted) g.obj.visible = this.shown === held;
     if (this.jammer) this.jammer.obj.visible = this.shown === 'jammer';
     if (this.grinder) this.grinder.obj.visible = this.shown === 'grinder';
     if (this.wrench) this.wrench.visible = this.shown === 'wrench';
@@ -254,6 +295,7 @@ export class ViewModel {
     const kind = playerHands.receiver.kind;
     const held: Partial<Record<Held, THREE.Object3D | null | undefined>> = {
       canteen: this.canteen, telescope: this.telescope, rifle: this.rifle, pistol: this.pistol, jammer: this.jammer?.obj, grinder: this.grinder?.obj,
+      blaster: this.mounted.get('blaster')?.obj, graviton: this.mounted.get('graviton')?.obj,
       receiver: kind ? this.receivers.get(kind)?.obj : null,
     };
     const o = held[this.shown];
@@ -287,7 +329,7 @@ export class ViewModel {
 
   /** The gun's muzzle in world space (as drawn: scaled about the eye like the rest), or null if it isn't out. */
   muzzle(out: THREE.Vector3): THREE.Vector3 | null {
-    const m = this.shown === 'rifle' ? this.rifleMuzzle : this.shown === 'pistol' ? this.pistolMuzzle : null;
+    const m = this.shown === 'rifle' ? this.rifleMuzzle : this.shown === 'pistol' ? this.pistolMuzzle : (this.mounted.get(this.shown)?.muzzle ?? null);
     if (!m || !this.root.visible || !this.sway.visible) return null; // hidden behind the scope: not drawn
     m.updateWorldMatrix(true, false);
     return m.getWorldPosition(out);
@@ -355,7 +397,7 @@ export class ViewModel {
     }
     this.sway.visible = this.lower < 1 && !playerHands.scoped && !playerHands.rifleScoped;
     // Recoil: kicked back and up on firing, sprung back with a little overshoot.
-    if (playerHands.kick > this.lastKick + 0.5) this.kickV += 9;
+    if (playerHands.kick > this.lastKick + 0.5) this.kickV += KICK[this.shown] ?? 9;
     this.lastKick = playerHands.kick;
     for (let n = Math.ceil(dt / SPRING_DT), h = dt / n; n > 0; n--) {
       this.kickV += (-260 * this.kick - 24 * this.kickV) * h;
@@ -390,22 +432,24 @@ export class ViewModel {
       if (playerHands.looking && this.has('TelescopeRaise')) this.play('TelescopeRaise', 0.1, true);
       else if (moving) this.play((walk = this.has('TelescopeWalk') ? 'TelescopeWalk' : 'Walk'));
       else this.play(this.has('TelescopeIdle') ? 'TelescopeIdle' : 'Idle');
-    } else if (this.shown === 'rifle') {
-      if (playerHands.aim > 0 && this.has('RifleAim')) {
+    } else if (this.shown === 'rifle' || this.shown === 'blaster') {
+      const pre = this.shown === 'blaster' && this.has('BlasterIdle') ? 'Blaster' : 'Rifle';
+      if (playerHands.aim > 0 && this.has(pre + 'Aim')) {
         // Scrubbed by the aim (raising and lowering), not played: it follows the button exactly.
-        this.play('RifleAim', 0.08);
+        this.play(pre + 'Aim', 0.08);
         const a = this.current!;
         a.timeScale = 0;
         a.time = smooth(playerHands.aim) * a.getClip().duration * 0.999;
-      } else if (moving) this.play((walk = this.has('RifleWalk') ? 'RifleWalk' : 'Walk'));
-      else this.play(this.has('RifleIdle') ? 'RifleIdle' : 'Idle');
+      } else if (moving) this.play((walk = this.has(pre + 'Walk') ? pre + 'Walk' : 'Walk'));
+      else this.play(this.has(pre + 'Idle') ? pre + 'Idle' : 'Idle');
     } else if (this.shown === 'grinder' && this.has('GrinderIdle')) {
       // held in both hands the way a grinder is: the right fist round the housing, the left round the side handle
       this.play(moving ? (walk = this.has('GrinderWalk') ? 'GrinderWalk' : 'GrinderIdle') : 'GrinderIdle');
-    } else if (this.shown === 'pistol' || this.shown === 'jammer' || this.shown === 'receiver' || this.shown === 'grinder' || this.shown === 'wrench') {
-      // The jammer has its own clips (two hands while jamming), the receiver and the wrench are held with them; a model without them
-      // falls back to the pistol's.
-      const pre = this.shown !== 'pistol' && this.has('JammerAim') ? 'Jammer' : 'Pistol';
+    } else if (this.shown === 'pistol' || this.shown === 'graviton' || this.shown === 'jammer' || this.shown === 'receiver' || this.shown === 'grinder' || this.shown === 'wrench') {
+      // The jammer has its own clips (two hands while jamming), the receiver and the wrench are held with them, the
+      // graviton pistol has its own; a model without them falls back to the pistol's.
+      const pre = this.shown === 'graviton' ? (this.has('GravitonIdle') ? 'Graviton' : 'Pistol')
+        : this.shown !== 'pistol' && this.has('JammerAim') ? 'Jammer' : 'Pistol';
       if (playerHands.aim > 0 && this.has(pre + 'Aim')) {
         this.play(pre + 'Aim', 0.08);
         const a = this.current!;

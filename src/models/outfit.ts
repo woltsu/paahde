@@ -1,8 +1,8 @@
 // What a player avatar holds and wears, beyond the scavenger glb (src/models/scavenger.ts): stand-in models
 // for the item in the hand (the selected hotbar slot) and for the wrist computer and storm detector when
 // equipped (the backpack is part of the glb). Small boxes and cylinders, like the loot on the sand
-// (src/world/loot.ts); parts use the disassembly part models (src/teardown/junk.ts). The laser rifle and pistol use
-// their own models (public/models/rifle.glb, pistol.glb; tools/models/rifle.py, pistol.py), the jammer
+// (src/world/loot.ts); parts use the disassembly part models (src/teardown/junk.ts). The guns use their own models
+// (GUN_MODELS: public/models/rifle.glb, pistol.glb, blaster.glb, graviton.glb from tools/models/<name>.py), the jammer
 // src/models/jammer.ts, the receivers src/models/receiver.ts.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -90,12 +90,23 @@ const HELD: Record<string, (loaded: () => void) => THREE.Object3D> = {
   // Muzzle forward and a little down. The avatar turns and places the guns itself (scavenger.ts GUN_HOLD: the rifle
   // across the body in both hands, or shouldered to aim; the pistol by the thigh, or held out at arm's length).
   laser_rifle: (loaded) => {
-    const g = gunModel('./models/rifle.glb', loaded, 0.087, 0.588);
+    const g = gunModel('laser_rifle', loaded);
     g.rotation.set(-0.25, Math.PI, 0); // the model's muzzle is +Z
     return g;
   },
   laser_pistol: (loaded) => {
-    const g = gunModel('./models/pistol.glb', loaded, 0.064, 0.205);
+    const g = gunModel('laser_pistol', loaded);
+    g.rotation.set(-0.45, Math.PI, 0);
+    return g;
+  },
+  // The blaster across the body in both hands like the rifle, the graviton pistol in one like the pistol.
+  blaster: (loaded) => {
+    const g = gunModel('blaster', loaded);
+    g.rotation.set(-0.25, Math.PI, 0);
+    return g;
+  },
+  graviton_pistol: (loaded) => {
+    const g = gunModel('graviton_pistol', loaded);
     g.rotation.set(-0.45, Math.PI, 0);
     return g;
   },
@@ -135,13 +146,22 @@ const HELD: Record<string, (loaded: () => void) => THREE.Object3D> = {
 
 const gunSrc = new Map<string, Promise<THREE.Object3D>>();
 
+/** The guns' own models (tools/models/<name>.py): origin at the grip, muzzle +Z, up +Y; the bore `bore` m up, its
+ *  tip `tip` m forward (the scripts' BZ, MUZZLE_Y). */
+export const GUN_MODELS: Record<string, { url: string; bore: number; tip: number }> = {
+  laser_rifle: { url: './models/rifle.glb', bore: 0.087, tip: 0.588 },
+  laser_pistol: { url: './models/pistol.glb', bore: 0.064, tip: 0.205 },
+  blaster: { url: './models/blaster.glb', bore: 0.094, tip: 0.592 },
+  graviton_pistol: { url: './models/graviton.glb', bore: 0.06, tip: 0.2 },
+};
+
 /**
- * The laser rifle or pistol (public/models/rifle.glb, pistol.glb): origin at the grip, muzzle +Z, up +Y, materials
- * 'Rifle' / 'Pistol' and the emissive glow. Empty until loaded (then `loaded` is called); each copy has its own
- * geometry, so disposeModel() can free it. A child 'Muzzle' marks the tip of the bore (`bore` m up, `tip` m forward:
- * rifle.py / pistol.py BZ, MUZZLE_Y), where its shots start (heldMuzzle).
+ * A gun's model (GUN_MODELS): materials named after it ('Rifle', 'Pistol', 'Blaster', 'Graviton') and its emissive
+ * '<Name>Glow'. Empty until loaded (then `loaded` is called); each copy has its own geometry, so disposeModel() can free
+ * it. A child 'Muzzle' marks the tip of the bore, where its shots start (heldMuzzle).
  */
-function gunModel(url: string, loaded: (() => void) | undefined, bore: number, tip: number): THREE.Group {
+export function gunModel(kind: string, loaded: (() => void) | undefined): THREE.Group {
+  const { url, bore, tip } = GUN_MODELS[kind];
   const g = glbModel(url, loaded);
   const muzzle = new THREE.Object3D();
   muzzle.name = 'Muzzle';

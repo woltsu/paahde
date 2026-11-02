@@ -42,6 +42,13 @@
 #     the bottom right corner
 # Mesh node `Pistol` ('Pistol', emissive 'PistolGlow') with `PistolMuzzle` / `PistolEye` markers, as the rifle's.
 # Also writes public/models/pistol.glb (origin at the grip, muzzle +Z, up +Y).
+# Blaster (tools/models/blaster.py, drawn by the game from public/models/blaster.glb on the empty `BlasterMount`, in its
+# glTF frame), two-handed like the rifle but carried lower:
+#   BlasterIdle / BlasterWalk  low ready, right hand on the pistol grip, left under the rubber handguard
+#   BlasterAim (0.33 s one-shot)  up to the carry handle's iron sights (no scope), eye B_RELIEF behind the rear sight
+# Graviton pistol (tools/models/graviton.py, public/models/graviton.glb on the empty `GravitonMount`), one-handed:
+#   GravitonIdle / GravitonWalk / GravitonAim  as the pistol's
+# Both mounts carry `<Gun>Muzzle` / `<Gun>Eye` markers like the rifle's. HANDS_FAST draws the guns flat on the mounts.
 # Jammer (src/models/jammer.ts, drawn by the game on the empty `JammerMount`, in the pistol's frame):
 #   JammerIdle / JammerWalk  low right in the right fist like the pistol, antenna on the crosshair
 #   JammerAim (0.27 s one-shot, scrubbed)  up in front at chest height, the left palm coming up under its body
@@ -793,9 +800,13 @@ def gun_in_right(G, nat_sdf, yaw, label):
 
 
 def rifle_in_left(alpha):
-    """Rifle (natural frame) relative to the LeftHand bone: the handguard lies obliquely across the left
-    palm with the muzzle end by the thumb, the palm facing up and `alpha` degrees towards the rifle's
-    right (the hand cups it from below-left)."""
+    return gun_in_left(RF, R_NAT_SDF, L_GRIP_Y, alpha)
+
+
+def gun_in_left(G, nat_sdf, grip_y, alpha):
+    """Two-handed gun (module G: rifle.py or blaster.py, natural frame) relative to the LeftHand bone: the handguard
+    (G.HG_*) lies obliquely across the left palm at `grip_y` with the muzzle end by the thumb, the palm facing up and
+    `alpha` degrees towards the gun's right (the hand cups it from below-left)."""
     a, pn, t = hand_frame(1)
     W = V(S.B['LeftHand'][0])
     b = math.radians(R_OBLIQUE)
@@ -803,11 +814,11 @@ def rifle_in_left(alpha):
     pp = (pn - F * pn.dot(F)).normalized()
     U = Quaternion(F, math.radians(-alpha)) @ pp
     R = F.cross(U)
-    hg = capsule_sdf(V((0, RF.HG_Y0, RF.HG_Z)), V((0, RF.HG_Y1, RF.HG_Z)), RF.HG_R)
+    hg = capsule_sdf(V((0, G.HG_Y0, G.HG_Z)), V((0, G.HG_Y1, G.HG_Z)), G.HG_R)
 
     def place(v):
         m = frame_cols(R, F, U).to_4x4()
-        m.translation = W + a * 0.058 + pn * v - F * L_GRIP_Y - U * RF.HG_Z
+        m.translation = W + a * 0.058 + pn * v - F * grip_y - U * G.HG_Z
         return m
 
     v = 0.05
@@ -815,7 +826,7 @@ def rifle_in_left(alpha):
         g = in_rest(place(v), hg)
         v -= min(g(p) for p in PALMS['Left']) + 0.002
     m = place(v)
-    return BONES['LeftHand'].matrix_local.inverted() @ m, in_rest(m, R_NAT_SDF), F
+    return BONES['LeftHand'].matrix_local.inverted() @ m, in_rest(m, nat_sdf), F
 
 
 def rifle_world(at, yaw=0.0, pitch=0.0, roll=0.0):
@@ -834,11 +845,16 @@ def rifle_ready(at, roll, dist=45.0):
     (×0.55 in game, ~25 m) ahead on the view axis, so a shot's beam (src/rifle.ts: from the drawn muzzle to
     where the crosshair hits) leaves along the barrel. Allows for the game's REST_PITCH (src/viewmodel.ts), which
     tips the whole viewmodel down about the eye."""
+    return gun_ready(RF, at, roll, dist)
+
+
+def gun_ready(G, at, roll, dist=45.0):
+    """Any gun (module G, natural frame) with its grip at `at` and its bore on the crosshair, as rifle_ready."""
     rest = 0.05  # -REST_PITCH
     T = V((0, dist * math.cos(rest), dist * math.sin(rest)))
     rw = rifle_world(at, roll=roll)
     for _ in range(4):
-        d = (T - rw @ RF.muzzle_local()).normalized()
+        d = (T - rw @ G.muzzle_local()).normalized()
         rw = rifle_world(at, math.degrees(math.atan2(-d.x, d.y)), math.degrees(math.asin(d.z)), roll)
     return rw
 
@@ -1030,6 +1046,166 @@ for nm, pw, pp in (('pistol ready', P_READY, PR_POLE), ('pistol aim', P_AIM, PR_
 for name, frames, fn in (('PistolIdle', 90, pistol_idle), ('PistolWalk', 22, pistol_walk)):
     S.clip(name, frames, fn)
 clip_once('PistolAim', 7, pistol_aim)  # 8 keys, 0.23 s
+
+# ============================================================================== blaster clips
+# Two-handed like the rifle (the same grips: gun_in_right on its pistol grip, gun_in_left under its rubber handguard),
+# but heavier: carried lower down the right of the view. No scope: BlasterAim brings the carry handle's iron sights to
+# the eye (B_RELIEF behind the rear sight), the butt under the cheek, and the hands stay in view. Its model
+# (public/models/blaster.glb, tools/models/blaster.py) is drawn by the game on the empty `BlasterMount` (in the gun's
+# glTF frame), with the `BlasterMuzzle` / `BlasterEye` markers under it.
+import blaster as BL  # noqa: E402
+
+B_RELIEF = 0.13  # eye behind the rear sight at full aim (model units; ×0.55 in game = 7 cm)
+B_GRIP_Y = 0.262  # where the support hand holds the handguard (natural y): its back end, so the left arm reaches
+
+
+def blaster_sdf_nat():
+    """Rough natural-frame sdf of what the hands can touch: pistol grip, trigger, receiver, handguard."""
+    g = capsule_sdf(BL.GRIP_AXIS * BL.GRIP_BOT, BL.GRIP_AXIS * BL.GRIP_TOP, BL.GRIP_R)
+    trig = capsule_sdf(V(BL.TRIGGER[0]), V(BL.TRIGGER[-1]), 0.003)
+    rec = box_sdf((-BL.REC_W / 2, BL.REC_Y0, BL.REC_Z0), (BL.REC_W / 2, BL.REC_Y1, BL.REC_Z1))
+    hg = capsule_sdf(V((0, BL.HG_Y0, BL.HG_Z)), V((0, BL.HG_Y1, BL.HG_Z)), BL.HG_R)
+    return lambda p: min(g(p), trig(p), rec(p), hg(p))
+
+
+B_NAT_SDF = blaster_sdf_nat()
+# hip: lower than the rifle (it's heavy), close enough in for the left arm to reach the handguard; the rear sight (0.08
+# behind the grip) stays past the near plane
+B_READY = gun_ready(BL, (0.10, 0.20, -0.25), roll=-4)
+B_AIM = Matrix.Translation(-BL.eye_local(B_RELIEF))
+
+
+def blaster_right_cost(yaw):
+    bh = gun_in_right(BL, B_NAT_SDF, yaw, 'BLASTER')[0]
+    return sum(best_pole('Right', bw @ bh.inverted(), 0.75)[1] for bw in (B_READY, B_AIM))
+
+
+B_YAW = min(range(-40, 41, 5), key=blaster_right_cost)
+B_HAND, B_SDF, B_AXIS = gun_in_right(BL, B_NAT_SDF, B_YAW, 'BLASTER')
+print('BLASTER right yaw', B_YAW)
+B_RGRIP = grasp('Right', B_SDF, wrap=B_AXIS)
+BR_POLE = best_pole('Right', B_READY @ B_HAND.inverted(), 0.75)[0]
+BR_POLE_AIM = best_pole('Right', B_AIM @ B_HAND.inverted(), 0.75)[0]
+
+
+def blaster_left_cost(alpha):
+    lh = gun_in_left(BL, B_NAT_SDF, B_GRIP_Y, alpha)[0]
+    return sum(best_pole('Left', bw @ lh.inverted(), L_TWIST)[1] for bw in (B_READY, B_AIM))
+
+
+BL_ALPHA = min(range(0, 61, 10), key=blaster_left_cost)
+BL_HAND, BL_SDF, BL_AXIS = gun_in_left(BL, B_NAT_SDF, B_GRIP_Y, BL_ALPHA)
+print('BLASTER left alpha', BL_ALPHA)
+B_LGRIP = grasp('Left', BL_SDF, wrap=BL_AXIS)
+BL_POLE = best_pole('Left', B_READY @ BL_HAND.inverted(), L_TWIST)[0]
+BL_POLE_AIM = best_pole('Left', B_AIM @ BL_HAND.inverted(), L_TWIST)[0]
+
+
+def blaster_pose(bw, rpole=None, lpole=None, sway=None):
+    pose = solve_arm('Right', bw @ B_HAND.inverted(), rpole or BR_POLE)
+    pose.update(solve_arm('Left', bw @ BL_HAND.inverted(), lpole or BL_POLE, twist=L_TWIST))
+    pose.update(B_RGRIP)
+    pose.update(B_LGRIP)
+    if sway:
+        pose['Root'] = sway
+    return pose
+
+
+def blaster_idle(p):
+    w = 2 * math.pi * p
+    return blaster_pose(B_READY, sway=rot((X, 1.1 * math.sin(w)), (Z, 0.5 * math.sin(w + 1)))), (0, 0, 0)
+
+
+def blaster_walk(p):
+    w = 2 * math.pi * p
+    return blaster_pose(B_READY, sway=rot((X, 3.0 * math.sin(2 * w)), (Y, 2.4 * math.sin(w)))), (0, 0, 0)
+
+
+def blaster_aim(p):
+    f = p * p * (3 - 2 * p)
+    bw = mat_lerp(B_READY, B_AIM, f)
+    bw.translation += V((0, 0.03, 0.0)) * math.sin(math.pi * p)  # pushed forward a little so the stock clears
+    rp = V(BR_POLE).lerp(V(BR_POLE_AIM), f)
+    lp = V(BL_POLE).lerp(V(BL_POLE_AIM), f)
+    return blaster_pose(bw, rp, lp, rot((Z, 0.6 * math.sin(1) * (1 - p)))), (0, 0, 0)
+
+
+for nm, bw, rp, lp in (('blaster ready', B_READY, BR_POLE, BL_POLE), ('blaster aim', B_AIM, BR_POLE_AIM, BL_POLE_AIM)):
+    ps = blaster_pose(bw, rp, lp)
+    print('WRIST', nm, 'right', round(wrist_bend_of(ps, 'Right')), 'left', round(wrist_bend_of(ps, 'Left')))
+
+for name, frames, fn in (('BlasterIdle', 90, blaster_idle), ('BlasterWalk', 22, blaster_walk)):
+    S.clip(name, frames, fn)
+clip_once('BlasterAim', 10, blaster_aim)  # 11 keys, 0.33 s: heavier than the rifle
+
+# ============================================================================== graviton clips
+# One-handed like the laser pistol (gun_in_right on its grip, the left arm lowered out of view), aimed out at arm's
+# length onto its sights. Its model (public/models/graviton.glb, tools/models/graviton.py) is drawn by the game on the
+# empty `GravitonMount`, with the `GravitonMuzzle` / `GravitonEye` markers under it.
+import graviton as GV  # noqa: E402
+
+G_RELIEF = 0.42  # as the pistol's P_RELIEF
+
+
+def graviton_sdf_nat():
+    """Rough natural-frame sdf of what the hand can touch: grip, trigger and the body."""
+    g = capsule_sdf(GV.GRIP_AXIS * GV.GRIP_BOT, GV.GRIP_AXIS * GV.GRIP_TOP, GV.GRIP_R)
+    trig = capsule_sdf(V(GV.TRIGGER[0]), V(GV.TRIGGER[-1]), 0.003)
+    body = box_sdf((-GV.REC_W / 2, GV.REC_Y0, GV.REC_Z0), (GV.REC_W / 2, GV.REC_Y1, GV.REC_Z1))
+    return lambda p: min(g(p), trig(p), body(p))
+
+
+G_NAT_SDF = graviton_sdf_nat()
+G_AIM = Matrix.Rotation(math.radians(P_CANT), 4, 'Y') @ Matrix.Translation(-GV.eye_local(G_RELIEF))
+G_READY = gun_ready(GV, (0.15, 0.30, -0.16), roll=-6)
+
+
+def graviton_cost(yaw):
+    gh = gun_in_right(GV, G_NAT_SDF, yaw, 'GRAVITON')[0]
+    return sum(best_pole('Right', gw @ gh.inverted(), 0.75)[1] for gw in (G_READY, G_AIM))
+
+
+G_YAW = min(range(-40, 41, 5), key=graviton_cost)
+G_HAND, G_SDF, G_AXIS = gun_in_right(GV, G_NAT_SDF, G_YAW, 'GRAVITON')
+print('GRAVITON yaw', G_YAW)
+G_GRIP = grasp('Right', G_SDF, wrap=G_AXIS)
+GR_POLE = best_pole('Right', G_READY @ G_HAND.inverted(), 0.75)[0]
+GR_POLE_AIM = best_pole('Right', G_AIM @ G_HAND.inverted(), 0.75)[0]
+
+
+def graviton_pose(gw, pole=None, sway=None):
+    pose = solve_arm('Right', gw @ G_HAND.inverted(), pole or GR_POLE)
+    pose.update(solve_arm('Left', left_hand_world(*L_LOW), L_POLE, twist=0.6))
+    curl(pose, 'Left', 12)
+    pose.update(G_GRIP)
+    if sway:
+        pose['Root'] = sway
+    return pose
+
+
+def graviton_idle(p):
+    w = 2 * math.pi * p
+    return graviton_pose(G_READY, sway=rot((X, 0.7 * math.sin(w)), (Z, 0.5 * math.sin(w + 1)))), (0, 0, 0)
+
+
+def graviton_walk(p):
+    w = 2 * math.pi * p
+    return graviton_pose(G_READY, sway=rot((X, 2.5 * math.sin(2 * w)), (Y, 2.0 * math.sin(w)))), (0, 0, 0)
+
+
+def graviton_aim(p):
+    f = p * p * (3 - 2 * p)
+    gw = mat_lerp(G_READY, G_AIM, f)
+    gw.translation += V((0, 0.0, 0.02)) * math.sin(math.pi * p)  # up over the line, not through it
+    return graviton_pose(gw, V(GR_POLE).lerp(V(GR_POLE_AIM), f), rot((Z, 0.6 * math.sin(1) * (1 - p)))), (0, 0, 0)
+
+
+for nm, gw, gp in (('graviton ready', G_READY, GR_POLE), ('graviton aim', G_AIM, GR_POLE_AIM)):
+    print('WRIST', nm, round(wrist_bend_of(graviton_pose(gw, gp), 'Right')))
+
+for name, frames, fn in (('GravitonIdle', 90, graviton_idle), ('GravitonWalk', 22, graviton_walk)):
+    S.clip(name, frames, fn)
+clip_once('GravitonAim', 7, graviton_aim)  # 8 keys, 0.23 s
 
 # ============================================================================== held by a bar
 # The shovel's shaft, the jammer's body and the scrap offcut are held like the spyglass: the bar lies obliquely
@@ -1635,6 +1811,21 @@ mmount = bpy.data.objects.new('MaceMount', None)
 bpy.context.scene.collection.objects.link(mmount)
 on_right_hand(mmount, MC_RHAND @ PS.FLIP)
 extra.append(mmount)
+# where the blaster and the graviton pistol (public/models/blaster.glb, graviton.glb: their glTF frames) go in the right
+# hand; FAST builds draw the guns themselves on them, flat, to look at the grips
+gun_mounts = []
+for nm, m, G, rgb in (('BlasterMount', B_HAND, BL, (0.6, 0.45, 0.15)), ('GravitonMount', G_HAND, GV, (0.15, 0.15, 0.2))):
+    gm = bpy.data.objects.new(nm, None)
+    bpy.context.scene.collection.objects.link(gm)
+    on_right_hand(gm, m @ G.FLIP)
+    extra.append(gm)
+    gun_mounts.append((gm, G))
+    if FAST:
+        gun, gun_glow = G.build()
+        gun = join([gun, gun_glow], nm.replace('Mount', 'Proxy'))
+        flat(gun, rgb)
+        on_right_hand(gun, m @ G.FLIP)
+        extra.append(gun)
 if FAST:  # a stand-in jammer from its boxes, to look at the grip
     jp = join([rounded_box('JammerProxy', c, sz, S.M['brass'], bevel=0.002, segments=1) for c, sz in (
         ((0, 0.035, 0.066), (0.048, 0.15, 0.044)), ((0, 0.045, 0.044), (0.05, 0.11, 0.008)),
@@ -1675,6 +1866,14 @@ for nm, p in (('PistolMuzzle', PS.muzzle_local()), ('PistolEye', PS.eye_local(P_
     e.matrix_parent_inverse = Matrix.Identity(4)
     e.matrix_basis = Matrix.Translation(PS.FLIP.to_3x3() @ p)
     marks.append(e)
+for (gm, G), pre, relief in zip(gun_mounts, ('Blaster', 'Graviton'), (B_RELIEF, G_RELIEF)):
+    for nm, p in ((pre + 'Muzzle', G.muzzle_local()), (pre + 'Eye', G.eye_local(relief))):
+        e = bpy.data.objects.new(nm, None)
+        bpy.context.scene.collection.objects.link(e)
+        e.parent = gm
+        e.matrix_parent_inverse = Matrix.Identity(4)
+        e.matrix_basis = Matrix.Translation(G.FLIP.to_3x3() @ p)
+        marks.append(e)
 
 
 def check_aim(label='RIFLE', clip='RifleAim', muzzle=0, eye=1):
@@ -1703,6 +1902,8 @@ def check_aim(label='RIFLE', clip='RifleAim', muzzle=0, eye=1):
 
 check_aim()
 check_aim('PISTOL', 'PistolAim', 2, 3)
+check_aim('BLASTER', 'BlasterAim', 4, 5)
+check_aim('GRAVITON', 'GravitonAim', 6, 7)
 bake.export(rig, [body, can, *tel_parts, rif, pis, *marks, *extra], OUT)
 from prune_hands import prune_hands
 prune_hands(OUT)
