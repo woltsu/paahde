@@ -2965,3 +2965,20 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   item in hand) are pitched down, a little louder, with a low thud under them. No text.
 - **Not looked at in a browser**: the browser extension wasn't connected; checked by types, `npm run check`, build and
   the audio captures only. The viewmodel and models are the art side's.
+
+## The piercer: model and holds
+
+- **Model:** tools/models/piercer.py (public/models/piercer.glb, ~9.4k tris, 1.32 m: the longest gun): an anti-materiel
+  rail rifle scavenged like the laser rifle. A long receiver in worn olive paint, heavy bolt handle, a ribbed top rail
+  with a big scope, a slug box, a skeleton stock (tall butt plate, cheek riser, folded monopod); ahead of it open rails
+  with copper faces and a pale blue glowing slit between them, square clamps, a spine with a ribbed rubber handguard,
+  two capacitor cans with glowing windows, a folded bipod and a boxy three-baffle muzzle brake. Same frames, bake and
+  'PiercerGlow' as the other guns. The scope sits forward over the receiver: further back, the left arm could not
+  reach the handguard with the eye at the eyepiece.
+- **First person:** PiercerIdle / PiercerWalk / PiercerAim (hands.py): low down the right in both hands; the idle
+  breathes under the weight, the walk sways slow and deep with a thud at every step, the aim heaves it up to the
+  scope in 0.4 s (src/rifle.ts draws the scope view). Kick 22, the hardest. The left hand stops about 5 mm short of the
+  handguard in one pose, as the blaster's does.
+- **Third person:** `PIERCER` in GUN_HOLD: low across the hips, the rails sloping down, the left hand further out;
+  aiming, the stock lower and the torso turned further in. Checked on all three bodies (`?item=piercer`, `&aim`,
+  `&clip=Walk`); on the bike nothing held shows. Not carried on the body when not in hand.

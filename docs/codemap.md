@@ -468,6 +468,9 @@ Everything built is shared, and anyone can take a building down.
   clips on `BlasterMount` / `GravitonMount` (src/viewmodel.ts, muzzle from the `<Gun>Muzzle` markers), by the avatar
   (`BLASTER` / `PISTOL` in src/models/scavenger.ts GUN_HOLD), on the sand (src/world/loot.ts), icons by
   tools/blender/finds.py
+- `tools/models/piercer.py` — the piercer's model (public/models/piercer.glb, `GUN_MODELS`): an open-rail anti-materiel
+  rifle with a scope; held in the hands' Piercer* clips on `PiercerMount` (src/viewmodel.ts, `PiercerMuzzle`), by the
+  avatar (`PIERCER` in GUN_HOLD), on the sand (src/world/loot.ts), icon by tools/blender/finds.py
 - `tools/models/hands.py` — first-person hands + held-item clips (docs/viewmodel-hands.md)
 - `tools/blender/icons.py`, `tools/icons/` — inventory icons for what has no Blender model of its own (scrap, cloth, the
   wrench, the carried machines, dumped from their three.js models); every icon's look and size: `docs/icons.md`
