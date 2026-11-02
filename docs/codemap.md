@@ -444,8 +444,13 @@ Everything built is shared, and anyone can take a building down.
   pad rumble); their beams are `zaps.beam` kinds (`BEAMS` in `src/world/zaps.ts`, pooled per kind); the blaster's
   burst (fireball, shock ring to BLAST_R, sand thrown up, scorch) and the graviton's caving-in end point in
   `src/world/blasts.ts` (pooled; lit through `zaps.light`, the shots' one light; `blasts.shake` shakes the view via
-  src/camera.ts `rumble`); sounds `src/gunSound.ts` (levels in docs/audio.md, the `blaster`/`graviton` scenarios of
-  `tools/audio-bench.ts`)
+  src/camera.ts `rumble`); sounds `src/gunSound.ts` (levels in docs/audio.md, the `blaster`/`graviton`/`piercer`
+  scenarios of `tools/audio-bench.ts`)
+- The piercer as fired and carried: `FEEL.piercer` (`wander`/`settle`: steady braced, wandering on the move), its
+  lingering ionised trail (`BEAMS.piercer` `trail`), the muzzle blast and the punch-through with molten metal
+  (`blasts.piercerMuzzle`, `blasts.piercer`), crack/roll, plate clang and capacitor whine (`gunSound.piercer*`); the
+  weight in hand is presentation only: a slow deep camera plod (`ViewPose.heavy`, `heave` on a jump that can't happen,
+  src/camera.ts) and heavy footsteps (`footsteps.step` `heavy`, from src/players.ts's held item)
 - `shared/jammer.ts` — the jammer (gear, found broken and repaired): hold it 3.5 s on a jet or drone in its cone and it
   glides down whole; the lock is added up by `onJam` (server/world.ts), aimed and heard in `src/jammer.ts`, model
   `src/models/jammer.ts`

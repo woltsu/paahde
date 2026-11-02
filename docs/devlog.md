@@ -2938,3 +2938,30 @@ The blaster and the graviton pistol as they are fired, for the shooter and every
   swarms and jets (the recharge, and you can't get out of the way); the simulator carries it like the blaster.
 - Tests in tools/weapons.test.mjs: a guardian's hull in three, a crawler in one, a point in one, the heavy plate turns
   it; half speed, no jump or slide; the server sets and clears `heavy` with the hotbar slot.
+
+## The piercer's feel, look and sound
+
+The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and everyone near ('zap' `gun: 'piercer'`).
+
+- **Feel** (`src/rifle.ts` `FEEL.piercer`): scoped like the rifle but slowest of all to the eye (0.6 s). Two new
+  per-gun knobs: `wander` multiplies the unsteadiness past settled (1.9: walking or winded its weight swims) and
+  `settle` is how fast the sway eases back (1.1/s, the rifle's 2). Settled it is 1.15× the rifle, crouched or holding
+  breath steadier still, so a braced shot is fair. The biggest climb (0.09 rad) and jolt (2×), a view shake, a brief
+  widening, a long hard rumble. Recharge bar wider and cold blue-white, the scope's cell too.
+- **Shot** (`src/world/zaps.ts` `BEAMS.piercer`): a hair-thin blinding blue-white core gone in a tenth of a second,
+  and a cold blue ionised trail (`trail`) that hangs where the slug went for 1.6 s, widening 3.5× and fraying into
+  drifting lumps; it stops following the kicking gun after 0.08 s so it stays in the air. A bright, wide muzzle flash.
+- **Muzzle and impact** (`src/world/blasts.ts`): at the muzzle a quick pale shock ring, brake smoke to both sides
+  (neither through the scope) and dust kicked up under a low barrel. On a walker the slug punches through: sparks out
+  of both sides, 26 molten drops (a new pooled sprite pool, two thirds blown on through) cooling white to red and lying
+  glowing where they land, a white flash through `zaps.light`, a little shake. Sand: a puff and spurt; rock or
+  concrete: sparks, dust and a small scorch. Nothing at its reach in the air.
+- **Sound** (`src/gunSound.ts`): a supersonic crack, a chest thump, the rails ringing, and a rolling echo of nine
+  ever later, duller taps over a long low rumble; on plate a clang of inharmonic partials with tearing metal; a thin
+  beating whine through the reload and a slide-and-clack when it's ready. Levelled in docs/audio.md "The piercer".
+- **Weight in hand** (presentation only; the sim does the slowing): the first-person bob reckons pace from the slowed
+  walk, so steps come at half the rate, deeper (1.8×) and rolling more from foot to foot (src/camera.ts `heft`);
+  pressing jump under it sags the knees on the landing spring (`heave`) and nothing more; footsteps (anyone's, from the
+  item in hand) are pitched down, a little louder, with a low thud under them. No text.
+- **Not looked at in a browser**: the browser extension wasn't connected; checked by types, `npm run check`, build and
+  the audio captures only. The viewmodel and models are the art side's.
