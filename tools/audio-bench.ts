@@ -7,7 +7,7 @@ import { CrashSound } from '../src/crashSound.ts';
 import { wind } from '../src/world/wind.ts';
 import { rifleSound } from '../src/rifleSound.ts';
 import { gunSound } from '../src/gunSound.ts';
-import { BLASTER_COOLDOWN_MS, GRAVITON_COOLDOWN_MS } from '../shared/rifle.ts';
+import { BLASTER_COOLDOWN_MS, GRAVITON_COOLDOWN_MS, PIERCER_COOLDOWN_MS } from '../shared/rifle.ts';
 import { guardianSound } from '../src/guardianSound.ts';
 import { wormSound } from '../src/wormSound.ts';
 import { listen } from '../src/echo.ts';
@@ -30,7 +30,7 @@ function wav(left: Float32Array, right: Float32Array, rate: number) {
   return btoa(s);
 }
 
-Object.assign(window, { measureAudio: async (scenario: 'exploration' | 'storm' | 'combat' | 'multiplayer' | 'blaster' | 'graviton', volume = 0.4, seconds = 20, components?: readonly string[]) => {
+Object.assign(window, { measureAudio: async (scenario: 'exploration' | 'storm' | 'combat' | 'multiplayer' | 'blaster' | 'graviton' | 'piercer', volume = 0.4, seconds = 20, components?: readonly string[]) => {
   if (!audio.ctx) throw new Error('Click Start audio first');
   const enabled = (part: string) => !components || components.includes(part);
   audio.setVolume(volume); audio.setMusicVolume(enabled('music') ? 1 : 0);
@@ -40,8 +40,9 @@ Object.assign(window, { measureAudio: async (scenario: 'exploration' | 'storm' |
   listener.forwardX.value = 0; listener.forwardY.value = 0; listener.forwardZ.value = -1;
   listener.upX.value = 0; listener.upY.value = 1; listener.upZ.value = 0;
   const at = (x: number, z: number) => ({ x: ear.x + x, y: heightAt(ear.x + x, ear.z + z) + 1, z: ear.z + z });
-  // blaster, graviton: combat with that gun fired at its cooldown in place of the rifle, its shots striking 25 m off.
-  const heavy = scenario === 'blaster' || scenario === 'graviton' ? scenario : null;
+  // blaster, graviton, piercer: combat with that gun fired at its cooldown in place of the rifle, its shots striking 25 m
+  // off (the piercer's on a walker's plate).
+  const heavy = scenario === 'blaster' || scenario === 'graviton' || scenario === 'piercer' ? scenario : null;
   const fight = scenario === 'combat' || scenario === 'multiplayer' || !!heavy;
   const multi = scenario === 'multiplayer';
   wind.override = scenario === 'storm' || multi ? 23 : 8;
@@ -65,6 +66,11 @@ Object.assign(window, { measureAudio: async (scenario: 'exploration' | 'storm' |
         nextShot = t + GRAVITON_COOLDOWN_MS / 1000;
         gunSound.gravitonShot();
         gunSound.gravitonImpact(at(0, -25), ear);
+      } else if (heavy === 'piercer') {
+        nextShot = t + PIERCER_COOLDOWN_MS / 1000;
+        gunSound.piercerShot();
+        gunSound.piercerCharge(PIERCER_COOLDOWN_MS / 1000 - 0.25);
+        gunSound.piercerImpact(at(0, -25), ear, 'enemy');
       } else {
         nextShot = t + 0.4;
         rifleSound.shot();

@@ -144,6 +144,28 @@ dBTP, the limiter working) and the full mix at −17.3; they were brought down t
 (−27.7 alone at 2.5 shots/s) plus the few dB a heavier, slower gun earns. Peak voices 9 (blaster) and 13 (graviton),
 no drops. Captures: `/tmp/a73d-audio-3`, `/tmp/a73d-audio-c3` (local).
 
+## The piercer (3 November 2026)
+
+`src/gunSound.ts` piercerShot (crack, thump, ringing rails, a rolling echo of nine ever duller taps over a 3 s
+rumble), piercerImpact (here on plate, 25 m off) and piercerCharge (the whine through the 2.6 s reload, the clack)
+were levelled with the `piercer` scenario of `tools/audio-bench.ts` (combat with the piercer fired at its cooldown).
+Chrome on macOS, `--seconds 20` (isolation 12):
+
+| Capture | Default 0.4: LUFS | Default: dBTP | Reference 1: LUFS | Reference: dBTP |
+| --- | ---: | ---: | ---: | ---: |
+| Combat (rifle), for comparison | −23.8 | −7.8 | −16.1 | −1.8 |
+| Blaster, for comparison | −23.9 | −6.8 | −16.2 | −2.5 |
+| Piercer, full mix | −24.3 | −6.5 | −16.7 | −1.5 |
+| Piercer's sounds alone (`--components shots`) | −25.8 | −6.4 | | |
+
+The first gains (shot 0.14, impact 0.2) put its sounds alone at −35.5 LUFS: a short loud crack every 2.6 s gated out
+by the quiet between. The roll and rumble were raised (the tail now falls from about −23 to −43 LUFS momentary over a
+second instead of a third of one) and the gains set to 0.37 and 0.5, the whine lowered to 0.005 (it had sat over the
+tail). Peak voices 9, no drops. Captures: `/tmp/piercer-audio-5`, `/tmp/piercer-audio-c5` (local).
+
+Note: Vite's dev watcher ignores `.claude/**`, so a capture served from an agent worktree runs stale code after an
+edit; restart Vite between gain changes there.
+
 ## Limits of these numbers
 
 These are scripted scenes using the game's actual sound entry points, not recordings of a complete multiplayer
