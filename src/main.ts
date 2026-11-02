@@ -88,6 +88,7 @@ import { BossBar } from './bossBar';
 import { Thrower } from './throw';
 import { Mace } from './mace';
 import { zaps } from './world/zaps';
+import { blasts } from './world/blasts';
 import { BenchMenu } from './benchMenu';
 import { BuildMenu } from './buildMenu';
 import { machinesAt } from '../shared/crash.ts';
@@ -372,12 +373,14 @@ rifle.nest = guardianFx.nest;
 rifle.remoteMuzzle = (id, out) => (remotes.get(id)?.muzzle(out) ? out : null);
 scene.add(zaps.root);
 zaps.setCamera(orbit.camera);
+scene.add(blasts.root);
+blasts.setCamera(orbit.camera);
 const thrower = new Thrower(scene, orbit, net, scrap);
 thrower.piece = () => viewmodel.scrapPiece(); // the piece in flight is the one drawn in the hand
 const mace = new Mace(orbit, net, guardianFx.guardians);
 mace.nest = guardianFx.nest;
 mace.onSwung = (by) => (by === net.id ? me : remotes.get(by))?.swing(); // the stroke on the avatar
-if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { rifle, zaps });
+if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { rifle, zaps, blasts });
 net.onSpawn = () => placedView.setSpawn(net.spawn?.id ?? null);
 net.onPlaced = () => {
   for (const p of placed) if (isTrophy(p.kind)) trophies.need(p.kind);
@@ -684,7 +687,7 @@ renderer.setAnimationLoop((time) => {
   }
   shieldFx.update(frameDt, (id) => (id === net.id ? me.root.position : others.find((o) => o.id === id) ?? null));
   if (L.things) corpseView.update(frameDt, focus);
-  orbit.rumble = stage.level === net.me.level ? (stage.rumble ?? 0) : 0;
+  orbit.rumble = Math.max(stage.level === net.me.level ? (stage.rumble ?? 0) : 0, blasts.shake); // and bursts nearby (src/world/blasts.ts)
   orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding || backSeat, heading: backSeat ? rideHeading : v.heading, lean: bikes.get(backSeat ? driver!.id : 0)?.leanAngle, short: L.crouchUnder,
     ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined }, frameDt);
   bossFx.update(net, frameDt, orbit.camera);
@@ -713,6 +716,7 @@ renderer.setAnimationLoop((time) => {
   viewmodel.setColor(net.color);
   viewmodel.update(frameDt, { speed: Math.hypot(s.vx, s.vz), grounded: s.grounded, sliding: s.sliding });
   zaps.update(frameDt); // after the gun is drawn: your beam starts at its muzzle
+  blasts.update(frameDt);
   // Before the wind: the storm sets how hard it blows here.
   const belt = equipped(net.boxes.equip, 'belt');
   storm.update(frameDt, L.weather ? net.storms : NO_STORMS, net.serverTime(), orbit.camera.position, net.me, belt ? stormWarnS(quality(belt)) : 0, survival.dead || net.down !== null);

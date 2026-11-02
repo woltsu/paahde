@@ -1,7 +1,12 @@
 // The laser rifle in your hands (shared/rifle.ts): aiming, the shot, and the feel of it. The laser pistol works the same
 // way with its own feel (FEEL): no scope, aimed it comes up at arm's length onto the iron sights (src/viewmodel.ts
 // PistolAim) with a slight zoom; it sways more (one hand), spreads more from the hip and kicks harder, but recharges
-// faster; and it reaches only PISTOL_RANGE.
+// faster; and it reaches only PISTOL_RANGE. The blaster is heavy: no scope, slow to raise onto its sights, it swims more
+// than the rifle, kicks and jolts hard, shakes the view and the pad, and its cell takes long to whine back up; its
+// beam bursts where it stops (src/world/blasts.ts, sounds src/gunSound.ts). The graviton pistol is held like the
+// pistol but eerily steady, barely kicks, and the view draws in on each shot; where its beam ends space caves in.
+// Where the drawn gun's muzzle is comes from src/viewmodel.ts `muzzle` (main.ts); a gun it doesn't know yet shoots
+// from a little ahead of the eye.
 //
 // - Aim: right mouse or X raises it to the eye (src/viewmodel.ts plays RifleAim); once it is there the view goes
 //   through the scope: a round eyepiece with a duplex reticle and a lit red dot, ZOOM× (the mouse wheel sets it). Let
@@ -35,14 +40,20 @@ import * as kills from './kills';
 import { rifleSound } from './rifleSound';
 import { rumble } from './gamepad';
 import { tyreDust } from './tyreDust';
-import { GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { BLASTER, GRAVITON, GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
 import { gunCooldown, quality } from '../shared/gear.ts';
-import { heightAt, shotGround } from '../shared/terrain.ts';
-import { groundAt, onFlat } from './ground.ts';
+import { heightAt, normalAt, shotGround } from '../shared/terrain.ts';
+import { groundAt, onFlat, solidAt } from './ground.ts';
+import { blasts } from './world/blasts';
+import { gunSound } from './gunSound';
 
-/** In a level with flat floors (src/ground.ts): how far along the shot the floor is, or `range`. */
+/** In a level with flat floors (src/ground.ts): how far along the shot a floor or a wall (the level's solids) is, or
+ *  `range`. */
 function floorShot(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, range: number): number {
-  for (let t = 0.25; t < range; t += 0.25) if (o.y + d.y * t <= groundAt(o.x + d.x * t, o.z + d.z * t, o.y + d.y * t)) return t;
+  for (let t = 0.25; t < range; t += 0.25) {
+    const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
+    if (y <= groundAt(x, z, y) || solidAt(x, y, z, 0.02)) return t;
+  }
   return range;
 }
 import { shelterSolid } from '../shared/shelters.ts';
@@ -64,12 +75,18 @@ const SPRING_DT = 1 / 120;
 
 /**
  * How each gun handles. `scope`: aimed, the view goes through a scope; else `sight` is the zoom on the iron sights.
- * `sway`: × the aim's sway. Hip fire lands within a cone of `hip` rad standing, up to `move` more on the move. Recoil:
- * muzzle climb `climb` rad per shot, sideways kick up to `side` rad either way.
+ * `raise`: s to bring it up to the eye. `sway`: × the aim's sway. Hip fire lands within a cone of `hip` rad standing,
+ * up to `move` more on the move. Recoil: muzzle climb `climb` rad per shot, sideways kick up to `side` rad either way,
+ * the view's jolt × `jolt`; `shake`: the view shakes (src/world/blasts.ts), `punch`: the view's zoom pulses by that
+ * share (+ pulled in, − thrown wide). `rumble`: the pad's strong and weak motors and ms.
+ * - blaster: heavy and two-handed: slow up, swims more than the rifle aimed, a big kick and a hard jolt.
+ * - graviton: held like the pistol but eerily steady, barely kicks; the world seems to draw in on each shot.
  */
 const FEEL = {
-  rifle: { kind: RIFLE, scope: true, sight: 1, sway: 1, hip: 0.022, move: 0.05, climb: 0.028, side: 0.007 },
-  pistol: { kind: PISTOL, scope: false, sight: 1.3, sway: 1.7, hip: 0.035, move: 0.06, climb: 0.045, side: 0.012 },
+  rifle: { kind: RIFLE, scope: true, sight: 1, raise: ADS_S, sway: 1, hip: 0.022, move: 0.05, climb: 0.028, side: 0.007, jolt: 1, shake: 0, punch: 0, rumble: [0.6, 0.8, 140] },
+  pistol: { kind: PISTOL, scope: false, sight: 1.3, raise: ADS_S, sway: 1.7, hip: 0.035, move: 0.06, climb: 0.045, side: 0.012, jolt: 1, shake: 0, punch: 0, rumble: [0.2, 0.6, 90] },
+  blaster: { kind: BLASTER, scope: false, sight: 1.15, raise: 0.42, sway: 1.4, hip: 0.03, move: 0.07, climb: 0.075, side: 0.02, jolt: 1.5, shake: 0.3, punch: -0.05, rumble: [1, 1, 260] },
+  graviton: { kind: GRAVITON, scope: false, sight: 1.35, raise: 0.22, sway: 0.3, hip: 0.012, move: 0.02, climb: 0.016, side: 0.002, jolt: 0.6, shake: 0.12, punch: 0.1, rumble: [0.9, 0.15, 420] },
 };
 type Gun = keyof typeof FEEL;
 const isGun = (h: string): h is Gun => h in FEEL;
@@ -90,6 +107,9 @@ body.gunSights #crosshair { display: none; }
   background: rgba(0, 0, 0, 0.3); opacity: 0; transition: opacity .12s; }
 #rifleCharge i { display: block; height: 100%; background: rgba(255, 244, 228, 0.7); transform-origin: left; }
 #rifleCharge.on { opacity: 0.8; transition: none; }
+#rifleCharge.blaster { width: 26px; margin-left: -13px; height: 3px; }
+#rifleCharge.blaster i { background: rgba(255, 178, 104, 0.8); }
+#rifleCharge.graviton i { background: rgba(196, 160, 255, 0.8); }
 body.rifleScoped #rifleCharge, body.down #rifleCharge { display: none; }
 `;
 
@@ -114,7 +134,7 @@ const SCOPE = `<svg viewBox="-1000 -1000 2000 2000">
 const wobble = (t: number, seed: number) => (Math.sin(t * 1.31 + seed) * 0.5 + Math.sin(t * 2.97 + seed * 2.1) * 0.3 + Math.sin(t * 5.53 + seed * 3.7) * 0.2);
 
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3(), _m = new THREE.Vector3();
-const _q = new THREE.Quaternion(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _r = new THREE.Vector3(), _u = new THREE.Vector3(), _n = new THREE.Vector3();
 
 export class Rifle {
   private view: FirstPersonCamera;
@@ -155,6 +175,8 @@ export class Rifle {
   private recoilVY = 0;
   private spread = FEEL.rifle.hip;
   private scoped = false;
+  /** The view's zoom pulse from the last shot (FEEL `punch`), easing back to 0. */
+  private punch = 0;
   /** The gun in hand (or last in hand). */
   private gun: Gun = 'rifle';
   /** Debug (?debug, `dbg.rifle`): hold the aim / fire buttons without the mouse captured. */
@@ -199,10 +221,20 @@ export class Rifle {
       _d.divideScalar(len);
       if (!this.remoteMuzzle(m.by, _o)) _o.set(m.x, m.y - 0.15, m.z).addScaledVector(_d, 0.8);
       const ear = this.view.camera.position;
-      zaps.beam(_o.x, _o.y, _o.z, m.ex, m.ey, m.ez, _o.distanceTo(ear) < 60);
-      rifleSound.shot(_o, ear, m.gun === PISTOL);
+      const heavy = m.gun === BLASTER ? 'blaster' : m.gun === GRAVITON ? 'graviton' : null;
+      zaps.beam(_o.x, _o.y, _o.z, m.ex, m.ey, m.ez, _o.distanceTo(ear) < 60, undefined, heavy ?? 'rifle');
+      if (heavy === 'blaster') gunSound.blasterShot(_o, ear);
+      else if (heavy === 'graviton') gunSound.gravitonShot(_o, ear);
+      else rifleSound.shot(_o, ear, m.gun === PISTOL);
       zaps.burst(m.ex, m.ey, m.ez, -_d.x, -_d.y, -_d.z, 10);
-      rifleSound.impact(m.hit ? 'glass' : !onFlat() && heightAt(m.ex, m.ez) > m.ey - 0.3 ? 'sand' : 'metal', _e.set(m.ex, m.ey, m.ez), ear);
+      const sand = !onFlat() && heightAt(m.ex, m.ez) > m.ey - 0.3;
+      _e.set(m.ex, m.ey, m.ez);
+      rifleSound.impact(m.hit ? 'glass' : sand ? 'sand' : 'metal', _e, ear);
+      if (heavy) {
+        const reached = len >= GUNS[m.gun!].range - 1 && !m.hit;
+        const on = m.hit ? 'enemy' : sand ? 'sand' : reached ? 'air' : 'hard';
+        this.heavyImpact(heavy, on, _d, ear);
+      }
     };
   }
 
@@ -217,7 +249,7 @@ export class Rifle {
     const holding = isGun(playerHands.held) && can;
     const aiming = holding && ((aimDown() && !!document.pointerLockElement) || this.forceAim);
     // The jammer (src/jammer.ts) raises the hand itself.
-    if (playerHands.held !== 'jammer' && playerHands.held !== 'grinder') playerHands.aim = Math.max(0, Math.min(1, playerHands.aim + (aiming ? dt : -dt * 1.4) / ADS_S));
+    if (playerHands.held !== 'jammer' && playerHands.held !== 'grinder') playerHands.aim = Math.max(0, Math.min(1, playerHands.aim + (aiming ? dt : -dt * 1.4) / feel.raise));
     // In third person aiming a scoped gun (or raising the telescope, src/telescope.ts) comes in to the eye (src/camera.ts).
     this.view.aimIn = (aiming && feel.scope) || playerHands.looking;
     const scoped = aiming && playerHands.aim >= 1 && feel.scope && this.view.boomLength < 0.05;
@@ -230,8 +262,9 @@ export class Rifle {
     document.body.classList.toggle('rifleHip', holding && !aiming);
     document.body.classList.toggle('rifleHeld', holding);
     document.body.classList.toggle('gunSights', holding && !feel.scope && playerHands.aim > 0.5);
+    this.punch *= Math.exp(-dt * 7);
     if (scoped) this.view.zoom = this.zoom;
-    else if (isGun(playerHands.held)) this.view.zoom = 1 + (feel.sight - 1) * playerHands.aim;
+    else if (isGun(playerHands.held)) this.view.zoom = (1 + (feel.sight - 1) * playerHands.aim) * (1 + this.punch);
 
     // How unsteady: the stance and pace now, being out of breath, holding it or gasping.
     const pace = pose.grounded ? pose.speed / WALK_SPEED : 2.5;
@@ -279,6 +312,8 @@ export class Rifle {
     playerHands.charge = charge;
     const recharging = holding && charge < 1;
     this.chargeEl.classList.toggle('on', recharging);
+    this.chargeEl.classList.toggle('blaster', this.gun === 'blaster');
+    this.chargeEl.classList.toggle('graviton', this.gun === 'graviton');
     if (recharging) this.chargeFill.style.transform = `scaleX(${Math.max(0, charge)})`;
     if (scoped) {
       this.zoomEl.textContent = `${this.zoom.toFixed(1)}×`;
@@ -362,11 +397,14 @@ export class Rifle {
       ? _m.copy(_o).addScaledVector(_d, 0.8).addScaledVector(_u.set(0, 1, 0).applyQuaternion(_q), -0.07)
       : _m.copy(_o).addScaledVector(_d, 0.6).addScaledVector(_r.set(1, 0, 0).applyQuaternion(_q), 0.2).add(_u.set(0, -0.25, 0)));
     // It starts at the drawn muzzle as the gun kicks and the view climbs.
-    zaps.beam(m.x, m.y, m.z, _e.x, _e.y, _e.z, true, this.muzzle);
-    rifleSound.shot(null, null, this.gun === 'pistol');
-    if (this.gun === 'pistol') rumble(0.2, 0.6, 90);
-    else rumble(0.6, 0.8, 140);
-    rifleSound.recharge(cooldown / 1000 - 0.08);
+    const heavy = this.gun === 'blaster' || this.gun === 'graviton' ? this.gun : null;
+    zaps.beam(m.x, m.y, m.z, _e.x, _e.y, _e.z, true, this.muzzle, heavy ?? 'rifle');
+    if (heavy === 'blaster') gunSound.blasterShot();
+    else if (heavy === 'graviton') gunSound.gravitonShot();
+    else rifleSound.shot(null, null, this.gun === 'pistol');
+    rumble(feel.rumble[0], feel.rumble[1], feel.rumble[2]);
+    if (heavy === 'blaster') gunSound.recharge(cooldown / 1000 - 0.12);
+    else rifleSound.recharge(cooldown / 1000 - 0.08);
     if (boss) {
       const lens = boss.index >= 0 && boss.index < MINION;
       zaps.burst(_e.x, _e.y, _e.z, boss.normal.x, boss.normal.y, boss.normal.z, lens ? 6 : 16, 1.4);
@@ -398,7 +436,12 @@ export class Rifle {
       for (let i = 0; i < 3; i++) tyreDust.emit(_e.x, _e.y + 0.1, _e.z, (Math.random() - 0.5) * 1.5, 1 + Math.random(), (Math.random() - 0.5) * 1.5, 0.35);
       rifleSound.impact('sand', _e, _o);
     }
-    const key = boss ? `b${boss.boss}` : nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
+    if (heavy) {
+      const enemy = !!(boss || nest || crawler || drone || jet || hit);
+      const on = enemy ? 'enemy' : !ground ? 'air' : onFlat() || shelterSolid(_e.x, _e.y, _e.z) === true ? 'hard' : 'sand';
+      this.heavyImpact(heavy, on, _d, _o);
+    }
+    const key = boss ? `b${boss.boss}`: nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
     if (key) kills.hit(key);
     this.net.fire(_o.x, _o.y, _o.z, _e.x, _e.y, _e.z, boss ? { b: boss.boss, bi: boss.index } : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
     // Recoil: the muzzle climbs (some of it stays: pull it back down), kicks a little sideways; less held to the eye.
@@ -407,8 +450,28 @@ export class Rifle {
     const side = (Math.random() - 0.5) * 2 * feel.side;
     this.view.pitch = Math.min(1.4, this.view.pitch + climb * CLIMB_STAYS);
     this.view.yaw += side * CLIMB_STAYS;
-    this.recoilVP += climb * (1 - CLIMB_STAYS) * 30;
-    this.recoilVY += side * (1 - CLIMB_STAYS) * 30;
+    this.recoilVP += climb * (1 - CLIMB_STAYS) * 30 * feel.jolt;
+    this.recoilVY += side * (1 - CLIMB_STAYS) * 30 * feel.jolt;
     playerHands.kick = 1;
+    this.punch = feel.punch;
+    if (feel.shake) blasts.shake = Math.max(blasts.shake, feel.shake);
+  }
+
+  /**
+   * Where a heavy gun's beam stopped (at _e, along `d`, heard from `ear`), on `on`: the blaster bursts (src/world/blasts.ts),
+   * the graviton's end caves in (not in the air). Your own shots and others' alike.
+   */
+  private heavyImpact(gun: 'blaster' | 'graviton', on: 'sand' | 'hard' | 'enemy' | 'air', d: THREE.Vector3, ear: THREE.Vector3) {
+    // The surface faces back along the beam; the sand by its slope.
+    if (on === 'sand') normalAt(_e.x, _e.z, _n);
+    else if (on === 'hard' && onFlat() && Math.abs(_e.y - groundAt(_e.x, _e.z, _e.y + 0.1)) < 0.3) _n.set(0, 1, 0);
+    else _n.set(-d.x, -d.y, -d.z);
+    if (gun === 'blaster') {
+      blasts.blaster(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z, on);
+      gunSound.blast(_e, ear, on === 'sand');
+    } else if (on !== 'air') {
+      blasts.graviton(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z);
+      gunSound.gravitonImpact(_e, ear);
+    }
   }
 }
