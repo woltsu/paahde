@@ -32,7 +32,9 @@
 // iron sights (no scope: the hands stay in view); the graviton pistol: GravitonIdle / GravitonWalk / GravitonAim as the
 // pistol's. Their models (public/models/blaster.glb, graviton.glb; src/models/outfit.ts GUN_MODELS) are drawn on the
 // `BlasterMount` / `GravitonMount` nodes; their `BlasterMuzzle` / `GravitonMuzzle` markers are the muzzle(). Without
-// their clips they fall back to the rifle's and the pistol's.
+// their clips they fall back to the rifle's and the pistol's. The piercer (`held` 'piercer', public/models/piercer.glb on
+// `PiercerMount`): PiercerIdle / PiercerWalk carried low in both hands with a slow, deep sway, and PiercerAim heaved up
+// to its scope (src/rifle.ts draws the scope view, the hands hidden, as the rifle's); the hardest kick of all.
 // Obsolete shovel and detector geometry/clips are stripped at export; legacy files still hide their nodes. Scrap in hand (`held` 'scrap'): ScrapIdle / ScrapWalk on `ScrapChunk`, and ScrapThrow from `playerHands.throwAt`, the piece
 // hidden from the release (THROW_RELEASE) until the hand is back with the next one.
 //
@@ -72,10 +74,13 @@ const DRAW_IN = [-0.075, -0.14];
 const DRAW_S = 0.3;
 /** The recoil spring's longest step (s): a slow frame taken whole would make it swing ever harder. */
 const SPRING_DT = 1 / 120;
-/** How hard a shot kicks the gun in hand (the spring's velocity): the blaster shoves, the graviton pistol barely moves. */
-const KICK: Partial<Record<Held, number>> = { blaster: 15, graviton: 5 };
+/** How hard a shot kicks the gun in hand (the spring's velocity): the blaster shoves, the piercer slams back, the graviton
+ *  pistol barely moves. */
+const KICK: Partial<Record<Held, number>> = { blaster: 15, piercer: 22, graviton: 5 };
 /** The guns drawn from their own models on the hands' mounts (tools/models/hands.py): what's held, item kind, node prefix. */
-const MOUNTED_GUNS: [Held, string, string][] = [['blaster', 'blaster', 'Blaster'], ['graviton', 'graviton_pistol', 'Graviton']];
+const MOUNTED_GUNS: [Held, string, string][] = [
+  ['blaster', 'blaster', 'Blaster'], ['graviton', 'graviton_pistol', 'Graviton'], ['piercer', 'piercer', 'Piercer'],
+];
 
 const params = new URLSearchParams(location.search);
 const forcedHold = params.get('hold') as Held | null;
@@ -99,7 +104,7 @@ export class ViewModel {
   private rifleGlow: THREE.MeshStandardMaterial[] = [];
   private pistol: THREE.Object3D | null = null;
   private pistolMuzzle: THREE.Object3D | null = null;
-  /** The blaster and the graviton pistol on their mounts, with their muzzles. */
+  /** The blaster, the graviton pistol and the piercer on their mounts, with their muzzles. */
   private mounted = new Map<Held, { obj: THREE.Object3D; muzzle: THREE.Object3D | null }>();
   private jammer: ReturnType<typeof jammerModel> | null = null;
   private grinder: ReturnType<typeof grinderModel> | null = null;
@@ -206,7 +211,7 @@ export class ViewModel {
       gmount.parent.add(gr);
     }
     for (const gun of [this.rifle, this.pistol]) if (gun) this.findGlow(gun);
-    // The blaster and the graviton pistol: their own models on their mounts, lit like the hands once loaded.
+    // The blaster, the graviton pistol and the piercer: their own models on their mounts, lit like the hands once loaded.
     for (const [held, kind, pre] of MOUNTED_GUNS) {
       const mount = model.getObjectByName(pre + 'Mount');
       if (!mount) continue;
@@ -295,7 +300,7 @@ export class ViewModel {
     const kind = playerHands.receiver.kind;
     const held: Partial<Record<Held, THREE.Object3D | null | undefined>> = {
       canteen: this.canteen, telescope: this.telescope, rifle: this.rifle, pistol: this.pistol, jammer: this.jammer?.obj, grinder: this.grinder?.obj,
-      blaster: this.mounted.get('blaster')?.obj, graviton: this.mounted.get('graviton')?.obj,
+      blaster: this.mounted.get('blaster')?.obj, graviton: this.mounted.get('graviton')?.obj, piercer: this.mounted.get('piercer')?.obj,
       receiver: kind ? this.receivers.get(kind)?.obj : null,
     };
     const o = held[this.shown];
@@ -432,8 +437,9 @@ export class ViewModel {
       if (playerHands.looking && this.has('TelescopeRaise')) this.play('TelescopeRaise', 0.1, true);
       else if (moving) this.play((walk = this.has('TelescopeWalk') ? 'TelescopeWalk' : 'Walk'));
       else this.play(this.has('TelescopeIdle') ? 'TelescopeIdle' : 'Idle');
-    } else if (this.shown === 'rifle' || this.shown === 'blaster') {
-      const pre = this.shown === 'blaster' && this.has('BlasterIdle') ? 'Blaster' : 'Rifle';
+    } else if (this.shown === 'rifle' || this.shown === 'blaster' || this.shown === 'piercer') {
+      const own = this.shown === 'blaster' ? 'Blaster' : this.shown === 'piercer' ? 'Piercer' : 'Rifle';
+      const pre = this.has(own + 'Idle') ? own : 'Rifle';
       if (playerHands.aim > 0 && this.has(pre + 'Aim')) {
         // Scrubbed by the aim (raising and lowering), not played: it follows the button exactly.
         this.play(pre + 'Aim', 0.08);

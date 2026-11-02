@@ -48,6 +48,9 @@
 #   BlasterAim (0.33 s one-shot)  up to the carry handle's iron sights (no scope), eye B_RELIEF behind the rear sight
 # Graviton pistol (tools/models/graviton.py, public/models/graviton.glb on the empty `GravitonMount`), one-handed:
 #   GravitonIdle / GravitonWalk / GravitonAim  as the pistol's
+# Piercer (tools/models/piercer.py, public/models/piercer.glb on the empty `PiercerMount`), two-handed, the heaviest:
+#   PiercerIdle (4 s loop) / PiercerWalk  low down the right, both hands; a deep, slow sway, a thud at every step
+#   PiercerAim (0.4 s one-shot)  heaved up to the scope, eye PC_RELIEF behind the eyepiece (as the rifle's)
 # Both mounts carry `<Gun>Muzzle` / `<Gun>Eye` markers like the rifle's. HANDS_FAST draws the guns flat on the mounts.
 # Jammer (src/models/jammer.ts, drawn by the game on the empty `JammerMount`, in the pistol's frame):
 #   JammerIdle / JammerWalk  low right in the right fist like the pistol, antenna on the crosshair
@@ -1207,6 +1210,102 @@ for name, frames, fn in (('GravitonIdle', 90, graviton_idle), ('GravitonWalk', 2
     S.clip(name, frames, fn)
 clip_once('GravitonAim', 7, graviton_aim)  # 8 keys, 0.23 s
 
+# ============================================================================== piercer clips
+# Two-handed like the blaster, but the heaviest thing carried: low down the right of the view, the long rails reaching
+# out to the crosshair, the right fist on the pistol grip and the left palm under the ribbed handguard. Its walk sways
+# slow and deep (a thud down at every step, a rock from side to side), its idle breathes under the weight, and
+# PiercerAim heaves it up to the scope (P_RELIEF behind the eyepiece, like the rifle's; the scope view itself is drawn
+# by src/rifle.ts). Its model (public/models/piercer.glb, tools/models/piercer.py) is drawn by the game on the empty
+# `PiercerMount`, with the `PiercerMuzzle` / `PiercerEye` markers under it.
+import piercer as PC  # noqa: E402
+
+PC_RELIEF = EYE_RELIEF  # eye behind the eyepiece at full aim, as the rifle's
+PC_GRIP_Y = 0.262  # where the support hand holds the handguard (natural y): its back end, so the left arm reaches
+
+
+def piercer_sdf_nat():
+    """Rough natural-frame sdf of what the hands can touch: pistol grip, trigger, receiver, handguard."""
+    g = capsule_sdf(PC.GRIP_AXIS * PC.GRIP_BOT, PC.GRIP_AXIS * PC.GRIP_TOP, PC.GRIP_R)
+    trig = capsule_sdf(V(PC.TRIGGER[0]), V(PC.TRIGGER[-1]), 0.003)
+    rec = box_sdf((-PC.REC_W / 2, PC.REC_Y0, PC.REC_Z0), (PC.REC_W / 2, PC.REC_Y1, PC.REC_Z1))
+    hg = capsule_sdf(V((0, PC.HG_Y0, PC.HG_Z)), V((0, PC.HG_Y1, PC.HG_Z)), PC.HG_R)
+    return lambda p: min(g(p), trig(p), rec(p), hg(p))
+
+
+PC_NAT_SDF = piercer_sdf_nat()
+# low ready: lower and further out to the right than the blaster, canted a little more under the weight; the eyepiece
+# (0.075 behind the grip) stays past the near plane
+PC_READY = gun_ready(PC, (0.105, 0.20, -0.27), roll=-6)
+PC_AIM = Matrix.Translation(-PC.eye_local(PC_RELIEF))
+
+
+def piercer_right_cost(yaw):
+    ph = gun_in_right(PC, PC_NAT_SDF, yaw, 'PIERCER')[0]
+    return sum(best_pole('Right', pw @ ph.inverted(), 0.75)[1] for pw in (PC_READY, PC_AIM))
+
+
+PC_YAW = min(range(-40, 41, 5), key=piercer_right_cost)
+PC_HAND, PC_SDF, PC_AXIS = gun_in_right(PC, PC_NAT_SDF, PC_YAW, 'PIERCER')
+print('PIERCER right yaw', PC_YAW)
+PC_RGRIP = grasp('Right', PC_SDF, wrap=PC_AXIS)
+PCR_POLE = best_pole('Right', PC_READY @ PC_HAND.inverted(), 0.75)[0]
+PCR_POLE_AIM = best_pole('Right', PC_AIM @ PC_HAND.inverted(), 0.75)[0]
+
+
+def piercer_left_cost(alpha):
+    lh = gun_in_left(PC, PC_NAT_SDF, PC_GRIP_Y, alpha)[0]
+    return sum(best_pole('Left', pw @ lh.inverted(), L_TWIST)[1] for pw in (PC_READY, PC_AIM))
+
+
+PCL_ALPHA = min(range(0, 61, 10), key=piercer_left_cost)
+PCL_HAND, PCL_SDF, PCL_AXIS = gun_in_left(PC, PC_NAT_SDF, PC_GRIP_Y, PCL_ALPHA)
+print('PIERCER left alpha', PCL_ALPHA)
+PC_LGRIP = grasp('Left', PCL_SDF, wrap=PCL_AXIS)
+PCL_POLE = best_pole('Left', PC_READY @ PCL_HAND.inverted(), L_TWIST)[0]
+PCL_POLE_AIM = best_pole('Left', PC_AIM @ PCL_HAND.inverted(), L_TWIST)[0]
+
+
+def piercer_pose(pw, rpole=None, lpole=None, sway=None):
+    pose = solve_arm('Right', pw @ PC_HAND.inverted(), rpole or PCR_POLE)
+    pose.update(solve_arm('Left', pw @ PCL_HAND.inverted(), lpole or PCL_POLE, twist=L_TWIST))
+    pose.update(PC_RGRIP)
+    pose.update(PC_LGRIP)
+    if sway:
+        pose['Root'] = sway
+    return pose
+
+
+def piercer_idle(p):
+    # breathing under the weight: deeper and slower to settle than the rifle's, the muzzle sagging a little each breath
+    w = 2 * math.pi * p
+    return piercer_pose(PC_READY, sway=rot((X, 1.5 * math.sin(w) - 0.4), (Z, 0.8 * math.sin(w + 1)))), (0, 0, 0)
+
+
+def piercer_walk(p):
+    # a thud down at every step (|sin|: it drops hard and comes up slow), a rock from side to side, a slow yaw
+    w = 2 * math.pi * p
+    thud = 1.0 - abs(math.sin(2 * w))
+    return piercer_pose(PC_READY, sway=rot((X, 4.2 * thud - 2.6), (Y, 3.0 * math.sin(w)), (Z, 1.6 * math.sin(w + 0.6)))), (0, 0, 0)
+
+
+def piercer_aim(p):
+    # heaved up: slow off the hip, the muzzle dipping before it comes up, then settling onto the eye
+    f = p * p * (3 - 2 * p)
+    pw = mat_lerp(PC_READY, PC_AIM, f)
+    pw.translation += V((0, 0.03, -0.02)) * math.sin(math.pi * p)  # forward so the stock clears, and down: the weight
+    rp = V(PCR_POLE).lerp(V(PCR_POLE_AIM), f)
+    lp = V(PCL_POLE).lerp(V(PCL_POLE_AIM), f)
+    return piercer_pose(pw, rp, lp, rot((X, -0.4 * (1 - p) - 1.5 * math.sin(math.pi * p)), (Z, 0.8 * math.sin(1) * (1 - p)))), (0, 0, 0)
+
+
+for nm, pw, rp, lp in (('piercer ready', PC_READY, PCR_POLE, PCL_POLE), ('piercer aim', PC_AIM, PCR_POLE_AIM, PCL_POLE_AIM)):
+    ps = piercer_pose(pw, rp, lp)
+    print('WRIST', nm, 'right', round(wrist_bend_of(ps, 'Right')), 'left', round(wrist_bend_of(ps, 'Left')))
+
+for name, frames, fn in (('PiercerIdle', 120, piercer_idle), ('PiercerWalk', 22, piercer_walk)):
+    S.clip(name, frames, fn)
+clip_once('PiercerAim', 12, piercer_aim)  # 13 keys, 0.4 s: the slowest up
+
 # ============================================================================== held by a bar
 # The shovel's shaft, the jammer's body and the scrap offcut are held like the spyglass: the bar lies obliquely
 # across the palm (T_OBLIQUE), pushed in until it presses the glove. Each object is placed in view space and the
@@ -1811,10 +1910,11 @@ mmount = bpy.data.objects.new('MaceMount', None)
 bpy.context.scene.collection.objects.link(mmount)
 on_right_hand(mmount, MC_RHAND @ PS.FLIP)
 extra.append(mmount)
-# where the blaster and the graviton pistol (public/models/blaster.glb, graviton.glb: their glTF frames) go in the right
+# where the blaster, the graviton pistol and the piercer (public/models/blaster.glb, graviton.glb, piercer.glb: their glTF frames) go in the right
 # hand; FAST builds draw the guns themselves on them, flat, to look at the grips
 gun_mounts = []
-for nm, m, G, rgb in (('BlasterMount', B_HAND, BL, (0.6, 0.45, 0.15)), ('GravitonMount', G_HAND, GV, (0.15, 0.15, 0.2))):
+for nm, m, G, rgb in (('BlasterMount', B_HAND, BL, (0.6, 0.45, 0.15)), ('GravitonMount', G_HAND, GV, (0.15, 0.15, 0.2)),
+                      ('PiercerMount', PC_HAND, PC, (0.35, 0.36, 0.22))):
     gm = bpy.data.objects.new(nm, None)
     bpy.context.scene.collection.objects.link(gm)
     on_right_hand(gm, m @ G.FLIP)
@@ -1866,7 +1966,7 @@ for nm, p in (('PistolMuzzle', PS.muzzle_local()), ('PistolEye', PS.eye_local(P_
     e.matrix_parent_inverse = Matrix.Identity(4)
     e.matrix_basis = Matrix.Translation(PS.FLIP.to_3x3() @ p)
     marks.append(e)
-for (gm, G), pre, relief in zip(gun_mounts, ('Blaster', 'Graviton'), (B_RELIEF, G_RELIEF)):
+for (gm, G), pre, relief in zip(gun_mounts, ('Blaster', 'Graviton', 'Piercer'), (B_RELIEF, G_RELIEF, PC_RELIEF)):
     for nm, p in ((pre + 'Muzzle', G.muzzle_local()), (pre + 'Eye', G.eye_local(relief))):
         e = bpy.data.objects.new(nm, None)
         bpy.context.scene.collection.objects.link(e)
@@ -1904,6 +2004,7 @@ check_aim()
 check_aim('PISTOL', 'PistolAim', 2, 3)
 check_aim('BLASTER', 'BlasterAim', 4, 5)
 check_aim('GRAVITON', 'GravitonAim', 6, 7)
+check_aim('PIERCER', 'PiercerAim', 8, 9)
 bake.export(rig, [body, can, *tel_parts, rif, pis, *marks, *extra], OUT)
 from prune_hands import prune_hands
 prune_hands(OUT)

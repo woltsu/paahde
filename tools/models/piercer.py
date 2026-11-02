@@ -40,14 +40,14 @@ BUTT_Y = -0.415
 RAIL_Y0, RAIL_Y1 = REC_Y1, 0.800  # the open rails
 RAIL_GAP = 0.0045  # half the slit between the rails
 SPINE_Z, SPINE_Y1 = BZ - 0.041, 0.712  # the spine under the rails
-HG_Y0, HG_Y1 = 0.262, 0.430  # rubber handguard round the spine's back end
+HG_Y0, HG_Y1 = 0.256, 0.430  # rubber handguard round the spine's back end
 HG_R = 0.021  # handguard radius the support hand closes on (its axis HG_Z, under the bore)
 HG_Z = SPINE_Z
 BRAKE_Y0 = 0.800
 MUZZLE_Y = 0.905
 SCOPE_Z = BZ + 0.085  # scope axis height
-SCOPE_EYE_Y = -0.120  # back face of the eyepiece
-SCOPE_OBJ_Y = 0.240
+SCOPE_EYE_Y = -0.075  # back face of the eyepiece
+SCOPE_OBJ_Y = 0.285
 CAP_X, CAP_Z, CAP_R = 0.024, SPINE_Z - 0.003, 0.015  # the two capacitor cans either side of the spine
 CAP_Y0, CAP_Y1 = 0.455, 0.690
 TN = 16
@@ -112,13 +112,13 @@ def build_parts(M):
         objs.append(rounded_box('Rib', (0, -0.110 + 0.0176 * k, REC_Z1 + 0.009), (0.028, 0.008, 0.005), M['dark'],
                                 bevel=0.0012, segments=1))
     # ---- scope: two tall rings on the rail, a long tube with a fat objective, turrets, eyecup
-    for y in (-0.050, 0.120):
+    for y in (-0.020, 0.165):
         objs.append(rounded_box('ScopeBase', (0, y, (REC_Z1 + 0.012 + SCOPE_Z - 0.016) / 2), (0.022, 0.024,
                                 SCOPE_Z - 0.016 - REC_Z1 - 0.010), M['dark'], bevel=0.003, segments=1))
         objs.append(tube('ScopeRing', [(y - 0.011, 0.0190), (y + 0.011, 0.0190)], M['dark'], n=18, cz=SCOPE_Z))
         objs.append(cylinder('RingScrew', (0.020, y, SCOPE_Z), (0.026, y, SCOPE_Z), 0.004, M['steel'], n=6))
     objs.append(tube('Scope', [(SCOPE_EYE_Y, 0.0175), (SCOPE_EYE_Y + 0.003, 0.0215), (SCOPE_EYE_Y + 0.040, 0.0215),
-                               (SCOPE_EYE_Y + 0.056, 0.0165), (0.140, 0.0165), (0.172, 0.0290), (SCOPE_OBJ_Y - 0.006, 0.0305),
+                               (SCOPE_EYE_Y + 0.056, 0.0165), (0.185, 0.0165), (0.217, 0.0290), (SCOPE_OBJ_Y - 0.006, 0.0305),
                                (SCOPE_OBJ_Y, 0.0290)], M['steel'], n=20, cz=SCOPE_Z, cap0=False, cap1=False))
     objs.append(tube('EyeCup', [(SCOPE_EYE_Y - 0.002, 0.0220), (SCOPE_EYE_Y + 0.016, 0.0226), (SCOPE_EYE_Y + 0.016, 0.0216)],
                      M['rubber'], n=20, cz=SCOPE_Z, cap0=False, cap1=False))
@@ -129,11 +129,11 @@ def build_parts(M):
                      flip=True))
     objs.append(tube('Sunshade', [(SCOPE_OBJ_Y - 0.030, 0.0300), (SCOPE_OBJ_Y - 0.030, 0.0322), (SCOPE_OBJ_Y - 0.004, 0.0322),
                                   (SCOPE_OBJ_Y - 0.004, 0.0300)], M['tape'], n=20, cz=SCOPE_Z, cap0=False, cap1=False))
-    for a, b, r in (((0, 0.045, SCOPE_Z + 0.014), (0, 0.045, SCOPE_Z + 0.034), 0.011),  # elevation
-                    ((0.014, 0.045, SCOPE_Z), (0.032, 0.045, SCOPE_Z), 0.0095),  # windage
-                    ((-0.014, 0.045, SCOPE_Z), (-0.028, 0.045, SCOPE_Z), 0.012)):  # parallax
+    for a, b, r in (((0, 0.090, SCOPE_Z + 0.014), (0, 0.090, SCOPE_Z + 0.034), 0.011),  # elevation
+                    ((0.014, 0.090, SCOPE_Z), (0.032, 0.090, SCOPE_Z), 0.0095),  # windage
+                    ((-0.014, 0.090, SCOPE_Z), (-0.028, 0.090, SCOPE_Z), 0.012)):  # parallax
         objs.append(cylinder('Turret', a, b, r, M['dark'], n=14, rings_extra=[(0.55, 1.0), (0.6, 1.1), (0.95, 1.1)]))
-    objs.append(rounded_box('Saddle', (0, 0.045, SCOPE_Z), (0.034, 0.034, 0.034), M['dark'], bevel=0.008, segments=2))
+    objs.append(rounded_box('Saddle', (0, 0.090, SCOPE_Z), (0.034, 0.034, 0.034), M['dark'], bevel=0.008, segments=2))
     # ---- skeleton stock: a top bar, a lower strut, a tall butt plate with a rubber pad, cheek riser, monopod
     objs.append(rounded_box('StockBar', (0, (REC_Y0 + BUTT_Y + 0.02) / 2, BZ + 0.012), (0.022, REC_Y0 - BUTT_Y - 0.01, 0.022),
                             M['dark'], bevel=0.004, segments=1))
