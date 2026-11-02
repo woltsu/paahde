@@ -12,21 +12,40 @@ import { hazeColor, sunColor } from './env.ts';
 import { uAt, ustarFrom10, wind } from './wind.ts';
 
 /**
- * The beam: a white-hot core in a cyan glow (HDR, bloom spreads it), gone in BEAM_S. Radii (m) grow from a thread at the
- * muzzle (the first-person gun is a few tens of cm from the eye: a full-width tube there fills the view) by SLOPE per
- * metre, to the full width that still reads at a hundred metres.
+ * The beams, by gun. Each is a core in a glow (HDR, bloom spreads it), gone in `life` s. Radii (m) grow from a thread
+ * at the muzzle (the first-person gun is a few tens of cm from the eye: a full-width tube there fills the view) by
+ * `slope` per metre, to the full width that still reads at a hundred metres.
+ * - rifle (and pistol): a white-hot core in a cyan glow.
+ * - blaster: thick and hot, a yellow-white core in an orange glow that lingers a little.
+ * - graviton: a black thread in a violet haze that ripples outward along it (`ripple`), lasting longest; its core is
+ *   drawn over the glow (`dark`), not added to it.
+ * The muzzle flash: a light thrown ahead of the gun (so it lights the sand, not just the hands) and a soft glow at the
+ * tip, about `flashAngle` rad across as seen from the camera (capped at `flashMax` m), `flash` coloured.
  */
-const BEAM_S = 0.14;
-const CORE_R = 0.012, GLOW_R = 0.07;
-const CORE_R0 = 0.002, GLOW_R0 = 0.005;
-const CORE_SLOPE = 0.01, GLOW_SLOPE = 0.03;
-const CORE = new THREE.Color(5, 9, 10);
-const GLOW = new THREE.Color(0.25, 1.4, 2.2);
-/** The muzzle flash: a light thrown ahead of the gun (so it lights the sand, not just the hands) and a soft glow at the
- *  tip, about FLASH_ANGLE rad across as seen from the camera (capped at FLASH_MAX m). */
-const FLASH_S = 0.07;
+export type BeamKind = 'rifle' | 'blaster' | 'graviton';
+type BeamStyle = {
+  life: number; coreR: number; glowR: number; coreR0: number; glowR0: number; coreSlope: number; glowSlope: number;
+  core: THREE.Color; glow: THREE.Color; dark: boolean; ripple: number;
+  flash: THREE.Color; flashS: number; flashI: number; flashAngle: number; flashMax: number;
+};
+const BEAMS: Record<BeamKind, BeamStyle> = {
+  rifle: {
+    life: 0.14, coreR: 0.012, glowR: 0.07, coreR0: 0.002, glowR0: 0.005, coreSlope: 0.01, glowSlope: 0.03,
+    core: new THREE.Color(5, 9, 10), glow: new THREE.Color(0.25, 1.4, 2.2), dark: false, ripple: 0,
+    flash: new THREE.Color(0x7fe8ff), flashS: 0.07, flashI: 60, flashAngle: 0.1, flashMax: 0.3,
+  },
+  blaster: {
+    life: 0.3, coreR: 0.05, glowR: 0.26, coreR0: 0.004, glowR0: 0.012, coreSlope: 0.035, glowSlope: 0.09,
+    core: new THREE.Color(12, 8, 3.5), glow: new THREE.Color(3.2, 0.95, 0.16), dark: false, ripple: 0,
+    flash: new THREE.Color(0xffa24a), flashS: 0.12, flashI: 140, flashAngle: 0.16, flashMax: 0.45,
+  },
+  graviton: {
+    life: 0.45, coreR: 0.03, glowR: 0.2, coreR0: 0.003, glowR0: 0.01, coreSlope: 0.02, glowSlope: 0.07,
+    core: new THREE.Color(0.012, 0, 0.03), glow: new THREE.Color(1.3, 0.3, 3.2), dark: true, ripple: 1,
+    flash: new THREE.Color(0xa070ff), flashS: 0.1, flashI: 90, flashAngle: 0.14, flashMax: 0.4,
+  },
+};
 const FLASH_AHEAD = 0.6;
-const FLASH_ANGLE = 0.1, FLASH_MAX = 0.3;
 const SPARKS = 384, SHARDS = 128, SMOKE = 768;
 const GRAVITY = 9.8;
 
@@ -35,20 +54,23 @@ const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, true).translate(0, 0.
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _m = new THREE.Matrix4(), _e = new THREE.Euler();
 const FWD = new THREE.Vector3(0, 0, 1);
 
+/** A beam, kept in its kind's pool when it has gone out (its materials are made once). */
 type Beam = {
-  group: THREE.Group; fade: { value: number }; len: { value: number }; age: number; mats: THREE.Material[];
+  kind: BeamKind; group: THREE.Group; fade: { value: number }; len: { value: number }; time: { value: number }; age: number;
   /** Where it ends, and (your own shot) where the drawn muzzle is now: the start follows the gun as it kicks. */
   end: THREE.Vector3; from?: (out: THREE.Vector3) => THREE.Vector3 | null; flash: boolean;
 };
 
-/** The tube along +Z from 0 to `len` m, `r0` m across at the start, widening by `slope` per metre up to `r`. */
-function taper(len: Node<'float'>, r0: number, slope: number, r: number) {
+/** The tube along +Z from 0 to `len` m, `r0` m across at the start, widening by `slope` per metre up to `r`; with
+ *  `wave` (a node of the distance along it), × that. */
+function taper(len: Node<'float'>, r0: number, slope: number, r: number, wave?: (d: Node<'float'>) => Node<'float'>) {
   const d = positionGeometry.z.mul(len);
-  return vec3(positionGeometry.xy.mul(min(float(r), d.mul(slope).add(r0))), d);
+  const w = min(float(r), d.mul(slope).add(r0));
+  return vec3(positionGeometry.xy.mul(wave ? w.mul(wave(d)) : w), d);
 }
 
 /** Instanced sprite pool: position, (alpha, size) per sprite. */
-class SpritePool {
+export class SpritePool {
   readonly sprite: THREE.Sprite;
   pos: Float32Array;
   data: Float32Array;
@@ -112,10 +134,17 @@ class SpritePool {
 class Zaps {
   readonly root = new THREE.Group();
   private beams: Beam[] = [];
+  private free: Record<BeamKind, Beam[]> = { rifle: [], blaster: [], graviton: [] };
+  /** The one light for every shot's flash (the muzzle, or a blast: `light`); no other is added. */
   private flash = new THREE.PointLight(0x7fe8ff, 0, 30, 2);
   private flashAge = 1;
+  private flashS = 0.07;
+  private flashI = 60;
+  private flashScale = { angle: 0.1, max: 0.3 };
   private flashGlow: THREE.Sprite;
   private flashFade = uniform(0);
+  private flashGlowColor = uniform(new THREE.Color());
+  private flashCoreColor = uniform(new THREE.Color());
   private flashAt = new THREE.Vector3();
   /** The glow is drawn: off when the shot starts where no gun is drawn (looking through the scope). */
   private flashDrawn = false;
@@ -162,7 +191,7 @@ class Zaps {
     const fm = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
     const fr = length(uv().sub(0.5)).mul(2);
     const soft = float(1).sub(smoothstep(0, 1, fr));
-    fm.colorNode = vec3(GLOW.r, GLOW.g, GLOW.b).mul(soft.mul(soft)).add(vec3(CORE.r, CORE.g, CORE.b).mul(pow(soft, float(6)).mul(0.3)));
+    fm.colorNode = c3(this.flashGlowColor).mul(soft.mul(soft)).add(c3(this.flashCoreColor).mul(pow(soft, float(6)).mul(0.3)));
     fm.opacityNode = this.flashFade;
     this.flashGlow = new THREE.Sprite(fm);
     this.flashGlow.visible = false;
@@ -175,34 +204,80 @@ class Zaps {
     this.camera = camera;
   }
 
-  /**
-   * A shot from (ax, ay, az) to (bx, by, bz); `flash`: light the muzzle (your own or a nearby player's shot). `from`:
-   * where the start is each frame while it lasts (your own drawn gun, kicking back), null to leave it.
-   */
-  beam(ax: number, ay: number, az: number, bx: number, by: number, bz: number, flash = true, from?: (out: THREE.Vector3) => THREE.Vector3 | null) {
-    const fade = uniform(1), len = uniform(1);
+  /** A beam of `kind`, its materials made once and kept (pooled) when it has gone out. */
+  private make(kind: BeamKind): Beam {
+    const st = BEAMS[kind];
+    const fade = uniform(1), len = uniform(1), time = uniform(0);
     const group = new THREE.Group();
-    const core = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-    core.positionNode = taper(len, CORE_R0, CORE_SLOPE, CORE_R);
-    core.colorNode = vec3(CORE.r, CORE.g, CORE.b).mul(fade);
+    // Graviton: swells travel out along the beam, the glow pulsing wider and brighter with them.
+    const swell = (d: Node<'float'>) => d.mul(1.8).sub(time.mul(26)).sin().mul(0.5).add(0.5);
+    const wave = st.ripple
+      ? (d: Node<'float'>) => swell(d).mul(0.9 * st.ripple).add(0.6).add(mx_noise_float(vec3(d.mul(0.7), time.mul(9), 0)).mul(0.25))
+      : undefined;
+    const core = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: st.dark ? THREE.NormalBlending : THREE.AdditiveBlending, depthWrite: false });
+    core.positionNode = taper(len, st.coreR0, st.coreSlope, st.coreR);
+    if (st.dark) {
+      core.colorNode = vec3(st.core.r, st.core.g, st.core.b);
+      core.opacityNode = fade.mul(0.95);
+    } else core.colorNode = vec3(st.core.r, st.core.g, st.core.b).mul(fade);
     const glow = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    glow.positionNode = taper(len, GLOW_R0, GLOW_SLOPE, GLOW_R);
-    glow.colorNode = vec3(GLOW.r, GLOW.g, GLOW.b);
-    glow.opacityNode = pow(abs(dot(normalView, positionViewDirection)), float(1.5)).mul(fade).mul(0.9);
-    for (const m of [core, glow]) {
+    glow.positionNode = taper(len, st.glowR0, st.glowSlope, st.glowR, wave);
+    glow.colorNode = vec3(st.glow.r, st.glow.g, st.glow.b);
+    const rim = pow(abs(dot(normalView, positionViewDirection)), float(1.5)).mul(fade).mul(0.9);
+    glow.opacityNode = st.ripple ? rim.mul(swell(positionGeometry.z.mul(len)).mul(1.2).add(0.35)) : rim;
+    [glow, core].forEach((m, i) => {
       const mesh = new THREE.Mesh(beamGeo, m);
       mesh.frustumCulled = false; // the shader sets its length
+      mesh.renderOrder = i; // the core over the glow (a dark core must cover it)
       group.add(mesh);
-    }
-    const b: Beam = { group, fade, len, age: 0, mats: [core, glow], end: new THREE.Vector3(bx, by, bz), from, flash };
+    });
+    return { kind, group, fade, len, time, age: 0, end: new THREE.Vector3(), flash: false };
+  }
+
+  /**
+   * A shot of `kind` from (ax, ay, az) to (bx, by, bz); `flash`: light the muzzle (your own or a nearby player's shot).
+   * `from`: where the start is each frame while it lasts (your own drawn gun, kicking back), null to leave it.
+   */
+  beam(ax: number, ay: number, az: number, bx: number, by: number, bz: number, flash = true, from?: (out: THREE.Vector3) => THREE.Vector3 | null, kind: BeamKind = 'rifle') {
+    const b = this.free[kind].pop() ?? this.make(kind);
+    b.age = 0;
+    b.fade.value = 1;
+    b.time.value = 0;
+    b.end.set(bx, by, bz);
+    b.from = from;
+    b.flash = flash;
     this.place(b, _v.set(ax, ay, az));
-    this.root.add(group);
+    this.root.add(b.group);
     this.beams.push(b);
     if (flash) {
+      const st = BEAMS[kind];
       this.flashAge = 0;
+      this.flashS = st.flashS;
+      this.flashI = st.flashI;
+      this.flash.color.copy(st.flash);
+      this.flash.distance = 30;
+      this.flashGlowColor.value.copy(st.glow);
+      this.flashCoreColor.value.copy(st.dark ? st.glow : st.core);
+      this.flashScale.angle = st.flashAngle;
+      this.flashScale.max = st.flashMax;
       this.flashDrawn = !from || from(_s) !== null;
       for (const o of this.beams) o.flash = o === b;
     }
+  }
+
+  /**
+   * A blast's light at (x, y, z) (src/world/blasts.ts): the shots' one light, taken from any muzzle flash: `color`,
+   * `intensity` at first, out to `distance` m, dying away over `seconds`.
+   */
+  light(x: number, y: number, z: number, color: THREE.ColorRepresentation, intensity: number, distance: number, seconds: number) {
+    for (const o of this.beams) o.flash = false;
+    this.flashDrawn = false;
+    this.flashAge = 0;
+    this.flashS = seconds;
+    this.flashI = intensity;
+    this.flash.color.set(color);
+    this.flash.distance = distance;
+    this.flash.position.set(x, y, z);
   }
 
   /** Start beam `b` at `a`, pointed at its end; its flash goes there too. */
@@ -261,10 +336,11 @@ class Zaps {
   update(dt: number) {
     this.beams = this.beams.filter((b) => {
       b.age += dt;
-      const t = b.age / BEAM_S;
+      b.time.value = b.age;
+      const t = b.age / BEAMS[b.kind].life;
       if (t >= 1) {
         b.group.removeFromParent();
-        for (const m of b.mats) m.dispose();
+        this.free[b.kind].push(b);
         return false;
       }
       b.fade.value = (1 - t) * (1 - t);
@@ -273,14 +349,14 @@ class Zaps {
       return true;
     });
     this.flashAge += dt;
-    const f = this.flashAge < FLASH_S ? 1 - this.flashAge / FLASH_S : 0;
-    this.flash.intensity = 60 * f;
+    const f = this.flashAge < this.flashS ? 1 - this.flashAge / this.flashS : 0;
+    this.flash.intensity = this.flashI * f;
     this.flashGlow.visible = f > 0 && this.flashDrawn;
     if (f > 0) {
       this.flashFade.value = f;
       const far = this.camera ? this.camera.getWorldPosition(_s).distanceTo(this.flashAt) : 1;
       this.flashGlow.position.copy(this.flashAt);
-      this.flashGlow.scale.setScalar(Math.min(FLASH_MAX, far * FLASH_ANGLE));
+      this.flashGlow.scale.setScalar(Math.min(this.flashScale.max, far * this.flashScale.angle));
     }
     const sp = this.sparks;
     sp.update(dt, (i, t) => {
