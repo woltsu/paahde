@@ -59,9 +59,10 @@ export type Enemy = {
   armor: number;
 };
 
-/** Armour by how thick the hull: thin (drones, spiderlings, jets: any gun bites), and the walkers', the harvester's
- *  and the bosses' plate (only the graviton pistol goes through; the rest must find the weak points). */
-export const ARMOR = { thin: 0, plate: 10 } as const;
+/** Armour by how thick the hull: thin (drones, spiderlings, jets: any gun bites); the walkers' plate (the piercer and
+ *  the graviton pistol go through); the harvester's and the bosses' heavy plate (only the graviton pistol). The rest
+ *  must find the weak points. */
+export const ARMOR = { thin: 0, plate: 10, heavy: 30 } as const;
 
 export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | 'spiderling' | BossKind;
 
@@ -76,7 +77,7 @@ const boss = (kind: BossKind): Enemy => ({
   fight: { seconds: odds(120, 900, 900), win: odds(0, 0.2, 0.75, 0, 0.72), death: odds(0.9, 0.7, 0.6), quality: 0.25 },
   drops: (rand) => bossDrops(kind, rand),
   mass: 1e6,
-  armor: ARMOR.plate,
+  armor: ARMOR.heavy,
 });
 
 /** A site's crawlers killed are back this long (s) after everyone has left it (server/guardians.ts swarm). */
@@ -133,7 +134,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     fight: { seconds: odds(40, 240, 150, 40, 90), win: odds(0, 0.3, 0.85, 0, 0.9), death: odds(0.25, 0.15, 0.06, 0.25, 0.05), quality: 0.2 },
     drops: (rand) => harvesterDrops(rand),
     mass: 2e6,
-    armor: ARMOR.plate,
+    armor: ARMOR.heavy,
   },
   // The solar farms' nests (shared/nest.ts): NEST_N (30) spiderlings each, clinging to the mirrors by the tower, most of
   // them on you by the time you're in among them (server/nests.ts); the ones killed are back PACK_BACK_S after everyone

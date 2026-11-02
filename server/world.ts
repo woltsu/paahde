@@ -29,7 +29,7 @@ import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
-import { blastDamage, GRAVITON, GUNS, type Gun, RIFLE } from '../shared/rifle.ts';
+import { GRAVITON, GUNS, HEAVY, RIFLE, blastDamage, type Gun } from '../shared/rifle.ts';
 import { inCone, JAM_BLEED, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { THROW_MS, THROWABLE } from '../shared/throw.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_SLACK } from '../shared/mace.ts';
@@ -1400,15 +1400,17 @@ function onDrop(p: Player, box: unknown, slot: unknown) {
 // equipment slots (if free).
 function onDebugGear(p: Player, tier: unknown) {
   const t = TIERS[Number.isInteger(tier) ? (tier as number) : 0] ?? 'scrap';
+  // The tools and materials first: the bag can't hold every gear kind too, and what doesn't fit is left out (the lab's
+  // floor has every one: shared/lab.ts).
+  items.give(p.browserId, 'grinder'); // (the grinder and the wrench are made, not found: shared/tables.ts RECIPE_TABLE)
+  items.give(p.browserId, 'wrench');
+  // and some of each base material, to build with (shared/tables.ts BUILD_TABLE)
+  for (const kind of [SCRAP, CLOTH, WIRING]) items.give(p.browserId, kind, stackOf(kind));
   // (Not the graviton pistol, shared/rifle.ts GRAVITON: the end of the game, given only by name.)
   for (const kind of GEAR_KINDS.filter((k) => !standsInWorld(k) && k !== GRAVITON)) {
     const parts = scrapParts(kind, t);
     if (!items.equip(p.browserId, { kind, parts })) items.giveItem(p.browserId, { kind, parts });
   }
-  items.give(p.browserId, 'grinder'); // (the grinder and the wrench are made, not found: shared/tables.ts RECIPE_TABLE)
-  items.give(p.browserId, 'wrench');
-  // and some of each base material, to build with (shared/tables.ts BUILD_TABLE)
-  for (const kind of [SCRAP, CLOTH, WIRING]) items.give(p.browserId, kind, stackOf(kind));
   for (const box of ['bag', 'equip']) sendBox(p, box);
   gearChanged(p.browserId);
 }
@@ -1570,6 +1572,12 @@ function carryPassengers() {
   }
 }
 
+/** The item in hand is a heavy gun (shared/rifle.ts HEAVY), repaired or not: it weighs the same. */
+function heavyInHand(p: Player): boolean {
+  const kind = p.slot < 0 ? undefined : items.slots(p.browserId, 'bag')[p.slot]?.kind;
+  return !!kind && HEAVY.has(kind);
+}
+
 function simulate(p: Player, now: number) {
   const command = p.inputs.take(now);
   p.input = command?.input ?? 0;
@@ -1580,6 +1588,9 @@ function simulate(p: Player, now: number) {
   if (tutorial.riding(p.id)) return;
   const drag = L.weather ? stormDrag(storms.storms, p.state.x, p.state.y, p.state.z, now) : 0;
   const pull = L.weather ? vortexPull(storms.vorticesNear(p.state.x, p.state.z, 500, nearScratch), p.state.x, p.state.y, p.state.z, now, { x: 0, z: 0 }) : NO_PULL;
+  // A heavy gun in hand (shared/rifle.ts HEAVY) weighs them down on foot (shared/sim.ts PlayerState.heavy).
+  const heavy = !p.down && !p.state.riding && heavyInHand(p);
+  if (heavy !== (p.state.heavy === true)) p.state = { ...p.state, heavy: heavy || undefined };
   const before = p.state;
   p.state = tickTriggers(step(p.state, p.input, p.yaw, drag, L.enemies ? guardians.posts : NO_LEGS, pull));
   offBike(p, before);

@@ -5,10 +5,10 @@
 // server/drones.ts); the hitter's own client shows the shove at once (src/world/shoves.ts), the server's following.
 import { ENEMIES, type EnemyKind } from './enemies.ts';
 
-export type Pusher = 'mace' | 'rifle' | 'pistol' | 'throw' | 'blaster' | 'graviton';
+export type Pusher = 'mace' | 'rifle' | 'pistol' | 'throw' | 'blaster' | 'graviton' | 'piercer';
 /** What a hit of each weapon pushes with (kg·m/s): the mace swings hard; the rifle's beam kicks more than the pistol's;
  *  the blaster's burst throws the light ones about, and the graviton beam shoves even a guardian. */
-export const PUSH: Record<Pusher, number> = { mace: 1500, rifle: 200, pistol: 80, throw: 60, blaster: 2500, graviton: 20000 };
+export const PUSH: Record<Pusher, number> = { mace: 1500, rifle: 200, pistol: 80, throw: 60, blaster: 2500, graviton: 20000, piercer: 3000 };
 /** How fast a knock dies away (1/s). */
 export const KNOCK_DRAG = 5;
 /** Knocks slower than this (m/s) aren't applied: the heavy things. */

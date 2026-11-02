@@ -75,6 +75,9 @@ export const GEAR: Record<string, GearSpec> = {
   // The blaster: a coil to throw the burst, a cell to charge it, a heat sink, wiring and plate.
   blaster: { slots: [WIRING, P('coil'), P('battery'), P('heatsink'), SCRAP], better: 'how fast it recharges',
     use: TEXT.gearUse.blaster },
+  // The piercer: a coil to drive the slug, a cell, a bearing for the bolt, a heat sink and plate.
+  piercer: { slots: [P('coil'), P('battery'), P('bearing'), P('heatsink'), SCRAP], better: 'how fast it recharges',
+    use: TEXT.gearUse.piercer },
   // The graviton pistol: never found in the world (shared/rifle.ts GRAVITON); a compute unit to shape the field, a coil
   // and a uranium cell to drive it.
   graviton_pistol: { slots: [P('compute'), P('coil'), CELL], better: 'how fast it recharges', use: TEXT.gearUse.graviton_pistol },

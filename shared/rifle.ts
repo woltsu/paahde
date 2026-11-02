@@ -63,6 +63,20 @@ export const GRAVITON_COOLDOWN_MS = 600;
 export const GRAVITON_RANGE = 400;
 
 /**
+ * The piercer: long and heavy, after the rifle (found broken on guardian ground). Its slug goes through the walkers'
+ * plate (shared/enemies.ts ARMOR.plate, not the heavy plate of the harvester and the bosses): a hit anywhere on a crawler
+ * or a guardian wears its hull (HULL_HP) as well as breaking a weak point. Carried in hand it halves your speed and you
+ * can't jump or slide (shared/sim.ts PlayerState.heavy, set by the server from what's in hand: HEAVY). A long reload.
+ */
+export const PIERCER = 'piercer';
+export const PIERCER_COOLDOWN_MS = 2600;
+export const PIERCER_RANGE = 320;
+/** Guns that weigh you down in hand (shared/sim.ts PlayerState.heavy). */
+export const HEAVY = new Set([PIERCER]);
+/** A walker's hull: the damage a gun that pierces its plate must do to it to kill it (crawler, guardian, by Kind). */
+export const HULL_HP = [2, 6];
+
+/**
  * The guns by item kind: cooldown (ms), reach (m), `pierce` (armour it goes through: shared/enemies.ts `armor`),
  * `damage` (hits a weak point or a thin-skinned enemy takes from one shot), `blast` (m: bursts where it stops,
  * hurting everything within it, else just what it hit), `push` (shared/knockback.ts), `scope` (aims through a scope).
@@ -72,14 +86,15 @@ export const GUNS: Record<string, Gun> = {
   [RIFLE]: { cooldown: COOLDOWN_MS, range: RANGE, pierce: 1, damage: 1, push: 'rifle', scope: true },
   [PISTOL]: { cooldown: PISTOL_COOLDOWN_MS, range: PISTOL_RANGE, pierce: 1, damage: 1, push: 'pistol' },
   [BLASTER]: { cooldown: BLASTER_COOLDOWN_MS, range: BLASTER_RANGE, pierce: 1, damage: 2, blast: BLAST_R, push: 'blaster' },
+  [PIERCER]: { cooldown: PIERCER_COOLDOWN_MS, range: PIERCER_RANGE, pierce: 20, damage: 2, push: 'piercer', scope: true },
   [GRAVITON]: { cooldown: GRAVITON_COOLDOWN_MS, range: GRAVITON_RANGE, pierce: 100, damage: 1000, push: 'graviton' },
 };
 
 /**
  * Armour: does a hit of `gun` on an enemy with hull armour `armor` (shared/enemies.ts ENEMIES[kind].armor, ARMOR)
  * bite? A weak point is never armoured (`weak`); otherwise the gun must pierce the armour. The lasers and the blaster
- * bite drones, spiderlings and jets but not the hulls of the walkers, the harvester or the bosses; the graviton pistol
- * bites everything. (Takes the number, not the kind: shared/enemies.ts imports this module's GUNS through lootRoll.)
+ * bite drones, spiderlings and jets but not the hulls of the walkers, the harvester or the bosses; the piercer bites the
+ * walkers too; the graviton pistol bites everything. (Takes the number, not the kind: shared/enemies.ts imports this module's GUNS through lootRoll.)
  */
 export function bites(gun: Gun, armor: number, weak: boolean): boolean {
   return weak || gun.pierce >= armor;

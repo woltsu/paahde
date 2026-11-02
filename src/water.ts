@@ -13,7 +13,7 @@
 import { DRINK_MS, HEAT_HIGH, HEAT_MAX, STROKE_RECOVER, STROKE_S } from '../shared/water.ts';
 import { equipped, repaired, tierOf } from '../shared/gear.ts';
 import { chargeOf, HOTBAR } from '../shared/items.ts';
-import { BLASTER, GRAVITON, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { BLASTER, GRAVITON, PIERCER, PISTOL, RIFLE } from '../shared/rifle.ts';
 import { JAMMER } from '../shared/jammer.ts';
 import { receiverBoss, type BossKind } from '../shared/bosses.ts';
 import { THROWABLE } from '../shared/throw.ts';
@@ -36,7 +36,7 @@ import { TEXT } from '../shared/text.ts';
  * What the first-person hands are doing, for the viewmodel (src/viewmodel.ts). `drinking` / `filling`
  * are true for the whole sip / refill action.
  */
-export type Held = 'none' | 'canteen' | 'telescope' | 'rifle' | 'pistol' | 'blaster' | 'graviton' | 'jammer' | 'receiver' | 'scrap' | 'grinder' | 'wrench' | 'mace';
+export type Held = 'none' | 'canteen' | 'telescope' | 'rifle' | 'pistol' | 'blaster' | 'piercer' | 'graviton' | 'jammer' | 'receiver' | 'scrap' | 'grinder' | 'wrench' | 'mace';
 /** `tier`: how good the item in hand is (shared/gear.ts tierOf), for its look (src/tierLook.ts).
  *  `looking`: spyglass being raised or at the eye; `scoped`: at the eye, view zoomed (hands hidden).
  *  `throwAt`: when the last throw of scrap started (performance.now(), src/throw.ts), for the hands' throw; `swingAt`:
@@ -300,7 +300,7 @@ export class Survival {
     const it = this.net.boxes.bag?.[this.selected];
     const kind = it?.kind;
     // A broken telescope or gun is just junk in the hand; a broken bottle still shows (it holds no water).
-    const held = kind === 'canteen' ? 'canteen' : kind === 'spyglass' && repaired(it) ? 'telescope' : kind === RIFLE && repaired(it) ? 'rifle' : kind === PISTOL && repaired(it) ? 'pistol' : kind === BLASTER && repaired(it) ? 'blaster' : kind === GRAVITON && repaired(it) ? 'graviton' : kind === JAMMER && repaired(it) ? 'jammer' : kind === 'grinder' ? 'grinder' : kind === 'wrench' ? 'wrench' : kind === MACE ? 'mace' : receiverBoss(kind) ? 'receiver' : kind && THROWABLE.has(kind) ? 'scrap' : 'none';
+    const held = kind === 'canteen' ? 'canteen' : kind === 'spyglass' && repaired(it) ? 'telescope' : kind === RIFLE && repaired(it) ? 'rifle' : kind === PISTOL && repaired(it) ? 'pistol' : kind === BLASTER && repaired(it) ? 'blaster' : kind === PIERCER && repaired(it) ? 'piercer' : kind === GRAVITON && repaired(it) ? 'graviton' : kind === JAMMER && repaired(it) ? 'jammer' : kind === 'grinder' ? 'grinder' : kind === 'wrench' ? 'wrench' : kind === MACE ? 'mace' : receiverBoss(kind) ? 'receiver' : kind && THROWABLE.has(kind) ? 'scrap' : 'none';
     if (held !== playerHands.held) this.cancel();
     playerHands.held = held;
     playerHands.tier = tierOf(it);

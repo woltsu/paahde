@@ -96,6 +96,8 @@ export const NO_PULL: Pull = { x: 0, z: 0 };
 // Landing.
 const HARD_LANDING = 13; // impact speed (m/s) above which a landing bogs you down
 const LAND_SLOW = 0.4; // speed factor right after a hard landing, recovering linearly
+/** Speed factor with a heavy gun in hand (PlayerState.heavy: shared/rifle.ts HEAVY); no jumping or sliding either. */
+export const HEAVY_SLOW = 0.5;
 const MAX_LAND_TICKS = 24;
 
 /** Where new players start: beside the hatch of crashed pod `n` (shared/pods.ts; mod the number of pods: podOf picks a
@@ -145,6 +147,10 @@ export type PlayerState = {
   /** A passenger on the back of a quad: the public id of whoever rides it (0 or absent: none). step() doesn't move them:
    *  the server keeps them where the quad is (server/world.ts carryPassengers); the bike key gets off (pillionOff). */
   pillion?: number;
+  /** A heavy gun in hand (shared/rifle.ts HEAVY, the piercer): on foot at HEAVY_SLOW of the speed, and no jump, air jump
+   *  or slide. Set by the server each tick from what's in hand (server/world.ts simulate); step() only reads it.
+   *  Absent: false. */
+  heavy?: boolean;
 };
 
 // Input is a bitmask so it is tiny on the wire and trivially comparable.
@@ -299,7 +305,9 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   }
 
   let landTicks = s.landTicks > 0 ? s.landTicks - 1 : 0;
+  const heavy = s.heavy === true;
   let speed = WALK_SPEED;
+  if (heavy) speed *= HEAVY_SLOW;
   if (landTicks > 0) speed *= LAND_SLOW + (1 - LAND_SLOW) * (1 - landTicks / MAX_LAND_TICKS);
   speed *= 1 - STORM_SLOW * Math.min(1, storm);
   const pushX = WIND.x * storm, pushZ = WIND.z * storm;
@@ -311,7 +319,7 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   let vz = s.vz;
   // Speed slide: a Shift press on the ground (or held through a landing) throws you forward; a tap
   // lasts SLIDE_TAP_TICKS, holding keeps it going while the speed holds up. Leaving the ground ends it.
-  const slideDown = (input & SLIDE) !== 0;
+  const slideDown = !heavy && (input & SLIDE) !== 0;
   let slideCool = s.slideCool > 0 ? s.slideCool - 1 : 0;
   let slideSpent = slideDown && s.slideSpent;
   let sliding = s.sliding;
@@ -410,9 +418,9 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   const jumpDown = (input & JUMP) !== 0;
   let airJumps = s.airJumps;
   let vy: number;
-  if (s.grounded && jumpDown && !s.jumpHeld) {
+  if (!heavy && s.grounded && jumpDown && !s.jumpHeld) {
     vy = JUMP_SPEED * (landTicks > 0 ? 0.75 : 1);
-  } else if (!s.grounded && jumpDown && !s.jumpHeld && airJumps > 0) {
+  } else if (!heavy && !s.grounded && jumpDown && !s.jumpHeld && airJumps > 0) {
     vy = AIR_JUMP_SPEED;
     airJumps--;
   } else {
@@ -463,7 +471,7 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   return {
     x, y, z, vx, vy, vz, facing, grounded, airJumps, jumpHeld: jumpDown, landTicks, sliding, crouching, slideCool,
     slideSpent, riding: false, bikeHeld: bikeDown, heading: s.heading, bike: s.bike, nose: 0, noseSpin: 0, level: s.level, gates,
-    tow: 0, hitch: s.hitch ?? 0,
+    tow: 0, hitch: s.hitch ?? 0, ...(heavy ? { heavy } : {}),
   };
 }
 

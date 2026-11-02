@@ -94,8 +94,11 @@ test('Repair beside a broken bike with every slot filled stands it up, theirs', 
     ws.send(JSON.stringify(send));
     await until(() => messages.slice(n).some((m) => m.t === 'items' && m.box === box_), 6000, send.t);
   };
-  for (const k of ['receiver_carrier', 'receiver_queen', 'receiver_colossus']) {
-    await answered({ t: 'drop', box: 'bag', slot: bag().findIndex((x) => x?.kind === k) }, 'bag');
+  // (Any three pieces of the kit's gear: which of it fits the bag depends on how much gear there is.)
+  for (let k = 0; k < 3; k++) {
+    const slot = bag().findIndex((x) => x && GEAR[x.kind] && !GEAR[x.kind].vehicle);
+    assert.ok(slot >= 0, 'gear in the lab kit to drop');
+    await answered({ t: 'drop', box: 'bag', slot }, 'bag');
   }
   for (const [i, s] of GEAR.motorcycle.slots.entries()) {
     if (slots()[0].parts?.[i]) continue;
