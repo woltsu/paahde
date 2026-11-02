@@ -15,7 +15,8 @@ import WebSocket from 'ws';
 import { BODY_H, CRAWLER, GUARDIAN, KINDS } from '../shared/guardians.ts';
 import { CORE_HP, CORES, harvesterAt, harvesterPose, SPEED, toWorld } from '../shared/harvester.ts';
 import { SP_DIE, SP_DROP } from '../shared/queen.ts';
-import { BLAST_R, BLASTER, blastDamage, DRONE_HP, GRAVITON, GUARDIAN_POINT_HP, GUNS, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { BLAST_R, BLASTER, blastDamage, DRONE_HP, GRAVITON, GUARDIAN_POINT_HP, GUNS, HULL_HP, PIERCER, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { FORWARD, JUMP, SLIDE, spawnState, step, WALK_SPEED } from '../shared/sim.ts';
 import { ORIGIN } from '../shared/origin.ts';
 import { PROTOCOL_VERSION } from '../shared/protocol.ts';
 import { EYE_HEIGHT } from '../shared/dig.ts';
@@ -27,7 +28,7 @@ import { HarvesterServer } from '../server/harvesters.ts';
 import { NestServer } from '../server/nests.ts';
 import { Tracks } from '../server/tracks.ts';
 
-const rifle = GUNS[RIFLE], pistol = GUNS[PISTOL], blaster = GUNS[BLASTER], graviton = GUNS[GRAVITON];
+const rifle = GUNS[RIFLE], pistol = GUNS[PISTOL], blaster = GUNS[BLASTER], graviton = GUNS[GRAVITON], piercer = GUNS[PIERCER];
 const dmg = (gun) => (d) => blastDamage(gun, d);
 const by = { id: 1, x: ORIGIN.x, y: 0, z: ORIGIN.z, safe: false };
 const NOW = 100_000;
@@ -164,7 +165,7 @@ function harvester() {
 test("a blaster burst does not hurt a harvester's hull, only its cores; the graviton pistol kills it through the hull", () => {
   const { s, h, pose } = harvester();
   const hull = { x: pose.x, y: pose.y + 10, z: pose.z };
-  for (const gun of [rifle, blaster]) {
+  for (const gun of [rifle, blaster, piercer]) {
     const r = s.shoot(pose.x + 30, pose.z, hull.x, hull.y, hull.z, h.id, -1, NOW, gun);
     assert.equal(r.hit, false);
     assert.equal(r.seen, true);
@@ -182,13 +183,60 @@ test("a blaster burst does not hurt a harvester's hull, only its cores; the grav
   assert.ok(r.hit && r.kill && h.down);
 });
 
+test("the piercer goes through a walker's plate: a guardian's hull in three hits, a crawler's in one, a weak point in one", () => {
+  const s = new GuardianServer(), g = guardianOf(s);
+  assert.equal(HULL_HP[GUARDIAN] / piercer.damage, 3);
+  for (let k = 1; k < 3; k++) {
+    const r = s.shoot(by, ...aimAt(g), g.id, -1, NOW, piercer);
+    assert.ok(r.hit && !r.kill, `hull hit ${k} bites`);
+    assert.equal(g.broken, 0, 'the weak points untouched');
+  }
+  const r = s.shoot(by, ...aimAt(g), g.id, -1, NOW, piercer);
+  assert.ok(r.hit && r.kill && g.deadAt >= 0, 'the third kills it');
+  // Another guardian: a weak point breaks at one piercer hit.
+  const g2 = guardianOf(s);
+  s.shoot(by, ...aimAt(g2), g2.id, 0, NOW, piercer);
+  assert.equal(g2.broken & 1, 1);
+  // A crawler: one body hit.
+  const p = { ...by, x: ORIGIN.x + 600, z: ORIGIN.z + 600 };
+  s.summon('crawlers', p, NOW);
+  const c = s.guardians.find((o) => o.kind === CRAWLER && o.deadAt < 0);
+  const rc = s.shoot(by, ...aimAt(c), c.id, -1, NOW, piercer);
+  assert.ok(rc.hit && rc.kill, 'a crawler dies of one');
+});
+
+test('the piercer in hand: half speed on foot, no jump, no air jump, no slide', () => {
+  const run = (heavy, input, n) => {
+    let s = { ...spawnState(), ...(heavy ? { heavy: true } : {}) };
+    for (let i = 0; i < n; i++) s = step(s, input, 0);
+    return s;
+  };
+  const light = run(false, FORWARD, 120), heavy = run(true, FORWARD, 120);
+  const speed = (s) => Math.hypot(s.vx, s.vz);
+  assert.ok(Math.abs(speed(light) - WALK_SPEED) < 0.5, `walks at ${speed(light)}`);
+  assert.ok(Math.abs(speed(heavy) - WALK_SPEED / 2) < 0.3, `half speed: ${speed(heavy)}`);
+  assert.ok(heavy.heavy, 'step() keeps the flag');
+  let s = { ...run(true, FORWARD, 30) };
+  const y0 = s.y;
+  for (let i = 0; i < 10; i++) s = step(s, FORWARD | JUMP, 0);
+  assert.ok(s.grounded && Math.abs(s.y - y0) < 0.6, 'no jump');
+  s = run(true, FORWARD, 30);
+  for (let i = 0; i < 10; i++) s = step(s, FORWARD | SLIDE, 0);
+  assert.equal(s.sliding, false, 'no slide');
+  assert.ok(speed(s) <= WALK_SPEED / 2 + 0.3, 'no burst of speed');
+  // Without it, the same presses jump and slide.
+  s = run(false, FORWARD, 30);
+  for (let i = 0; i < 5; i++) s = step(s, FORWARD | JUMP, 0);
+  assert.equal(s.grounded, false, 'jumps');
+});
+
 test('the graviton pistol kills a boss with one hull hit; nothing else hurts the hull', () => {
   const b = new BossServer(), p = { id: 1, x: ORIGIN.x + 800, y: 0, z: ORIGIN.z, safe: false };
   b.summon('colossus', p, NOW);
   const boss = b.bosses[0], out = { kills: [], craters: [], events: [] };
   const end = [boss.x, boss.y + 2, boss.z];
   const from = [boss.x + 60, boss.y + 10, boss.z];
-  for (const gun of [rifle, blaster]) assert.equal(b.shoot(p, ...from, ...end, boss.id, -1, NOW, out, gun).hit, false);
+  for (const gun of [rifle, blaster, piercer]) assert.equal(b.shoot(p, ...from, ...end, boss.id, -1, NOW, out, gun).hit, false);
   const hp = boss.hp;
   assert.equal(boss.hp, hp);
   const r = b.shoot(p, ...from, ...end, boss.id, -1, NOW, out, graviton);
@@ -280,4 +328,17 @@ test("through the world server: a blaster shot bursting beside a summoned drone 
   await until(() => other.messages.filter((m) => m.t === 'zap').length > zaps, 6000, 'the second zap');
   assert.equal(other.messages.findLast((m) => m.t === 'zap').hit, true, 'the burst hurt something');
   await until(() => crawlers().some((o) => o.broken || o.dead), 6000, 'a crawler hurt by the burst');
+
+  // The piercer in hand weighs us down (the server's PlayerState.heavy, in the snapshot); another slot, and it's off.
+  send({ t: 'debugGive', kind: PIERCER, tier: 1 });
+  await until(() => bag().some((s) => s?.kind === PIERCER), 6000, 'the piercer');
+  const before = me.messages.length;
+  send({ t: 'move', from: 'bag', fi: bag().findIndex((s) => s?.kind === PIERCER), to: 'bag', ti: 1 });
+  await until(() => me.messages.slice(before).some((m) => m.t === 'items' && m.box === 'bag' && m.slots[1]?.kind === PIERCER), 6000, 'the piercer on the hotbar');
+  const snapState = () => me.messages.findLast((m) => m.t === 'snap').state;
+  assert.ok(!snapState().heavy, 'the blaster weighs nothing');
+  send({ t: 'hands', hands: 0, aim: false, slot: 1 });
+  await until(() => snapState().heavy === true, 6000, 'heavy with the piercer in hand');
+  send({ t: 'hands', hands: 0, aim: false, slot: 0 });
+  await until(() => !snapState().heavy, 6000, 'light again');
 });

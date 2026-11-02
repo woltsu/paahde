@@ -285,6 +285,8 @@ export const FINDS: Record<string, { n: number; level: SiteLevel }> = {
   // The blaster (shared/rifle.ts BLASTER), after the rifle: out on guardian ground, where the packs and the drones are
   // thickest. (The graviton pistol is in no table at all: never found.)
   blaster: { n: 4, level: 2 },
+  // The piercer (shared/rifle.ts PIERCER), after the rifle too: out on guardian ground, for the walkers' plate.
+  piercer: { n: 3, level: 2 },
   // The jammer (shared/jammer.ts): out where the roaming drones and the jets first come after you.
   jammer: { n: 5, level: 1 },
   // The receivers that call the bosses (shared/bosses.ts): out on guardian ground.

@@ -64,8 +64,9 @@ export const GRAVITON_RANGE = 400;
 
 /**
  * The piercer: long and heavy, after the rifle (found broken on guardian ground). Its slug goes through the walkers'
- * plate (shared/enemies.ts ARMOR.plate, not the heavy plate of the harvester and the bosses): a hit anywhere on a crawler
- * or a guardian wears its hull (HULL_HP) as well as breaking a weak point. Carried in hand it halves your speed and you
+ * plate (shared/enemies.ts ARMOR.plate, not the heavy plate of the harvester and the bosses): a hit on a crawler's or a
+ * guardian's body wears its hull (HULL_HP: a crawler dies of one, a guardian of three), and a weak point breaks at one
+ * (damage 2). Carried in hand it halves your speed and you
  * can't jump or slide (shared/sim.ts PlayerState.heavy, set by the server from what's in hand: HEAVY). A long reload.
  */
 export const PIERCER = 'piercer';
@@ -73,8 +74,8 @@ export const PIERCER_COOLDOWN_MS = 2600;
 export const PIERCER_RANGE = 320;
 /** Guns that weigh you down in hand (shared/sim.ts PlayerState.heavy). */
 export const HEAVY = new Set([PIERCER]);
-/** A walker's hull: the damage a gun that pierces its plate must do to it to kill it (crawler, guardian, by Kind). */
-export const HULL_HP = [2, 6];
+/** A walker's hull: the damage a gun that pierces its plate must do to its body to kill it (by Kind: guardian, crawler). */
+export const HULL_HP = [6, 2];
 
 /**
  * The guns by item kind: cooldown (ms), reach (m), `pierce` (armour it goes through: shared/enemies.ts `armor`),

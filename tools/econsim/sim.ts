@@ -37,13 +37,13 @@ import { CORPSE_S, World, type Poi, type Source, type Thing } from './world.ts';
  *  and the chest its box: the wrench, then the cart's levels 1 and 2 (CART_GOALS) in their place. */
 const GOALS = [
   'wrench', 'cart1', 'cart2', 'dismantle_bench', 'workbench', 'canteen', 'bedroll', 'scrap_mace', 'backpack', 'laser_pistol', 'motorcycle', 'storage_chest', 'spyglass', 'shield', 'laser_rifle', 'storm_detector', 'jammer', 'wristpad',
-  'grinder', 'blaster', 'receiver_colossus', 'boss:colossus', 'receiver_queen', 'boss:queen', 'receiver_carrier', 'boss:carrier', 'receiver_worm', 'boss:worm',
+  'grinder', 'blaster', 'piercer', 'receiver_colossus', 'boss:colossus', 'receiver_queen', 'boss:queen', 'receiver_carrier', 'boss:carrier', 'receiver_worm', 'boss:worm',
   'windmill', 'battery_station', 'well',
 ] as const;
 /** Worn gear: its equipment slot. */
 const WORN: Partial<Record<string, EquipSlot>> = { backpack: 'back', shield: 'armor', storm_detector: 'belt', wristpad: 'wrist' };
 /** Carried in the hotbar when there's one. */
-const CARRIED = ['canteen', 'blaster', 'laser_rifle', 'laser_pistol', 'jammer', 'spyglass'];
+const CARRIED = ['canteen', 'blaster', 'piercer', 'laser_rifle', 'laser_pistol', 'jammer', 'spyglass'];
 /** Gear whose quality is a milestone of its own (q2: quality 2+, Quality-grade parts throughout). */
 const QUALITY_MILESTONES = ['laser_rifle', 'motorcycle', 'backpack', 'canteen'];
 /** Scrap-tier metal parts the workbench hammers out of scrap (shared/tables.ts RECIPE_TABLE). */
@@ -218,7 +218,7 @@ export class Sim {
     const jammer = this.carried('jammer');
     const jam = jammer ? quality(jammer) : null;
     const guns: { w: Weapon; q: number }[] = [];
-    for (const [k, w] of [['blaster', 'blaster'], ['laser_rifle', 'rifle'], ['laser_pistol', 'pistol']] as const) {
+    for (const [k, w] of [['blaster', 'blaster'], ['piercer', 'piercer'], ['laser_rifle', 'rifle'], ['laser_pistol', 'pistol']] as const) {
       const g = this.carried(k);
       if (g) guns.push({ w, q: quality(g) });
     }

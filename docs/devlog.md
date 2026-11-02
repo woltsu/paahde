@@ -2918,3 +2918,23 @@ The blaster and the graviton pistol as they are fired, for the shooter and every
   Levelled in the full browser mix (docs/audio.md "The heavy guns").
 - **Not looked at in a browser**: the test Chrome's game tab kept reloading or crashing on this machine (several dev
   servers running), so the visuals are checked by types and build only; the sounds were captured and measured.
+
+## The piercer
+
+- **What:** a long, heavy gun after the rifle (shared/rifle.ts `PIERCER`: pierce 20, damage 2, 2.6 s recharge, a
+  scope, 320 m), found broken on guardian ground (shared/tables.ts FINDS, level 2, 3 at a time). Its slug goes
+  through the walkers' plate: armour is now three-tiered (shared/enemies.ts `ARMOR`: thin 0, the walkers' plate 10,
+  the harvester's and the bosses' heavy plate 30), so the piercer bites crawlers and guardians anywhere but not the
+  harvester or the bosses (still only the graviton pistol). A body hit wears the walker's hull (`HULL_HP`, by kind:
+  a guardian 6, three hits; a crawler 2, one hit; server/guardians.ts `hull`); a weak point breaks at one hit
+  (damage 2). The hull's wear isn't sent or drawn: a hit throws sparks and the kill comes with the server's 'bots'.
+- **Heavy:** with it in hand you walk at half speed and can't jump, air jump or slide (shared/sim.ts `HEAVY_SLOW`,
+  `PlayerState.heavy`). The flag is the server's, set each tick from the item in hand (server/world.ts `heavyInHand`,
+  repaired or not: it weighs the same), and the client takes it with the snapshot like `bike`; step() only reads it,
+  so prediction stays deterministic. Switching to it, prediction runs light for one round trip and is corrected.
+- **Lab kit:** the debug kit gives the tools and materials before the gear now; the bag no longer holds every gear kind
+  (what doesn't fit is on the lab's floor). tools/bike-repair.test.mjs drops any three pieces of gear for room.
+- **Economy:** `Weapon` 'piercer' (shared/enemies.ts): the best gun for guardians and good for crawlers, poor at
+  swarms and jets (the recharge, and you can't get out of the way); the simulator carries it like the blaster.
+- Tests in tools/weapons.test.mjs: a guardian's hull in three, a crawler in one, a point in one, the heavy plate turns
+  it; half speed, no jump or slide; the server sets and clears `heavy` with the hotbar slot.

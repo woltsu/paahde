@@ -427,9 +427,12 @@ Everything built is shared, and anyone can take a building down.
 ## Weapons and tools
 
 - `shared/rifle.ts` — the guns (`GUNS`: the laser rifle, the cheaper one-handed laser pistol, the heavy blaster whose
-  beam bursts where it stops, and the never-found graviton pistol; gear found broken and repaired, shared/gear.ts; model
-  `tools/models/pistol.py`), armour (`bites`: a hull's plate, shared/enemies.ts `armor`, turns every gun but the
-  graviton pistol, which kills anything it touches; weak points and thin-skinned things are always hurt), the walkers'
+  beam bursts where it stops, the long, heavy piercer whose slug goes through the walkers' plate, and the never-found
+  graviton pistol; gear found broken and repaired, shared/gear.ts; model `tools/models/pistol.py`), armour (`bites`:
+  a hull's plate, shared/enemies.ts `armor`, turns every gun but the piercer (the walkers' plate, wearing their hull:
+  `HULL_HP`) and the graviton pistol, which kills anything it touches; weak points and thin-skinned things are always
+  hurt), the heavy guns (`HEAVY`: in hand, shared/sim.ts `PlayerState.heavy` halves your speed and takes away jumping
+  and sliding; set by the server each tick, server/world.ts `heavyInHand`), the walkers'
   red weak points (a guardian's take `GUARDIAN_POINT_HP` hits, cracked and blinking after the first; all broken: it
   dies), drone hits and the burst's `blastDamage`; aim, sway, recoil, scope and the hitscan in `src/rifle.ts`,
   beam/sparks/smoke `src/world/zaps.ts`, sounds `src/rifleSound.ts`, targets, cracks and the collapse in

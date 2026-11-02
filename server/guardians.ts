@@ -26,7 +26,7 @@ import {
 } from '../shared/missiles.ts';
 import { nearStorm, seized, type Storm } from '../shared/storm.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
-import { allBroken, bites, GUARDIAN_POINT_HP, type Gun, kills, shotPasses, weakPoints, WRECK_S } from '../shared/rifle.ts';
+import { allBroken, bites, GUARDIAN_POINT_HP, type Gun, HULL_HP, kills, shotPasses, weakPoints, WRECK_S } from '../shared/rifle.ts';
 import { ENEMIES } from '../shared/enemies.ts';
 import { sunElevation } from '../shared/sun.ts';
 import { heightAt } from '../shared/terrain.ts';
@@ -103,8 +103,9 @@ type Guardian = {
   /** Last missile launched when. */
   missileAt: number;
   /** Weak points (shared/rifle.ts): how many, which are shot (bit mask), hits each has taken (a guardian's take
-   *  GUARDIAN_POINT_HP: one hit cracks it); died when (-1 alive). */
-  points: number; broken: number; hits: number[]; deadAt: number;
+   *  GUARDIAN_POINT_HP: one hit cracks it); damage its hull has taken from guns that pierce its plate (shared/rifle.ts
+   *  HULL_HP: dead at that); died when (-1 alive). */
+  points: number; broken: number; hits: number[]; hull: number; deadAt: number;
   /** Guardians' feet (crawlers' are only drawn, src/world/guardians.ts); yaw last tick; standing still for (s). */
   feet: Foot[] | null; lastYaw: number; still: number;
   /** Crawlers: which way round what's in its way (server/pack.ts); the lunge (LUNGE_*) since when, springing along
@@ -178,7 +179,7 @@ export class GuardianServer {
       id: this.nextWalker++, kind, legs, x, z, yaw: rand(-Math.PI, Math.PI), speed: 0, home,
       tx: home.x, tz: home.z, guardUntil: 0, prey: -1, huntAt: 0, px: 0, pz: 0, knownAt: 0, calmUntil: 0, shotUntil: 0, bitAt: 0,
       aiming: false, ax: 0, ay: 0, az: 0, chargeAt: -1, firedAt: 0, missileAt: 0,
-      points: weakPoints(kind, legs).length, broken: 0, hits: weakPoints(kind, legs).map(() => 0), deadAt: -1, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
+      points: weakPoints(kind, legs).length, broken: 0, hits: weakPoints(kind, legs).map(() => 0), hull: 0, deadAt: -1, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
       lunge: LUNGE_NONE, lungeAt: 0, lx: 0, lz: 0, left: 0, trail: [], kx: 0, kz: 0,
     };
     g.lastYaw = g.yaw;
@@ -804,8 +805,8 @@ export class GuardianServer {
    * point `i` of walker `gid` (-1: its body). Plausible (alive, the point whole, in range, the shot passing and ending at
    * that walker): the point takes the gun's damage (a guardian's cracks at the first hit and breaks at
    * GUARDIAN_POINT_HP; a crawler's at one), and the walker (crawlers: the whole pack) comes for the shooter. The body's
-   * plate turns every gun but the graviton pistol (shared/rifle.ts bites): a body hit does no harm but angers it the
-   * same. Returns whether it did harm, the kill if that was the last point, and whether the shot was seen to end at it
+   * plate turns every gun but the piercer and the graviton pistol (shared/rifle.ts bites): a body hit does no harm but
+   * angers it the same; the piercer's wears its hull (HULL_HP), the graviton pistol's kills it. Returns whether it did harm, the kill if that was the last point, and whether the shot was seen to end at it
    * (`seen`: a body hit too).
    */
   shoot(by: BotPlayer, x: number, y: number, z: number, ex: number, ey: number, ez: number, gid: unknown, i: unknown, now: number, gun: Gun): { hit: boolean; kill: Kill | null; seen?: boolean } {
@@ -939,12 +940,15 @@ export class GuardianServer {
     return g;
   }
 
-  /** Weak point `i` of `g` hit by player `by` for `dmg` (-1: its body, every point at once if `dmg` > 0; 0: no harm,
-   *  it only angers it): broken once it has taken its hits (GUARDIAN_POINT_HP for a guardian's, one for a crawler's),
-   *  a kill if it was the last. */
+  /** Weak point `i` of `g` hit by player `by` for `dmg` (0: no harm, it only angers it): broken once it has taken its
+   *  hits (GUARDIAN_POINT_HP for a guardian's, one for a crawler's), a kill if it was the last. `i` -1: its body, through
+   *  the plate: its hull takes `dmg` (HULL_HP[kind] kills it; Infinity, the graviton pistol's, at once). */
   private strike(g: Guardian, by: BotPlayer, i: number, dmg: number, now: number): { hit: boolean; kill: Kill | null } {
     const hp = g.kind === GUARDIAN ? GUARDIAN_POINT_HP : 1;
-    if (dmg > 0) {
+    if (i === -1 && dmg > 0) {
+      g.hull += dmg;
+      if (g.hull >= HULL_HP[g.kind]) g.broken = (1 << g.points) - 1;
+    } else if (dmg > 0) {
       for (let k = 0; k < g.points; k++) {
         if ((i !== -1 && k !== i) || g.broken & (1 << k)) continue;
         g.hits[k] = Math.min(hp, g.hits[k] + dmg);
