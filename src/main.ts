@@ -1,7 +1,7 @@
 import { viewCull } from './world/viewCull';
 import { buildingBox, cargoBox, towerBox, vehicleBox } from '../shared/boxes.ts';
 import * as THREE from 'three/webgpu';
-import { BACK, DT, FORWARD, GRAB, isSlipFace, quantizeYaw } from '../shared/sim.ts';
+import { BACK, DT, FORWARD, GRAB, isSlipFace, JUMP, quantizeYaw } from '../shared/sim.ts';
 import { EYE_HEIGHT, quantizePitch } from '../shared/dig.ts';
 import { scrapTarget } from '../shared/scrap.ts';
 import { allBeaten } from '../shared/bosses.ts';
@@ -297,6 +297,8 @@ const remotes = new Map<number, Avatar>();
 // Sand bikes and quads, one per riding player (keyed by their id, 0 for us): drawn here, simulated in shared/sim.ts.
 const bikes = new Map<number, Bike | Quad>();
 let lastHeading = NaN;
+/** Last frame's input bits (a press, not a hold). */
+let lastInput = 0;
 /** Draw player `id`'s bike (or quad) while they ride, with `avatar` seated on it, and drop it when they get off.
  *  False when not riding: then the caller updates the avatar on foot. */
 function ride(id: number, avatar: Avatar, p: { riding: boolean; pitch?: number; bike: number; quad?: boolean } & Parameters<Bike['update']>[0], dt: number): boolean {
@@ -689,7 +691,10 @@ renderer.setAnimationLoop((time) => {
   if (L.things) corpseView.update(frameDt, focus);
   orbit.rumble = Math.max(stage.level === net.me.level ? (stage.rumble ?? 0) : 0, blasts.shake); // and bursts nearby (src/world/blasts.ts)
   orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding || backSeat, heading: backSeat ? rideHeading : v.heading, lean: bikes.get(backSeat ? driver!.id : 0)?.leanAngle, short: L.crouchUnder,
-    ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined }, frameDt);
+    ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined, heavy: s.heavy }, frameDt);
+  // Jump pressed under a heavy gun (the sim won't): the knees give a little, no more.
+  if (s.heavy && s.grounded && !s.riding && input & JUMP && !(lastInput & JUMP)) orbit.heave();
+  lastInput = input;
   bossFx.update(net, frameDt, orbit.camera);
   bossBar.update(frameDt, bossFx.bar);
   guardianFx.update(net, frameDt, orbit.camera, focus);

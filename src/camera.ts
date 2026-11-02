@@ -2,7 +2,9 @@
 // The yaw is also the movement frame sent to the server (see shared/sim.ts step()), and the body faces it.
 //
 // Feel: the eye height is smoothed a little so slopes don't jitter, the head bobs with stride, hard
-// landings dip the view on a spring, strafing rolls it slightly, and sprinting kicks the FOV out.
+// landings dip the view on a spring, strafing rolls it slightly, and sprinting kicks the FOV out. With a heavy gun in
+// hand (ViewPose.heavy: the piercer, shared/sim.ts PlayerState.heavy) the steps are slow and the bob deep, a plod
+// rolling from foot to foot, and trying to jump only sags the knees (`heave`).
 // T toggles a third-person view over the right shoulder: the camera backs off behind the eye and to its right, turned
 // in so the screen centre (crosshair) crosses the dig/pickup ray at about arm's reach, and the boom shortens so it
 // never sinks into a dune or passes through a wall, floor or ceiling (a shelter's, a level's: Level.solid).
@@ -14,7 +16,7 @@ import { tools } from './input';
 import { comfort, COMFORT_RANGES } from './comfort';
 import { groundAt, onFlat, solidAt } from './ground.ts';
 import { canvasYAt, tarpRigs } from '../shared/tarp.ts';
-import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, slopeAt } from '../shared/sim.ts';
+import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, HEAVY_SLOW, slopeAt } from '../shared/sim.ts';
 import { CROUCH_CYCLE } from './models/crouchGait';
 import { EYE_HEIGHT } from '../shared/dig.ts'; // the dig and pickup rays start here too
 import { sandHidden, shelterSolid } from '../shared/shelters.ts';
@@ -63,7 +65,9 @@ export type ViewPose = { x: number; y: number; z: number; vx: number; vy: number
   ladder?: number;
   /** Crouched or sliding where that makes you short (Level.crouchUnder, shared/sim.ts CROUCH_HEIGHT): the eye goes lower
    *  with the body, under the tray and the blast door's edge. */
-  short?: boolean };
+  short?: boolean;
+  /** A heavy gun in hand (shared/sim.ts PlayerState.heavy): a slow, deep plod. */
+  heavy?: boolean };
 
 export class FirstPersonCamera {
   readonly camera: THREE.PerspectiveCamera;
@@ -78,6 +82,7 @@ export class FirstPersonCamera {
   private bobPhase = 0;
   private bobAmount = 0; // about 0..1 (more when trudging uphill), fades in with walking, out when airborne/stopped
   private climb = 0; // 0..1, eased: how much of a trudge uphill the step is
+  private heft = 0; // 0..1, eased: a heavy gun in hand (the plod)
   private crouch = 0; // 0..1, eased in while sliding (crouching: 0.7): the eye drops and the view rolls a touch
   private dip = 0; // landing dip offset (m), spring back to 0
   private dipVel = 0;
@@ -186,6 +191,11 @@ export class FirstPersonCamera {
     return this.boom;
   }
 
+  /** Trying to jump under a heavy gun (shared/sim.ts: you can't): the knees bend for it and nothing comes of it. */
+  heave() {
+    this.dipVel -= 0.32;
+  }
+
   /** Place the eye at the player's feet position `p` (predicted state + visual error offset). */
   update(p: ViewPose, dt: number) {
     const speed = Math.hypot(p.vx, p.vz);
@@ -227,7 +237,10 @@ export class FirstPersonCamera {
     const moving = p.grounded && speed > 0.5;
     // Past a walk it grows only gently (sprint ≈ 1.1×, its faster step rate is enough), and the vertical shape is sin², which is smooth
     // at footfall where |sin| had a hard cusp.
-    const pace = speed / WALK_SPEED;
+    // A heavy gun in hand: the pace is reckoned from the slowed walk (a full stride's bob at half the speed, so half
+    // the steps a second), and the bob goes deeper, rolling from foot to foot.
+    this.heft += ((p.heavy && !p.riding ? 1 : 0) - this.heft) * (1 - Math.exp(-dt * 4));
+    const pace = speed / (WALK_SPEED * (1 - (1 - HEAVY_SLOW) * this.heft));
     // Crouched: short quick steps (the body's, src/models/crouchGait.ts), the bob gentle.
     const crouched = !!p.crouching && !p.sliding;
     const walking = moving && !p.sliding && !p.riding;
@@ -244,8 +257,8 @@ export class FirstPersonCamera {
     this.bobAmount += (bobTarget - this.bobAmount) * (1 - Math.exp(-dt * 6));
     if (p.grounded) this.bobPhase += (speed * dt * Math.PI) / (crouched ? CROUCH_CYCLE / 2 : STRIDE * this.stride * (1 - CLIMB_SHORTEN * this.climb));
     const s = Math.sin(this.bobPhase);
-    const bobY = (0.5 - s * s) * 0.018 * this.bobAmount * comfort.motion;
-    const bobX = s * 0.009 * this.bobAmount * comfort.motion;
+    const bobY = (0.5 - s * s) * 0.018 * (1 + 0.8 * this.heft) * this.bobAmount * comfort.motion;
+    const bobX = s * 0.009 * (1 + 0.6 * this.heft) * this.bobAmount * comfort.motion;
 
     // Camera basis on the ground plane.
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
@@ -319,7 +332,7 @@ export class FirstPersonCamera {
     const mx = x - bx * OTS_MEET - this.camera.position.x, my = y - by * OTS_MEET - this.camera.position.y, mz = z - bz * OTS_MEET - this.camera.position.z;
     const camYaw = this.shoulder > 0 ? Math.atan2(-mx, -mz) : viewYaw;
     const camPitch = this.shoulder > 0 ? Math.atan2(my, Math.hypot(mx, mz)) : pitch;
-    this.camera.rotation.set(camPitch, camYaw, (this.roll + this.slide * SLIDE_ROLL * (1 - 0.6 * Math.min(1, this.boom / BOOM)) + shakeR) * comfort.motion + bobX * 0.1);
+    this.camera.rotation.set(camPitch, camYaw, (this.roll + this.slide * SLIDE_ROLL * (1 - 0.6 * Math.min(1, this.boom / BOOM)) + shakeR) * comfort.motion + bobX * (0.1 + 0.3 * this.heft));
 
     // FOV kick when moving faster than a walk (sprint, slides).
     const t = Math.max(0, Math.min(1, (speed - WALK_SPEED - 0.5) / (SPRINT_SPEED - WALK_SPEED - 1)));

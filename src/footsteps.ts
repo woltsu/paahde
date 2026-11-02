@@ -5,7 +5,8 @@
 // of SLOT seconds, each a step starting near the slot start. Outside it is a walk on a gravel trail,
 // levelled so a steady walk at ~2.4 steps/s measures −23 LUFS; inside a shelter it is footsteps on concrete,
 // which only peak-normalise to about −30 LUFS, so their gain is higher to sound as loud. `gain` pulls both
-// well under the wind, since in game you take ~4.4 steps/s.
+// well under the wind, since in game you take ~4.4 steps/s. Carrying a heavy gun (shared/rifle.ts HEAVY) a step is a
+// plod: pitched down, a little louder, with a dull thud of the weight coming down under it.
 import { audio } from './audio';
 import { reflect } from './acoustics';
 import { atEar } from './echo';
@@ -27,6 +28,8 @@ const FAR = 30;
 const ECHO = 0.5;
 const ECHO_HEAR = 1200;
 const WALK = 6;
+/** A heavy step: pitch ×, level ×, and its thud's level (× the step's). */
+const HEAVY_PITCH = 0.8, HEAVY_LEVEL = 1.3, THUD = 0.9;
 
 class Footsteps {
   private bufs: Partial<Record<Surface, AudioBuffer>> = {};
@@ -54,15 +57,15 @@ class Footsteps {
     this.yaw = yaw;
   }
 
-  /** A foot planted at (x, z) on `surface`, moving at `speed` m/s. */
-  step(x: number, z: number, speed: number, surface: Surface = 'sand') {
+  /** A foot planted at (x, z) on `surface`, moving at `speed` m/s; `heavy`: carrying a heavy gun. */
+  step(x: number, z: number, speed: number, surface: Surface = 'sand', heavy = false) {
     const ctx = audio.ctx, buf = this.bufs[surface], sprite = SPRITES[surface];
     if (!ctx || !buf || !audio.out || !audio.running) return;
     const dx = x - this.lx, dz = z - this.lz;
     const d = Math.hypot(dx, dz);
     if (d > FAR) return;
     // Faster is heavier, a bit; distance falls off as 1/d with a fade to nothing at FAR.
-    const level = sprite.gain * Math.min(1.4, 0.6 + 0.4 * (speed / WALK)) * Math.min(1, NEAR / d) * Math.min(1, (FAR - d) / 5);
+    const level = sprite.gain * (heavy ? HEAVY_LEVEL : Math.min(1.4, 0.6 + 0.4 * (speed / WALK))) * Math.min(1, NEAR / d) * Math.min(1, (FAR - d) / 5);
 
     // A random step, never the same one twice in a row, slightly varied in pitch and level.
     let i = Math.floor(Math.random() * (sprite.slots - 1));
@@ -70,7 +73,7 @@ class Footsteps {
     this.last = i;
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = 0.92 + Math.random() * 0.16;
+    src.playbackRate.value = (0.92 + Math.random() * 0.16) * (heavy ? HEAVY_PITCH : 1);
     const gain = ctx.createGain();
     gain.gain.value = level * (0.85 + Math.random() * 0.3);
     // Pan by which side of the listener it is on; steps under your own feet stay centred.
@@ -80,6 +83,18 @@ class Footsteps {
     src.connect(gain).connect(pan).connect(audio.out);
     reflect(gain, d < NEAR ? null : atEar(x, z), gain.gain.value, ECHO_HEAR, ECHO);
     src.start(ctx.currentTime, i * SLOT, SLOT);
+    if (heavy) {
+      // The weight coming down: a short low sine drop.
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime + 0.012;
+      o.frequency.setValueAtTime(85, t);
+      o.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(level * THUD, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.connect(g).connect(pan);
+      o.start(t);
+      o.stop(t + 0.22);
+    }
   }
 }
 
