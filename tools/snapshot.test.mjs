@@ -83,3 +83,20 @@ test('checked-in snapshots hold no browser IDs', () => {
     }
   }
 });
+
+test('walkers come back as they were: snapshot, restore at the same time, snapshot again', async () => {
+  const { GuardianServer } = await import('../server/guardians.ts');
+  const now = 123_456;
+  const a = new GuardianServer();
+  assert.ok(a.guardians.length, 'a world has guardians');
+  Object.assign(a.guardians[0], { prey: 3, huntAt: now - 500, guardUntil: now + 5000, x: a.guardians[0].x + 12 });
+  const saved = JSON.parse(JSON.stringify(a.snapshot())); // (as written to the file and read back)
+  const b = new GuardianServer();
+  b.restore(saved, now, now, (id) => id);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.snapshot())), saved);
+  // Later: the times moved with the clock, a prey not here forgotten.
+  const c = new GuardianServer();
+  c.restore(JSON.parse(JSON.stringify(saved)), now, now + 1000, () => -1);
+  assert.equal(c.guardians[0].guardUntil, now + 6000);
+  assert.equal(c.guardians[0].prey, -1);
+});
