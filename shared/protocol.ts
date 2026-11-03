@@ -166,6 +166,10 @@ export type ClientMsg =
   | { t: 'debugHeat'; off: boolean }
   // Debug menu: no random sandstorms in this world (shared by everyone) while on.
   | { t: 'debugWeather'; off: boolean }
+  // Debug menu → Scenarios (dev server, the test world only): set up gameplay test scenario `id` (shared/scenarios.ts) for
+  // you: moved there ('level'), the bag and equipment as it says ('items'), the clock ('epoch'), the weather and its enemies;
+  // answered with 'scenario'.
+  | { t: 'scenario'; id: string }
   // Crash-site machines (shared/crash.ts). Carry a small one home: the server checks reach and that it is still
   // there, puts it in your bag as an item (of the component's kind) and answers 'items'.
   | { t: 'crashTake'; id: string }
@@ -353,6 +357,8 @@ export type ServerMsg =
   // You are somewhere else now: in level `level` (shared/levels.ts), standing as `state`. A teleport (src/net.ts drops
   // its prediction); the client switches the stage (src/levels/stage.ts) behind a fade.
   | { t: 'level'; level: number; state: PlayerState }
+  // Scenario `id` (shared/scenarios.ts) is set up: hold hotbar slot `slot` (-1: empty hands).
+  | { t: 'scenario'; id: string; slot: number }
   // Every sandstorm announced and not yet over (shared/storm.ts; times on the server clock, like snap.time), and every
   // poison gas cloud out (shared/gas.ts). Sent before 'welcome' on join and to everyone whenever a list changes.
   | { t: 'storms'; storms: Storm[]; gas: Gas[]; vortices?: Vortex[]; vortexZero?: number }

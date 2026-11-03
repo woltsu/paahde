@@ -53,6 +53,7 @@ export function clientMessage(v: unknown): v is ClientMsg {
     case 'debugGive': return str(m.kind) && Object.hasOwn(ITEMS, m.kind) && optional(m.n, (x) => int(x, 1, 1e6)) && optional(m.tier, (x) => int(x, -1, 3));
     case 'debugHeat': case 'debugWeather': return bool(m.off);
     case 'debugBike': return optional(m.working, bool) && optional(m.quad, bool);
+    case 'scenario': return str(m.id) && m.id.length <= 64;
     case 'crashTake': case 'siteJoin': case 'siteLeave': case 'siteScrap': return str(m.id);
     case 'crashUse': return str(m.kind) && Object.hasOwn(ITEMS, m.kind) && str(m.at);
     case 'benchScrap': return str(m.at);

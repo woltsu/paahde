@@ -13,7 +13,7 @@ import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
 import type { WorldStats } from '../shared/protocol.ts';
 import { checkName, GAME_NAME, MAX_PLAYERS } from '../shared/names.ts';
-import { BENCH_WORLD, LAB_WORLD, labAllowed, LEGACY_WORLD, LIVES, newWorldId, WORLD_ID_RE } from '../shared/world.ts';
+import { DEV_WORLDS, labAllowed, LEGACY_WORLD, LIVES, newWorldId, WORLD_ID_RE } from '../shared/world.ts';
 import { leaderboard, minigameApi } from './minigame.ts';
 import { registry } from './registry.ts';
 import { PasswordBusy } from './password.ts';
@@ -44,7 +44,7 @@ const games = registry(join(dirname(DB_PATH), 'registry.db'));
 
 /** The world from before there were worlds keeps its old database; the rest have one each. */
 const dbPath = (id: string) => (id === LEGACY_WORLD ? DB_PATH : join(WORLDS_DIR, `${id}.db`));
-const exists = (id: string) => ((id === LAB_WORLD || id === BENCH_WORLD) && labAllowed()) || (WORLD_ID_RE.test(id) && existsSync(dbPath(id)));
+const exists = (id: string) => (DEV_WORLDS.includes(id) && labAllowed()) || (WORLD_ID_RE.test(id) && existsSync(dbPath(id)));
 
 type World = { child: ChildProcess; port: Promise<number> };
 const worlds = new Map<string, World>();
@@ -108,7 +108,7 @@ const SUMMARY_TTL_MS = 60_000;
 /** How a world is doing, read from its database (the world process writes it; WAL lets us read alongside), with
  *  its settings; with `browserId`, also their name there and how long they've played. */
 function stats(id: string, browserId?: string): WorldStats | null {
-  if (id === LAB_WORLD || id === BENCH_WORLD || !exists(id)) return null;
+  if (DEV_WORLDS.includes(id) || !exists(id)) return null;
   const cached = summaries.get(id);
   if (!browserId && cached && Date.now() - cached.at < SUMMARY_TTL_MS) return { ...cached.value, online: online.get(id) ?? 0 };
   let db: DatabaseSync | undefined;

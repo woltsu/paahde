@@ -3000,3 +3000,19 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   an early out, hazed by distance (fog off: on the proxy it tinted the whole sphere). On a surface it's clipped to its
   plane (a dome on the sand that lifts off as it rises). Inside the ball the back faces are drawn. 10/14/18/24 steps by
   sand detail. Checked by screenshots of each preset over its life, by day and by night.
+
+## Gameplay test scenarios
+
+- **What:** debug menu → Scenarios (dev server only): Start sets up a fixed situation to play through again and again
+  (shared/scenarios.ts, docs/scenarios.md). The first, "Piercer vs guardian": 17:30, clear, a basic piercer in hand
+  (bottle, spyglass, backpack), on flat sand at (-873, 777) with the evening sun at your back and a guardian standing
+  300 m ahead on a rise, at the edge of the piercer's 320 m.
+- **Fixed seed:** scenarios run in a dev-only world, `?w=test` (like the lab and the bench, but the real desert with
+  everything happening in it; endless lives, no beginning), so a place is the same place every time. Started from
+  another world, the menu goes there with `&scenario=<id>` and the client asks till the server answers (it takes
+  nothing before 'ready').
+- **Server:** `scenario` message → `onScenario`: moveTo (a teleport, the camera turned), the bag and equipment emptied
+  (ItemServer.reset) and filled, health/heat/water reset, the shared clock shifted, storms off (or one summoned),
+  enemies placed. A placed guardian (`GuardianServer.stage`) has a made-up home where it stands, like a summoned crawler
+  pack (gone once nobody is within 450 m), keeps to it (no wandering), isn't replaced when killed, and goes when the
+  next scenario starts (`unstage`).

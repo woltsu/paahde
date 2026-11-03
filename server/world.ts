@@ -12,7 +12,7 @@ import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
 import { packPlayerPose, PLAYER_VIEW_RADIUS, type PlayerAppearance } from '../shared/network.ts';
 import { podOf } from '../shared/pods.ts';
 import { PITCH_STEPS, quantizePitch } from '../shared/dig.ts';
-import { bottleSips, equipped, GEAR_KINDS, isBuilding, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
+import { bottleSips, equipped, GEAR, GEAR_KINDS, isBuilding, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { scrapKey, scrapTaken } from '../shared/scrap.ts';
 import { CLOTH, HOTBAR, ITEMS, levelOnlyItems, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
@@ -85,7 +85,8 @@ import { CHOKE_RECOVER, CHOKE_S, frontExposure, stormAt, stormDrag, toolsDown } 
 import { GAS_GRACE_S, GAS_RECOVER, GAS_S, gasExposure } from '../shared/gas.ts';
 import { NEW_WORLD_TOD, shiftToTimeOfDay, timeOfDayAt } from '../shared/sun.ts';
 import { isTrophy, trophyFree } from '../shared/trophies.ts';
-import { CALM, LIVES, WORLD_ID } from '../shared/world.ts';
+import { CALM, LIVES, TEST, WORLD_ID } from '../shared/world.ts';
+import { scenarioById, type ScenarioItem } from '../shared/scenarios.ts';
 import { TEXT } from '../shared/text.ts';
 import { pickupLimit, type PickupLimit } from './pickupLimit.ts';
 import { DESERT, desertArrival, doorAt, level, levelByKey, type Level } from '../shared/levels.ts';
@@ -101,9 +102,9 @@ const MAX_SIM_STEPS = 6;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const db = openDb(process.env.DB_PATH ?? `data/worlds/${WORLD_ID}.db`);
-/** Deaths left in this world, shared by everyone; at 0 the game is over. The lab has endless lives: they never run down
- *  there, and a lab that ran out before that is given them back. */
-let lives = LAB ? Math.max(db.getSetting('lives') ?? LIVES, LIVES) : (db.getSetting('lives') ?? LIVES);
+/** Deaths left in this world, shared by everyone; at 0 the game is over. The lab and the test world have endless lives:
+ *  they never run down there, and one that ran out before that is given them back. */
+let lives = LAB || TEST ? Math.max(db.getSetting('lives') ?? LIVES, LIVES) : (db.getSetting('lives') ?? LIVES);
 /** Boss kinds killed at least once (shared/bosses.ts bossBit); each first kill gave BOSS_LIVES lives. */
 let beaten = db.getSetting('bosses_beaten') ?? 0;
 const terrain = new TerrainServer(db);
@@ -202,7 +203,7 @@ const seenBy = (p: Player, o: Player) => o === p || (o.state.level === p.state.l
 /** What a player in a level without the world's things (Level.things) may still send: the rest asks about the
  *  desert's layout or the things lying about by position, and must not reach them through the shared coordinates. */
 const IN_LEVEL = new Set<ClientMsg['t']>(['input', 'ready', 'hands', 'telemetry', 'chat', 'siteLeave', 'drink', 'move', 'sort', 'fire', 'swing',
-  'setEpoch', 'enter', 'debugGear', 'debugGive', 'debugHeat', 'debugWeather', 'debugHit', 'debugLevel']);
+  'setEpoch', 'enter', 'debugGear', 'debugGive', 'debugHeat', 'debugWeather', 'debugHit', 'debugLevel', 'scenario']);
 
 const players = new Map<WebSocket, Player>();
 let nextId = 1;
@@ -263,6 +264,7 @@ wss.on('connection', (ws) => {
     if (p && !levelOf(p).things && !IN_LEVEL.has(msg.t)) return refuseInLevel(p, msg);
     if (msg.t === 'enter' && p) return onEnter(p);
     if (msg.t === 'debugLevel' && p) return onDebugLevel(p, msg.key);
+    if (msg.t === 'scenario' && p) return onScenario(p, msg.id);
     if (msg.t === 'input' && p) return onInput(p, msg.seq, msg.input, msg.yaw, msg.pitch);
     if (msg.t === 'pickup' && p) return onPickup(p, msg.ix, msg.iz, msg.i);
     if (msg.t === 'tend' && p) return onTend(p, msg.bed);
@@ -443,7 +445,7 @@ async function join(ws: WebSocket, browserId: unknown, spawn: unknown, wanted: u
   // Someone new to this world (never here, never through it) begins aboard the falling datacenter (docs/levels/tutorial.md),
   // not in the lab or the art bench, and not with a dev spawn asked for (?spawn=pod skips it; ?spawn=beginning goes in
   // every time, on ready, like any level).
-  if (!row && !CALM && spawn === undefined && !db.hasGrant(browserId, BEGINNING_DONE)) state = levelSpawn(TUTORIAL);
+  if (!row && !CALM && !TEST && spawn === undefined && !db.hasGrant(browserId, BEGINNING_DONE)) state = levelSpawn(TUTORIAL);
   // Whatever of a level's own is in the bag outside it goes (a crash mid-level, a level left some other way).
   if (state.level !== TUTORIAL) stripLevelItems(browserId, level(TUTORIAL).key);
   grantKits(items, db, browserId);
@@ -598,6 +600,57 @@ function onDebugLevel(p: Player, key: unknown) {
   const L = typeof key === 'string' ? levelByKey(key) : undefined;
   if (!L || L.id === p.state.level) return;
   moveTo(p, L.id === DESERT ? levelDoor(p) : levelSpawn(L.id, p.id));
+}
+
+/** Debug menu → Scenarios: set up gameplay test scenario `id` (shared/scenarios.ts) for `p`, in the test world only (its
+ *  places are the test world's seed's). Moved there, the bag and equipment as it says, cooled down with a full bottle,
+ *  the shared clock at its time of day, its weather, and its enemies placed (the ones an earlier scenario placed gone). */
+function onScenario(p: Player, id: string) {
+  const sc = scenarioById(id);
+  if (!TEST || !sc) return;
+  const { x, z, facing } = sc.at;
+  if (!moveTo(p, spawnState(x, z, heightAt(x, z), DESERT, facing))) return; // (down, loading, or just moved)
+  p.yaw = quantizeYaw(facing);
+  const now = performance.now();
+
+  // What they carry: the hotbar in order, then the equipment (so a backpack opens its rows), then the bag.
+  const parts = (it: ScenarioItem) => (GEAR[it.kind] ? scrapParts(it.kind, it.tier ?? 'scrap') : undefined);
+  items.reset(p.browserId, sc.hotbar.map((it) => ({ kind: it.kind, n: it.n ?? 1, parts: parts(it) })));
+  const rest = sc.bag ?? [];
+  for (const it of rest.filter((it) => GEAR[it.kind]?.equip)) items.equip(p.browserId, { kind: it.kind, parts: parts(it)! });
+  for (const it of rest.filter((it) => !GEAR[it.kind]?.equip)) {
+    const ps = parts(it);
+    if (ps) items.giveItem(p.browserId, { kind: it.kind, parts: ps });
+    else items.give(p.browserId, it.kind, it.n ?? 1);
+  }
+  for (const box of ['bag', 'equip']) sendBox(p, box);
+  gearChanged(p.browserId);
+  p.health = HEALTH_MAX;
+  p.choke = p.gassed = 0;
+  Object.assign(p.heat, { heat: 0, stroke: 0, sips: p.heat.maxSips, off: sc.noHeat === true, arrivedAt: -Infinity });
+  send(p.ws, waterMsg(p.heat));
+
+  // The time of day, for everyone (the test world's clock).
+  epoch += shiftToTimeOfDay(now + epoch, sc.tod);
+  db.setSetting('clockShift', epoch - realEpoch);
+  for (const o of players.values()) send(o.ws, { t: 'epoch', epoch });
+
+  // The weather: clear (none coming on its own either), or one brought on them.
+  storms.off = sc.weather === 'clear';
+  if (sc.weather === 'storm') storms.spawn(x, z, 0, now);
+  if (sc.weather === 'front') storms.spawnFront([p.state], now);
+  if (sc.weather === 'gas') storms.spawnGas([p.state], now);
+
+  // The enemies, placed round them: at `dist` m, `bearing` turned from straight ahead (the sim faces -sin, -cos).
+  guardians.unstage();
+  const me = { id: p.id, x, y: p.state.y, z, safe: false };
+  for (const e of sc.enemies) {
+    const a = facing + (e.bearing ?? 0), ex = x - Math.sin(a) * e.dist, ez = z - Math.cos(a) * e.dist;
+    // (Side on to them, unaware, unless it's hunting.)
+    const yaw = Math.atan2(x - ex, z - ez) + (e.hunting ? 0 : Math.PI / 2);
+    if (e.kind === 'guardian') guardians.stage(ex, ez, yaw, e.standS ?? 0, e.hunting ? me : null, now);
+  }
+  send(p.ws, { t: 'scenario', id: sc.id, slot: sc.hotbar.length ? 0 : -1 });
 }
 
 /** A message a level without the world's things doesn't take (IN_LEVEL): refused, with what the client needs to undo its
@@ -784,7 +837,7 @@ function die(p: Player, cause: DeathCause, push: [number, number, number] = [0, 
     sendBox(p, 'bag');
     gearChanged(p.browserId);
   }
-  if (LAB) return; // (endless lives in the lab)
+  if (LAB || TEST) return; // (endless lives in the lab and the test world)
   lives--;
   db.setSetting('lives', lives);
   for (const o of players.values()) send(o.ws, { t: 'lives', n: lives, beaten });

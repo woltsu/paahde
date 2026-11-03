@@ -16,6 +16,8 @@
 // "Go to level" moves you into a level (shared/levels.ts), or back out to the desert, through the server's door move.
 // "Give item" puts any one item (shared/items.ts ITEMS; type to search by name or id) in your bag: a count of it, or gear
 // repaired with parts of the chosen tier, or broken.
+// "Scenarios" (the header's other view, dev server only) lists the gameplay test scenarios (shared/scenarios.ts): Start sets
+// one up for you in the test world (?w=test), going there first from any other world.
 import { isBound } from './bindings';
 import { BEATS } from '../shared/levels/beginning.ts';
 import { LEVELS } from '../shared/levels.ts';
@@ -26,6 +28,8 @@ import { CLOTH, ITEMS, RETIRED, SCRAP, stackOf, WIRING } from '../shared/items.t
 import { TONE_CURVES, toneControl, type ToneCurve } from './post';
 import { summonLocalStorm } from './storm';
 import { clockText, timeControl } from './world/dayNight';
+import { SCENARIOS } from '../shared/scenarios.ts';
+import { labAllowed, TEST, TEST_WORLD } from '../shared/world.ts';
 import type { FlyCam } from './flyCam';
 
 const PRESETS: [string, number][] = [['Dawn', 0.27], ['Noon', 0.5], ['Golden hour', 0.7], ['Dusk', 0.77], ['Midnight', 0]];
@@ -37,15 +41,23 @@ export class DebugMenu {
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean, quad: boolean) => void = () => {},
-    goLevel: (key: string) => void = () => {}) {
+    goLevel: (key: string) => void = () => {}, startScenario: (id: string) => void = () => {}) {
     const style = document.createElement('style');
     style.textContent = `
 #debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh / var(--ui, 1) - 60px); overflow-y: auto;
   overscroll-behavior: contain; padding: 8px 10px 10px; display: none; box-sizing: border-box;
   font: 12px var(--mono); color: #ffe9cc; background: rgba(20, 10, 5, 0.86); border-radius: 8px;
   box-shadow: 0 0 0 1px rgba(255, 240, 220, 0.18); z-index: 10; scrollbar-width: thin; scrollbar-color: rgba(255, 233, 204, 0.3) transparent; }
-#debugMenu h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; opacity: .6;
-  display: flex; justify-content: space-between; }
+#debugMenu h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center; }
+#debugMenu h4 > span { opacity: .6; }
+#debugMenu .tabs { display: flex; gap: 2px; }
+#debugMenu .tabs button { padding: 1px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; background: none; opacity: .5; }
+#debugMenu .tabs button.on { opacity: 1; background: rgba(255, 233, 204, 0.12); }
+#debugMenu .scen { border-top: 1px solid rgba(255, 240, 220, 0.12); padding: 6px 0 8px; }
+#debugMenu .scen b { display: block; letter-spacing: .04em; }
+#debugMenu .scen p { margin: 3px 0 0; opacity: .75; line-height: 1.35; }
+#debugMenu .scen .facts { opacity: .5; font-size: 11px; }
 #debugMenu details { border-top: 1px solid rgba(255, 240, 220, 0.12); padding: 5px 0 6px; }
 #debugMenu summary { cursor: pointer; list-style: none; font-weight: bold; letter-spacing: .04em; opacity: .85;
   display: flex; justify-content: space-between; user-select: none; }
@@ -75,7 +87,14 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     const tiers = ['Scrap', 'Basic', 'Quality', 'Space'];
     const p = this.panel;
     p.id = 'debugMenu';
-    p.innerHTML = `<h4><span>Debug</span><span>F3</span></h4>
+    const scenarios = labAllowed() ? `<div id="dbgScenarios" style="display:none">
+<p style="margin:2px 0 4px;opacity:.6;line-height:1.35">${TEST ? 'Sets it up for you here: place, gear (your bag and equipment emptied first), time, weather and enemies. Start again to retry.' : `Runs in the test world (?w=${TEST_WORLD}, fixed seed): Start goes there and sets it up.`}</p>
+${SCENARIOS.map((sc) => `<div class="scen"><b>${sc.label}</b><p>${sc.note}</p>
+<p class="facts">${clockText(sc.tod)} · ${sc.weather} · ${[...sc.hotbar, ...(sc.bag ?? [])].map((it) => `${ITEMS[it.kind]?.label ?? it.kind}${it.tier ? ` (${it.tier})` : it.n && it.n > 1 ? ` ×${it.n}` : ''}`).join(', ')}
+ · ${sc.enemies.map((e) => `${e.kind} ${e.dist} m${e.hunting ? ', hunting' : ''}`).join(', ') || 'no enemies'}</p>
+<div class="row"><button class="go" data-scenario="${sc.id}">Start</button></div></div>`).join('')}</div>` : '';
+    p.innerHTML = `<h4>${scenarios ? '<div class="tabs"><button data-view="main" class="on">Debug</button><button data-view="scenarios">Scenarios</button></div>' : '<span>Debug</span>'}<span>F3</span></h4>
+${scenarios}<div id="dbgMain">
 <details data-sec="time" open><summary>Time <b id="dbgTime"></b></summary>
 <input id="dbgTod" type="range" min="0" max="1439" step="1">
 <div class="row" id="dbgPresets"></div>
@@ -134,13 +153,37 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <label title="No random sandstorms in this world (clears the ones blowing)"><input id="dbgNoWeather" type="checkbox"> Disable weather</label>
 <div class="row"><button id="dbgHit" title="A killing blow (a guardian's laser): try the shield plate">Hit me</button></div>
 <div class="sub">Test lab (?w=lab)</div>
-<div class="grid"><button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div></details>`;
+<div class="grid"><button id="dbgYard" title="Put the nearest lab machine back together (?w=lab)">Reset near</button><button id="dbgYardAll" title="Put every lab machine back together">Reset all</button></div></details></div>`;
     // Which sections are open is remembered per browser.
     for (const d of p.querySelectorAll<HTMLDetailsElement>('details[data-sec]')) {
       const key = `debugMenu.${d.dataset.sec}`;
       try { const v = localStorage.getItem(key); if (v !== null) d.open = v === '1'; } catch { /* no storage */ }
       d.addEventListener('toggle', () => { try { localStorage.setItem(key, d.open ? '1' : '0'); } catch { /* no storage */ } });
     }
+    // The header's views: the debug controls, or the test scenarios (which one is remembered per browser).
+    const views = { main: p.querySelector<HTMLElement>('#dbgMain')!, scenarios: p.querySelector<HTMLElement>('#dbgScenarios') };
+    const tabs = [...p.querySelectorAll<HTMLButtonElement>('[data-view]')];
+    const view = (v: string) => {
+      if (v !== 'scenarios' || !views.scenarios) v = 'main';
+      views.main.style.display = v === 'main' ? '' : 'none';
+      if (views.scenarios) views.scenarios.style.display = v === 'scenarios' ? '' : 'none';
+      for (const t of tabs) t.classList.toggle('on', t.dataset.view === v);
+      try { localStorage.setItem('debugMenu.view', v); } catch { /* no storage */ }
+    };
+    for (const t of tabs) t.addEventListener('click', () => view(t.dataset.view!));
+    try { view(localStorage.getItem('debugMenu.view') ?? 'main'); } catch { view('main'); }
+    for (const b of p.querySelectorAll<HTMLElement>('[data-scenario]')) b.addEventListener('click', () => {
+      const id = b.dataset.scenario!;
+      if (!TEST) {
+        // Into the test world, which starts it once loaded (main.ts).
+        location.href = `${location.pathname}?w=${TEST_WORLD}&debug&scenario=${encodeURIComponent(id)}`;
+        return;
+      }
+      // Its time is on the shared clock: stop holding a local one.
+      timeControl.override = null;
+      live.checked = true;
+      startScenario(id);
+    });
     p.addEventListener('wheel', (e) => e.stopPropagation()); // scrolling the panel is not the game's wheel
     document.body.append(p);
     const slider = p.querySelector<HTMLInputElement>('#dbgTod')!;

@@ -842,6 +842,7 @@ export class Net {
       return this.fall(msg);
     }
     if (msg.t === 'level') return this.teleport(msg.state);
+    if (msg.t === 'scenario') return this.onScenario?.(msg.slot);
     if (msg.t === 'respawn') {
       if (this.dying) this.fall(this.dying);
       this.down = null;
@@ -1011,6 +1012,13 @@ export class Net {
   debugLevel(key: string) {
     this.send({ t: 'debugLevel', key });
   }
+
+  /** Debug menu → Scenarios: set up gameplay test scenario `id` (shared/scenarios.ts; the test world only). */
+  scenario(id: string) {
+    if (this.connected) this.send({ t: 'scenario', id });
+  }
+  /** A scenario is set up: main.ts puts hotbar slot `slot` in hand. */
+  onScenario?: (slot: number) => void;
 
   /** The bolt `id` reached us on screen (src/world/bolts.ts): a death it caused, held till now, happens. */
   boltArrived(id: number) {

@@ -287,6 +287,11 @@ export class Survival {
     return this.selected;
   }
 
+  /** Hotbar slot `slot` in hand (-1: empty hands), as if its key were pressed (a test scenario's set-up). */
+  take(slot: number) {
+    this.select(slot);
+  }
+
   private select(slot: number) {
     if (slot !== this.selected) this.cancel();
     this.selected = slot;
