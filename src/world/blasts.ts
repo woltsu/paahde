@@ -1,45 +1,111 @@
-// What the heavy guns do where their beams stop (shared/rifle.ts; src/rifle.ts fires them, for everyone near). Purely
-// visual; the damage is the server's.
-// - The blaster's burst, sized to BLAST_R: a white-hot fireball going orange and red as it swells, a shock ring out to
-//   the burst's reach along the surface struck, the shots' one light (src/world/zaps.ts `light`: no light is added),
-//   sparks and smoke, sand thrown up all round on the dunes (src/tyreDust.ts), and a scorch left where it hit the
-//   ground or a wall.
+// Explosions, and what the heavy guns do where their beams stop (shared/rifle.ts; src/rifle.ts fires them, for everyone
+// near). Purely visual; the damage is the server's.
+// - `explode`: one explosion, everything about it tuned by a BlastSpec (`blastSpec(strength)`: the strength is the
+//   fireball's radius in metres, the rest follows it by rough scaling laws; `BLASTS` has the ones the game sets off:
+//   the blaster's burst, a guardian's bolt, missiles, bombs, crashes). A volumetric fireball (src/world/fireball.ts)
+//   that burns white to red and leaves rising smoke, a shock ring along the surface struck, the shots' one light
+//   (src/world/zaps.ts `light`: no light is added), sparks, hot debris streaming smoke, smoke that hangs about, sand
+//   thrown up all round on the dunes (src/tyreDust.ts), a scorch where it hit the ground or a wall, and the view
+//   shaken by how near it is.
+// - The blaster's burst (`blaster`), sized to BLAST_R.
 // - The graviton pistol's end point: a black hole with a violet halo that swells for an instant and then caves in on
 //   itself, sucking violet motes in from all round, and a violet ring breaking outward as it closes.
 // - The piercer's slug: at the muzzle a quick pale shock ring, the brake's smoke and the sand kicked up under a low
 //   barrel; where it stops, punched through a walker's plate, sparks out of both sides and a spray of molten metal
 //   (most of it blown on through), a puff of sand on the dunes, sparks, dust and a small scorch on rock and concrete.
-// They shake the view by how near they are (`shake`, read by src/camera.ts `rumble` through main.ts).
+// All the view by how near they are (`shake`, read by src/camera.ts `rumble` through main.ts).
 //
-// Pools, made once (no materials per shot): FIREBALLS, RINGS, SCORCHES and HOLES meshes each with its own uniforms,
-// and instanced sprite pools for the motes and the molten metal.
+// Pools, made once (no materials per shot): RINGS, SCORCHES and HOLES meshes each with its own uniforms, the fireballs'
+// (fireball.ts), instanced sprite pools for the motes, the molten metal and the debris' hot heads, and a list of the debris in flight.
 import * as THREE from 'three/webgpu';
-import { abs, dot, float, length, mix, mx_noise_float, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { abs, dot, float, length, mx_noise_float, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { BLAST_R } from '../../shared/rifle.ts';
-import { tyreDust } from '../tyreDust.ts';
+import { heightAt } from '../../shared/terrain.ts';
 import { groundAt } from '../ground.ts';
+import { tyreDust } from '../tyreDust.ts';
+import { fireballs, type FireballLook } from './fireball.ts';
 import { SpritePool, zaps } from './zaps.ts';
 
-const FIREBALLS = 4, RINGS = 6, SCORCHES = 10, HOLES = 3, MOTES = 256, MOLTEN = 160;
-/** The fireball: lives FIRE_S, swells to FIRE_R m across (radius). */
-const FIRE_S = 0.55, FIRE_R = BLAST_R * 0.7;
-/** The shock ring: out to the burst's reach in RING_S. */
+const RINGS = 8, SCORCHES = 12, HOLES = 3, MOTES = 256, MOLTEN = 160, EMBERS = 128;
+/** The shock ring: out to a blaster burst's reach in RING_S (bigger rings take longer, by the root of their size). */
 const RING_S = 0.32;
-/** A scorch: SCORCH_R m across (radius), there SCORCH_S s, fading over the last SCORCH_FADE. */
-const SCORCH_R = 1.5, SCORCH_S = 25, SCORCH_FADE = 6;
+/** A scorch: there SCORCH_S s, fading over the last SCORCH_FADE. */
+const SCORCH_S = 25, SCORCH_FADE = 6;
 /** The graviton's hole: swells to HOLE_R m in HOLE_GROW s, then caves in by HOLE_S. */
 const HOLE_R = 1.6, HOLE_GROW = 0.08, HOLE_S = 0.5;
-/** The view shakes within SHAKE_NEAR m at full (× the burst's `shake`), fading to nothing at SHAKE_FAR m. */
+/** The view shakes within SHAKE_NEAR m at full (× the burst's `shake`), fading to nothing at SHAKE_FAR m (further for
+ *  bigger explosions: BlastSpec `felt`). */
 const SHAKE_NEAR = 4, SHAKE_FAR = 40;
+/** Debris falls at GRAVITY and puffs smoke every TRAIL_S s while it flies. */
+const GRAVITY = 9.8, TRAIL_S = 0.05;
+
+/**
+ * One explosion, all of it. Made by `blastSpec(strength)`, which sizes everything from the fireball's radius; any
+ * field can be set over that. The fireball's own look (radius, burn and smoke times, heat, soot, rise, tint) is
+ * fireball.ts FireballLook.
+ */
+export type BlastSpec = FireballLook & {
+  /** The shock ring's reach along the surface (m; 0: none). */
+  ring: number;
+  /** Sparks thrown; hot pieces flung out on arcs, trailing smoke. */
+  sparks: number; debris: number;
+  /** Smoke left hanging about (× the usual for its size and soot). */
+  linger: number;
+  /** Sand thrown up on the dunes (1: a blaster's). */
+  sand: number;
+  /** The scorch's radius (m; 0: none). */
+  scorch: number;
+  /** The light: intensity at first, its reach (m), how long it dies away over (s). */
+  light: number; reach: number; lightS: number;
+  /** How hard it shakes the view when near (0..1), and how far off it's still felt (m). */
+  shake: number; felt: number;
+};
+
+/**
+ * An explosion of `strength`: its fireball's radius (m). A real fireball's size and how long it burns both go as the
+ * cube root of its yield; here the burn time goes as the square root of the size (small ones would flash by too fast
+ * to read otherwise), and everything round it scales with the size.
+ */
+export function blastSpec(strength: number, o: Partial<BlastSpec> = {}): BlastSpec {
+  const r = Math.max(0.3, strength), fire = 0.42 * Math.sqrt(r);
+  return {
+    r, fire, smoke: fire * 2.2, heat: 1, soot: 0.5, rise: 0.7 * Math.sqrt(r), tint: new THREE.Color(1, 1, 1),
+    ring: r * 1.4, sparks: Math.min(140, Math.round(12 * r)), debris: Math.min(10, Math.floor(r / 2)), linger: 1,
+    sand: r / 3.4, scorch: r * 0.4, light: 200 * r, reach: 8 * r, lightS: fire * 0.8,
+    shake: Math.min(1, r / 4), felt: SHAKE_FAR * Math.max(1, r / 3.4),
+    ...o,
+  };
+}
+
+/** The explosions the game sets off (src/rifle.ts, src/guardians.ts, src/world/colossus.ts, src/world/carrier.ts). */
+export const BLASTS = {
+  /** The blaster's burst: hot and quick, yellow-white, little smoke; its ring is the burst's reach. */
+  blaster: blastSpec(BLAST_R * 0.75, { tint: new THREE.Color(1, 0.95, 0.85), soot: 0.3, ring: BLAST_R * 1.05, shake: 0.9, debris: 0, scorch: 1.5 }),
+  /** A guardian's laser bolt bursting: redder (the bolt's colour), smokier; on the sand, and in the air or on a wall. */
+  bolt: blastSpec(4.5, { tint: new THREE.Color(1.15, 0.72, 0.55), soot: 0.55, debris: 3 }),
+  boltAir: blastSpec(3.2, { tint: new THREE.Color(1.15, 0.72, 0.55), soot: 0.4, debris: 0 }),
+  /** A missile (the guardians' and the worm's, shared/missiles.ts BLAST_R; the colossus'): a big, dirty fireball. */
+  missile: blastSpec(6.5, { soot: 0.8, debris: 5 }),
+  /** The hive carrier's bombs. */
+  bomb: blastSpec(7.5, { soot: 0.75, debris: 6 }),
+  /** A jet nosing into the sand, the harvester going up: huge, oily, burning long. */
+  crash: blastSpec(13, { soot: 0.9, heat: 1.2, debris: 10, sand: 2 }),
+} satisfies Record<string, BlastSpec>;
 
 const c3 = (u: unknown) => u as Node<'vec3'>;
-const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _b = new THREE.Vector3();
-const Z = new THREE.Vector3(0, 0, 1);
+const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _b = new THREE.Vector3(), _s = new THREE.Vector3();
+const Z = new THREE.Vector3(0, 0, 1), UP = new THREE.Vector3(0, 1, 0);
 const ball = new THREE.IcosahedronGeometry(1, 3);
 const quad = new THREE.PlaneGeometry(2, 2);
 
+/** The dunes' normal at (x, z). */
+export function sandNormal(x: number, z: number, out: THREE.Vector3): THREE.Vector3 {
+  return out.set(heightAt(x - 1, z) - heightAt(x + 1, z), 2, heightAt(x, z - 1) - heightAt(x, z + 1)).normalize();
+}
+
 type Slot = { mesh: THREE.Object3D; fade: { value: number }; age: number; life: number; size: number };
+type Debris = { x: number; y: number; z: number; vx: number; vy: number; vz: number; age: number; life: number; puff: number; size: number };
 
 /** Where on the sprite's disc: 0 centre .. 1 edge. */
 const disc = () => length(uv().sub(0.5)).mul(2);
@@ -51,32 +117,18 @@ class Blasts {
   /** How hard the view shakes now, 0..1 (src/camera.ts `rumble`, through main.ts). */
   shake = 0;
   private camera: THREE.Camera | null = null;
-  private fires: (Slot & { heat: { value: number } })[] = [];
   private rings: (Slot & { color: { value: THREE.Color } })[] = [];
   private scorches: Slot[] = [];
   private holes: (Slot & { rim: THREE.Mesh; ring: boolean; at: THREE.Vector3; normal: THREE.Vector3 })[] = [];
   private motes: SpritePool;
   private molten: SpritePool;
+  /** Hot debris flung out: a glowing head (embers) and a smoke trail. */
+  private embers: SpritePool;
+  private debris: Debris[] = [];
 
   constructor() {
     this.root.name = 'Blasts';
-    for (let i = 0; i < FIREBALLS; i++) {
-      // Lumpy, churning, white-hot inside and orange to dark red at the rim; going redder as it cools (`heat`).
-      const fade = uniform(0), heat = uniform(1), seed = i * 7.3;
-      const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-      m.positionNode = positionGeometry.mul(mx_noise_float(positionGeometry.mul(1.8).add(seed)).mul(0.35).add(1));
-      const churn = mx_noise_float(positionGeometry.mul(3.2).add(vec3(seed, heat.mul(-3), seed * 0.5))).mul(0.5).add(0.5);
-      const f = facing();
-      const hot = vec3(9, 6, 2.6), warm = vec3(2.6, 0.75, 0.12), cold = vec3(0.6, 0.08, 0.02);
-      m.colorNode = mix(mix(cold, warm, heat), hot, pow(f, float(2)).mul(heat).mul(churn.add(0.3)));
-      m.opacityNode = smoothstep(0.05, 0.6, f).mul(churn.mul(0.7).add(0.45)).mul(fade);
-      const mesh = new THREE.Mesh(ball, m);
-      mesh.visible = false;
-      mesh.frustumCulled = false;
-      mesh.renderOrder = 2;
-      this.root.add(mesh);
-      this.fires.push({ mesh, fade, heat, age: 1, life: FIRE_S, size: FIRE_R });
-    }
+    this.root.add(fireballs.root);
     for (let i = 0; i < RINGS; i++) {
       // A thin bright band at the edge of a flat disc, a little lumpy, flat on the surface struck.
       const fade = uniform(0), color = uniform(new THREE.Color());
@@ -102,7 +154,7 @@ class Blasts {
       mesh.visible = false;
       mesh.frustumCulled = false;
       this.root.add(mesh);
-      this.scorches.push({ mesh, fade, age: 1, life: SCORCH_S, size: SCORCH_R });
+      this.scorches.push({ mesh, fade, age: 1, life: SCORCH_S, size: 1 });
     }
     for (let i = 0; i < HOLES; i++) {
       // A black ball, softly edged, in a violet halo that flickers like something bent around it.
@@ -132,7 +184,13 @@ class Blasts {
       m.opacityNode = float(1).sub(smoothstep(0.1, 1, r));
       m.scaleNode = vec2(d.y, d.y);
     }, true);
-    this.root.add(this.motes.sprite);
+    // The debris' heads: small orange-white points, dulling as they cool.
+    this.embers = new SpritePool(EMBERS, (m, d) => {
+      m.colorNode = vec3(4, 1.6, 0.4).mul(d.x);
+      m.opacityNode = float(1).sub(smoothstep(0.1, 1, disc()));
+      m.scaleNode = vec2(d.y, d.y);
+    }, true);
+    this.root.add(this.motes.sprite, this.embers.sprite);
     // Molten metal torn out by the piercer's slug: white-yellow drops cooling to orange and dull red, lying glowing a
     // moment where they land.
     this.molten = new SpritePool(MOLTEN, (m, d) => {
@@ -144,9 +202,10 @@ class Blasts {
     this.root.add(this.molten.sprite);
   }
 
-  /** The camera the shake is measured from. */
+  /** The camera the shake is measured from (and the fireballs know when it's inside one). */
   setCamera(camera: THREE.Camera) {
     this.camera = camera;
+    fireballs.setCamera(camera);
   }
 
   private take<T extends Slot>(pool: T[]): T {
@@ -164,47 +223,75 @@ class Blasts {
     mesh.rotateZ(Math.random() * Math.PI * 2);
   }
 
-  private shakeFrom(x: number, y: number, z: number, k: number) {
+  private shakeFrom(x: number, y: number, z: number, k: number, far = SHAKE_FAR) {
     if (!this.camera) return;
     const d = this.camera.getWorldPosition(_v).distanceTo(_n.set(x, y, z));
-    const near = 1 - Math.min(1, Math.max(0, (d - SHAKE_NEAR) / (SHAKE_FAR - SHAKE_NEAR)));
+    const near = 1 - Math.min(1, Math.max(0, (d - SHAKE_NEAR) / (far - SHAKE_NEAR)));
     this.shake = Math.min(1, Math.max(this.shake, k * near * near));
   }
 
   /**
-   * The blaster's burst at (x, y, z) on a surface facing (nx, ny, nz). `on`: what it struck (the sand throws up dust,
-   * the sand and walls keep a scorch; nothing, in the air at the beam's reach, still bursts).
+   * An explosion at (x, y, z) on a surface facing (nx, ny, nz), as `spec` says. `on`: what it struck (the sand throws
+   * up dust; the sand and walls keep a scorch and clip the fireball to their plane; an enemy, or nothing, in the air,
+   * neither).
    */
-  blaster(x: number, y: number, z: number, nx: number, ny: number, nz: number, on: 'sand' | 'hard' | 'enemy' | 'air') {
+  explode(x: number, y: number, z: number, nx: number, ny: number, nz: number, on: 'sand' | 'hard' | 'enemy' | 'air', spec: BlastSpec) {
     const n = _b.set(nx, ny, nz).normalize();
-    const f = this.take(this.fires);
-    f.mesh.position.set(x, y, z).addScaledVector(n, 0.5);
-    f.mesh.rotation.set(Math.random() * 6, Math.random() * 6, 0);
-    const r = this.take(this.rings);
-    r.color.value.setRGB(2.4, 1.3, 0.55);
-    r.life = RING_S;
-    r.size = BLAST_R * 1.05;
-    this.flat(r.mesh, x, y, z, on === 'air' || on === 'enemy' ? _v.set(0, 1, 0) : n, 0.15);
-    zaps.light(x + n.x * 1.2, y + n.y * 1.2, z + n.z * 1.2, 0xffa050, 700, BLAST_R * 6, 0.4);
-    zaps.burst(x, y, z, n.x, n.y, n.z, 44, 3);
-    for (let i = 0; i < 6; i++) {
-      const a = Math.random() * Math.PI * 2, s = Math.random() * 1.6;
-      zaps.puff(x + Math.cos(a) * s, y + 0.4 + Math.random(), z + Math.sin(a) * s, 1.4 + Math.random() * 1.2, 1.5 + Math.random() * 1.5);
+    const flat = on === 'sand' || on === 'hard';
+    fireballs.fire(x, y, z, flat ? n : null, spec);
+    if (spec.ring > 0) {
+      const r = this.take(this.rings);
+      r.color.value.setRGB(2.4, 1.3, 0.55).multiplyScalar(spec.heat);
+      r.life = RING_S * Math.sqrt(spec.ring / BLAST_R);
+      r.size = spec.ring;
+      this.flat(r.mesh, x, y, z, flat ? n : UP, 0.15);
     }
-    if (on === 'sand') {
+    const up = spec.r * 0.4;
+    zaps.light(x + n.x * up, y + n.y * up, z + n.z * up, 0xffa050, spec.light * spec.heat, spec.reach, spec.lightS);
+    zaps.burst(x, y, z, n.x, n.y, n.z, spec.sparks, spec.r / 1.2);
+    // Smoke hanging about once the fireball has gone: about its size, rising slowly; more of it the sootier.
+    const puffs = Math.round(spec.linger * (2 + spec.r * 1.2) * (0.3 + spec.soot));
+    for (let i = 0; i < puffs; i++) {
+      const a = Math.random() * Math.PI * 2, s = Math.random() * spec.r * 0.6;
+      zaps.puff(x + Math.cos(a) * s, y + spec.r * (0.3 + Math.random() * 0.8), z + Math.sin(a) * s, spec.r * (0.45 + Math.random() * 0.4), spec.rise * 0.6);
+    }
+    // Hot pieces flung out and up off the surface, each streaming smoke as it arcs down.
+    for (let i = 0; i < spec.debris; i++) {
+      _s.randomDirection();
+      if (_s.dot(n) < 0) _s.addScaledVector(n, -2 * _s.dot(n));
+      _s.addScaledVector(n, 1.1).normalize();
+      const v = (7 + Math.random() * 7) * Math.sqrt(spec.r / 4);
+      this.debris.push({
+        x, y, z, vx: _s.x * v, vy: _s.y * v, vz: _s.z * v, age: 0, life: 0.8 + Math.random() * 1.2, puff: 0,
+        size: (0.25 + Math.random() * 0.25) * Math.sqrt(spec.r / 4),
+      });
+    }
+    if (on === 'sand' && spec.sand > 0) {
       // A ring of sand thrown out and up, and a column of it in the middle.
-      for (let i = 0; i < 18; i++) {
-        const a = (i / 18) * Math.PI * 2 + Math.random() * 0.3, v = 4 + Math.random() * 5;
-        tyreDust.emit(x, y + 0.2, z, Math.cos(a) * v, 1.5 + Math.random() * 3, Math.sin(a) * v, 0.9 + Math.random() * 0.9, 2.5 + Math.random() * 2);
+      const k = Math.sqrt(spec.sand), ring = Math.round(18 * k), col = Math.round(6 * k);
+      for (let i = 0; i < ring; i++) {
+        const a = (i / ring) * Math.PI * 2 + Math.random() * 0.3, v = (4 + Math.random() * 5) * k;
+        tyreDust.emit(x, y + 0.2, z, Math.cos(a) * v, (1.5 + Math.random() * 3) * k, Math.sin(a) * v, (0.9 + Math.random() * 0.9) * k, 2.5 + Math.random() * 2);
       }
-      for (let i = 0; i < 6; i++) tyreDust.emit(x, y + 0.3, z, (Math.random() - 0.5) * 2, 5 + Math.random() * 6, (Math.random() - 0.5) * 2, 1.2 + Math.random(), 3 + Math.random() * 2);
+      for (let i = 0; i < col; i++) tyreDust.emit(x, y + 0.3, z, (Math.random() - 0.5) * 2, (5 + Math.random() * 6) * k, (Math.random() - 0.5) * 2, (1.2 + Math.random()) * k, 3 + Math.random() * 2);
     }
-    if (on === 'sand' || on === 'hard') {
+    if (flat && spec.scorch > 0) {
       const s = this.take(this.scorches);
-      s.size = SCORCH_R * (0.8 + Math.random() * 0.4);
+      s.size = spec.scorch * (0.8 + Math.random() * 0.4);
       this.flat(s.mesh, x, y, z, n, on === 'sand' ? 0.04 : 0.02);
     }
-    this.shakeFrom(x, y, z, 0.9);
+    this.shakeFrom(x, y, z, spec.shake, spec.felt);
+  }
+
+  /** An explosion on the dunes at (x, y, z) (flat on the sand's slope there), as `spec` says. */
+  explodeOnSand(x: number, y: number, z: number, spec: BlastSpec) {
+    const n = sandNormal(x, z, _n);
+    this.explode(x, y, z, n.x, n.y, n.z, 'sand', spec);
+  }
+
+  /** The blaster's burst at (x, y, z) on a surface facing (nx, ny, nz) (`explode`, BLASTS.blaster). */
+  blaster(x: number, y: number, z: number, nx: number, ny: number, nz: number, on: 'sand' | 'hard' | 'enemy' | 'air') {
+    this.explode(x, y, z, nx, ny, nz, on, BLASTS.blaster);
   }
 
   /** The graviton beam's end at (x, y, z), off a surface facing (nx, ny, nz). */
@@ -297,18 +384,8 @@ class Blasts {
   update(dt: number) {
     this.shake *= Math.exp(-dt * 4.5);
     if (this.shake < 1e-3) this.shake = 0;
-    for (const f of this.fires) {
-      if (!f.mesh.visible) continue;
-      const t = (f.age += dt) / f.life;
-      if (t >= 1) {
-        f.mesh.visible = false;
-        continue;
-      }
-      f.mesh.scale.setScalar(f.size * (0.25 + 0.75 * (1 - Math.exp(-t * 9))));
-      f.heat.value = Math.max(0, 1 - t * 1.3);
-      f.fade.value = Math.min(1, (1 - t) * 2.2);
-      f.mesh.position.y += dt * 1.2 * t; // the hot gas starts to rise
-    }
+    fireballs.update(dt);
+    this.updateDebris(dt);
     for (const r of this.rings) {
       if (!r.mesh.visible) continue;
       const t = (r.age += dt) / r.life;
@@ -378,6 +455,34 @@ class Blasts {
       } else ml.pos[v + 1] = g + 0.01; // landed: lies glowing in the sand
       ml.data[i * 2] = (1 - t) * (1 - 0.3 * t);
       ml.data[i * 2 + 1] = ml.size[i] * (1 - 0.4 * t);
+    });
+  }
+
+  private updateDebris(dt: number) {
+    this.debris = this.debris.filter((d) => {
+      d.age += dt;
+      d.vy -= GRAVITY * dt;
+      const k = Math.exp(-dt * 0.4);
+      d.vx *= k;
+      d.vz *= k;
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      d.z += d.vz * dt;
+      const t = d.age / d.life;
+      if (t >= 1 || (d.vy < 0 && d.y < heightAt(d.x, d.z))) return false;
+      // Smoke behind it, thickening as it cools; its head a short-lived ember where it is now.
+      d.puff += dt;
+      if (d.puff >= TRAIL_S) {
+        d.puff -= TRAIL_S;
+        zaps.puff(d.x, d.y, d.z, 0.07 + t * 0.12, 0.3); // (smoke swells about five times over its life)
+        this.embers.add(d.x, d.y, d.z, 0, 0, 0, d.size * (1.4 - t), 0.12);
+      }
+      return true;
+    });
+    const em = this.embers;
+    em.update(dt, (i, t) => {
+      em.data[i * 2] = 1 - t;
+      em.data[i * 2 + 1] = em.size[i];
     });
   }
 }

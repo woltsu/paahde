@@ -38,6 +38,7 @@ import { colossusSound } from '../colossusSound';
 import { guardianSound } from '../guardianSound';
 import { rifleSound } from '../rifleSound';
 import { tyreDust } from '../tyreDust';
+import { BLASTS, blasts } from './blasts';
 import { weakPoint, type BossCtx, type BossFxMsg, type BossView } from './bossParts';
 import { zaps } from './zaps';
 
@@ -840,15 +841,10 @@ export class ColossusView implements BossView {
     this.markMat.color.setRGB(1.6 * k * (0.5 + pulse), 0.16 * k, 0.05 * k);
   }
 
-  /** A missile bursting on the sand. */
+  /** A missile bursting on the sand (src/world/blasts.ts BLASTS.missile). */
   private blast(x: number, y: number, z: number, ctx: BossCtx) {
-    zaps.burst(x, y + 0.5, z, 0, 1, 0, 40, 4);
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2, v = 6 + Math.random() * 7;
-      tyreDust.emit(x + Math.cos(a) * 2, y + 0.5, z + Math.sin(a) * 2, Math.cos(a) * v, 2 + Math.random() * 6, Math.sin(a) * v, 3.5 + Math.random() * 2, 3 + Math.random() * 2);
-    }
-    for (let i = 0; i < 4; i++) zaps.puff(x + (Math.random() - 0.5) * 4, y + 2 + i * 2, z + (Math.random() - 0.5) * 4, 5, 3);
-    ctx.thump(x, y, z, 2.4, 26, 7, 3.2);
+    blasts.explodeOnSand(x, y, z, BLASTS.missile);
+    ctx.thump(x, y, z, 2.4, 0, 7, 3.2); // the shake (the explosion throws the sand)
     guardianSound.boom(x, y, z, ctx.ear);
     _v.set(x, y, z);
     rifleSound.firework(_v, ctx.ear, 1, 0.75);

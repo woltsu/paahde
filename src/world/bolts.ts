@@ -1,12 +1,13 @@
 // Guardians' laser bolts (shared/guardians.ts, server/guardians.ts): big glowing slugs flying straight from the
 // cannon at BOLT_SPEED, drawn on the server clock from each 'shot' (starting at the drawn muzzle, easing onto the
-// server's line), and a burst of light and sand at each 'boom'. Visual only: the server decides who is hit.
+// server's line), and an explosion at each 'boom' (src/world/blasts.ts BLASTS.bolt). Visual only: the server decides who is hit.
 // A shot that comes late (after a network stall) still leaves the muzzle and flies faster until it is back on the
 // server clock, and its 'boom' waits until the drawn bolt gets there, so a bolt is always seen before it kills.
 import * as THREE from 'three/webgpu';
-import { abs, dot, float, length, normalView, positionViewDirection, pow, smoothstep, uniform, uv, vec3 } from 'three/tsl';
+import { abs, dot, float, normalView, positionViewDirection, pow } from 'three/tsl';
 import { BOLT_RANGE, BOLT_SPEED } from '../../shared/guardians.ts';
 import type { ServerMsg } from '../../shared/protocol.ts';
+import { BLASTS, blasts } from './blasts.ts';
 
 type Shot = Extract<ServerMsg, { t: 'shot' }>;
 
@@ -16,9 +17,6 @@ const CORE = new THREE.Color(4, 1.1, 0.35);
 const GLOW = new THREE.Color(1.1, 0.16, 0.04);
 /** The drawn muzzle and the server's line meet over this long (s). */
 const EASE_S = 0.35;
-/** A burst: grows to this size (m) over its life (s); bigger and longer where a bolt hits the sand. */
-const BURST_SIZE = 11, BURST_LIFE = 0.7;
-const GROUND_SIZE = 18, GROUND_LIFE = 1.1;
 /** A late bolt's clock runs this much faster than the server's until it has caught up (2: three times as fast). */
 const CATCH_UP = 2;
 
@@ -34,13 +32,11 @@ type Bolt = {
   shot: Shot; mesh: THREE.Group; off: THREE.Vector3; age: number; lag: number | null;
   end: { x: number; y: number; z: number; ground: boolean; dist: number } | null;
 };
-type Burst = { sprite: THREE.Sprite; fade: { value: number }; age: number; size: number; life: number };
 
 const _p = new THREE.Vector3(), _d = new THREE.Vector3();
 
 export class Bolts {
   private bolts = new Map<number, Bolt>();
-  private bursts: Burst[] = [];
   private scene: THREE.Object3D;
   /** A guardian's bolt burst on screen (its 'boom', once the drawn bolt got there). */
   onBurst?: (id: number, x: number, y: number, z: number, ground: boolean) => void;
@@ -76,17 +72,10 @@ export class Bolts {
     b.end = { x, y, z, ground, dist: (x - s.x) * s.dx + (y - s.y) * s.dy + (z - s.z) * s.dz };
   }
 
-  /** A burst of light and sand at (x, y, z), no bolt; `ground`: on the sand. */
+  /** A bolt's explosion at (x, y, z), no bolt; `ground`: on the sand (else in the air, or on a wall or an enemy). */
   burst(x: number, y: number, z: number, ground = false) {
-    const fade = uniform(1);
-    const m = new THREE.SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    const r = length(uv().sub(0.5)).mul(2);
-    m.colorNode = vec3(2.2, 0.55, 0.16).mul(fade);
-    m.opacityNode = float(1).sub(smoothstep(0.0, 1, r)).mul(fade).mul(0.8);
-    const sprite = new THREE.Sprite(m);
-    sprite.position.set(x, y + (ground ? 2 : 1), z);
-    this.scene.add(sprite);
-    this.bursts.push({ sprite, fade, age: 0, size: ground ? GROUND_SIZE : BURST_SIZE, life: ground ? GROUND_LIFE : BURST_LIFE });
+    if (ground) blasts.explodeOnSand(x, y, z, BLASTS.bolt);
+    else blasts.explode(x, y, z, 0, 1, 0, 'air', BLASTS.boltAir);
   }
 
   /** Every frame, at server time `now` (ms). */
@@ -112,17 +101,5 @@ export class Bolts {
       _p.set(s.x, s.y, s.z).addScaledVector(_d, d).addScaledVector(b.off, ease * ease);
       b.mesh.position.copy(_p).addScaledVector(_d, -LENGTH / 2);
     }
-    this.bursts = this.bursts.filter((b) => {
-      b.age += dt;
-      const t = b.age / b.life;
-      if (t >= 1) {
-        b.sprite.removeFromParent();
-        (b.sprite.material as THREE.Material).dispose();
-        return false;
-      }
-      b.sprite.scale.setScalar(b.size * (0.3 + 0.7 * Math.sqrt(t)));
-      b.fade.value = (1 - t) * (1 - t);
-      return true;
-    });
   }
 }

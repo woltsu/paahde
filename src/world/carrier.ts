@@ -30,6 +30,7 @@ import { guardianSound } from '../guardianSound';
 import { rifleSound } from '../rifleSound';
 import { glowsThroughDust } from '../post.ts';
 import { tyreDust } from '../tyreDust';
+import { BLASTS, blasts } from './blasts';
 import { mergePart, weakPoint, type BossCtx, type BossFxMsg, type BossView } from './bossParts';
 import { timeOfDay } from './dayNight';
 import { zaps } from './zaps';
@@ -742,16 +743,10 @@ export class CarrierView implements BossView {
     });
   }
 
-  /** A bomb bursting on the sand. */
+  /** A bomb bursting on the sand (src/world/blasts.ts BLASTS.bomb). */
   private boom(x: number, y: number, z: number, ctx: BossCtx) {
-    this.burst(x, y + 2.5, z, 24, 1.1);
-    zaps.burst(x, y + 0.5, z, 0, 1, 0, 40, 5);
-    for (let i = 0; i < 18; i++) {
-      const a = (i / 18) * Math.PI * 2, v = 6 + Math.random() * 8;
-      tyreDust.emit(x + Math.cos(a) * 2, y + 0.5, z + Math.sin(a) * 2, Math.cos(a) * v, 2 + Math.random() * 6, Math.sin(a) * v, 3.5 + Math.random() * 2.5, 3 + Math.random() * 2);
-    }
-    for (let i = 0; i < 4; i++) zaps.puff(x + (Math.random() - 0.5) * 4, y + 2 + i * 2, z + (Math.random() - 0.5) * 4, 5, 3);
-    ctx.thump(x, y, z, 2.6, 30, 7, 3.4);
+    blasts.explodeOnSand(x, y, z, BLASTS.bomb);
+    ctx.thump(x, y, z, 2.6, 0, 7, 3.4); // the shake (the explosion throws the sand)
     guardianSound.boom(x, y, z, ctx.ear);
     _v.set(x, y, z);
     rifleSound.firework(_v, ctx.ear, 1.1, 0.7);

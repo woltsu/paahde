@@ -2982,3 +2982,21 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - **Third person:** `PIERCER` in GUN_HOLD: low across the hips, the rails sloping down, the left hand further out;
   aiming, the stock lower and the torso turned further in. Checked on all three bodies (`?item=piercer`, `&aim`,
   `&clip=Walk`); on the bike nothing held shows. Not carried on the body when not in hand.
+
+## Volumetric explosions
+
+- **What:** one explosion effect for everything that blows up, tuned by strength: `blasts.explode` with a `BlastSpec`
+  (src/world/blasts.ts). `blastSpec(r)` takes the fireball's radius (m) and scales the rest from it: burn time
+  0.42·√r s (a real fireball's goes as the cube root of its yield, like its size; √ keeps small ones readable), smoke
+  2.2× that, rise 0.7·√r m/s, ring 1.4 r, sparks, smoke-trailing debris, lingering smoke by soot, sand, scorch,
+  light and how far the shake is felt. Presets in `BLASTS`: the blaster's burst, a guardian's bolt (on the sand / in
+  the air), missiles (the guardians' and the colossus'), the carrier's bombs, and crashes (a jet into the sand, the
+  harvester going up). They replace the blaster's additive noise ball and the flat sprite bursts of the bolts,
+  missiles and bombs; the callers' `thump`s keep their shake but no longer throw their own sand.
+- **The fireball** (src/world/fireball.ts): a proxy sphere per explosion (pool of 8) whose shader marches the eye's
+  ray through it: density from a 3-octave noise-displaced ball boiling upward, temperature hottest in the core and
+  cooling from the rim in, so it goes white, orange, red and leaves soot with the last glow deep inside. Soot is lit by
+  one shadow tap towards the sun, the haze (less deep inside) and the fire within; premultiplied, front-to-back with
+  an early out, hazed by distance (fog off: on the proxy it tinted the whole sphere). On a surface it's clipped to its
+  plane (a dome on the sand that lifts off as it rises). Inside the ball the back faces are drawn. 10/14/18/24 steps by
+  sand detail. Checked by screenshots of each preset over its life, by day and by night.

@@ -9,6 +9,7 @@ import * as THREE from 'three/webgpu';
 import { BOT_DELAY_MS, dronesAt, guardiansAt } from './world/botFrames';
 import { Drones } from './world/drones';
 import { Guardians, type Footfall } from './world/guardians';
+import { BLASTS, blasts } from './world/blasts';
 import { Bolts } from './world/bolts';
 import { Missiles } from './world/missiles';
 import { Jets } from './world/jets';
@@ -125,7 +126,7 @@ export class GuardianFx {
     };
     // The last core: the engine seizes, a blast through the hull, fire and a column of smoke, a shake felt far off.
     this.harvesters.onDeath = (x, y, z) => {
-      this.bolts.burst(x, y, z, true);
+      blasts.explode(x, y, z, 0, 1, 0, 'air', BLASTS.crash);
       zaps.burst(x, y + 4, z, 0, 1, 0, 120, 14);
       zaps.shatter(x, y + 6, z, 0, 1, 0, 9);
       for (let i = 0; i < 24; i++) zaps.puff(x + (Math.random() - 0.5) * 16, y + Math.random() * 10, z + (Math.random() - 0.5) * 24, 8 + Math.random() * 10, 5 + Math.random() * 4);
@@ -141,7 +142,7 @@ export class GuardianFx {
     // Nose first into the sand (shot or jammed): a fireball, a spray of sparks and torn panels thrown on the way it
     // was going, a ring of dust and a big shake, a bang and a slam.
     this.jets.onCrash = (x, y, z, dx, dy, dz) => {
-      this.bolts.burst(x, y, z, true);
+      blasts.explodeOnSand(x, y, z, BLASTS.crash);
       zaps.burst(x, y + 1, z, dx * 0.6, 0.8, dz * 0.6, 90, 10);
       zaps.shatter(x, y + 1.5, z, dx * 0.8, 0.6 - dy * 0.3, dz * 0.8, 6);
       for (let i = 0; i < 16; i++) zaps.puff(x + (Math.random() - 0.5) * 12, y + Math.random() * 6, z + (Math.random() - 0.5) * 12, 8 + Math.random() * 8, 5 + Math.random() * 4);
@@ -288,7 +289,7 @@ export class GuardianFx {
       net.holdDeath = (id) => this.bolts.flying(id);
       this.bolts.onBurst = (id, x, y, z, ground) => {
         guardianSound.boom(x, y, z, this.ear);
-        if (ground) this.thump(x, y, z, 2.6, 30, 7, 3.4);
+        if (ground) this.thump(x, y, z, 2.6, 0, 7, 3.4); // the shake (the explosion throws the sand)
         net.boltArrived(id);
       };
       net.onBolt = (m) => {
@@ -303,10 +304,10 @@ export class GuardianFx {
           this.missiles.launch(m);
         } else {
           this.missiles.land(m.id);
-          this.bolts.burst(m.x, m.y, m.z, true);
+          blasts.explodeOnSand(m.x, m.y, m.z, BLASTS.missile);
           guardianSound.boom(m.x, m.y, m.z, this.ear);
           rifleSound.firework(m, this.ear, MISSILE_FIREWORK, MISSILE_FIREWORK_PITCH);
-          this.thump(m.x, m.y, m.z, 2.6, 30, 7, 3.4);
+          this.thump(m.x, m.y, m.z, 2.6, 0, 7, 3.4); // the shake (the explosion throws the sand)
         }
       };
     }
