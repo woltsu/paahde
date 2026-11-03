@@ -1282,18 +1282,18 @@ const RIFLE: GunHold = {
  *  lower aiming (its sights are up on the carry handle). */
 const BLASTER: GunHold = {
   ready: V(-0.62, -0.4, -0.55).normalize(), readyUp: V(0.25, 1, -0.2), readyAt: V(-0.04, -0.36, -0.24),
-  aimFrom: V(-0.06, -0.08, 0.02), aimOut: 0.3,
+  aimFrom: V(-0.06, -0.11, 0.02), aimOut: 0.33,
   elbow: V(0.7, -0.6, 0.6), aimElbow: V(1, -0.9, 0.3),
-  twist: -0.45, support: 0.27,
+  twist: -0.45, support: 0.31,
 };
 /** The piercer: the heaviest thing carried. Low across the hips, the long rails sloping down to the front left, the left
  *  hand braced under the handguard further out; aiming, the stock lower in the shoulder (its scope sits high) and the
  *  torso turned further into it. */
 const PIERCER: GunHold = {
-  ready: V(-0.55, -0.52, -0.6).normalize(), readyUp: V(0.25, 1, -0.3), readyAt: V(-0.03, -0.41, -0.2),
-  aimFrom: V(-0.06, -0.11, 0.03), aimOut: 0.28,
+  ready: V(-0.55, -0.43, -0.64).normalize(), readyUp: V(0.25, 1, -0.3), readyAt: V(-0.03, -0.4, -0.2),
+  aimFrom: V(-0.06, -0.13, 0.03), aimOut: 0.32,
   elbow: V(0.7, -0.8, 0.5), aimElbow: V(1, -1, 0.3),
-  twist: -0.55, support: 0.29,
+  twist: -0.55, support: 0.33,
 };
 const PISTOL: GunHold = {
   ready: V(-0.05, -0.75, -0.6).normalize(), readyUp: V(0, 0.6, -0.75), readyAt: V(0.07, -0.5, -0.12),

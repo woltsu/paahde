@@ -153,13 +153,13 @@ const HELD: Record<string, (loaded: () => void) => THREE.Object3D> = {
 const gunSrc = new Map<string, Promise<THREE.Object3D>>();
 
 /** The guns' own models (tools/models/<name>.py): origin at the grip, muzzle +Z, up +Y; the bore `bore` m up, its
- *  tip `tip` m forward (the scripts' BZ, MUZZLE_Y). */
+ *  tip `tip` m forward (the scripts' muzzle_local(): BZ, MUZZLE_Y, as built: the blaster and piercer are scaled up). */
 export const GUN_MODELS: Record<string, { url: string; bore: number; tip: number }> = {
   laser_rifle: { url: './models/rifle.glb', bore: 0.087, tip: 0.588 },
   laser_pistol: { url: './models/pistol.glb', bore: 0.064, tip: 0.205 },
-  blaster: { url: './models/blaster.glb', bore: 0.094, tip: 0.592 },
+  blaster: { url: './models/blaster.glb', bore: 0.11, tip: 0.699 },
   graviton_pistol: { url: './models/graviton.glb', bore: 0.06, tip: 0.2 },
-  piercer: { url: './models/piercer.glb', bore: 0.1, tip: 0.905 },
+  piercer: { url: './models/piercer.glb', bore: 0.108, tip: 1.271 },
 };
 
 /**

@@ -5,7 +5,7 @@
 # an open rail: two thick steel rails with copper faces above and below the bore and a glowing slit between them, held
 # by square clamps with phenolic insulators; under them a spine with a ribbed rubber handguard, two capacitor cans with
 # glowing windows and a folded bipod; at the end a boxy three-baffle muzzle brake with the lens in its mouth.
-# ~1.32 m long, stylised: the longest and heaviest gun in the game.
+# ~1.76 m long, stylised: the longest and heaviest gun in the game.
 #
 # Used by hands.py (held in both hands of the first-person viewmodel on the empty `PiercerMount`, where the game draws
 # public/models/piercer.glb; hands.py only places it). Bake and export piercer.glb:
@@ -24,11 +24,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import scmats  # noqa: E402
 from sclib import V, catmull, cylinder, join, loft, rect_profile, rounded_box, sweep  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
 from mathutils import Matrix  # noqa: E402
 from rifle import aring, glow, tube, yring  # noqa: E402
 
 FLIP = Matrix.Rotation(math.pi, 4, 'Z')
 
+# Modelled at the numbers below, then the whole gun is scaled by SCALE about PIVOT (the receiver's floor over the grip),
+# except what the hand holds (HAND_SIZED: the pistol grip, its cap, the trigger and its guard), which keep their size.
+# HANDS holds the as-built numbers hands.py fits the hands to; muzzle_local() / eye_local() give as-built points.
+SCALE = 1.15
 BZ = 0.100  # bore height above the grip origin
 RAKE = 16  # pistol grip rake (deg): its top leans forward
 GRIP_R = 0.0145  # radius of the cylinder the hand closes on
@@ -37,23 +42,30 @@ REC_Y0, REC_Y1 = -0.130, 0.250  # receiver
 REC_Z0, REC_Z1 = 0.048, 0.146
 REC_W = 0.052
 BUTT_Y = -0.415
-RAIL_Y0, RAIL_Y1 = REC_Y1, 0.800  # the open rails
+RAIL_Y0, RAIL_Y1 = REC_Y1, 1.000  # the open rails
 RAIL_GAP = 0.0045  # half the slit between the rails
-SPINE_Z, SPINE_Y1 = BZ - 0.041, 0.712  # the spine under the rails
+SPINE_Z, SPINE_Y1 = BZ - 0.041, RAIL_Y1 - 0.088  # the spine under the rails
 HG_Y0, HG_Y1 = 0.256, 0.430  # rubber handguard round the spine's back end
 HG_R = 0.021  # handguard radius the support hand closes on (its axis HG_Z, under the bore)
 HG_Z = SPINE_Z
-BRAKE_Y0 = 0.800
-MUZZLE_Y = 0.905
+BRAKE_Y0 = RAIL_Y1
+MUZZLE_Y = BRAKE_Y0 + 0.105
 SCOPE_Z = BZ + 0.085  # scope axis height
 SCOPE_EYE_Y = -0.075  # back face of the eyepiece
 SCOPE_OBJ_Y = 0.285
 CAP_X, CAP_Z, CAP_R = 0.024, SPINE_Z - 0.003, 0.015  # the two capacitor cans either side of the spine
-CAP_Y0, CAP_Y1 = 0.455, 0.690
+CAP_Y0, CAP_Y1 = 0.455, 0.860
 TN = 16
 
 TRIGGER = ((0, 0.050, REC_Z0 + 0.001), (0, 0.048, REC_Z0 - 0.011), (0, 0.042, REC_Z0 - 0.021))
 GRIP_AXIS = V((0, math.sin(math.radians(RAKE)), math.cos(math.radians(RAKE))))  # bottom -> top
+PIVOT = V((0, 0, REC_Z0))
+HAND_SIZED = {'Grip', 'GripCap', 'Guard', 'Trigger'}
+
+
+def sc(p):
+    """A modelled point as built (natural frame)."""
+    return PIVOT + (V(p) - PIVOT) * SCALE
 
 
 def materials():
@@ -211,15 +223,19 @@ def build_parts(M):
     # square clamps round the rails and the spine, phenolic insulators either side of the slit
     cz = (BZ + RAIL_GAP + 0.018 + SPINE_Z - 0.013) / 2
     chz = (BZ + RAIL_GAP + 0.018 - (SPINE_Z - 0.013)) / 2
-    for k, y in enumerate((0.258, 0.445, 0.520, 0.595, 0.670, 0.745, 0.792)):
-        objs.append(washer('Clamp', y, 0.016 if k < 6 else 0.020, cz, (0.0165, chz - 0.002), (0.024, chz + 0.004),
-                           M['paint'] if k in (0, 6) else M['dark']))
+    clamps = [0.258, 0.445]  # behind and in front of the handguard, then evenly out to the brake
+    nc = round((RAIL_Y1 - 0.055 - 0.445) / 0.075)
+    clamps += [0.445 + (RAIL_Y1 - 0.055 - 0.445) * (k + 1) / nc for k in range(nc)] + [RAIL_Y1 - 0.008]
+    for k, y in enumerate(clamps):
+        last = k == len(clamps) - 1
+        objs.append(washer('Clamp', y, 0.020 if last else 0.016, cz, (0.0165, chz - 0.002), (0.024, chz + 0.004),
+                           M['paint'] if k == 0 or last else M['dark']))
         for sx in (1, -1):
             objs.append(rounded_box('Insulator', (sx * 0.0115, y, BZ), (0.006, 0.020, 0.030), M['phenolic'], bevel=0.0015,
                                     segments=1))
-    objs.append(washer('Stripe', 0.774, 0.020, cz, (0.0165, chz - 0.002), (0.0235, chz + 0.0025), M['stripe']))
+    objs.append(washer('Stripe', RAIL_Y1 - 0.026, 0.020, cz, (0.0165, chz - 0.002), (0.0235, chz + 0.0025), M['stripe']))
     # the two capacitor cans either side of the spine, glowing windows between wide steel bands
-    nwin = 3
+    nwin = 5
     seg = (CAP_Y1 - CAP_Y0 - 0.040) / nwin
     for sx in (1, -1):
         x = sx * CAP_X
@@ -238,12 +254,13 @@ def build_parts(M):
                             bevel=0.003, segments=1))
     for sx in (1, -1):
         x = sx * 0.013
-        objs.append(cylinder('BipodLeg', (x, SPINE_Y1 - 0.012, SPINE_Z - 0.024), (x, 0.540, SPINE_Z - 0.026), 0.0058,
+        y1, y2 = SPINE_Y1 - 0.172, SPINE_Y1 - 0.242  # the legs' knee and foot, laid back
+        objs.append(cylinder('BipodLeg', (x, SPINE_Y1 - 0.012, SPINE_Z - 0.024), (x, y1, SPINE_Z - 0.026), 0.0058,
                              M['steel'], n=8))
-        objs.append(cylinder('BipodInner', (x, 0.540, SPINE_Z - 0.026), (x, 0.470, SPINE_Z - 0.027), 0.0042, M['steel'],
+        objs.append(cylinder('BipodInner', (x, y1, SPINE_Z - 0.026), (x, y2, SPINE_Z - 0.027), 0.0042, M['steel'],
                              n=8))
-        objs.append(rounded_box('BipodFoot', (x, 0.462, SPINE_Z - 0.028), (0.012, 0.018, 0.012), M['rubber'], bevel=0.004,
-                                segments=1))
+        objs.append(rounded_box('BipodFoot', (x, y2 - 0.008, SPINE_Z - 0.028), (0.012, 0.018, 0.012), M['rubber'],
+                                bevel=0.004, segments=1))
     # ---- the muzzle brake: top and bottom plates, three baffles, the bore and the lens in the mouth
     by = (BRAKE_Y0 + MUZZLE_Y) / 2
     for sz in (1, -1):
@@ -256,6 +273,11 @@ def build_parts(M):
                                (MUZZLE_Y - 0.002, 0.010)], M['steel'], n=16, cz=BZ, cap0=False, cap1=False))
     glows.append(loft('Lens', [yring(MUZZLE_Y - 0.001, 0, BZ, 0.0102, 0.0102, 2, 14),
                                yring(MUZZLE_Y - 0.004, 0, BZ, 0.004, 0.004, 2, 14)], M['glow'], cap_end=True, flip=True))
+    for o in objs + glows:  # as built: everything but what the hand holds scaled up about PIVOT
+        if o.name.split('.')[0] not in HAND_SIZED:
+            for v in o.data.vertices:
+                v.co = sc(v.co)
+            o.data.update()
     return objs, glows
 
 
@@ -298,13 +320,21 @@ def bake_and_export(gun, gl, out_dir, path, at, size=1024):
 
 
 def muzzle_local():
-    """Muzzle tip on the bore (natural frame)."""
-    return V((0, MUZZLE_Y, BZ))
+    """Muzzle tip on the bore (natural frame, as built)."""
+    return sc((0, MUZZLE_Y, BZ))
 
 
 def eye_local(relief):
-    """Where the eye goes: on the scope axis, `relief` behind the eyepiece (natural frame)."""
-    return V((0, SCOPE_EYE_Y - relief, SCOPE_Z))
+    """Where the eye goes: on the scope axis, `relief` behind the eyepiece (natural frame, as built)."""
+    return sc((0, SCOPE_EYE_Y, SCOPE_Z)) - V((0, relief, 0))
+
+
+# what hands.py fits the hands to, as built: the grip and trigger as modelled, the receiver and handguard scaled
+HANDS = SimpleNamespace(
+    FLIP=FLIP, RAKE=RAKE, GRIP_AXIS=GRIP_AXIS, GRIP_R=GRIP_R, GRIP_TOP=GRIP_TOP, GRIP_BOT=GRIP_BOT, TRIGGER=TRIGGER,
+    REC_W=REC_W * SCALE, REC_Y0=REC_Y0 * SCALE, REC_Y1=REC_Y1 * SCALE, REC_Z0=REC_Z0, REC_Z1=sc((0, 0, REC_Z1)).z,
+    HG_Y0=HG_Y0 * SCALE, HG_Y1=HG_Y1 * SCALE, HG_Z=sc((0, 0, HG_Z)).z, HG_R=HG_R * SCALE,
+    build=build, muzzle_local=muzzle_local, eye_local=eye_local)
 
 
 if __name__ == '__main__':

@@ -1056,10 +1056,11 @@ clip_once('PistolAim', 7, pistol_aim)  # 8 keys, 0.23 s
 # the eye (B_RELIEF behind the rear sight), the butt under the cheek, and the hands stay in view. Its model
 # (public/models/blaster.glb, tools/models/blaster.py) is drawn by the game on the empty `BlasterMount` (in the gun's
 # glTF frame), with the `BlasterMuzzle` / `BlasterEye` markers under it.
-import blaster as BL  # noqa: E402
+import blaster  # noqa: E402
+BL = blaster.HANDS  # as built (scaled up from the modelled numbers)
 
 B_RELIEF = 0.13  # eye behind the rear sight at full aim (model units; ×0.55 in game = 7 cm)
-B_GRIP_Y = 0.262  # where the support hand holds the handguard (natural y): its back end, so the left arm reaches
+B_GRIP_Y = BL.HG_Y0 + 0.055  # where the support hand holds the handguard (natural y): its back end, so the left arm reaches
 
 
 def blaster_sdf_nat():
@@ -1074,7 +1075,7 @@ def blaster_sdf_nat():
 B_NAT_SDF = blaster_sdf_nat()
 # hip: lower than the rifle (it's heavy), close enough in for the left arm to reach the handguard; the rear sight (0.08
 # behind the grip) stays past the near plane
-B_READY = gun_ready(BL, (0.10, 0.20, -0.25), roll=-4)
+B_READY = gun_ready(BL, (0.11, 0.22, -0.27), roll=-4)
 B_AIM = Matrix.Translation(-BL.eye_local(B_RELIEF))
 
 
@@ -1217,10 +1218,11 @@ clip_once('GravitonAim', 7, graviton_aim)  # 8 keys, 0.23 s
 # PiercerAim heaves it up to the scope (P_RELIEF behind the eyepiece, like the rifle's; the scope view itself is drawn
 # by src/rifle.ts). Its model (public/models/piercer.glb, tools/models/piercer.py) is drawn by the game on the empty
 # `PiercerMount`, with the `PiercerMuzzle` / `PiercerEye` markers under it.
-import piercer as PC  # noqa: E402
+import piercer  # noqa: E402
+PC = piercer.HANDS  # as built (scaled up from the modelled numbers)
 
 PC_RELIEF = EYE_RELIEF  # eye behind the eyepiece at full aim, as the rifle's
-PC_GRIP_Y = 0.262  # where the support hand holds the handguard (natural y): its back end, so the left arm reaches
+PC_GRIP_Y = PC.HG_Y0 + 0.007  # where the support hand holds the handguard (natural y): its back end, so the left arm reaches
 
 
 def piercer_sdf_nat():
@@ -1235,7 +1237,7 @@ def piercer_sdf_nat():
 PC_NAT_SDF = piercer_sdf_nat()
 # low ready: lower and further out to the right than the blaster, canted a little more under the weight; the eyepiece
 # (0.075 behind the grip) stays past the near plane
-PC_READY = gun_ready(PC, (0.105, 0.20, -0.27), roll=-6)
+PC_READY = gun_ready(PC, (0.115, 0.22, -0.29), roll=-6)
 PC_AIM = Matrix.Translation(-PC.eye_local(PC_RELIEF))
 
 
