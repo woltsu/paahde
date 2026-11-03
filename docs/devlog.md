@@ -3031,7 +3031,6 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - Removed the heavy breathing that played from 70% heat (src/breathing.ts, public/audio/breathing.mp3 and its credit)
   and the `heatstroke` music state left over from it (nothing cued it any more). High heat still shows in the screen
   (post.ts heatstroke vignette and swimming view) and the sigh after a sip (src/drinkSound.ts).
-||||||| parent of 036d211 (Scenarios as world-state snapshots: debug menu → Scenarios (dev server, test world only) loads a snapshot in place of the whole world, or saves the world as it is now (scenarios/<id>.json, server/snapshot.ts). A snapshot is every table's rows (browser IDs as placeholders; the saver's is the protagonist, played by whoever loads it) and the live state a restart loses: time of day, weather, every walker, the protagonist's facing, health and hand. Load writes the rows and ends the world process; the next is built from them and takes the live state (StormServer/GuardianServer snapshot/restore, times moved to the new clock); pages reload on close 4012. The first: "Piercer vs guardian". The declarative scenarios are gone. tools/snapshot.test.mjs, docs/scenarios.md)
 
 ## Scenarios as world-state snapshots
 
@@ -3050,3 +3049,17 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   their own name); the test fails on any other UUID in `scenarios/`.
 - The first one, "Piercer vs guardian", was saved after kitting out through the debug menu, then had the spot, the time
   and the guardian edited into the file. The declarative scenarios (shared/scenarios.ts, `GuardianServer.stage`) are gone.
+
+## Scenario snapshots: review fixes
+
+- **Live state once:** the loaded snapshot's walkers, health and facing are given the first time the loader is in
+  (`pending` cleared in restoreLive); before, every reload or second tab until the world ended rewound them while the
+  database went on.
+- **One flush:** `flushAll` (server/world.ts) writes what a restart keeps, for the way out and for a Save alike; a Save
+  now also writes the corpses' clocks and a ridden bike's place (`vehicleSrv.persist`, the rider stays on).
+- **No names:** a dump replaces every `name` column as it does browser IDs (`Protagonist`, `Player <n>` by placeholder);
+  the test checks dumps and the checked-in files.
+- **The reload:** the freezing world tells server/index.ts it is closing (IPC `closing`), and a connection to it waits for
+  it to exit and goes to the next process, instead of maybe reaching the frozen one, which ignores hellos. Tried over a
+  WebSocket: a reconnect at once after the 4012 waits ~0.9 s and joins the new world.
+- The id rule is one (`SNAPSHOT_ID_RE`, `SNAPSHOT_ID_MAX` in shared/world.ts); walkers have a round-trip test.
