@@ -51,6 +51,7 @@ import { heightAt, normalAt, shotGround } from '../shared/terrain.ts';
 import { groundAt, onFlat, solidAt } from './ground.ts';
 import { blasts } from './world/blasts';
 import { gunSound } from './gunSound';
+import { Reticle } from './reticle';
 
 /** In a level with flat floors (src/ground.ts): how far along the shot a floor or a wall (the level's solids) is, or
  *  `range`. */
@@ -110,41 +111,37 @@ const css = `
 #rifleScope .cell { position: absolute; left: 50%; bottom: calc(7% + 18px); width: 120px; height: 3px; margin-left: -60px; background: rgba(120, 230, 255, 0.15); }
 #rifleScope .cell i { display: block; height: 100%; background: #7fe8ff; transform-origin: left; }
 body.rifleScoped #crosshair, body.rifleScoped #pickup { display: none !important; }
-#rifleHip { position: fixed; left: 50%; top: 50%; pointer-events: none; z-index: 4; display: none; }
-#rifleHip i { position: absolute; background: rgba(255, 244, 228, 0.75); box-shadow: 0 0 2px #000; }
-body.rifleHip #rifleHip { display: block; }
-body.rifleHip #crosshair { display: none; }
 body.gunSights #crosshair { display: none; }
-#rifleCharge { position: fixed; left: 50%; top: 50%; width: 44px; height: 4px; margin-left: -23px; pointer-events: none; z-index: 4;
-  background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(0, 0, 0, 0.55); border-radius: 2px; box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
-  opacity: 0; transition: opacity .15s; }
-#rifleCharge i { display: block; height: 100%; background: rgba(255, 244, 228, 0.95); transform-origin: left; border-radius: 1px; }
-#rifleCharge.on { opacity: 1; transition: none; }
-#rifleCharge.blaster { width: 60px; margin-left: -31px; height: 5px; }
-#rifleCharge.blaster i { background: rgba(255, 178, 104, 0.95); }
-#rifleCharge.graviton i { background: rgba(196, 160, 255, 0.95); }
-#rifleCharge.piercer { width: 64px; margin-left: -33px; height: 4px; }
-#rifleCharge.piercer i { background: rgba(214, 232, 255, 0.95); }
+#rifleScope .pr, #rifleScope.piercer .rr { display: none; }
+#rifleScope.piercer .pr { display: inline; }
 #rifleScope.piercer .cell { background: rgba(200, 220, 255, 0.15); }
 #rifleScope.piercer .cell i { background: #dceaff; }
-body.rifleScoped #rifleCharge, body.down #rifleCharge { display: none; }
 `;
 
-// The scope: everything outside the eyepiece black, a soft edge, a faint green-grey lens tint and vignette, and a
-// duplex reticle (heavy posts to thin cross hairs) with mil dots and an illuminated red centre dot. Drawn huge and
-// centred, so the shadow can slide around (eye not quite on the axis).
+// The scope: everything outside the eyepiece black, a soft edge, a faint green-grey lens tint and vignette, and the
+// gun's reticle. The rifle's a duplex (heavy posts to thin cross hairs) with mil dots and an illuminated red centre
+// dot; the piercer's a long-range one: fine hairlines with a ranging scale, heavy posts only at the rim and none above,
+// and an open chevron whose tip is the aim, its tip lit blue-white. Drawn huge and centred, so the shadow can slide
+// around (eye not quite on the axis).
 const SCOPE = `<svg viewBox="-1000 -1000 2000 2000">
 <defs><filter id="rsBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="9"/></filter>
 <mask id="rsMask"><rect x="-1000" y="-1000" width="2000" height="2000" fill="white"/><circle r="300" fill="black" filter="url(#rsBlur)"/></mask>
 <radialGradient id="rsLens"><stop offset="0.55" stop-color="#0c1a14" stop-opacity="0"/><stop offset="0.93" stop-color="#0c1a14" stop-opacity="0.45"/>
 <stop offset="1" stop-color="#000" stop-opacity="0.8"/></radialGradient></defs>
 <circle r="300" fill="url(#rsLens)"/>
-<g class="reticle" stroke="#0a0a08" fill="none">
+<g class="rr"><g stroke="#0a0a08" fill="none">
 <path d="M-300 0H-70M70 0H300M0 -300V-70M0 70V300" stroke-width="7"/>
 <path d="M-70 0H-6M6 0H70M0 -70V-6M0 6V70" stroke-width="1.6"/>
 <g fill="#0a0a08" stroke="none">${[-56, -42, -28, -14, 14, 28, 42, 56].map((v) => `<circle cx="${v}" cy="0" r="1.8"/><circle cx="0" cy="${v}" r="1.8"/>`).join('')}</g>
 </g>
-<circle r="2.4" fill="#ff2a14"/><circle r="5" fill="#ff2a14" opacity="0.25"/>
+<circle r="2.4" fill="#ff2a14"/><circle r="5" fill="#ff2a14" opacity="0.25"/></g>
+<g class="pr"><g stroke="#0a0a08" fill="none">
+<path d="M-300 0H-215M215 0H300M0 300V215" stroke-width="9"/>
+<path d="M-215 0H-14M14 0H215M0 -215V-40M0 22V215" stroke-width="1.1"/>
+<path d="${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => { const x = k * 18, h = k % 5 ? 4 : 9; return `M${x} -${h}V${h}M${-x} -${h}V${h}`; }).join('')}" stroke-width="1.1"/>
+<path d="${[1, 2, 3, 4, 5, 6].map((k) => { const y = 22 + k * 24, w = k % 2 ? 10 : 18; return `M-${w} ${y}H${w}`; }).join('')}" stroke-width="1.1"/>
+<path d="M-15 17L0 1L15 17" stroke-width="2.4" stroke-linejoin="miter"/></g>
+<path d="M-6 7.4L0 1L6 7.4" stroke="#bfe2ff" stroke-width="1.6" fill="none"/><circle cy="1" r="6" fill="#9fd0ff" opacity="0.2"/></g>
 <rect x="-1000" y="-1000" width="2000" height="2000" fill="#030302" mask="url(#rsMask)"/></svg>`;
 
 /** Smooth 1D noise: a sum of incommensurate sines, -1..1. */
@@ -167,10 +164,9 @@ export class Rifle {
   private svg: SVGSVGElement;
   private zoomEl: HTMLElement;
   private cellEl: HTMLElement;
-  private hip = document.createElement('div');
-  /** The recharge under the crosshair (unscoped; the scope has its own). */
-  private chargeEl = document.createElement('div');
-  private chargeFill: HTMLElement;
+  /** The gun's own crosshair (src/reticle.ts): the cone, the recharge and hits (unscoped; the scope has its own). */
+  private reticle = new Reticle();
+  private charge = 1;
   private zoom = ZOOM;
   private time = 0;
   private wasFire = false;
@@ -229,12 +225,7 @@ export class Rifle {
     this.svg = this.el.querySelector('svg')!;
     this.zoomEl = this.el.querySelector('.zoom')!;
     this.cellEl = this.el.querySelector('.cell i')!;
-    this.hip.id = 'rifleHip';
-    this.hip.innerHTML = '<i></i><i></i><i></i><i></i>';
-    this.chargeEl.id = 'rifleCharge';
-    this.chargeEl.innerHTML = '<i></i>';
-    this.chargeFill = this.chargeEl.firstElementChild as HTMLElement;
-    document.body.append(this.el, this.hip, this.chargeEl);
+    document.body.append(this.el);
     addEventListener('wheel', (e) => {
       if (!this.scoped) return;
       this.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoom * Math.exp(-e.deltaY * 0.0015)));
@@ -334,9 +325,9 @@ export class Rifle {
       document.body.classList.toggle('rifleScoped', scoped);
     }
     playerHands.rifleScoped = scoped;
-    document.body.classList.toggle('rifleHip', holding && !aiming);
     document.body.classList.toggle('rifleHeld', holding);
-    document.body.classList.toggle('gunSights', holding && !feel.scope && playerHands.aim > 0.5);
+    // On iron sights (first person) the sights are the crosshair; in third person the gun's own stays.
+    document.body.classList.toggle('gunSights', holding && !feel.scope && playerHands.aim > 0.5 && this.view.boomLength < 0.05);
     this.punch *= Math.exp(-dt * 7);
     if (scoped) this.view.zoom = this.zoom;
     else if (isGun(playerHands.held)) this.view.zoom = (1 + (feel.sight - 1) * playerHands.aim) * (1 + this.punch);
@@ -391,13 +382,8 @@ export class Rifle {
     }
     const charge = Math.min(1, 1 - (this.readyAt - performance.now()) / this.cooldown(feel.kind));
     playerHands.charge = charge;
-    const recharging = holding && charge < 1;
-    this.chargeEl.classList.toggle('on', recharging);
-    this.chargeEl.classList.toggle('blaster', this.gun === 'blaster');
-    this.chargeEl.classList.toggle('graviton', this.gun === 'graviton');
-    this.chargeEl.classList.toggle('piercer', this.gun === 'piercer');
+    this.charge = charge;
     this.el.classList.toggle('piercer', this.gun === 'piercer');
-    if (recharging) this.chargeFill.style.transform = `scaleX(${Math.max(0, charge)})`;
     if (scoped) {
       this.zoomEl.textContent = `${this.zoom.toFixed(1)}×`;
       this.cellEl.style.transform = `scaleX(${charge})`;
@@ -424,16 +410,9 @@ export class Rifle {
     cam.rotation.x += this.swayPitch + this.recoilPitch;
     cam.rotation.y += this.swayYaw + this.recoilYaw;
     cam.updateMatrixWorld();
-    // Hip crosshair: four ticks spread to the cone.
+    // The gun's crosshair opens to the cone (px from the centre) and fills back in with the charge.
     const gap = 6 + (Math.tan(this.spread) / Math.tan(((cam.fov / 2) * Math.PI) / 180)) * innerHeight * 0.5;
-    const ticks = this.hip.children as HTMLCollectionOf<HTMLElement>;
-    const place = (e: HTMLElement, x: number, y: number, w: number, h: number) => (e.style.cssText = `left:${x - w / 2}px;top:${y - h / 2}px;width:${w}px;height:${h}px`);
-    place(ticks[0], -gap - 5, 0, 8, 1.5);
-    place(ticks[1], gap + 5, 0, 8, 1.5);
-    place(ticks[2], 0, -gap - 5, 1.5, 8);
-    place(ticks[3], 0, gap + 5, 1.5, 8);
-    // The recharge bar: under the dot, or under the lower tick from the hip.
-    this.chargeEl.style.marginTop = `${document.body.classList.contains('rifleHip') ? gap + 14 : 10}px`;
+    this.reticle.set(this.gun, gap, this.charge, this.dt);
     if (fire) this.shoot();
   }
 
@@ -568,7 +547,10 @@ export class Rifle {
       this.heavyImpact(heavy, on, d, ear);
     }
     const key = boss ? `b${boss.boss}`: nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
-    if (key) kills.hit(key);
+    if (key) {
+      kills.hit(key);
+      this.reticle.hit();
+    }
     this.net.fire(from.x, from.y, from.z, _e.x, _e.y, _e.z, boss ? { b: boss.boss, bi: boss.index } : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
     return true;
   }
