@@ -25,6 +25,7 @@ import { SPEED_OF_SOUND } from './acoustics';
 import { CHARGE_MS, CRAWLER, FIRE_R, FOOT_CRUSH_R, GUARDIAN, KINDS, LUNGE_DASH, LUNGE_HIT_R, LUNGE_WIND, LUNGE_WIND_MS } from '../shared/guardians.ts';
 import { guardianSound } from './guardianSound';
 import { rifleSound } from './rifleSound';
+import { gunSound, MISSILE_FIREWORK_PITCH } from './gunSound';
 import { tyreDust } from './tyreDust';
 import { zaps } from './world/zaps';
 import type { Net } from './net';
@@ -56,8 +57,6 @@ function perchAt(n: number[], o: number): Perch | null {
  *  (×level), a missile's blast lower (pitch) to sound bigger. */
 const CRAWLER_FIREWORK = 0.4;
 const DRONE_FIREWORK = 0.5;
-const MISSILE_FIREWORK_PITCH = 0.8;
-const MISSILE_FIREWORK = 0.7;
 
 /** What can turn on us, and what we can kill (the character's remarks: src/speechLines.ts). */
 export type Aggro = 'guardian' | 'crawler' | 'drone' | 'harvester';
@@ -305,8 +304,7 @@ export class GuardianFx {
         } else {
           this.missiles.land(m.id);
           blasts.explodeOnSand(m.x, m.y, m.z, BLASTS.missile);
-          guardianSound.boom(m.x, m.y, m.z, this.ear);
-          rifleSound.firework(m, this.ear, MISSILE_FIREWORK, MISSILE_FIREWORK_PITCH);
+          gunSound.explosion(m, this.ear);
           this.thump(m.x, m.y, m.z, 2.6, 0, 7, 3.4); // the shake (the explosion throws the sand)
         }
       };

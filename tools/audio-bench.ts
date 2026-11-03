@@ -61,7 +61,7 @@ Object.assign(window, { measureAudio: async (scenario: 'exploration' | 'storm' |
         nextShot = t + BLASTER_COOLDOWN_MS / 1000;
         gunSound.blasterShot();
         gunSound.recharge(BLASTER_COOLDOWN_MS / 1000 - 0.12);
-        gunSound.blast(at(0, -25), ear, true);
+        gunSound.blast(at(0, -25), ear);
       } else if (heavy === 'graviton') {
         nextShot = t + GRAVITON_COOLDOWN_MS / 1000;
         gunSound.gravitonShot();

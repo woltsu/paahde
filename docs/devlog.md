@@ -3109,3 +3109,13 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   just the time since the last shot, so a hacked client could skip the wait.
 - The recharge bar under the crosshair is bigger and solid (44 × 4 px, the blaster's 60 × 5, the piercer's 64 × 4;
   was 18–30 × 2–3 px at 0.8 opacity), on a darker outlined track.
+
+## The blaster sounds like the laser guns
+
+- The blaster's shot is the laser pulse the rifle, pistol and guardians' cannon share (src/rifleSound.ts `pulse`),
+  pitched down to `BLASTER_PITCH` 0.68 (between the rifle's 1 and the cannon's 0.5), a little louder than the rifle's
+  and carrying further: one family of laser guns. The synthesised thump-and-snarl is gone.
+- Where the plasma bolt lands it explodes like a guardian's missile: `gunSound.explosion` (the bolt boom of
+  src/guardianSound.ts under a low firework burst, `MISSILE_FIREWORK`/`_PITCH`), which the missiles now play too.
+  The synthesised crack-boom-debris is gone.
+- Not re-measured in the full mix (docs/audio.md); not heard in a running game yet.

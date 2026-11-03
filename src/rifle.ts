@@ -586,7 +586,7 @@ export class Rifle {
     else _n.set(-d.x, -d.y, -d.z);
     if (gun === 'blaster') {
       blasts.blaster(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z, on);
-      gunSound.blast(_e, ear, on === 'sand');
+      gunSound.blast(_e, ear);
     } else if (on === 'air') {
       // Spent at its reach: nothing to see or hear there.
     } else if (gun === 'piercer') {

@@ -1,8 +1,8 @@
 // Sounds of the heavy guns (shared/rifle.ts; src/rifle.ts fires them), all synthesised:
-// - blasterShot: a heavy charge-thump: a sub drop and a punch of low noise under a downward electric snarl.
-// - blast: the blaster's burst where the beam stopped: a sharp crack, a deep boom with a long low rumble, debris
-//   pattering down (and on the dunes the hiss of sand falling back). It carries far (src/acoustics.ts: late, duller,
-//   softer and wetter with distance, with the echoes off rock that big sounds have).
+// - blasterShot: the laser pulse the rifle, pistol and guardians' cannon share, pitched down (src/rifleSound.ts
+//   `blaster`).
+// - blast / explosion: where the blaster's plasma bolt lands, the same explosion as a guardian's missile: the bolt
+//   boom (src/guardianSound.ts) under a low firework burst (src/rifleSound.ts), carried far through src/acoustics.ts.
 // - blasterRecharge: the heavy cell's slow, grinding whine back up between shots (much longer than the rifle's), and a
 //   heavy latch when it's ready: yours only.
 // - gravitonShot: a deep sub-bass drop under a high tearing shimmer, as if the air were ripped.
@@ -19,11 +19,16 @@
 // tools/audio-bench.ts).
 import { audio } from './audio';
 import { placed, type P } from './acoustics';
+import { rifleSound } from './rifleSound';
+import { guardianSound } from './guardianSound';
+
+/** A missile-sized explosion's firework: its level and pitch (src/rifleSound.ts `firework`; lower is bigger). */
+export const MISSILE_FIREWORK = 0.7, MISSILE_FIREWORK_PITCH = 0.8;
 
 /** Each sound's level (into src/acoustics.ts `placed`), calibrated in the full mix (docs/audio.md). */
-const LEVEL = { blasterShot: 0.11, blast: 0.25, recharge: 0.012, gravitonShot: 0.2, gravitonImpact: 0.33, piercerShot: 0.37, piercerImpact: 0.5, piercerCharge: 0.005 };
+const LEVEL = { recharge: 0.012, gravitonShot: 0.2, gravitonImpact: 0.33, piercerShot: 0.37, piercerImpact: 0.5, piercerCharge: 0.005 };
 /** Full level within this many metres. */
-const BLAST_REF = 25, GRAV_REF = 18, PIERCE_REF = 12;
+const GRAV_REF = 18, PIERCE_REF = 12;
 
 const noiseBufs = new WeakMap<BaseAudioContext, AudioBuffer>();
 function noise(ctx: BaseAudioContext) {
@@ -71,31 +76,6 @@ function tone(ctx: BaseAudioContext, to: AudioNode, t: number, len: number, type
 }
 
 // The voices, built on any context into `o` from time `t` (so they can be rendered offline and measured).
-
-export function blasterShotVoice(ctx: BaseAudioContext, o: AudioNode, t: number) {
-  tone(ctx, o, t, 0.45, 'sine', 150, 34, 0.9, 0.004); // the thump
-  hiss(ctx, o, t, 0.3, 'lowpass', 700, 0.8, 0.8, 0.002); // its punch
-  // The snarl: two detuned saws diving through a closing lowpass.
-  const lp = ctx.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.Q.value = 4;
-  lp.frequency.setValueAtTime(5200, t);
-  lp.frequency.exponentialRampToValueAtTime(380, t + 0.35);
-  lp.connect(o);
-  tone(ctx, lp, t, 0.38, 'sawtooth', 920, 110, 0.22, 0.002);
-  tone(ctx, lp, t, 0.38, 'sawtooth', 947, 104, 0.18, 0.002);
-  hiss(ctx, o, t, 0.06, 'highpass', 3500, 0.7, 0.45, 0.001); // the crack of the discharge
-}
-
-export function blastVoice(ctx: BaseAudioContext, o: AudioNode, t: number, sand: boolean) {
-  hiss(ctx, o, t, 0.09, 'highpass', 1800, 0.6, 0.9, 0.001); // crack
-  tone(ctx, o, t, 1.3, 'sine', 85, 26, 1, 0.006); // boom
-  hiss(ctx, o, t, 1.8, 'lowpass', 380, 0.7, 1.1, 0.008); // its body and roll
-  hiss(ctx, o, t + 0.05, 0.9, 'bandpass', 900, 0.9, 0.35, 0.01);
-  // Debris pattering down.
-  for (let i = 0; i < 10; i++) hiss(ctx, o, t + 0.15 + Math.random() * 0.9, 0.05 + Math.random() * 0.08, 'bandpass', 1200 + Math.random() * 2600, 6, 0.12 + Math.random() * 0.15);
-  if (sand) hiss(ctx, o, t + 0.25, 1.6, 'bandpass', 2400, 0.6, 0.18, 0.4); // sand falling back
-}
 
 export function gravitonShotVoice(ctx: BaseAudioContext, o: AudioNode, t: number) {
   tone(ctx, o, t, 1.3, 'sine', 95, 22, 1, 0.03); // the drop
@@ -240,14 +220,18 @@ class GunSound {
 
   /** A blaster shot: yours (`at` null) or someone else's at `at`, heard from `ear`. */
   blasterShot(at: P | null = null, ear: P | null = null) {
-    const s = placed(at, ear, LEVEL.blasterShot, 15, 700, { duration: 0.55 });
-    if (audio.ctx && s) blasterShotVoice(audio.ctx, s.input, s.t);
+    rifleSound.blaster(at, ear);
   }
 
-  /** The blaster's burst at `at`, heard from `ear`; `sand`: on the dunes. */
-  blast(at: P, ear: P, sand: boolean) {
-    const s = placed(at, ear, LEVEL.blast, BLAST_REF, 1000, { duration: 2 });
-    if (audio.ctx && s) blastVoice(audio.ctx, s.input, s.t, sand);
+  /** The blaster's plasma bolt bursting at `at`, heard from `ear`: a missile's explosion. */
+  blast(at: P, ear: P) {
+    this.explosion(at, ear);
+  }
+
+  /** A missile-sized explosion at `at`, heard from `ear`: the bolt boom under a low firework. */
+  explosion(at: P, ear: P) {
+    guardianSound.boom(at.x, at.y, at.z, ear);
+    rifleSound.firework(at, ear, MISSILE_FIREWORK, MISSILE_FIREWORK_PITCH);
   }
 
   /** A graviton shot: yours (`at` null) or someone else's at `at`, heard from `ear`. */

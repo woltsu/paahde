@@ -4,7 +4,8 @@
 //   off pitch each time; the pistol plays them higher and lighter. Your own is dry and in your head; another
 //   player's carries across the desert (src/acoustics.ts: late, duller, softer and more reverb with distance). A
 //   guardian's cannon fires the same pulses an octave down (CANNON_PITCH), slower and heavier: −15 LUFS momentary
-//   max within CANNON_REF (peaks about 0 dBFS: the limiter takes them), −21 at 80 m.
+//   max within CANNON_REF (peaks about 0 dBFS: the limiter takes them), −21 at 80 m. The blaster fires them a
+//   fifth or so down (BLASTER_PITCH): heavier than the rifle, lighter than the cannon.
 // - firework: a weak point shattering (a crawler's softer), a shot-down drone crashing (softer) and a missile's blast
 //   (lower) burst like a firework: one of
 //   four of TB0Y298's "Firework Explosion" 1–4 (CC BY 4.0; firework-1..4.mp3, mono, each levelled to −18.9 LUFS
@@ -30,6 +31,10 @@ const PULSES = ['./audio/laser-1.mp3', './audio/laser-2.mp3', './audio/laser-3.m
 const CANNON_PITCH = 0.5;
 const CANNON_GAIN = 1.4;
 const CANNON_REF = 40;
+/** The blaster: the pulses at this pitch, level (× SHOT_GAIN) and full-level distance (m). */
+const BLASTER_PITCH = 0.68;
+const BLASTER_GAIN = 1.5;
+const BLASTER_REF = 20;
 const CHARGE_GAIN = 0.035;
 const IMPACT_GAIN = 1.2;
 const DEATH_GAIN = 1.8;
@@ -106,24 +111,31 @@ class RifleSound {
   /** A shot: yours (`at` null) or someone else's at `at`, heard from `ear`. `pistol`: the laser pistol's, higher,
    *  shorter and lighter. */
   shot(at: P | null = null, ear: P | null = null, pistol = false) {
+    // The pistol: up in pitch (so quicker), less body.
+    this.pulse(at, ear, pistol ? 1.35 : 1, SHOT_GAIN * (pistol ? 0.75 : 1), 15, 600);
+  }
+
+  /** A blaster shot: yours (`at` null) or someone else's at `at`, heard from `ear`: the pulse pitched down, heavier. */
+  blaster(at: P | null = null, ear: P | null = null) {
+    this.pulse(at, ear, BLASTER_PITCH, SHOT_GAIN * BLASTER_GAIN, BLASTER_REF, 700);
+  }
+
+  /** One of the pulses at `pitch` (a little off each time), `level`, full within `ref` m, heard out to `far`. */
+  private pulse(at: P | null, ear: P | null, pitch: number, level: number, ref: number, far: number) {
     const ctx = audio.ctx;
     if (!ctx || !audio.running || !this.pulses.length) return;
     const buf = this.pulses[Math.floor(Math.random() * this.pulses.length)];
-    const rate = (pistol ? 1.35 : 1) * (0.96 + Math.random() * 0.08);
-    const s = placed(at, ear, SHOT_GAIN * (pistol ? 0.75 : 1), 15, 600, { duration: buf.duration / rate + 0.1 });
+    const rate = pitch * (0.96 + Math.random() * 0.08);
+    const s = placed(at, ear, level, ref, far, { duration: buf.duration / rate + 0.1 });
     if (!s) return;
-    const { input: o, t } = s;
-    // The pistol: up in pitch (so quicker), less body.
-    if (buf) {
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.playbackRate.value = rate;
-      const g = ctx.createGain();
-      g.gain.value = PULSE_GAIN;
-      src.connect(g).connect(o);
-      src.start(t);
-      src.onended = () => g.disconnect();
-    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = ctx.createGain();
+    g.gain.value = PULSE_GAIN;
+    src.connect(g).connect(s.input);
+    src.start(s.t);
+    src.onended = () => g.disconnect();
   }
 
   /** A firework burst at `at`, heard from `ear`, at `level` × FIREWORK_GAIN and `pitch` (about 1, lower is bigger). */

@@ -144,6 +144,11 @@ dBTP, the limiter working) and the full mix at −17.3; they were brought down t
 (−27.7 alone at 2.5 shots/s) plus the few dB a heavier, slower gun earns. Peak voices 9 (blaster) and 13 (graviton),
 no drops. Captures: `/tmp/a73d-audio-3`, `/tmp/a73d-audio-c3` (local).
 
+Since 4 November 2026 the blaster's shot is the rifle's laser pulse pitched down (src/rifleSound.ts `blaster`,
+`BLASTER_PITCH` 0.68, `BLASTER_GAIN`) and its bolt's burst is a missile's explosion (`gunSound.explosion`: the bolt
+boom and a low firework), so the table's blaster rows predate that; the levels were set from the rifle's and the
+missile's calibrated ones and not yet re-captured.
+
 ## The piercer (3 November 2026)
 
 `src/gunSound.ts` piercerShot (crack, thump, ringing rails, a rolling echo of nine ever duller taps over a 3 s
