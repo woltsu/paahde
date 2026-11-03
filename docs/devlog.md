@@ -3100,3 +3100,12 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   for a bolt it allows the flight: two can land up to `range / PLASMA_SPEED` closer than the recharge, and the shooter
   may have moved on at a slide's pace (server/world.ts `BOLT_MOVE`).
 - Not seen in a running game yet (the scripted join in Chrome stays on the menu).
+
+## Guns come up empty
+
+- Drawing a gun (another hotbar slot, or another gun in the slot) used to leave it ready at once if it had recharged
+  while away. Now it comes up empty and recharges from nothing first (src/rifle.ts `drawn`, `recharge()`: the same
+  wait and charging sound as after a shot; the gun's glow fills with it). Client-side only: the server still checks
+  just the time since the last shot, so a hacked client could skip the wait.
+- The recharge bar under the crosshair is bigger and solid (44 × 4 px, the blaster's 60 × 5, the piercer's 64 × 4;
+  was 18–30 × 2–3 px at 0.8 opacity), on a darker outlined track.

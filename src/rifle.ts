@@ -115,15 +115,16 @@ body.rifleScoped #crosshair, body.rifleScoped #pickup { display: none !important
 body.rifleHip #rifleHip { display: block; }
 body.rifleHip #crosshair { display: none; }
 body.gunSights #crosshair { display: none; }
-#rifleCharge { position: fixed; left: 50%; top: 50%; width: 18px; height: 2px; margin-left: -9px; pointer-events: none; z-index: 4;
-  background: rgba(0, 0, 0, 0.3); opacity: 0; transition: opacity .12s; }
-#rifleCharge i { display: block; height: 100%; background: rgba(255, 244, 228, 0.7); transform-origin: left; }
-#rifleCharge.on { opacity: 0.8; transition: none; }
-#rifleCharge.blaster { width: 26px; margin-left: -13px; height: 3px; }
-#rifleCharge.blaster i { background: rgba(255, 178, 104, 0.8); }
-#rifleCharge.graviton i { background: rgba(196, 160, 255, 0.8); }
-#rifleCharge.piercer { width: 30px; margin-left: -15px; height: 2px; }
-#rifleCharge.piercer i { background: rgba(214, 232, 255, 0.85); }
+#rifleCharge { position: fixed; left: 50%; top: 50%; width: 44px; height: 4px; margin-left: -23px; pointer-events: none; z-index: 4;
+  background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(0, 0, 0, 0.55); border-radius: 2px; box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+  opacity: 0; transition: opacity .15s; }
+#rifleCharge i { display: block; height: 100%; background: rgba(255, 244, 228, 0.95); transform-origin: left; border-radius: 1px; }
+#rifleCharge.on { opacity: 1; transition: none; }
+#rifleCharge.blaster { width: 60px; margin-left: -31px; height: 5px; }
+#rifleCharge.blaster i { background: rgba(255, 178, 104, 0.95); }
+#rifleCharge.graviton i { background: rgba(196, 160, 255, 0.95); }
+#rifleCharge.piercer { width: 64px; margin-left: -33px; height: 4px; }
+#rifleCharge.piercer i { background: rgba(214, 232, 255, 0.95); }
 #rifleScope.piercer .cell { background: rgba(200, 220, 255, 0.15); }
 #rifleScope.piercer .cell i { background: #dceaff; }
 body.rifleScoped #rifleCharge, body.down #rifleCharge { display: none; }
@@ -174,6 +175,8 @@ export class Rifle {
   private time = 0;
   private wasFire = false;
   private readyAt = 0;
+  /** The gun last drawn ('<slot>:<kind>'): drawing another starts its recharge from empty. */
+  private drawn = '';
   /** Breath: held for how long (s), gasping until (time). */
   private held = 0;
   private gaspUntil = 0;
@@ -381,6 +384,12 @@ export class Rifle {
     }
     playerHands.kick = Math.max(0, playerHands.kick - dt * 5);
 
+    // A gun just drawn (another slot, or another gun in it) comes up empty and recharges first.
+    const drawn = isGun(playerHands.held) ? `${tools.slot}:${playerHands.held}` : '';
+    if (drawn !== this.drawn) {
+      this.drawn = drawn;
+      if (drawn) this.recharge(this.cooldown(feel.kind));
+    }
     const charge = Math.min(1, 1 - (this.readyAt - performance.now()) / this.cooldown(feel.kind));
     playerHands.charge = charge;
     const recharging = holding && charge < 1;
@@ -435,10 +444,17 @@ export class Rifle {
     return gunCooldown(GUNS[kind].cooldown, it?.kind === kind ? Math.max(0, quality(it)) : 0);
   }
 
+  /** Empty the cell and recharge it over `cooldown` ms, heard as it fills. */
+  private recharge(cooldown: number) {
+    this.readyAt = performance.now() + cooldown;
+    if (this.gun === 'blaster') gunSound.recharge(cooldown / 1000 - 0.12);
+    else if (this.gun === 'piercer') gunSound.piercerCharge(cooldown / 1000 - 0.25);
+    else rifleSound.recharge(cooldown / 1000 - 0.08);
+  }
+
   private shoot() {
     const cam = this.view.camera;
     const feel = FEEL[this.gun], { range } = GUNS[feel.kind], cooldown = this.cooldown(feel.kind);
-    this.readyAt = performance.now() + cooldown;
     // From the eye along the aim (sway included), scattered within the cone from the hip. In third person the
     // camera is behind the eye on the view ray, so this still goes where the crosshair is; over the shoulder the
     // camera is beside that ray, so the shot starts at the camera instead.
@@ -474,9 +490,7 @@ export class Rifle {
       blasts.piercerMuzzle(m.x, m.y, m.z, _d.x, _d.y, _d.z, !this.scoped);
     } else rifleSound.shot(null, null, this.gun === 'pistol');
     rumble(feel.rumble[0], feel.rumble[1], feel.rumble[2]);
-    if (heavy === 'blaster') gunSound.recharge(cooldown / 1000 - 0.12);
-    else if (heavy === 'piercer') gunSound.piercerCharge(cooldown / 1000 - 0.25);
-    else rifleSound.recharge(cooldown / 1000 - 0.08);
+    this.recharge(cooldown);
     // Recoil: the muzzle climbs (some of it stays: pull it back down), kicks a little sideways; less held to the eye.
     const ads = playerHands.aim;
     const climb = feel.climb * (1.25 - 0.45 * ads) * (0.85 + Math.random() * 0.3);
