@@ -46,7 +46,9 @@ const games = registry(join(dirname(DB_PATH), 'registry.db'));
 const dbPath = (id: string) => (id === LEGACY_WORLD ? DB_PATH : join(WORLDS_DIR, `${id}.db`));
 const exists = (id: string) => (DEV_WORLDS.includes(id) && labAllowed()) || (WORLD_ID_RE.test(id) && existsSync(dbPath(id)));
 
-type World = { child: ChildProcess; port: Promise<number> };
+/** `closing`: the process has said it's going (a snapshot loading: server/world.ts onSnapshotLoad) and takes nobody
+ *  more; it resolves once it has exited. */
+type World = { child: ChildProcess; port: Promise<number>; closing?: Promise<void> };
 const worlds = new Map<string, World>();
 let starting = 0;
 let reserved = 0;
@@ -55,6 +57,8 @@ const canStart = () => worlds.size + reserved < MAX_WORLDS && starting < MAX_STA
 /** The world's process, started if it isn't running; resolves to the local port it takes connections on. */
 function world(id: string, reservation = false): Promise<number> {
   let w = worlds.get(id);
+  // Going: the next one, built from what it leaves (a connection before it's gone would find it ignoring hellos).
+  if (w?.closing && !reservation) return w.closing.then(() => world(id));
   if (reservation) reserved--;
   if (w && reservation) starting--;
   if (!w) {
@@ -86,6 +90,7 @@ function world(id: string, reservation = false): Promise<number> {
       timer.unref();
       child.on('message', (m: { t?: string; port?: number } | null) => {
         if (m?.t === 'port' && Number.isInteger(m.port) && m.port! > 0 && m.port! <= 65535) finish(undefined, m.port);
+        if (m?.t === 'closing' && w && !w.closing) w.closing = new Promise((r) => (child.exitCode !== null || child.signalCode !== null ? r() : child.once('exit', () => r())));
       });
       child.once('error', (error) => { finish(error); if (worlds.get(id)?.child === child) worlds.delete(id); });
       child.once('exit', () => finish(new Error(`world ${id} exited`)));

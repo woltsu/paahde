@@ -643,6 +643,7 @@ function onSnapshotLoad(p: Player, id: string) {
   const snap = TEST && !frozen ? readSnapshot(id) : null;
   if (!snap || snap.world !== WORLD_ID) return;
   frozen = true;
+  process.send?.({ t: 'closing' }); // (server/index.ts: whoever comes next waits for the next process, built from the rows)
   for (const o of players.values()) o.ws.close(4012, 'snapshot');
   // (The close frames on their way; anything written meanwhile is wiped with the rest.)
   setTimeout(() => {
