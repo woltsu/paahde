@@ -37,6 +37,7 @@ Every push to `main` deploys to dev (https://dev.paahde.herkku.org/) within a fe
 
 ## Rules & Conventions
 
+- **Boy-scout rule — every finding is ours:** Any bug, broken test, code-quality smell, or architectural concern you come across, in or out of your task's scope, is our problem, never someone else's. Never pass over it silently: fix it inline when it's small and safe, otherwise log it in `todo-issues.md` (root) before you finish. Fix or log, every time, and say which in your report.
 - **Multiplayer (`docs/netcode.md`):** Server is authoritative; clients send only input bitmasks. Anything that moves a player must be in `shared/sim.ts` and deterministic (fixed `DT`, no `Math.random()`/`Date.now()`/frame time) or client prediction will rubber-band. The browser ID is a secret credential: never include it in messages to other clients.
 - **Levels (`docs/levels.md`):** Anything that moves a player reads ground and solids through `level(s.level)` in `shared/sim.ts`, never the desert's functions directly. Desert systems (weather, enemies, heat) take players through the server's level gate, by property (`weather`, `enemies`, `climate`), never `level === DATACENTER`. A level's lights come from its light pool; a stage never adds lights to the scene outside its root.
 - **Node type stripping:** `server/` and `shared/` run with Node's native type stripping: import with `.ts` extensions, and no enums, namespaces, or constructor parameter properties (`erasableSyntaxOnly`).
