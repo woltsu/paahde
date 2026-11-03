@@ -24,7 +24,7 @@
 // Everything plays through `audio.music` (music slider, then the volume slider and limiter).
 import { audio } from './audio';
 
-export type MusicState = 'dead' | 'heatstroke' | 'epic' | 'combat' | 'sandstorm' | 'indoors' | 'ambient';
+export type MusicState = 'dead' | 'epic' | 'combat' | 'sandstorm' | 'indoors' | 'ambient';
 /** What is going on, from main.ts. `ambient` is not a cue: it plays a triggered piece when none of these is.
  *  `dead` only starts the death music (on the way in); the state lasts as long as the song. `sunrise`: the sun
  *  is coming up (not a state, it triggers ambient music when you are outdoors). */
@@ -61,8 +61,6 @@ const SURFACE_HOLD = 3;
 /** Highest priority first. `ambient`'s song is the triggered piece (Music.ambient). */
 const STATES: { state: MusicState; song: Song | null; enter: number; leave: number }[] = [
   { state: 'dead', song: DEATH, enter: 0, leave: 0 },
-  // Not cued: the breathing (src/breathing.ts) plays over whatever music is on.
-  { state: 'heatstroke', song: null, enter: 0, leave: 3 },
   { state: 'epic', song: EPIC_BATTLE, enter: 0, leave: 8 },
   { state: 'combat', song: COMBAT_DRUMS, enter: 0, leave: 8 },
   { state: 'sandstorm', song: null, enter: 1, leave: 4 },

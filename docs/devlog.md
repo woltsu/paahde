@@ -3025,3 +3025,9 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - The piercer's molten metal through a walker's plate is bigger and brighter (src/world/blasts.ts `piercer`): 72 drops
   (was 26), 0.08–0.2 m (was 0.05–0.12), a wider fan, every twelfth a big slow gob that glows on the sand ~4 s, hotter
   colour, a longer orange-white flash; MOLTEN pool 400.
+
+## No heavy breathing at high heat
+
+- Removed the heavy breathing that played from 70% heat (src/breathing.ts, public/audio/breathing.mp3 and its credit)
+  and the `heatstroke` music state left over from it (nothing cued it any more). High heat still shows in the screen
+  (post.ts heatstroke vignette and swimming view) and the sigh after a sip (src/drinkSound.ts).

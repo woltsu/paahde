@@ -56,7 +56,6 @@ import { bikeLandSound } from './bikeLandSound';
 import { cartSound } from './cartSound';
 import { music } from './music';
 import { uiSound } from './uiSound';
-import { breathing } from './breathing';
 import { slideSound } from './slideSound';
 import { audio } from './audio';
 import { heightAt } from '../shared/terrain.ts';
@@ -773,7 +772,6 @@ renderer.setAnimationLoop((time) => {
   footsteps.listener(orbit.camera.position, orbit.viewYaw);
   bikeLandSound.listener(orbit.camera.position, orbit.viewYaw);
   cartSound.listener(orbit.camera.position, orbit.viewYaw);
-  breathing.update(survival.heatLevel, survival.dead);
   audio.setMuffled(survival.dead); // the world goes dull while you lie dead; the music doesn't
   const cam = orbit.camera.position;
   music.update(frameDt, {
