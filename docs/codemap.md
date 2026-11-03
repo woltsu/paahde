@@ -446,6 +446,12 @@ Everything built is shared, and anyone can take a building down.
   (server/guardians.ts, drones.ts, jets.ts, harvesters.ts, nests.ts, bosses.ts) and sets off the blaster's `burst`
   in each of them (`GuardianServer.pointAt`: the weak points where the server reckons them); tests
   `tools/weapons.test.mjs`
+- Each gun's crosshair: `src/reticle.ts` (`Reticle`, one SVG glyph per gun drawn over a dark halo: pistol brackets,
+  rifle fine cross, blaster burst ring with a drop bar, piercer rails with a penetrator and three capacitor chevrons,
+  graviton void with orbiting motes); it opens with the hip cone and fills back in with the recharge through three
+  custom properties (`--g`, `--q`, `--rot`), flashes white on a hit (src/rifle.ts `strike`); the plain dot
+  (src/crosshair.ts) shows when no gun is in hand. The scopes' reticles (rifle duplex, piercer ranging chevron) are
+  `SCOPE` in src/rifle.ts
 - The heavy guns as fired: their feel (`FEEL` in `src/rifle.ts`: raise time, sway, kick, view jolt, shake, zoom punch,
   pad rumble); their beams are `zaps.beam` kinds (`BEAMS` in `src/world/zaps.ts`, pooled per kind); the blaster's
   burst (`BLASTS.blaster`) and the graviton's caving-in end point in `src/world/blasts.ts` (pooled; lit through

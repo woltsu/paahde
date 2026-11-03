@@ -3130,3 +3130,20 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   shooter's eye). The server no longer bursts it either when it ends there over low ground (server/world.ts onFire).
 - Since a bolt's flight is longer, the server's rate check allows two blaster shots that much closer (~0.45 s apart
   at the least, was ~1.3 s): the slack for a bolt landing up to its whole flight after the trigger.
+
+## A crosshair for each gun
+
+- The four hip ticks and the recharge bar are gone: each gun draws its own crosshair (src/reticle.ts), its shape the
+  gun's character. Pistol: small open brackets, a pip and a post tick. Rifle: a clean fine cross with a centre dot.
+  Blaster: a chunky pale-amber ring (the burst) with four heavy notches and a drop bar under the dot (its bolt falls).
+  Piercer: long thin blue-white rails, a penetrator chevron whose tip is the aim, three capacitor chevrons below.
+  Graviton: a dark void ringed in violet, six motes slowly orbiting on the cone (still under reduced motion).
+- Each opens with the hip cone as the ticks did. The recharge fills it back in: the brackets and lines redraw, the
+  blaster's ring winds round, the piercer's capacitors light one by one, the graviton's motes light. Empty, a glyph is
+  its dark outline (bright sand) or a dim ghost (night). A hit flashes it white and a little wider.
+- Drawn as SVG `<use>` copies (dark halo, glyph, flash); per frame only `--g`/`--q`/`--rot` change. Sized by the
+  comfort HUD scale (the gap divided back, so the cone stays true).
+- The piercer's scope has its own reticle: fine hairlines with a ranging scale, heavy posts only at the rim and none
+  above, an open chevron with a lit blue-white tip. The rifle keeps the duplex.
+- On iron sights only first person hides the crosshair now; aiming a pistol in third person had shown nothing.
+- Looked at in a headless preview (bright and dark, settled/hip/moving, recharging, hit); not yet in a running game.
