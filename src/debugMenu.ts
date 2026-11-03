@@ -16,8 +16,9 @@
 // "Go to level" moves you into a level (shared/levels.ts), or back out to the desert, through the server's door move.
 // "Give item" puts any one item (shared/items.ts ITEMS; type to search by name or id) in your bag: a count of it, or gear
 // repaired with parts of the chosen tier, or broken.
-// "Scenarios" (the header's other view, dev server only) lists the gameplay test scenarios (shared/scenarios.ts): Start sets
-// one up for you in the test world (?w=test), going there first from any other world.
+// "Scenarios" (the header's other view, dev server only): gameplay test scenarios as world-state snapshots
+// (server/snapshot.ts, docs/scenarios.md), in the test world (?w=test) only. Load replaces the whole world with one, you
+// its protagonist (the page reloads into it); Save keeps the world as it is now as one (scenarios/<id>.json).
 import { isBound } from './bindings';
 import { BEATS } from '../shared/levels/beginning.ts';
 import { LEVELS } from '../shared/levels.ts';
@@ -28,7 +29,7 @@ import { CLOTH, ITEMS, RETIRED, SCRAP, stackOf, WIRING } from '../shared/items.t
 import { TONE_CURVES, toneControl, type ToneCurve } from './post';
 import { summonLocalStorm } from './storm';
 import { clockText, timeControl } from './world/dayNight';
-import { SCENARIOS } from '../shared/scenarios.ts';
+import type { Net } from './net';
 import { labAllowed, TEST, TEST_WORLD } from '../shared/world.ts';
 import type { FlyCam } from './flyCam';
 
@@ -41,7 +42,7 @@ export class DebugMenu {
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean, quad: boolean) => void = () => {},
-    goLevel: (key: string) => void = () => {}, startScenario: (id: string) => void = () => {}) {
+    goLevel: (key: string) => void = () => {}, net?: Net) {
     const style = document.createElement('style');
     style.textContent = `
 #debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh / var(--ui, 1) - 60px); overflow-y: auto;
@@ -87,12 +88,16 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
     const tiers = ['Scrap', 'Basic', 'Quality', 'Space'];
     const p = this.panel;
     p.id = 'debugMenu';
-    const scenarios = labAllowed() ? `<div id="dbgScenarios" style="display:none">
-<p style="margin:2px 0 4px;opacity:.6;line-height:1.35">${TEST ? 'Sets it up for you here: place, gear (your bag and equipment emptied first), time, weather and enemies. Start again to retry.' : `Runs in the test world (?w=${TEST_WORLD}, fixed seed): Start goes there and sets it up.`}</p>
-${SCENARIOS.map((sc) => `<div class="scen"><b>${sc.label}</b><p>${sc.note}</p>
-<p class="facts">${clockText(sc.tod)} · ${sc.weather} · ${[...sc.hotbar, ...(sc.bag ?? [])].map((it) => `${ITEMS[it.kind]?.label ?? it.kind}${it.tier ? ` (${it.tier})` : it.n && it.n > 1 ? ` ×${it.n}` : ''}`).join(', ')}
- · ${sc.enemies.map((e) => `${e.kind} ${e.dist} m${e.hunting ? ', hunting' : ''}`).join(', ') || 'no enemies'}</p>
-<div class="row"><button class="go" data-scenario="${sc.id}">Start</button></div></div>`).join('')}</div>` : '';
+    const scenarios = labAllowed() ? `<div id="dbgScenarios" style="display:none">${TEST ? `
+<p class="facts" style="margin:2px 0 4px">Load replaces the whole world with a snapshot, you its protagonist (everyone here reloads). Save keeps the world as it is now.</p>
+<div id="dbgSnapList"><p class="facts">…</p></div>
+<div class="sub">Save the world as it is now</div>
+<div class="row"><input id="dbgSnapId" placeholder="id (a-z, 0-9, -)" style="flex:1;min-width:0"></div>
+<div class="row"><input id="dbgSnapLabel" placeholder="label" style="flex:1;min-width:0"></div>
+<div class="row"><input id="dbgSnapNote" placeholder="what it's for" style="flex:1;min-width:0"></div>
+<div class="row"><button id="dbgSnapSave" class="go">Save</button><span id="dbgSnapMsg" class="facts"></span></div>` : `
+<p class="facts" style="margin:2px 0 6px">Scenarios are snapshots of the test world (?w=${TEST_WORLD}, fixed seed), loaded and saved there.</p>
+<div class="row"><button id="dbgToTest" class="go">Go to the test world</button></div>`}</div>` : '';
     p.innerHTML = `<h4>${scenarios ? '<div class="tabs"><button data-view="main" class="on">Debug</button><button data-view="scenarios">Scenarios</button></div>' : '<span>Debug</span>'}<span>F3</span></h4>
 ${scenarios}<div id="dbgMain">
 <details data-sec="time" open><summary>Time <b id="dbgTime"></b></summary>
@@ -172,18 +177,32 @@ ${scenarios}<div id="dbgMain">
     };
     for (const t of tabs) t.addEventListener('click', () => view(t.dataset.view!));
     try { view(localStorage.getItem('debugMenu.view') ?? 'main'); } catch { view('main'); }
-    for (const b of p.querySelectorAll<HTMLElement>('[data-scenario]')) b.addEventListener('click', () => {
-      const id = b.dataset.scenario!;
-      if (!TEST) {
-        // Into the test world, which starts it once loaded (main.ts).
-        location.href = `${location.pathname}?w=${TEST_WORLD}&debug&scenario=${encodeURIComponent(id)}`;
-        return;
-      }
-      // Its time is on the shared clock: stop holding a local one.
-      timeControl.override = null;
-      live.checked = true;
-      startScenario(id);
-    });
+    p.querySelector('#dbgToTest')?.addEventListener('click', () => (location.href = `${location.pathname}?w=${TEST_WORLD}&debug`));
+    const snapList = p.querySelector<HTMLElement>('#dbgSnapList');
+    if (snapList && net) {
+      const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+      const msg = p.querySelector<HTMLElement>('#dbgSnapMsg')!;
+      const field = (id: string) => p.querySelector<HTMLInputElement>(id)!;
+      net.onSnapshotList = (list, saved) => {
+        snapList.innerHTML = list.map((s) => `<div class="scen"><b>${esc(s.label)}</b>${s.note ? `<p>${esc(s.note)}</p>` : ''}
+<p class="facts">${esc(s.id)} · ${esc(s.savedAt.slice(0, 16).replace('T', ' '))}</p>
+<div class="row"><button class="go" data-snap="${esc(s.id)}">Load</button></div></div>`).join('') || '<p class="facts">No snapshots yet.</p>';
+        for (const b of snapList.querySelectorAll<HTMLElement>('[data-snap]')) b.addEventListener('click', () => {
+          b.textContent = 'Loading…';
+          net.snapshotLoad(b.dataset.snap!);
+        });
+        if (saved) msg.textContent = `saved scenarios/${saved}.json`;
+      };
+      for (const id of ['#dbgSnapId', '#dbgSnapLabel', '#dbgSnapNote']) field(id).addEventListener('keydown', (e) => e.stopPropagation()); // (typing is not the game's keys)
+      p.querySelector('#dbgSnapSave')!.addEventListener('click', () => {
+        const id = field('#dbgSnapId').value.trim();
+        if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(id)) { msg.textContent = 'id: a-z, 0-9 and -'; return; }
+        msg.textContent = '';
+        net.snapshotSave(id, field('#dbgSnapLabel').value.trim(), field('#dbgSnapNote').value.trim());
+      });
+      // The list is asked for whenever the view is shown.
+      for (const t of tabs) if (t.dataset.view === 'scenarios') t.addEventListener('click', () => net.snapshotList());
+    }
     p.addEventListener('wheel', (e) => e.stopPropagation()); // scrolling the panel is not the game's wheel
     document.body.append(p);
     const slider = p.querySelector<HTMLInputElement>('#dbgTod')!;
@@ -345,6 +364,7 @@ ${scenarios}<div id="dbgMain">
         if (document.pointerLockElement) ui.debugFreed = true;
         document.exitPointerLock();
         if (live.checked) show(currentTod());
+        if (views.scenarios && views.scenarios.style.display !== 'none') net?.snapshotList();
       }
     });
   }

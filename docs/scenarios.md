@@ -1,39 +1,58 @@
-# Gameplay test scenarios
+# Gameplay test scenarios: world-state snapshots
 
-A fixed set-up to play one situation through again and again: where you stand, what you carry, the time of day, the
-weather and the enemies round you. For the dev server only (`npm run dev`).
+A scenario is a snapshot of the whole test world, loaded in place of it to play one situation through again and again.
+Dev server only (`npm run dev`), in the test world only (`?w=test`).
 
 ## Using them
 
-- Open the debug menu (F3, with `debug` in the URL), switch the header from **Debug** to **Scenarios**, press
-  **Start**. From any other world it goes to the test world first (`?w=test&debug&scenario=<id>`) and starts the
-  scenario once you're in; in the test world it starts at once. Start again to retry.
-- **Start empties your bag and equipment** (in the test world, the only place it runs) and fills them as the scenario
-  says; the first hotbar item is in hand. Health, heat and water are reset (a full bottle).
-- The time of day moves the test world's **shared clock** (everyone in it sees it). Weather `clear` turns random storms
-  off (the debug menu's "Disable weather") and clears the ones blowing; the seeded sand vortices still roam far off.
-- Enemies placed by a scenario go when you start another one, or once nobody is within 450 m of where they stand
-  (like a summoned crawler pack). A killed one isn't replaced.
-- The rest of the desert keeps going: the world's own guardians, drones at night, jets and crawler packs.
+- In the test world, open the debug menu (F3) and switch its header from **Debug** to **Scenarios**. Elsewhere the view
+  just offers to go there.
+- **Load** replaces the whole world with the snapshot and you play its protagonist: where they stood and faced, what they
+  carried and wore, their health, the slot in hand, under your own name. Everyone in the world is sent off (close code
+  4012) and their pages reload into it. Load again to retry.
+- **Save** keeps the world as it is now as `scenarios/<id>.json`, you its protagonist (an id of `a-z`, `0-9` and `-`; a
+  label and a line on what it's for). Saving an id that exists overwrites it. Commit the file to share it.
+
+## What a snapshot holds
+
+- **The database, every table and row** (`server/snapshot.ts` `dumpDb`): players, bags and boxes, equipment, terrain
+  digs, scrap and loot, crash-site progress, placed things, vehicles, power, corpses, settings (lives, bosses beaten,
+  where bosses stand). That is everything a server restart keeps. Loading empties every table and writes the snapshot's
+  rows in one transaction, matching columns by name (a column added since gets its default, one dropped is ignored),
+  then ends the world process without saving: the next one is built from the rows, as after any restart.
+- **The live state a restart would lose** (`LiveState` in `server/world.ts`): the time of day (the clock is set to it),
+  the weather (storms, gas, summoned vortices, whether random weather is off, when the next ones come), every walker
+  (guardians and crawlers, with their homes, damage, timers and whom they hunt), and the protagonist's facing, health
+  and hand. Server-clock times are moved to the new process's clock.
+- **Not held:** drones, jets, bosses' fights in progress, harvesters, missiles and bolts in flight, night packs (their
+  crawlers come back as summoned ones). They start afresh. The seeded sand vortices follow the wall clock.
+
+## Browser IDs
+
+They are secret credentials and snapshots are checked in. A dump replaces every UUID in every row with a placeholder:
+the saver's with `PROTAGONIST` (`00000000-0000-4000-8000-000000000001`), which becomes the loader's browser ID, anyone
+else's with `…000000000002`, `…3` and so on (offline players in the loaded world). `tools/snapshot.test.mjs` fails on
+any other UUID in `scenarios/`.
+
+## Making one
+
+Play it into place and Save. What the debug menu can't do (a spot, an exact time, an enemy at an exact place) can be
+edited in the file, which is plain JSON with one row a line:
+
+- the protagonist's row in `tables.players` (`x`, `z`; the height comes from the sand), `live.saver.facing` (the sim's:
+  0 looks towards -z, π towards +z), `live.tod` (0..1);
+- a walker in `live.walkers.walkers`: `x`, `z`, `yaw`; `home` `{ "id": -1, "x": …, "z": … }` makes it patrol round
+  that spot (gone once nobody is within 450 m of it); `feet: null` plants its feet where it stands; `guardUntil`
+  (server-clock ms, against `live.savedNow`) keeps it standing that long.
+
+`scenarios/piercer-guardian.json` was made that way: saved after giving the piercer, bottle, spyglass and backpack
+(worn) by the debug menu, then the protagonist moved to (-873, 777) facing +z with the evening sun at their back, the
+time set to 17:31, and the guardian the menu had brought moved 300 m ahead, onto a rise 12 m up (a clear line of
+sight), standing a minute before it patrols.
 
 ## The test world
 
 `?w=test` (`TEST_WORLD` / `TEST` in shared/world.ts) is a dev-only world like the lab and the bench: the server only has
-it with `--lab` (`npm run dev:server`), the browser only in Vite's dev mode. It's the real desert from the fixed seed of
-the id `test`, with everything happening in it, endless lives and no beginning (new players start by their pod). Its
-database is `data/worlds/test.db`; delete it for a fresh world (the layout comes from the seed, not the database).
-
-## Adding one
-
-Add an entry to `SCENARIOS` in `shared/scenarios.ts`:
-
-- `at`: a place in the test world's seed (x, z in m) and `facing` (the sim's: 0 looks towards -z, π towards +z).
-  Find open, flat sand away from crash sites with a clear line to where the enemies go: `tools/scenarios.test.mjs`
-  checks every scenario's line of sight, and a quick script importing `shared/terrain.ts` (`heightAt`) and
-  `shared/crashsites.ts` with `WORLD_ID=test` finds candidates. Mind the sun: at evening it sets towards -z.
-- `tod` (0..1), `weather`, `hotbar` (up to five; gear with a `tier` comes repaired with parts of it), `bag`
-  (equippable gear goes on), `enemies` (`dist` m away, `bearing` turned from straight ahead; `standS` seconds standing
-  guard before it patrols; `hunting` to have it come at once), `noHeat`.
-- Only guardians can be placed so far. Another kind wants a placing method in its server module (like
-  `GuardianServer.stage`/`unstage`) and a branch in `server/world.ts` `onScenario`.
-- Run `node --test tools/scenarios.test.mjs`.
+it with `--lab` (`npm run dev:server`), the browser only in Vite's dev mode, and the snapshot messages do nothing
+anywhere else. It's the real desert from the fixed seed of the id `test` (a snapshot's rows are about that layout), with
+everything happening in it, endless lives and no beginning.

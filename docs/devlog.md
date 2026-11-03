@@ -3031,3 +3031,22 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - Removed the heavy breathing that played from 70% heat (src/breathing.ts, public/audio/breathing.mp3 and its credit)
   and the `heatstroke` music state left over from it (nothing cued it any more). High heat still shows in the screen
   (post.ts heatstroke vignette and swimming view) and the sigh after a sip (src/drinkSound.ts).
+||||||| parent of 036d211 (Scenarios as world-state snapshots: debug menu → Scenarios (dev server, test world only) loads a snapshot in place of the whole world, or saves the world as it is now (scenarios/<id>.json, server/snapshot.ts). A snapshot is every table's rows (browser IDs as placeholders; the saver's is the protagonist, played by whoever loads it) and the live state a restart loses: time of day, weather, every walker, the protagonist's facing, health and hand. Load writes the rows and ends the world process; the next is built from them and takes the live state (StormServer/GuardianServer snapshot/restore, times moved to the new clock); pages reload on close 4012. The first: "Piercer vs guardian". The declarative scenarios are gone. tools/snapshot.test.mjs, docs/scenarios.md)
+
+## Scenarios as world-state snapshots
+
+- **What:** a gameplay test scenario is now a snapshot of the whole test world (`scenarios/<id>.json`), not a
+  declarative set-up: debug menu → Scenarios lists them with Load, and Save keeps the world as it is now. Dev server,
+  test world only (docs/scenarios.md).
+- **Why a restart:** every server module caches its part of the database in memory, and the walkers, the weather and
+  the clock live only there. Writing the rows back under a running world would leave those stale, so a load writes them
+  and ends the process; the next one is built from them like after any deploy, and takes the live state as it starts
+  (clock, weather) and when the loader is in (walkers, facing, health, hand). Pages reload on the close (4012), since
+  the client also caches what only grows (scrap taken, sites visited).
+- **What's live:** walkers and weather are plain data apart from their server-clock times, which are moved to the new
+  clock (times below 0 mean "none"). A walker's fields are matched by name, so a snapshot outlives fields being added.
+  Drones, jets, boss fights, harvesters and things in flight are not held: they start afresh.
+- **Secrets:** every UUID in a dump is a placeholder (the saver's is the protagonist, played by whoever loads it under
+  their own name); the test fails on any other UUID in `scenarios/`.
+- The first one, "Piercer vs guardian", was saved after kitting out through the debug menu, then had the spot, the time
+  and the guardian edited into the file. The declarative scenarios (shared/scenarios.ts, `GuardianServer.stage`) are gone.

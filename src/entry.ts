@@ -7,7 +7,7 @@ import { TEXT } from '../shared/text.ts';
 
 document.title = TEXT.game.title;
 
-// The dev test lab (?w=lab, shared/lab.ts) and the test world (?w=test, shared/scenarios.ts) open with the debug menu (F3) on.
+// The dev test lab (?w=lab, shared/lab.ts) and the test world (?w=test, docs/scenarios.md) open with the debug menu (F3) on.
 if ((LAB || TEST) && !location.search.includes('debug')) history.replaceState(null, '', `${location.pathname}${location.search}&debug${location.hash}`);
 
 const play = () => {

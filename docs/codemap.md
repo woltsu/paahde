@@ -128,10 +128,12 @@ when you find it stale.
   player alone is told theirs (`spawn` message): a lantern by its pillow (src/world/placed.ts), the locator's home
 - `shared/lab.ts` — the dev test lab (`?w=lab`, `LAB` in shared/world.ts: flat floor at y 0, no desert or events; laid out
   from its own spot `LAB_AT`, world (0, 0), you start at `LAB_SPAWN`; layout of the machine sites `lab:<n>`, pickups and plates); drawn by `src/world/labPlates.ts`, pickups via `server/loot.ts`
-- `shared/scenarios.ts` — gameplay test scenarios (docs/scenarios.md): debug menu → Scenarios sets one up in the
-  dev-only test world (`?w=test`, `TEST` in shared/world.ts: the real desert from a fixed seed, endless lives, no
-  beginning): place, bag and equipment, shared clock, weather, enemies (server/world.ts `onScenario`, guardians placed
-  by `GuardianServer.stage`); `tools/scenarios.test.mjs` checks their places and sight lines
+- `server/snapshot.ts` — world-state snapshots, the gameplay test scenarios (docs/scenarios.md): debug menu → Scenarios
+  in the dev-only test world (`?w=test`, `TEST` in shared/world.ts: the real desert from a fixed seed, endless lives, no
+  beginning). Save dumps every table (browser IDs as placeholders) and the live state (`LiveState` in server/world.ts:
+  time of day, `StormServer`/`GuardianServer` `snapshot()`, the protagonist's facing, health, hand) to
+  `scenarios/<id>.json`; Load writes the rows back and ends the world process, the next one takes the live state
+  (`restore()`); `tools/snapshot.test.mjs`
 - `src/artBench.ts` — the art-style bench (`?w=bench`): the desert from a fixed seed with no events, fixed camera shots
   at set times of day (`[` `]`), a panel tuning the global look live (tone, grade, bloom, light, sky palette keys,
   haze, sand/rock/mud colours; hold `\` for the defaults), exported as JSON or a diff naming where each default lives

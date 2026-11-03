@@ -11,6 +11,7 @@ import { ORIGIN } from '../shared/origin.ts';
 import { GAS_LEAD_S, GAS_PASS_S, GAS_SPEED, type Gas } from '../shared/gas.ts';
 import { DAY_SECONDS, sunElevation } from '../shared/sun.ts';
 import type { ServerMsg } from '../shared/protocol.ts';
+import { rebase } from './snapshot.ts';
 
 /** Quiet time between one storm's announcement and the next (ms). */
 const GAP_MIN_MS = 4 * 60_000;
@@ -49,6 +50,11 @@ const BIG_GAP_MS = 20 * 60_000;
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
+/** The weather in a world-state snapshot (StormServer.snapshot). */
+export type StormsSnapshot = {
+  storms: Storm[]; gas: Gas[]; vortices: Vortex[]; off: boolean; nextId: number; nextAt: number; nextFrontAt: number; nextGasAt: number;
+};
+
 export class StormServer {
   storms: Storm[] = [];
   gas: Gas[] = [];
@@ -63,6 +69,27 @@ export class StormServer {
   private changed = false;
   /** Debug menu: no random storms (and any blowing now are cleared). */
   off = false;
+
+  /** World-state snapshots (server/snapshot.ts): what's blowing and when the next of each comes (server-clock times). */
+  snapshot(): StormsSnapshot {
+    return { storms: this.storms, gas: this.gas, vortices: this.vortices, off: this.off, nextId: this.nextId,
+      nextAt: this.nextAt, nextFrontAt: this.nextFrontAt, nextGasAt: this.nextGasAt };
+  }
+
+  /** Back to a snapshot taken at server time `savedNow`, its times moved to `now`. */
+  restore(s: StormsSnapshot, savedNow: number, now: number) {
+    const at = (t: number) => rebase(t, savedNow, now);
+    const moved = <T extends { start: number; end: number }>(list: T[]) => list.map((o) => ({ ...o, start: at(o.start), end: at(o.end) }));
+    this.storms = moved(s.storms);
+    this.gas = moved(s.gas);
+    this.vortices = moved(s.vortices);
+    this.off = s.off;
+    this.nextId = Math.max(this.nextId, s.nextId);
+    this.nextAt = at(s.nextAt);
+    this.nextFrontAt = at(s.nextFrontAt);
+    this.nextGasAt = at(s.nextGasAt);
+    this.changed = true;
+  }
 
   constructor(now: number) {
     this.nextAt = now + rand(GAP_MIN_MS, GAP_MAX_MS) / 2;

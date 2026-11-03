@@ -254,7 +254,7 @@ new DebugMenu(() => sky.day.tod, (tod) => net.shareTimeOfDay(tod), () => net.res
   (kind, n, tier) => net.debugGive(kind, n, tier),
   (working, quad) => net.debugBike(working, quad),
   (key) => net.debugLevel(key),
-  (id) => net.scenario(id));
+  net);
 // The art-style bench (?w=bench, dev only): fixed shots and the look panel (src/artBench.ts).
 const artBench = BENCH ? new ArtBench({ fly, camera: orbit.camera, day: sky.day, post, blownSand, startFly: () => fly.start(orbit.camera, orbit.yaw, orbit.pitch) }) : null;
 new Chat(net);
@@ -344,22 +344,8 @@ const LADDER_EYE_AHEAD = 0.1;
 const locator = new LocatorBar();
 const hud = new InventoryHud(net, renderer.domElement);
 const survival = new Survival(net);
-// Gameplay test scenarios (debug menu → Scenarios, shared/scenarios.ts): set up, the first hotbar item is in hand. One
-// asked for in the address (&scenario=<id>, from the menu in another world) starts once we're in, asked again till it's
-// answered (the server takes nothing before our 'ready' lands, and the move waits out a teleport just made).
-net.onScenario = (slot) => survival.take(slot);
-const scenarioWanted = TEST ? new URLSearchParams(location.search).get('scenario') : null;
-if (scenarioWanted) {
-  const ask = setInterval(() => net.isReady && net.scenario(scenarioWanted), 1500);
-  net.onScenario = (slot) => {
-    clearInterval(ask);
-    net.onScenario = (s) => survival.take(s);
-    survival.take(slot);
-    const q = new URLSearchParams(location.search);
-    q.delete('scenario');
-    history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`);
-  };
-}
+// Back in a loaded world-state snapshot (debug menu → Scenarios, server/snapshot.ts): the slot its protagonist held.
+net.onSnapshot = (slot) => survival.take(slot);
 survival.wheelBusy = () => fly.active;
 const speech = new Speech();
 // Once the first thing said on arriving is read, how to look in the bag.

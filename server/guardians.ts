@@ -14,6 +14,7 @@ import { ORIGIN } from '../shared/origin.ts';
 import type { Vortex } from '../shared/vortex.ts';
 import { PACK_BACK_S } from '../shared/enemies.ts';
 import { coreCrashSites, crashSite, type CrashSite, LEVEL_R } from '../shared/crashsites.ts';
+import { rebase } from './snapshot.ts';
 import {
   ALERT_R, BITE_DAMAGE, BITE_MS, BLAST_R, BOT_DELAY_MS, BODY_H, BOLT_R, BOLT_RANGE, BOLT_SPEED, CHARGE_MS, CRAWLER, CRAWLER_CALM_MS,
   CRAWLER_CHASE_MS, CRUSH_SLACK, LUNGE_DASH, LUNGE_HIT_R, LUNGE_NONE, LUNGE_OVER, LUNGE_REST, LUNGE_REST_MS, LUNGE_SPEED,
@@ -106,8 +107,6 @@ type Guardian = {
    *  GUARDIAN_POINT_HP: one hit cracks it); damage its hull has taken from guns that pierce its plate (shared/rifle.ts
    *  HULL_HP: dead at that); died when (-1 alive). */
   points: number; broken: number; hits: number[]; hull: number; deadAt: number;
-  /** Placed by a gameplay test scenario (stage): keeps to its made-up home, isn't replaced when killed. */
-  staged: boolean;
   /** Guardians' feet (crawlers' are only drawn, src/world/guardians.ts); yaw last tick; standing still for (s). */
   feet: Foot[] | null; lastYaw: number; still: number;
   /** Crawlers: which way round what's in its way (server/pack.ts); the lunge (LUNGE_*) since when, springing along
@@ -116,6 +115,15 @@ type Guardian = {
   lunge: number; lungeAt: number; lx: number; lz: number; left: number; trail: number[];
   /** Knocked back (shared/knockback.ts): sliding at (kx, kz) m/s, dying away. */
   kx: number; kz: number;
+};
+
+/** A walker's fields that are server-clock times (snapshots move them: server/snapshot.ts rebase). */
+const WALKER_TIMES = ['guardUntil', 'huntAt', 'knownAt', 'calmUntil', 'shotUntil', 'bitAt', 'chargeAt', 'firedAt', 'missileAt', 'lungeAt', 'deadAt'] as const;
+
+/** The walkers in a world-state snapshot (GuardianServer.snapshot). */
+export type WalkersSnapshot = {
+  walkers: ({ home: { id: number; x?: number; z?: number } } & Record<string, unknown>)[];
+  comeback: { at: number; x: number; z: number }[];
 };
 
 /** A night pack: its made-up home (walking to (tx, tz)), and whether it's walking off (day has come). */
@@ -181,7 +189,7 @@ export class GuardianServer {
       id: this.nextWalker++, kind, legs, x, z, yaw: rand(-Math.PI, Math.PI), speed: 0, home,
       tx: home.x, tz: home.z, guardUntil: 0, prey: -1, huntAt: 0, px: 0, pz: 0, knownAt: 0, calmUntil: 0, shotUntil: 0, bitAt: 0,
       aiming: false, ax: 0, ay: 0, az: 0, chargeAt: -1, firedAt: 0, missileAt: 0,
-      points: weakPoints(kind, legs).length, broken: 0, hits: weakPoints(kind, legs).map(() => 0), hull: 0, deadAt: -1, staged: false, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
+      points: weakPoints(kind, legs).length, broken: 0, hits: weakPoints(kind, legs).map(() => 0), hull: 0, deadAt: -1, feet: null, lastYaw: 0, still: 0, skirt: { side: 0, until: 0 },
       lunge: LUNGE_NONE, lungeAt: 0, lx: 0, lz: 0, left: 0, trail: [], kx: 0, kz: 0,
     };
     g.lastYaw = g.yaw;
@@ -724,7 +732,7 @@ export class GuardianServer {
   /** Reached a waypoint: stand guard, wander off to another site, or on to the next point around this one. */
   private arrive(g: Guardian, now: number) {
     if (Math.random() < GUARD_CHANCE[g.kind]) g.guardUntil = now + rand(GUARD_MIN, GUARD_MAX) * (g.kind === CRAWLER ? 0.4 : 1);
-    if (g.kind === GUARDIAN && !g.staged && Math.random() < WANDER_CHANCE) {
+    if (g.kind === GUARDIAN && Math.random() < WANDER_CHANCE) {
       const next = this.ground.filter((s) => s !== g.home && Math.hypot(s.x - g.home.x, s.z - g.home.z) < WANDER_R
         && Math.hypot(s.x - ORIGIN.x, s.z - ORIGIN.z) > START_KEEP_OUT + PATROL[GUARDIAN][1]
         && !this.guardians.some((o) => o !== g && o.kind === GUARDIAN && o.home === s));
@@ -802,31 +810,45 @@ export class GuardianServer {
     g.calmUntil = 0;
   }
 
-  /** Gameplay test scenarios (shared/scenarios.ts): a guardian of its own at (x, z), facing `yaw`, standing guard for
-   *  `standS` s and then patrolling round that spot (a made-up home, gone like a summoned pack's once everyone has left
-   *  it); `prey`: it comes for them at once. */
-  stage(x: number, z: number, yaw: number, standS: number, prey: BotPlayer | null, now: number) {
-    const home: CrashSite = { ...this.sites[0], id: -this.nextSummon++, x, z };
-    this.summoned.push(home);
-    const g = this.walker(GUARDIAN, 4, home, x, z);
-    g.staged = true;
-    g.yaw = g.lastYaw = yaw;
-    this.plantFeet(g);
-    g.tx = x;
-    g.tz = z;
-    g.guardUntil = now + standS * 1000;
-    this.guardians.push(g);
-    if (prey && open(prey)) {
-      this.hunt(g, prey, now);
-      this.rouse(g, prey, now);
-    }
+  /** World-state snapshots (server/snapshot.ts): every walker as data (its home by site id, or where a made-up one is),
+   *  and the killed guardians still to come back. Times are on the server clock (`now`). */
+  snapshot(): WalkersSnapshot {
+    return {
+      walkers: this.guardians.map(({ home, ...g }) => ({ ...g, home: home.id < 0 ? { id: home.id, x: home.x, z: home.z } : { id: home.id } })),
+      comeback: this.comeback,
+    };
   }
 
-  /** The walkers an earlier scenario placed (stage), gone. */
-  unstage() {
-    const homes = new Set(this.guardians.filter((g) => g.staged).map((g) => g.home));
-    this.guardians = this.guardians.filter((g) => !g.staged);
-    this.summoned = this.summoned.filter((s) => !homes.has(s));
+  /** Back to a snapshot's walkers (taken at server time `savedNow`; their times moved to `now`), instead of the ones there
+   *  are; `prey` maps the snapshot's player ids to who they are now (anyone else is forgotten). A walker's fields are
+   *  matched by name: one added since keeps a fresh walker's value (a guardian's feet, left null, are planted where it
+   *  stands). Made-up homes come back as summoned ones (gone once
+   *  everyone has left them); crawlers at a site count as that site's swarm. Night packs and drones start afresh. */
+  restore(snap: WalkersSnapshot, savedNow: number, now: number, prey: (id: number) => number) {
+    const at = (t: unknown) => (typeof t === 'number' ? rebase(t, savedNow, now) : t);
+    const homes = new Map<number, CrashSite>();
+    const homeOf = (h: { id: number; x?: number; z?: number }): CrashSite => {
+      if (h.id >= 0) return crashSite(h.id) ?? this.sites[0];
+      if (!homes.has(h.id)) homes.set(h.id, { ...this.sites[0], id: h.id, x: h.x ?? 0, z: h.z ?? 0 });
+      return homes.get(h.id)!;
+    };
+    this.guardians = snap.walkers.map((saved) => {
+      const g = this.walker(saved.kind as Kind, saved.legs as 3 | 4, homeOf(saved.home), saved.x as number, saved.z as number);
+      for (const k of Object.keys(g) as (keyof Guardian)[]) if (k !== 'home' && k in saved) (g as Record<string, unknown>)[k] = saved[k];
+      for (const k of WALKER_TIMES) (g as Record<string, unknown>)[k] = at(g[k]);
+      g.skirt = { ...g.skirt, until: at(g.skirt.until) as number };
+      g.trail = [];
+      g.prey = g.prey >= 0 ? prey(g.prey) : -1;
+      if (g.kind === GUARDIAN && !g.feet) this.plantFeet(g); // (feet: null in a hand-edited snapshot: planted where it stands)
+      return g;
+    });
+    this.nextWalker = Math.max(this.nextWalker, ...this.guardians.map((g) => g.id + 1));
+    this.nextSummon = Math.max(this.nextSummon, ...[...homes.keys()].map((id) => -id + 1));
+    this.summoned = [...homes.values()];
+    this.packs = [];
+    this.left.clear();
+    this.swarmed = new Set(this.guardians.filter((g) => g.kind === CRAWLER && g.home.id >= 0).map((g) => g.home.id));
+    this.comeback = snap.comeback.map((c) => ({ ...c, at: rebase(c.at, savedNow, now) }));
   }
 
   /**
@@ -1008,7 +1030,7 @@ export class GuardianServer {
   private wrecks(now: number) {
     this.guardians = this.guardians.filter((g) => {
       if (g.deadAt < 0 || now - g.deadAt < WRECK_MS[g.kind]) return true;
-      if (g.kind === GUARDIAN && !g.staged) this.comeback.push({ at: g.deadAt + GUARDIAN_BACK_MS, x: g.x, z: g.z });
+      if (g.kind === GUARDIAN) this.comeback.push({ at: g.deadAt + GUARDIAN_BACK_MS, x: g.x, z: g.z });
       return false;
     });
     this.comeback = this.comeback.filter((c) => {

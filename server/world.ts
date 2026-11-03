@@ -12,7 +12,7 @@ import { sendJson, sendStream, SOFT_BACKLOG_BYTES } from './outgoing.ts';
 import { packPlayerPose, PLAYER_VIEW_RADIUS, type PlayerAppearance } from '../shared/network.ts';
 import { podOf } from '../shared/pods.ts';
 import { PITCH_STEPS, quantizePitch } from '../shared/dig.ts';
-import { bottleSips, equipped, GEAR, GEAR_KINDS, isBuilding, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
+import { bottleSips, equipped, GEAR_KINDS, isBuilding, standsInWorld, shieldGraceMs, tierOf, gunCooldown, jamMs, quality, repaired, scrapParts, isVehicle } from '../shared/gear.ts';
 import { carriedGear, gearTiers, wornGear } from '../shared/gearBits.ts';
 import { scrapKey, scrapTaken } from '../shared/scrap.ts';
 import { CLOTH, HOTBAR, ITEMS, levelOnlyItems, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
@@ -86,7 +86,9 @@ import { GAS_GRACE_S, GAS_RECOVER, GAS_S, gasExposure } from '../shared/gas.ts';
 import { NEW_WORLD_TOD, shiftToTimeOfDay, timeOfDayAt } from '../shared/sun.ts';
 import { isTrophy, trophyFree } from '../shared/trophies.ts';
 import { CALM, LIVES, TEST, WORLD_ID } from '../shared/world.ts';
-import { scenarioById, type ScenarioItem } from '../shared/scenarios.ts';
+import { dumpDb, listSnapshots, readSnapshot, restoreDb, setPending, SNAPSHOT_ID_RE, takePending, writeSnapshot } from './snapshot.ts';
+import type { StormsSnapshot } from './storm.ts';
+import type { WalkersSnapshot } from './guardians.ts';
 import { TEXT } from '../shared/text.ts';
 import { pickupLimit, type PickupLimit } from './pickupLimit.ts';
 import { DESERT, desertArrival, doorAt, level, levelByKey, type Level } from '../shared/levels.ts';
@@ -203,7 +205,7 @@ const seenBy = (p: Player, o: Player) => o === p || (o.state.level === p.state.l
 /** What a player in a level without the world's things (Level.things) may still send: the rest asks about the
  *  desert's layout or the things lying about by position, and must not reach them through the shared coordinates. */
 const IN_LEVEL = new Set<ClientMsg['t']>(['input', 'ready', 'hands', 'telemetry', 'chat', 'siteLeave', 'drink', 'move', 'sort', 'fire', 'swing',
-  'setEpoch', 'enter', 'debugGear', 'debugGive', 'debugHeat', 'debugWeather', 'debugHit', 'debugLevel', 'scenario']);
+  'setEpoch', 'enter', 'debugGear', 'debugGive', 'debugHeat', 'debugWeather', 'debugHit', 'debugLevel', 'snapshotList', 'snapshotSave', 'snapshotLoad']);
 
 const players = new Map<WebSocket, Player>();
 let nextId = 1;
@@ -248,6 +250,7 @@ wss.on('connection', (ws) => {
       return ws.close(1003, 'bad message');
     }
     const p = players.get(ws);
+    if (frozen) return; // (a snapshot is loading: this world is over)
     if (msg.t === 'hello' && !p) {
       if (msg.protocol !== PROTOCOL_VERSION) return ws.close(4406, 'incompatible protocol');
       return void join(ws, msg.browserId, msg.spawn, msg.name, msg.color, msg.look).catch((error) => {
@@ -264,7 +267,9 @@ wss.on('connection', (ws) => {
     if (p && !levelOf(p).things && !IN_LEVEL.has(msg.t)) return refuseInLevel(p, msg);
     if (msg.t === 'enter' && p) return onEnter(p);
     if (msg.t === 'debugLevel' && p) return onDebugLevel(p, msg.key);
-    if (msg.t === 'scenario' && p) return onScenario(p, msg.id);
+    if (msg.t === 'snapshotList' && p) return send(p.ws, { t: 'snapshots', list: TEST ? listSnapshots(WORLD_ID) : [] });
+    if (msg.t === 'snapshotSave' && p) return onSnapshotSave(p, msg.id, msg.label, msg.note);
+    if (msg.t === 'snapshotLoad' && p) return onSnapshotLoad(p, msg.id);
     if (msg.t === 'input' && p) return onInput(p, msg.seq, msg.input, msg.yaw, msg.pitch);
     if (msg.t === 'pickup' && p) return onPickup(p, msg.ix, msg.iz, msg.i);
     if (msg.t === 'tend' && p) return onTend(p, msg.bed);
@@ -602,55 +607,71 @@ function onDebugLevel(p: Player, key: unknown) {
   moveTo(p, L.id === DESERT ? levelDoor(p) : levelSpawn(L.id, p.id));
 }
 
-/** Debug menu → Scenarios: set up gameplay test scenario `id` (shared/scenarios.ts) for `p`, in the test world only (its
- *  places are the test world's seed's). Moved there, the bag and equipment as it says, cooled down with a full bottle,
- *  the shared clock at its time of day, its weather, and its enemies placed (the ones an earlier scenario placed gone). */
-function onScenario(p: Player, id: string) {
-  const sc = scenarioById(id);
-  if (!TEST || !sc) return;
-  const { x, z, facing } = sc.at;
-  if (!moveTo(p, spawnState(x, z, heightAt(x, z), DESERT, facing))) return; // (down, loading, or just moved)
-  p.yaw = quantizeYaw(facing);
+// --- World-state snapshots (server/snapshot.ts, docs/scenarios.md): gameplay test scenarios, the dev server's test world
+// only (TEST). The database holds what a restart keeps; this is the rest a scenario needs.
+type LiveState = {
+  /** Server time it was taken at: the times in it are on that clock. */
+  savedNow: number;
+  /** Time of day (0..1): the clock is set to it on load. */
+  tod: number;
+  walkers: WalkersSnapshot;
+  storms: StormsSnapshot;
+  /** The saver (PROTAGONIST): their player id then, facing, health and the hotbar slot in hand. */
+  saver: { id: number; facing: number; health: number; slot: number };
+};
+
+/** Debug menu → Scenarios → Save: the whole world as it is now, to scenarios/<id>.json, with `p` as its protagonist. */
+function onSnapshotSave(p: Player, id: string, label: string, note: string) {
+  if (!TEST || !SNAPSHOT_ID_RE.test(id)) return;
+  // Everything into the database first (what's normally saved on the way out).
+  for (const o of players.values()) save(o);
+  terrain.save(true);
+  power.save();
+  saveBossPlaces();
   const now = performance.now();
+  const live: LiveState = {
+    savedNow: now, tod: timeOfDayAt(now + epoch), walkers: guardians.snapshot(), storms: storms.snapshot(),
+    saver: { id: p.id, facing: p.state.facing, health: p.health, slot: p.slot },
+  };
+  writeSnapshot({ id, label: label || id, note, world: WORLD_ID, savedAt: new Date().toISOString(), live, tables: dumpDb(db.raw, p.browserId) });
+  send(p.ws, { t: 'snapshots', list: listSnapshots(WORLD_ID), saved: id });
+}
 
-  // What they carry: the hotbar in order, then the equipment (so a backpack opens its rows), then the bag.
-  const parts = (it: ScenarioItem) => (GEAR[it.kind] ? scrapParts(it.kind, it.tier ?? 'scrap') : undefined);
-  items.reset(p.browserId, sc.hotbar.map((it) => ({ kind: it.kind, n: it.n ?? 1, parts: parts(it) })));
-  const rest = sc.bag ?? [];
-  for (const it of rest.filter((it) => GEAR[it.kind]?.equip)) items.equip(p.browserId, { kind: it.kind, parts: parts(it)! });
-  for (const it of rest.filter((it) => !GEAR[it.kind]?.equip)) {
-    const ps = parts(it);
-    if (ps) items.giveItem(p.browserId, { kind: it.kind, parts: ps });
-    else items.give(p.browserId, it.kind, it.n ?? 1);
-  }
-  for (const box of ['bag', 'equip']) sendBox(p, box);
-  gearChanged(p.browserId);
-  p.health = HEALTH_MAX;
-  p.choke = p.gassed = 0;
-  Object.assign(p.heat, { heat: 0, stroke: 0, sips: p.heat.maxSips, off: sc.noHeat === true, arrivedAt: -Infinity });
-  send(p.ws, waterMsg(p.heat));
+/** Set once a snapshot is loading: nothing more is taken from anyone or saved (the database is the snapshot's now). */
+let frozen = false;
 
-  // The time of day, for everyone (the test world's clock).
-  epoch += shiftToTimeOfDay(now + epoch, sc.tod);
-  db.setSetting('clockShift', epoch - realEpoch);
-  for (const o of players.values()) send(o.ws, { t: 'epoch', epoch });
+/** Debug menu → Scenarios → Load: the world replaced by snapshot `id`, `p` its protagonist. Everyone is sent off (4012:
+ *  their page reloads), the rows go in, and this process ends without saving; the next one is built from them and takes
+ *  the live state as it starts and when `p` is back in (restoreLive). */
+function onSnapshotLoad(p: Player, id: string) {
+  const snap = TEST && !frozen ? readSnapshot(id) : null;
+  if (!snap || snap.world !== WORLD_ID) return;
+  frozen = true;
+  for (const o of players.values()) o.ws.close(4012, 'snapshot');
+  // (The close frames on their way; anything written meanwhile is wiped with the rest.)
+  setTimeout(() => {
+    restoreDb(db.raw, snap.tables, p.browserId);
+    db.setName(p.browserId, p.name); // (playing the protagonist, under their own name)
+    setPending(db.raw, snap.live, p.browserId);
+    process.exit(0);
+  }, 250);
+}
 
-  // The weather: clear (none coming on its own either), or one brought on them.
-  storms.off = sc.weather === 'clear';
-  if (sc.weather === 'storm') storms.spawn(x, z, 0, now);
-  if (sc.weather === 'front') storms.spawnFront([p.state], now);
-  if (sc.weather === 'gas') storms.spawnGas([p.state], now);
+/** A snapshot just loaded (onSnapshotLoad), taken as this process starts: the clock and the weather now, the walkers
+ *  and the protagonist once they're in (restoreLive). */
+const pending = TEST ? takePending<LiveState>(db.raw) : null;
 
-  // The enemies, placed round them: at `dist` m, `bearing` turned from straight ahead (the sim faces -sin, -cos).
-  guardians.unstage();
-  const me = { id: p.id, x, y: p.state.y, z, safe: false };
-  for (const e of sc.enemies) {
-    const a = facing + (e.bearing ?? 0), ex = x - Math.sin(a) * e.dist, ez = z - Math.cos(a) * e.dist;
-    // (Side on to them, unaware, unless it's hunting.)
-    const yaw = Math.atan2(x - ex, z - ez) + (e.hunting ? 0 : Math.PI / 2);
-    if (e.kind === 'guardian') guardians.stage(ex, ez, yaw, e.standS ?? 0, e.hunting ? me : null, now);
-  }
-  send(p.ws, { t: 'scenario', id: sc.id, slot: sc.hotbar.length ? 0 : -1 });
+/** The loaded snapshot's protagonist is in: the walkers as they were (prey on them kept), and them facing the way they
+ *  faced, as hurt as they were, with the same slot in hand. */
+function restoreLive(p: Player) {
+  if (!pending || p.browserId !== pending.loader) return;
+  const { live } = pending;
+  const now = performance.now();
+  guardians.restore(live.walkers, live.savedNow, now, (id) => (id === live.saver.id ? p.id : -1));
+  p.health = live.saver.health;
+  moveTo(p, { ...p.state, facing: live.saver.facing });
+  p.yaw = quantizeYaw(live.saver.facing);
+  send(p.ws, { t: 'snapshot', slot: live.saver.slot });
 }
 
 /** A message a level without the world's things doesn't take (IN_LEVEL): refused, with what the client needs to undo its
@@ -1245,6 +1266,7 @@ function onReady(p: Player) {
   sendName(p);
   if (p.levelWanted !== null && p.levelWanted !== p.state.level) moveTo(p, levelSpawn(p.levelWanted, p.id));
   p.levelWanted = null;
+  restoreLive(p);
   // In chat for everyone, unless they've only dropped and come straight back (or are in already, in another tab).
   const back = performance.now() - (leftAt.get(p.browserId) ?? -Infinity) < REJOIN_QUIET_MS;
   if (!back && ![...players.values()].some((o) => o !== p && o.ready && o.browserId === p.browserId)) {
@@ -1699,6 +1721,12 @@ setInterval(() => {
 const realEpoch = performance.timeOrigin;
 if (newWorld) db.setSetting('clockShift', shiftToTimeOfDay(realEpoch + performance.now(), NEW_WORLD_TOD));
 let epoch = realEpoch + (db.getSetting('clockShift') ?? 0);
+if (pending) {
+  // A snapshot just loaded: its time of day, and its weather as it was.
+  epoch += shiftToTimeOfDay(performance.now() + epoch, pending.live.tod);
+  db.setSetting('clockShift', epoch - realEpoch);
+  storms.restore(pending.live.storms, pending.live.savedNow, performance.now());
+}
 
 // Electricity (server/power.ts): the windmills charge the battery stations every second; everyone hears how it stands.
 const power = new PowerServer(db, performance.now() + epoch, items);
@@ -1837,6 +1865,7 @@ function send(ws: WebSocket, msg: ServerMsg): boolean {
 }
 
 function save(p: Player) {
+  if (frozen) return;
   // Lying dead: they come back at their bedroll or their pod.
   const at = p.down ? { ...homeOf(p), y: 0, level: DESERT } : p.state;
   // Play time counts only once they're in the game (ready), not on the loading screen.

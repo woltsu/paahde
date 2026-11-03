@@ -142,18 +142,6 @@ export class ItemServer {
     return true;
   }
 
-  /** Gameplay test scenarios (server/world.ts onScenario): the bag and the equipment emptied, then `hotbar` laid in the
-   *  hotbar's slots in order (what's past them is left out). */
-  reset(browserId: string, hotbar: { kind: string; n: number; parts?: (string | null)[] }[]) {
-    const bag = this.slots(browserId, 'bag'), equip = this.slots(browserId, 'equip');
-    this.change(browserId, ['bag', 'equip'], (newId) => {
-      bag.fill(null);
-      bag.length = BAG_SLOTS;
-      equip.fill(null);
-      hotbar.slice(0, HOTBAR).forEach((it, i) => (bag[i] = makeItem(newId(), it)));
-    });
-  }
-
   /** Use up one `kind` from the bag (the last stack that has one). False if there is none. */
   take(browserId: string, kind: string): boolean {
     const bag = this.slots(browserId, 'bag');

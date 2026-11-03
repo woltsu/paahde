@@ -49,7 +49,7 @@ export function labAllowed(): boolean {
  *  fixed seed, without weather, walkers, jets or heat, seen from a list of fixed camera shots while the look is tuned. */
 export const BENCH_WORLD = 'bench';
 
-/** The gameplay test world (shared/scenarios.ts), in development only (like the lab): the real desert from this id's fixed
+/** The gameplay test world (world-state snapshots: server/snapshot.ts), in development only (like the lab): the real desert from this id's fixed
  *  seed, with everything happening in it, endless lives and no beginning; the debug menu's scenarios are set up here. */
 export const TEST_WORLD = 'test';
 /** The dev worlds only the dev server has: the lab, the bench and the test world. */

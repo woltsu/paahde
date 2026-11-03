@@ -760,6 +760,8 @@ export class Net {
       clearTimeout(this.dyingTimer);
       if (this.stopped) return;
       if (e.code === 4406) { this.stop(); this.onIncompatible?.(); return; }
+      // A world-state snapshot was loaded (server/snapshot.ts): the world is another now, so the page starts over in it.
+      if (e.code === 4012) { this.stop(); setTimeout(() => location.reload(), 600); return; }
       this.status = 'reconnecting';
       // Game over, no such world, locked, full or a name it won't take (server/world.ts, server/index.ts): retrying won't help.
       const ended = ({ 4410: 'over', 4404: 'missing', 4403: 'locked', 4429: 'full', 4422: 'name' } as const)[e.code as 4410];
@@ -842,7 +844,8 @@ export class Net {
       return this.fall(msg);
     }
     if (msg.t === 'level') return this.teleport(msg.state);
-    if (msg.t === 'scenario') return this.onScenario?.(msg.slot);
+    if (msg.t === 'snapshots') return this.onSnapshotList?.(msg.list, msg.saved);
+    if (msg.t === 'snapshot') return this.onSnapshot?.(msg.slot);
     if (msg.t === 'respawn') {
       if (this.dying) this.fall(this.dying);
       this.down = null;
@@ -1013,12 +1016,21 @@ export class Net {
     this.send({ t: 'debugLevel', key });
   }
 
-  /** Debug menu → Scenarios: set up gameplay test scenario `id` (shared/scenarios.ts; the test world only). */
-  scenario(id: string) {
-    if (this.connected) this.send({ t: 'scenario', id });
+  /** Debug menu → Scenarios (world-state snapshots, server/snapshot.ts; the dev server's test world only): ask for the
+   *  list, save the world as snapshot `id`, or load one (the page reloads into it). */
+  snapshotList() {
+    if (this.connected) this.send({ t: 'snapshotList' });
   }
-  /** A scenario is set up: main.ts puts hotbar slot `slot` in hand. */
-  onScenario?: (slot: number) => void;
+  snapshotSave(id: string, label: string, note: string) {
+    if (this.connected) this.send({ t: 'snapshotSave', id, label, note });
+  }
+  snapshotLoad(id: string) {
+    if (this.connected) this.send({ t: 'snapshotLoad', id });
+  }
+  /** The snapshots there are (`saved`: the one just saved). */
+  onSnapshotList?: (list: { id: string; label: string; note: string; savedAt: string }[], saved?: string) => void;
+  /** Back in a loaded snapshot as its protagonist: main.ts puts hotbar slot `slot` in hand. */
+  onSnapshot?: (slot: number) => void;
 
   /** The bolt `id` reached us on screen (src/world/bolts.ts): a death it caused, held till now, happens. */
   boltArrived(id: number) {

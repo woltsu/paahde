@@ -655,5 +655,7 @@ export function openDb(path: string) {
       }
     },
     close: () => db.close(),
+    /** The connection itself, for world-state snapshots (server/snapshot.ts: every table, whatever its rows). */
+    raw: db,
   };
 }
