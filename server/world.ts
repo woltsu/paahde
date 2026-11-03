@@ -85,8 +85,8 @@ import { CHOKE_RECOVER, CHOKE_S, frontExposure, stormAt, stormDrag, toolsDown } 
 import { GAS_GRACE_S, GAS_RECOVER, GAS_S, gasExposure } from '../shared/gas.ts';
 import { NEW_WORLD_TOD, shiftToTimeOfDay, timeOfDayAt } from '../shared/sun.ts';
 import { isTrophy, trophyFree } from '../shared/trophies.ts';
-import { CALM, LIVES, TEST, WORLD_ID } from '../shared/world.ts';
-import { dumpDb, listSnapshots, readSnapshot, restoreDb, setPending, SNAPSHOT_ID_RE, takePending, writeSnapshot } from './snapshot.ts';
+import { CALM, LIVES, SNAPSHOT_ID_RE, TEST, WORLD_ID } from '../shared/world.ts';
+import { dumpDb, listSnapshots, readSnapshot, restoreDb, setPending, takePending, writeSnapshot } from './snapshot.ts';
 import type { StormsSnapshot } from './storm.ts';
 import type { WalkersSnapshot } from './guardians.ts';
 import { TEXT } from '../shared/text.ts';

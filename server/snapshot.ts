@@ -8,11 +8,10 @@
 // placeholder, the saver's by PROTAGONIST, which becomes the browser ID of whoever loads it.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
+import { SNAPSHOT_ID_RE } from '../shared/world.ts';
 
 /** Where snapshots live: checked in, next to the code. */
 export const SNAPSHOT_DIR = new URL('../scenarios/', import.meta.url);
-/** Snapshot ids: file names. */
-export const SNAPSHOT_ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
 /** The saver's browser ID in a snapshot: whoever loads it plays them. */
 export const PROTAGONIST = '00000000-0000-4000-8000-000000000001';
 /** Anyone else who was in the world is one of these (n from 2). */

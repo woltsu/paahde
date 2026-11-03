@@ -52,6 +52,9 @@ export const BENCH_WORLD = 'bench';
 /** The gameplay test world (world-state snapshots: server/snapshot.ts), in development only (like the lab): the real desert from this id's fixed
  *  seed, with everything happening in it, endless lives and no beginning; the debug menu's scenarios are set up here. */
 export const TEST_WORLD = 'test';
+/** Snapshot (scenario) ids: file names in scenarios/, at most this long. */
+export const SNAPSHOT_ID_MAX = 48;
+export const SNAPSHOT_ID_RE = new RegExp(`^[a-z0-9][a-z0-9-]{0,${SNAPSHOT_ID_MAX - 1}}$`);
 /** The dev worlds only the dev server has: the lab, the bench and the test world. */
 export const DEV_WORLDS = [LAB_WORLD, BENCH_WORLD, TEST_WORLD];
 

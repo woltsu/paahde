@@ -5,6 +5,7 @@ import { INPUT_MASK, YAW_STEPS } from '../shared/sim.ts';
 import { PITCH_STEPS } from '../shared/dig.ts';
 import { boxKind } from '../shared/boxes.ts';
 import { ITEMS } from '../shared/items.ts';
+import { SNAPSHOT_ID_MAX } from '../shared/world.ts';
 import { BUILDS, HAND_RECIPES, RECIPES } from '../shared/crafting.ts';
 
 const num = (v: unknown, min = -1e7, max = 1e7): v is number => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
@@ -54,8 +55,8 @@ export function clientMessage(v: unknown): v is ClientMsg {
     case 'debugHeat': case 'debugWeather': return bool(m.off);
     case 'debugBike': return optional(m.working, bool) && optional(m.quad, bool);
     case 'snapshotList': return true;
-    case 'snapshotLoad': return str(m.id) && m.id.length <= 48;
-    case 'snapshotSave': return str(m.id) && m.id.length <= 48 && typeof m.label === 'string' && m.label.length <= 80 && typeof m.note === 'string' && m.note.length <= 400;
+    case 'snapshotLoad': return str(m.id) && m.id.length <= SNAPSHOT_ID_MAX;
+    case 'snapshotSave': return str(m.id) && m.id.length <= SNAPSHOT_ID_MAX && typeof m.label === 'string' && m.label.length <= 80 && typeof m.note === 'string' && m.note.length <= 400;
     case 'crashTake': case 'siteJoin': case 'siteLeave': case 'siteScrap': return str(m.id);
     case 'crashUse': return str(m.kind) && Object.hasOwn(ITEMS, m.kind) && str(m.at);
     case 'benchScrap': return str(m.at);

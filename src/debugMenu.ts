@@ -30,7 +30,7 @@ import { TONE_CURVES, toneControl, type ToneCurve } from './post';
 import { summonLocalStorm } from './storm';
 import { clockText, timeControl } from './world/dayNight';
 import type { Net } from './net';
-import { labAllowed, TEST, TEST_WORLD } from '../shared/world.ts';
+import { labAllowed, SNAPSHOT_ID_RE, TEST, TEST_WORLD } from '../shared/world.ts';
 import type { FlyCam } from './flyCam';
 
 const PRESETS: [string, number][] = [['Dawn', 0.27], ['Noon', 0.5], ['Golden hour', 0.7], ['Dusk', 0.77], ['Midnight', 0]];
@@ -196,7 +196,7 @@ ${scenarios}<div id="dbgMain">
       for (const id of ['#dbgSnapId', '#dbgSnapLabel', '#dbgSnapNote']) field(id).addEventListener('keydown', (e) => e.stopPropagation()); // (typing is not the game's keys)
       p.querySelector('#dbgSnapSave')!.addEventListener('click', () => {
         const id = field('#dbgSnapId').value.trim();
-        if (!/^[a-z0-9][a-z0-9-]{0,47}$/.test(id)) { msg.textContent = 'id: a-z, 0-9 and -'; return; }
+        if (!SNAPSHOT_ID_RE.test(id)) { msg.textContent = 'id: a-z, 0-9 and -'; return; }
         msg.textContent = '';
         net.snapshotSave(id, field('#dbgSnapLabel').value.trim(), field('#dbgSnapNote').value.trim());
       });
