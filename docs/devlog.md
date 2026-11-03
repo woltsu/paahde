@@ -3063,3 +3063,24 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   it to exit and goes to the next process, instead of maybe reaching the frozen one, which ignores hellos. Tried over a
   WebSocket: a reconnect at once after the 4012 waits ~0.9 s and joins the new world.
 - The id rule is one (`SNAPSHOT_ID_RE`, `SNAPSHOT_ID_MAX` in shared/world.ts); walkers have a round-trip test.
+
+
+## The blaster and the piercer, bigger
+
+- **What:** both heavy guns read as bigger than the laser rifle now. Each model is built at its own numbers and then
+  scaled up as a whole (`SCALE` in tools/models/blaster.py / piercer.py, about the receiver's floor over the grip),
+  all but what the hand holds: the pistol grip, its cap, the trigger and the guard keep their size, so the fist still
+  closes on them. hands.py fits the hands to each module's `HANDS` (the as-built receiver and handguard);
+  `muzzle_local()` / `eye_local()` give as-built points, so the markers, the beams and the sight check follow.
+- **Blaster:** ×1.18 and chonkier on top: a wider, deeper receiver (75 × 125 mm, was 52 × 90), a fatter shroud
+  (92 mm, was 62), fins, emitter bell and capacitor drum (64 mm, was 42), a thicker stock and carry handle, a bigger
+  cell. 0.94 → 1.11 m.
+- **Piercer:** ×1.15 and the open rails 0.2 m longer (more clamps, longer capacitor cans with five windows, the bipod
+  and the brake moved out with them): 1.33 → 1.76 m. Scope, grip and handguard stay where they were (scaled), so the
+  hands' holds still work.
+- **Holds:** first person, the low ready is a little further out and lower for both (`B_READY`, `PC_READY`); the
+  support hand sits on the scaled handguard; the aims are on the sight axis (0 mm). Third person (scavenger.ts
+  `BLASTER` / `PIERCER`): the left hand further out (0.31 / 0.33), aiming the grip lower and further out so the
+  higher sights reach the eye and the longer stock the shoulder; the piercer's ready slopes less, or its muzzle
+  touched the sand. `GUN_MODELS` bore / tip follow (0.11 / 0.699, 0.108 / 1.271). Icons re-rendered (they fit their
+  4 × 1 cells by framing).

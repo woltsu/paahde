@@ -475,12 +475,13 @@ Everything built is shared, and anyone can take a building down.
   MaceIdle / MaceSwing clips on `MaceMount` (tools/models/hands.py) and by the avatar (`MACE`, `MACE_STROKE` in
   src/models/scavenger.ts), model `src/models/mace.ts`, checked by `onSwing` (server/world.ts) and `GuardianServer.smash`
 - `tools/models/blaster.py`, `tools/models/graviton.py` — the blaster's and the graviton pistol's models
-  (public/models/blaster.glb, graviton.glb; src/models/outfit.ts `GUN_MODELS`): held in the hands' Blaster* / Graviton*
+  (public/models/blaster.glb, 1.11 m, a 75 mm wide receiver; graviton.glb; src/models/outfit.ts `GUN_MODELS`): held in the hands' Blaster* / Graviton*
   clips on `BlasterMount` / `GravitonMount` (src/viewmodel.ts, muzzle from the `<Gun>Muzzle` markers), by the avatar
   (`BLASTER` / `PISTOL` in src/models/scavenger.ts GUN_HOLD), on the sand (src/world/loot.ts), icons by
   tools/blender/finds.py
-- `tools/models/piercer.py` — the piercer's model (public/models/piercer.glb, `GUN_MODELS`): an open-rail anti-materiel
-  rifle with a scope; held in the hands' Piercer* clips on `PiercerMount` (src/viewmodel.ts, `PiercerMuzzle`), by the
+- `tools/models/piercer.py` — the piercer's model (public/models/piercer.glb, 1.76 m, `GUN_MODELS`): an open-rail
+  anti-materiel rifle with a scope. Both it and the blaster are modelled at their numbers and then scaled up (`SCALE`)
+  about the receiver's floor, all but the grip, trigger and guard; hands.py fits the hands to `HANDS` (as built); held in the hands' Piercer* clips on `PiercerMount` (src/viewmodel.ts, `PiercerMuzzle`), by the
   avatar (`PIERCER` in GUN_HOLD), on the sand (src/world/loot.ts), icon by tools/blender/finds.py
 - `tools/models/hands.py` — first-person hands + held-item clips (docs/viewmodel-hands.md)
 - `tools/blender/icons.py`, `tools/icons/` — inventory icons for what has no Blender model of its own (scrap, cloth, the
