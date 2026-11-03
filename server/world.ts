@@ -654,14 +654,15 @@ function onSnapshotLoad(p: Player, id: string) {
 }
 
 /** A snapshot just loaded (onSnapshotLoad), taken as this process starts: the clock and the weather now, the walkers
- *  and the protagonist once they're in (restoreLive). */
-const pending = TEST ? takePending<LiveState>(db.raw) : null;
+ *  and the protagonist once they're in (restoreLive), the first time only. */
+let pending = TEST ? takePending<LiveState>(db.raw) : null;
 
 /** The loaded snapshot's protagonist is in: the walkers as they were (prey on them kept), and them facing the way they
  *  faced, as hurt as they were, with the same slot in hand. */
 function restoreLive(p: Player) {
   if (!pending || p.browserId !== pending.loader) return;
   const { live } = pending;
+  pending = null; // (once: a reload or a second tab later finds the world as it has gone on since)
   const now = performance.now();
   guardians.restore(live.walkers, live.savedNow, now, (id) => (id === live.saver.id ? p.id : -1));
   p.health = live.saver.health;
