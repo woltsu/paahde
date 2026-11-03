@@ -27,7 +27,7 @@ import { tyreDust } from '../tyreDust.ts';
 import { fireballs, type FireballLook } from './fireball.ts';
 import { SpritePool, zaps } from './zaps.ts';
 
-const RINGS = 8, SCORCHES = 12, HOLES = 3, MOTES = 256, MOLTEN = 400, EMBERS = 128;
+const RINGS = 8, SCORCHES = 12, HOLES = 3, MOTES = 256, MOLTEN = 400, EMBERS = 128, PLASMA = 384;
 /** The shock ring: out to a blaster burst's reach in RING_S (bigger rings take longer, by the root of their size). */
 const RING_S = 0.32;
 /** A scorch: there SCORCH_S s, fading over the last SCORCH_FADE. */
@@ -122,6 +122,7 @@ class Blasts {
   private holes: (Slot & { rim: THREE.Mesh; ring: boolean; at: THREE.Vector3; normal: THREE.Vector3 })[] = [];
   private motes: SpritePool;
   private molten: SpritePool;
+  private plasma: SpritePool;
   /** Hot debris flung out: a glowing head (embers) and a smoke trail. */
   private embers: SpritePool;
   private debris: Debris[] = [];
@@ -200,6 +201,27 @@ class Blasts {
       m.scaleNode = vec2(d.y, d.y);
     }, true);
     this.root.add(this.molten.sprite);
+    // The blaster's plasma bolt in flight (src/rifle.ts): a white-hot head and an orange trail fading behind it.
+    this.plasma = new SpritePool(PLASMA, (m, d) => {
+      const r = disc(), k = d.x;
+      m.colorNode = vec3(7, 3, 0.7).mul(k).add(vec3(5, 4.5, 3.5).mul(k.mul(k).mul(k)));
+      m.opacityNode = float(1).sub(smoothstep(0.15, 1, r)).mul(k);
+      m.scaleNode = vec2(d.y, d.y);
+    }, true);
+    this.root.add(this.plasma.sprite);
+  }
+
+  /** A plasma bolt's flight this frame, from (ax, ay, az) to (bx, by, bz): its head at the end, and a trail along the
+   *  way that cools and thins out in a fraction of a second; its glow lights what it passes. */
+  plasmaTrail(ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
+    const dx = bx - ax, dy = by - ay, dz = bz - az, len = Math.hypot(dx, dy, dz);
+    const n = Math.min(20, Math.max(1, Math.ceil(len / 0.35)));
+    for (let k = 0; k < n; k++) {
+      const f = (k + 1) / n;
+      this.plasma.add(ax + dx * f, ay + dy * f, az + dz * f, 0, 0, 0, 0.16 + 0.1 * f, 0.1 + 0.08 * f);
+    }
+    this.plasma.add(bx, by, bz, 0, 0, 0, 0.6, 0.04);
+    zaps.light(bx, by, bz, 0xff9a40, 140, 12, 0.05);
   }
 
   /** The camera the shake is measured from (and the fireballs know when it's inside one). */
@@ -440,6 +462,11 @@ class Blasts {
       mp.pos[v + 2] += mp.vel[v + 2] * dt;
       mp.data[i * 2] = Math.min(1, t * 3) * (1 - t * t * 0.5);
       mp.data[i * 2 + 1] = mp.size[i];
+    });
+    const pl = this.plasma;
+    pl.update(dt, (i, t) => {
+      pl.data[i * 2] = 1 - t;
+      pl.data[i * 2 + 1] = pl.size[i] * (1 - 0.5 * t);
     });
     const ml = this.molten;
     ml.update(dt, (i, t) => {

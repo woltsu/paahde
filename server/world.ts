@@ -29,7 +29,7 @@ import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
-import { GRAVITON, GUNS, HEAVY, RIFLE, blastDamage, type Gun } from '../shared/rifle.ts';
+import { GRAVITON, GUNS, HEAVY, RIFLE, PLASMA_SPEED, blastDamage, type Gun } from '../shared/rifle.ts';
 import { inCone, JAM_BLEED, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { THROW_MS, THROWABLE } from '../shared/throw.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_SLACK } from '../shared/mace.ts';
@@ -1074,6 +1074,8 @@ function boltPush(p: Player, events: { msg: ServerMsg }[], t: 'boom' | 'blast', 
 const SHOT_FROM = 6;
 /** A blaster's beam ending this high (m) over the sand still bursts there: on a low wall, a wreck or scrap. */
 const BURST_UP = 6;
+/** How fast (m/s) a shooter may have gone on moving while their plasma bolt flew: a slide's. */
+const BOLT_MOVE = 16;
 /** A shot of any gun (shared/rifle.ts GUNS): the gun in hand and charged, within its reach, from the shooter's eye.
  *  Shown to everyone near. */
 function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
@@ -1087,12 +1089,15 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
   const kind = held?.kind;
   const gun = kind ? GUNS[kind] : undefined;
   if (p.down || !kind || !gun || !repaired(held)) return;
-  // A little slack for network jitter bunching two clicks together.
-  if (now - p.firedAt < gunCooldown(gun.cooldown, quality(held)) * 0.8) return;
+  // A little slack for network jitter bunching two clicks together. A plasma bolt (shared/rifle.ts PLASMA_SPEED) is
+  // claimed where it lands, up to its whole flight after the trigger: two can land that much closer together, and
+  // the shooter has gone on moving meanwhile (from where it was fired, up to a slide's speed for the flight).
+  const flight = gun.bolt ? gun.range / PLASMA_SPEED : 0;
+  if (now - p.firedAt < gunCooldown(gun.cooldown, quality(held)) * 0.8 - flight * 1000) return;
   if (Math.hypot(m.ex - m.x, m.ey - m.y, m.ez - m.z) > gun.range + 5) return;
   p.firedAt = now;
   const s = p.state;
-  if (Math.hypot(m.x - s.x, m.y - (s.y + EYE_HEIGHT), m.z - s.z) > SHOT_FROM) return;
+  if (Math.hypot(m.x - s.x, m.y - (s.y + EYE_HEIGHT), m.z - s.z) > SHOT_FROM + flight * BOLT_MOVE) return;
   const wall = Date.now();
   const by = { id: p.id, x: s.x, y: s.y, z: s.z, safe: wall - p.heat.diedAt < BOT_GRACE_MS };
   // What the beam struck, by the client's claim (shared/protocol.ts 'fire'), as the server checks it; each takes the

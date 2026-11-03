@@ -3084,3 +3084,19 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   higher sights reach the eye and the longer stock the shoulder; the piercer's ready slopes less, or its muzzle
   touched the sand. `GUN_MODELS` bore / tip follow (0.11 / 0.699, 0.108 / 1.271). Icons re-rendered (they fit their
   4 × 1 cells by framing).
+
+## The blaster fires a plasma bolt
+
+- Every other gun is hitscan (the client casts the shot along its whole reach at once). The blaster now fires a plasma
+  bolt that flies at the speed of sound (shared/rifle.ts `PLASMA_SPEED` 343 m/s, `GUNS` `bolt`) and drops a little
+  (`PLASMA_DROP` 4 m/s²: ~0.45 m over its 160 m, `plasmaAt`), bursting where it hits.
+- src/rifle.ts: `shoot()` is the trigger (aim, muzzle, sound, recoil); `strike()` finds what a stretch of a shot meets
+  and lands it (sparks, impact, the claim to the server). A beam is one stretch; a bolt (`flyBolts`, each frame) one
+  stretch of its path per frame against everything as drawn then, so moving targets can be led or missed. It is drawn
+  from the muzzle, closing onto its path from the eye over `BOLT_MERGE`; head and trail are `blasts.plasmaTrail`
+  (src/world/blasts.ts, a sprite pool; its glow on the one shot light). Others see it fly from their muzzle to where it
+  landed (the zap that comes when it lands), then burst.
+- The server checks the landing claim as before (its straight line from the eye passes within a quarter of the drop);
+  for a bolt it allows the flight: two can land up to `range / PLASMA_SPEED` closer than the recharge, and the shooter
+  may have moved on at a slide's pace (server/world.ts `BOLT_MOVE`).
+- Not seen in a running game yet (the scripted join in Chrome stays on the menu).

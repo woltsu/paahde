@@ -15,7 +15,7 @@ import WebSocket from 'ws';
 import { BODY_H, CRAWLER, GUARDIAN, KINDS } from '../shared/guardians.ts';
 import { CORE_HP, CORES, harvesterAt, harvesterPose, SPEED, toWorld } from '../shared/harvester.ts';
 import { SP_DIE, SP_DROP } from '../shared/queen.ts';
-import { BLAST_R, BLASTER, blastDamage, DRONE_HP, GRAVITON, GUARDIAN_POINT_HP, GUNS, HULL_HP, PIERCER, PISTOL, RIFLE } from '../shared/rifle.ts';
+import { BLAST_R, BLASTER, blastDamage, DRONE_HP, GRAVITON, GUARDIAN_POINT_HP, GUNS, HULL_HP, PIERCER, PISTOL, PLASMA_SPEED, plasmaAt, RIFLE, shotPasses } from '../shared/rifle.ts';
 import { FORWARD, JUMP, SLIDE, spawnState, step, WALK_SPEED } from '../shared/sim.ts';
 import { ORIGIN } from '../shared/origin.ts';
 import { PROTOCOL_VERSION } from '../shared/protocol.ts';
@@ -203,6 +203,22 @@ test("the piercer goes through a walker's plate: a guardian's hull in three hits
   const c = s.guardians.find((o) => o.kind === CRAWLER && o.deadAt < 0);
   const rc = s.shoot(by, ...aimAt(c), c.id, -1, NOW, piercer);
   assert.ok(rc.hit && rc.kill, 'a crawler dies of one');
+});
+
+test("the blaster's plasma bolt flies at the speed of sound and drops a little: the straight line the server checks still passes", () => {
+  assert.ok(blaster.bolt && !rifle.bolt && !GUNS[PIERCER].bolt && !graviton.bolt, 'only the blaster fires a bolt');
+  assert.equal(PLASMA_SPEED, 343);
+  const o = { x: 0, y: 10, z: 0 }, d = { x: 1, y: 0, z: 0 }, out = { x: 0, y: 0, z: 0 };
+  const t = blaster.range / PLASMA_SPEED;
+  plasmaAt(o, d, t, out);
+  assert.ok(Math.abs(out.x - blaster.range) < 1e-6, 'its reach in its flight time');
+  const drop = o.y - out.y;
+  assert.ok(drop > 0.2 && drop < 0.6, `a little drop over its reach: ${drop.toFixed(2)} m`);
+  // Landing at the far end on a target there: the server's straight-line check from the eye still passes (its middle
+  // sags only a quarter of the drop below the chord).
+  assert.ok(shotPasses(o.x, o.y, o.z, out.x, out.y, out.z, out.x, out.y, out.z, 1));
+  plasmaAt(o, d, t / 2, out);
+  assert.ok(o.y - out.y < drop / 2, 'a curve, falling faster as it goes');
 });
 
 test('the piercer in hand: half speed on foot, no jump, no air jump, no slide', () => {

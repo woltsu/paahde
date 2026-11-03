@@ -49,6 +49,20 @@ export const PISTOL_RANGE = 100;
 export const BLASTER = 'blaster';
 export const BLASTER_COOLDOWN_MS = 2200;
 export const BLASTER_RANGE = 160;
+/** The blaster fires a plasma bolt, not a beam: it flies at PLASMA_SPEED (the speed of sound) and drops a little
+ *  (PLASMA_DROP m/s², under half a metre over its reach), bursting where it hits (plasmaAt). */
+export const PLASMA_SPEED = 343;
+export const PLASMA_DROP = 4;
+
+/** Where a bolt fired from `o` along unit `d` is `t` s later, into `out`. */
+export function plasmaAt(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, t: number,
+  out: { x: number; y: number; z: number }) {
+  out.x = o.x + d.x * PLASMA_SPEED * t;
+  out.y = o.y + d.y * PLASMA_SPEED * t - 0.5 * PLASMA_DROP * t * t;
+  out.z = o.z + d.z * PLASMA_SPEED * t;
+  return out;
+}
+
 /** The burst's reach (m) around where the beam stopped. Within BLAST_CORE of its reach a thing takes the gun's whole
  *  damage (blastDamage), out to the rim one hit: a spiderling or a drone at the rim lives, a guardian's weak point cracks. */
 export const BLAST_R = 4.5;
@@ -80,13 +94,14 @@ export const HULL_HP = [6, 2];
 /**
  * The guns by item kind: cooldown (ms), reach (m), `pierce` (armour it goes through: shared/enemies.ts `armor`),
  * `damage` (hits a weak point or a thin-skinned enemy takes from one shot), `blast` (m: bursts where it stops,
- * hurting everything within it, else just what it hit), `push` (shared/knockback.ts), `scope` (aims through a scope).
+ * hurting everything within it, else just what it hit), `push` (shared/knockback.ts), `scope` (aims through a scope),
+ * `bolt` (fires a plasma bolt that flies there, PLASMA_SPEED, else hits at once along a beam).
  */
-export type Gun = { cooldown: number; range: number; pierce: number; damage: number; blast?: number; push: Pusher; scope?: true };
+export type Gun = { cooldown: number; range: number; pierce: number; damage: number; blast?: number; push: Pusher; scope?: true; bolt?: true };
 export const GUNS: Record<string, Gun> = {
   [RIFLE]: { cooldown: COOLDOWN_MS, range: RANGE, pierce: 1, damage: 1, push: 'rifle', scope: true },
   [PISTOL]: { cooldown: PISTOL_COOLDOWN_MS, range: PISTOL_RANGE, pierce: 1, damage: 1, push: 'pistol' },
-  [BLASTER]: { cooldown: BLASTER_COOLDOWN_MS, range: BLASTER_RANGE, pierce: 1, damage: 2, blast: BLAST_R, push: 'blaster' },
+  [BLASTER]: { cooldown: BLASTER_COOLDOWN_MS, range: BLASTER_RANGE, pierce: 1, damage: 2, blast: BLAST_R, push: 'blaster', bolt: true },
   [PIERCER]: { cooldown: PIERCER_COOLDOWN_MS, range: PIERCER_RANGE, pierce: 20, damage: 2, push: 'piercer', scope: true },
   [GRAVITON]: { cooldown: GRAVITON_COOLDOWN_MS, range: GRAVITON_RANGE, pierce: 100, damage: 1000, push: 'graviton' },
 };
