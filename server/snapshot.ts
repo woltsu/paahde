@@ -5,7 +5,8 @@
 // next one is built from it, as from any save.
 //
 // Browser IDs are secret credentials (docs/netcode.md): a snapshot is checked in, so every UUID in it is replaced by a
-// placeholder, the saver's by PROTAGONIST, which becomes the browser ID of whoever loads it.
+// placeholder, the saver's by PROTAGONIST, which becomes the browser ID of whoever loads it. Players' names are theirs
+// to keep too: every `name` column is replaced (PROTAGONIST_NAME, `Player <n>` for the others).
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { SNAPSHOT_ID_RE } from '../shared/world.ts';
@@ -14,7 +15,9 @@ import { SNAPSHOT_ID_RE } from '../shared/world.ts';
 export const SNAPSHOT_DIR = new URL('../scenarios/', import.meta.url);
 /** The saver's browser ID in a snapshot: whoever loads it plays them. */
 export const PROTAGONIST = '00000000-0000-4000-8000-000000000001';
-/** Anyone else who was in the world is one of these (n from 2). */
+/** The saver's name in a snapshot (whoever loads it plays under their own: server/world.ts). */
+export const PROTAGONIST_NAME = 'Protagonist';
+/** Anyone else who was in the world is one of these (n from 2), named `Player <n>`. */
 const placeholder = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const UUID_G = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
@@ -44,7 +47,9 @@ const quote = (name: string) => `"${name.replace(/"/g, '""')}"`;
 const columnsOf = (db: DatabaseSync, name: string) =>
   (db.prepare(`PRAGMA table_info(${quote(name)})`).all() as { name: string }[]).map((c) => c.name);
 
-/** Every table's rows, with every UUID in them a placeholder (`saver`'s PROTAGONIST). */
+/** Every table's rows, with every UUID in them a placeholder (`saver`'s PROTAGONIST) and every name (any `name`
+ *  column: players, obituaries) a neutral one: a player's goes with their placeholder (PROTAGONIST_NAME, `Player <n>`
+ *  for placeholder n), a name nobody in the players table has takes the next number. */
 export function dumpDb(db: DatabaseSync, saver: string): Tables {
   const ids = new Map<string, string>([[saver.toLowerCase(), PROTAGONIST]]);
   const anon = (s: string) => s.replace(UUID_G, (u) => {
@@ -52,14 +57,31 @@ export function dumpDb(db: DatabaseSync, saver: string): Tables {
     if (!ids.has(k)) ids.set(k, placeholder(ids.size + 1));
     return ids.get(k)!;
   });
+  const nameOf = (id: string) => (id === PROTAGONIST ? PROTAGONIST_NAME : `Player ${Number(id.slice(-12))}`);
+  // The players' names first, so a name elsewhere (an obituary) is the same neutral one.
+  const names = new Map<string, string>();
+  const tables = tableNames(db);
+  if (tables.includes('players') && ['id', 'name'].every((c) => columnsOf(db, 'players').includes(c))) {
+    const rows = db.prepare('SELECT id, name FROM players ORDER BY rowid').all() as { id: unknown; name: unknown }[];
+    for (const { id, name } of rows) if (typeof id === 'string' && typeof name === 'string' && !names.has(name)) names.set(name, nameOf(anon(id)));
+  }
+  const neutral = (name: string) => {
+    if (!names.has(name)) {
+      const id = placeholder(ids.size + 1);
+      ids.set(`name ${name}`, id); // (a number of its own, as if a player)
+      names.set(name, nameOf(id));
+    }
+    return names.get(name)!;
+  };
   const out: Tables = {};
-  for (const name of tableNames(db)) {
+  for (const name of tables) {
     const columns = columnsOf(db, name);
     const all = db.prepare(`SELECT * FROM ${quote(name)}`).all() as Record<string, unknown>[];
     const rows = all.map((row) => columns.map((c): Cell => {
       const v = row[c];
       if (v instanceof Uint8Array) return { b64: Buffer.from(v).toString('base64') };
       if (typeof v === 'bigint') return Number(v);
+      if (typeof v === 'string' && c === 'name') return name === 'players' && typeof row.id === 'string' ? nameOf(anon(row.id)) : neutral(v);
       if (typeof v === 'string') return anon(v);
       return v as number | null;
     }));
