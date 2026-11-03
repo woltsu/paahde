@@ -623,11 +623,7 @@ type LiveState = {
 /** Debug menu → Scenarios → Save: the whole world as it is now, to scenarios/<id>.json, with `p` as its protagonist. */
 function onSnapshotSave(p: Player, id: string, label: string, note: string) {
   if (!TEST || !SNAPSHOT_ID_RE.test(id)) return;
-  // Everything into the database first (what's normally saved on the way out).
-  for (const o of players.values()) save(o);
-  terrain.save(true);
-  power.save();
-  saveBossPlaces();
+  flushAll(); // (everything into the database first, as on the way out)
   const now = performance.now();
   const live: LiveState = {
     savedNow: now, tod: timeOfDayAt(now + epoch), walkers: guardians.snapshot(), storms: storms.snapshot(),
@@ -1910,18 +1906,26 @@ setInterval(() => {
   }
 }, HEARTBEAT_MS);
 
-// Watchtower stops the container with SIGTERM on every deploy: persist everyone, then tell
-// clients the server is restarting (1012) so they reconnect.
-function shutdown() {
+/** Everything a restart keeps into the database, now: everyone (and the bike they ride, where it is: it parks under them,
+ *  not back where they got on), the corpses' clocks, where bosses stand, every dug chunk, the power. On the way out, and
+ *  before a snapshot is taken (they play on). Nothing once a snapshot is loading (frozen: the database is the snapshot's). */
+function flushAll() {
+  if (frozen) return;
   corpses.expire(playingOwners());
   saveBossPlaces();
   for (const p of players.values()) {
     save(p);
-    vehicleSrv.release(p.id, p.state.riding ? p.state : undefined); // the bike parks under them, not back where they got on
-    p.ws.close(1012, 'server restarting');
+    if (p.state.riding) vehicleSrv.persist(p.id, p.state);
   }
   terrain.save(true);
   power.save();
+}
+
+// Watchtower stops the container with SIGTERM on every deploy: persist everyone, then tell
+// clients the server is restarting (1012) so they reconnect.
+function shutdown() {
+  flushAll();
+  for (const p of players.values()) p.ws.close(1012, 'server restarting');
   db.close();
   http.close();
   process.exit(0);
