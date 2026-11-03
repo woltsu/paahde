@@ -261,22 +261,21 @@ export class Rifle {
         gunSound.piercerShot(_o, ear);
         if (_o.distanceTo(ear) < 150) blasts.piercerMuzzle(_o.x, _o.y, _o.z, _d.x, _d.y, _d.z, true);
       } else rifleSound.shot(_o, ear, m.gun === PISTOL);
-      this.remoteImpact(m, _d, len, heavy);
+      this.remoteImpact(m, _d, heavy);
     };
   }
 
-  /** Where someone else's shot `m` (along unit `d`, `len` m long) stopped: sparks, the sound, a heavy gun's impact. */
-  private remoteImpact(m: Extract<ServerMsg, { t: 'zap' }>, d: THREE.Vector3, len: number, heavy: 'blaster' | 'graviton' | 'piercer' | null) {
+  /** Where someone else's shot `m` (along unit `d`) stopped: sparks, the sound, a heavy gun's impact. */
+  private remoteImpact(m: Extract<ServerMsg, { t: 'zap' }>, d: THREE.Vector3, heavy: 'blaster' | 'graviton' | 'piercer' | null) {
     const ear = this.view.camera.position;
-    zaps.burst(m.ex, m.ey, m.ez, -d.x, -d.y, -d.z, 10);
     const sand = !onFlat() && heightAt(m.ex, m.ez) > m.ey - 0.3;
+    // Spent at its reach (from their eye) on nothing: no sparks, no sound, no burst.
+    const reach = GUNS[m.gun ?? RIFLE]?.range ?? 0;
+    if (!m.hit && !sand && Math.hypot(m.ex - m.x, m.ey - m.y, m.ez - m.z) >= reach - 1) return;
+    zaps.burst(m.ex, m.ey, m.ez, -d.x, -d.y, -d.z, 10);
     _e.set(m.ex, m.ey, m.ez);
     rifleSound.impact(m.hit ? 'glass' : sand ? 'sand' : 'metal', _e, ear);
-    if (heavy) {
-      const reached = len >= GUNS[m.gun!].range - 1 && !m.hit;
-      const on = m.hit ? 'enemy' : sand ? 'sand' : reached ? 'air' : 'hard';
-      this.heavyImpact(heavy, on, d, ear);
-    }
+    if (heavy) this.heavyImpact(heavy, m.hit ? 'enemy' : sand ? 'sand' : 'hard', d, ear);
   }
 
   /** The plasma bolts in flight, this frame: ours strike what they meet along this frame's stretch of their path,
@@ -292,7 +291,7 @@ export class Rifle {
         blasts.plasmaTrail(_a.x, _a.y, _a.z, _b.x, _b.y, _b.z);
         if (k1 < 1) return true;
         _d.copy(b.d);
-        this.remoteImpact(b.remote, _d, b.len, 'blaster');
+        this.remoteImpact(b.remote, _d, 'blaster');
         return false;
       }
       const range = GUNS[BLASTER].range;
@@ -584,11 +583,11 @@ export class Rifle {
     if (on === 'sand') normalAt(_e.x, _e.z, _n);
     else if (on === 'hard' && onFlat() && Math.abs(_e.y - groundAt(_e.x, _e.z, _e.y + 0.1)) < 0.3) _n.set(0, 1, 0);
     else _n.set(-d.x, -d.y, -d.z);
-    if (gun === 'blaster') {
+    if (on === 'air') {
+      // Spent at its reach: nothing to see or hear there (a plasma bolt just goes out).
+    } else if (gun === 'blaster') {
       blasts.blaster(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z, on);
       gunSound.blast(_e, ear);
-    } else if (on === 'air') {
-      // Spent at its reach: nothing to see or hear there.
     } else if (gun === 'piercer') {
       blasts.piercer(_e.x, _e.y, _e.z, _n.x, _n.y, _n.z, d.x, d.y, d.z, on);
       gunSound.piercerImpact(_e, ear, on);

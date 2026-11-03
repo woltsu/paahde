@@ -1125,8 +1125,10 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
     if (r.kill) dropSpoils(r.kill);
     (hit = r.hit), (seen = !!r.seen);
   }
-  // The blaster's beam bursts where it stopped: on what it struck, or on the sand, rock or a shelter's wall there.
-  if (gun.blast && hunted && (hit || seen || stopsOnGround(m.ex, m.ey, m.ez))) hit = burst(by, gun, m) || hit;
+  // The blaster's bolt bursts where it stopped: on what it struck, or on the sand, rock or a shelter's wall there; spent
+  // at its whole reach on nothing, it just goes out (as the clients draw it, src/rifle.ts heavyImpact).
+  const spent = Math.hypot(m.ex - m.x, m.ey - m.y, m.ez - m.z) >= gun.range - 1 && heightAt(m.ex, m.ez) <= m.ey - 0.3;
+  if (gun.blast && hunted && (hit || seen || (!spent && stopsOnGround(m.ex, m.ey, m.ez)))) hit = burst(by, gun, m) || hit;
   const zap: ServerMsg = { t: 'zap', by: p.id, x: m.x, y: m.y, z: m.z, ex: m.ex, ey: m.ey, ez: m.ez, hit, ...(kind !== RIFLE ? { gun: kind } : {}) };
   for (const o of players.values()) if (o !== p && sameNear(o, s, BOT_SEND_R)) send(o.ws, zap);
 }

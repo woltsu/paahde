@@ -3119,3 +3119,14 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   src/guardianSound.ts under a low firework burst, `MISSILE_FIREWORK`/`_PITCH`), which the missiles now play too.
   The synthesised crack-boom-debris is gone.
 - Not re-measured in the full mix (docs/audio.md); not heard in a running game yet.
+
+## Longer reach for the big guns
+
+- Reach (shared/rifle.ts GUNS `range`): the rifle 260 → 400 m, the blaster 160 → 450 m, the piercer 320 → 900 m; the
+  pistol stays at 100 m. Enemies are sent to clients well beyond that (server/bots.ts SEND_R 1200 m), so far walkers
+  and drones can be hit. The plasma bolt's drop halves (PLASMA_DROP 4 → 2 m/s²: about 1.7 m over its whole reach).
+- A blaster bolt spent at its reach in the air just goes out: no burst, sparks or sound (src/rifle.ts heavyImpact,
+  for every heavy gun), and others' shots that end in the air likewise (remoteImpact, by the shot's length from the
+  shooter's eye). The server no longer bursts it either when it ends there over low ground (server/world.ts onFire).
+- Since a bolt's flight is longer, the server's rate check allows two blaster shots that much closer (~0.45 s apart
+  at the least, was ~1.3 s): the slack for a bolt landing up to its whole flight after the trigger.

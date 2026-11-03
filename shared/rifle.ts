@@ -19,7 +19,7 @@ export const RIFLE = 'laser_rifle';
  *  quality, shared/gear.ts gunCooldown). */
 export const COOLDOWN_MS = 420;
 /** How far the beam reaches (m). */
-export const RANGE = 260;
+export const RANGE = 400;
 
 /** The server's check of a hit a client claims: did the shot from (x, y, z) to (ex, ey, ez) pass within `slack` (m) of
  *  (cx, cy, cz) and end within 1.5 × slack of it? */
@@ -48,11 +48,12 @@ export const PISTOL_RANGE = 100;
  */
 export const BLASTER = 'blaster';
 export const BLASTER_COOLDOWN_MS = 2200;
-export const BLASTER_RANGE = 160;
+export const BLASTER_RANGE = 450;
 /** The blaster fires a plasma bolt, not a beam: it flies at PLASMA_SPEED (the speed of sound) and drops a little
- *  (PLASMA_DROP m/s², under half a metre over its reach), bursting where it hits (plasmaAt). */
+ *  (PLASMA_DROP m/s²: a few centimetres at 100 m, under two metres over its whole reach), bursting where it hits
+ *  (plasmaAt); spent at its reach in the air, it just goes out. */
 export const PLASMA_SPEED = 343;
-export const PLASMA_DROP = 4;
+export const PLASMA_DROP = 2;
 
 /** Where a bolt fired from `o` along unit `d` is `t` s later, into `out`. */
 export function plasmaAt(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, t: number,
@@ -85,7 +86,7 @@ export const GRAVITON_RANGE = 400;
  */
 export const PIERCER = 'piercer';
 export const PIERCER_COOLDOWN_MS = 3800;
-export const PIERCER_RANGE = 320;
+export const PIERCER_RANGE = 900;
 /** Guns that weigh you down in hand (shared/sim.ts PlayerState.heavy). */
 export const HEAVY = new Set([PIERCER]);
 /** A walker's hull: the damage a gun that pierces its plate must do to its body to kill it (by Kind: guardian, crawler). */

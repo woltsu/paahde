@@ -213,7 +213,7 @@ test("the blaster's plasma bolt flies at the speed of sound and drops a little: 
   plasmaAt(o, d, t, out);
   assert.ok(Math.abs(out.x - blaster.range) < 1e-6, 'its reach in its flight time');
   const drop = o.y - out.y;
-  assert.ok(drop > 0.2 && drop < 0.6, `a little drop over its reach: ${drop.toFixed(2)} m`);
+  assert.ok(drop > 0.5 && drop < 2, `a little drop over its reach: ${drop.toFixed(2)} m`);
   // Landing at the far end on a target there: the server's straight-line check from the eye still passes (its middle
   // sags only a quarter of the drop below the chord).
   assert.ok(shotPasses(o.x, o.y, o.z, out.x, out.y, out.z, out.x, out.y, out.z, 1));

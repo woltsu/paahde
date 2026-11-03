@@ -9,3 +9,5 @@ Known problems not fixed on the spot (boy-scout rule, `CLAUDE.md`). Anyone, huma
 
 ## Open
 
+
+- [netcode] The server's fire-rate check subtracts a bolt's whole flight (`server/world.ts:1096`): at the blaster's 450 m reach a hacked client may fire every ~0.45 s instead of 2.2 s. Track per-shot fire times (the trigger, not the landing) to close it. (2026-11-04, Claude)
