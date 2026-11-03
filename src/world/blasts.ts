@@ -27,7 +27,7 @@ import { tyreDust } from '../tyreDust.ts';
 import { fireballs, type FireballLook } from './fireball.ts';
 import { SpritePool, zaps } from './zaps.ts';
 
-const RINGS = 8, SCORCHES = 12, HOLES = 3, MOTES = 256, MOLTEN = 160, EMBERS = 128;
+const RINGS = 8, SCORCHES = 12, HOLES = 3, MOTES = 256, MOLTEN = 400, EMBERS = 128;
 /** The shock ring: out to a blaster burst's reach in RING_S (bigger rings take longer, by the root of their size). */
 const RING_S = 0.32;
 /** A scorch: there SCORCH_S s, fading over the last SCORCH_FADE. */
@@ -195,7 +195,7 @@ class Blasts {
     // moment where they land.
     this.molten = new SpritePool(MOLTEN, (m, d) => {
       const r = disc(), heat = d.x;
-      m.colorNode = vec3(6, 3.4, 1.2).mul(heat.mul(heat).mul(heat)).add(vec3(2.2, 0.55, 0.08).mul(heat));
+      m.colorNode = vec3(9, 5, 1.8).mul(heat.mul(heat).mul(heat)).add(vec3(3.2, 0.8, 0.12).mul(heat));
       m.opacityNode = float(1).sub(smoothstep(0.25, 1, r)).mul(smoothstep(0, 0.12, heat));
       m.scaleNode = vec2(d.y, d.y);
     }, true);
@@ -351,15 +351,16 @@ class Blasts {
   piercer(x: number, y: number, z: number, nx: number, ny: number, nz: number, dx: number, dy: number, dz: number, on: 'sand' | 'hard' | 'enemy') {
     const n = _b.set(nx, ny, nz).normalize();
     if (on === 'enemy') {
-      zaps.light(x + n.x * 0.5, y + n.y * 0.5, z + n.z * 0.5, 0xd8e8ff, 420, 16, 0.18);
-      zaps.burst(x, y, z, n.x, n.y, n.z, 30, 2);
-      zaps.burst(x, y, z, dx, dy, dz, 24, 2.5); // through and out the other side
-      for (let i = 0; i < 26; i++) {
-        // Most of it blown on through, the rest back out of the hole.
-        const through = i < 17, s = (through ? 7 : 4) + Math.random() * 7;
-        const ax = through ? dx : n.x, ay = through ? dy : n.y, az = through ? dz : n.z;
-        this.molten.add(x, y, z, (ax + (Math.random() - 0.5) * 0.9) * s, (ay + (Math.random() - 0.3) * 0.9) * s, (az + (Math.random() - 0.5) * 0.9) * s,
-          0.05 + Math.random() * 0.07, 1.2 + Math.random() * 1.4);
+      // A white-hot flash going orange, lit long enough to see the spray by.
+      zaps.light(x + n.x * 0.5, y + n.y * 0.5, z + n.z * 0.5, 0xffd2a0, 700, 22, 0.35);
+      zaps.burst(x, y, z, n.x, n.y, n.z, 40, 2.4);
+      zaps.burst(x, y, z, dx, dy, dz, 36, 3); // through and out the other side
+      for (let i = 0; i < 72; i++) {
+        // Most of it blown on through in a wide fan, the rest back out of the hole; the first few big slow gobs.
+        const through = i < 48, gob = i % 12 === 0, s = gob ? 3 + Math.random() * 3 : (through ? 8 : 5) + Math.random() * 9;
+        const ax = through ? dx : n.x, ay = through ? dy : n.y, az = through ? dz : n.z, w = through ? 1.3 : 1;
+        this.molten.add(x, y, z, (ax + (Math.random() - 0.5) * w) * s, (ay + (Math.random() - 0.2) * w) * s, (az + (Math.random() - 0.5) * w) * s,
+          gob ? 0.22 + Math.random() * 0.12 : 0.08 + Math.random() * 0.12, gob ? 3 + Math.random() * 1.5 : 1.8 + Math.random() * 1.8);
       }
       zaps.puff(x, y, z, 0.8, 1.2);
       this.shakeFrom(x, y, z, 0.2);

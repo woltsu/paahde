@@ -47,7 +47,7 @@ export const PISTOL_RANGE = 100;
  * many small enemies at once.
  */
 export const BLASTER = 'blaster';
-export const BLASTER_COOLDOWN_MS = 1400;
+export const BLASTER_COOLDOWN_MS = 2200;
 export const BLASTER_RANGE = 160;
 /** The burst's reach (m) around where the beam stopped. Within BLAST_CORE of its reach a thing takes the gun's whole
  *  damage (blastDamage), out to the rim one hit: a spiderling or a drone at the rim lives, a guardian's weak point cracks. */
@@ -70,7 +70,7 @@ export const GRAVITON_RANGE = 400;
  * can't jump or slide (shared/sim.ts PlayerState.heavy, set by the server from what's in hand: HEAVY). A long reload.
  */
 export const PIERCER = 'piercer';
-export const PIERCER_COOLDOWN_MS = 2600;
+export const PIERCER_COOLDOWN_MS = 3800;
 export const PIERCER_RANGE = 320;
 /** Guns that weigh you down in hand (shared/sim.ts PlayerState.heavy). */
 export const HEAVY = new Set([PIERCER]);

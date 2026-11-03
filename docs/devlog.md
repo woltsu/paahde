@@ -3016,3 +3016,12 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   enemies placed. A placed guardian (`GuardianServer.stage`) has a made-up home where it stands, like a summoned crawler
   pack (gone once nobody is within 450 m), keeps to it (no wandering), isn't replaced when killed, and goes when the
   next scenario starts (`unstage`).
+
+## Heavier reloads, a bigger spray
+
+- The blaster recharges in 2.2 s (was 1.4) and the piercer in 3.8 s (was 2.6): shared/rifle.ts BLASTER_COOLDOWN_MS,
+  PIERCER_COOLDOWN_MS. (The audio bench's gun scenarios in docs/audio.md were measured at the old rates; fewer shots only
+  lower the mix.)
+- The piercer's molten metal through a walker's plate is bigger and brighter (src/world/blasts.ts `piercer`): 72 drops
+  (was 26), 0.08–0.2 m (was 0.05–0.12), a wider fan, every twelfth a big slow gob that glows on the sand ~4 s, hotter
+  colour, a longer orange-white flash; MOLTEN pool 400.
