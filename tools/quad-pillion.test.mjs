@@ -120,7 +120,8 @@ test('a second player rides on the back of the quad, carried with it, and gets o
   a.input(0, a.state().heading);
   await sleep(400);
   assert.ok(Math.hypot(a.state().x - at.x, a.state().z - at.z) > 2, 'the quad moved');
-  assert.ok(Math.hypot(a.state().x - b.state().x, a.state().z - b.state().z) < 0.5, 'the passenger with it');
+  // (each client's last snapshot: under load one may be a tick behind the other, so wait for them to agree)
+  await until(() => Math.hypot(a.state().x - b.state().x, a.state().z - b.state().z) < 0.5, 3000, 'the passenger with it');
   assert.ok(b.messages.findLast((m) => m.t === 'snap').players.some((p) => p[0] === b.id && p[14] === a.id), 'drawn on its back');
 
   // The bike key gets the passenger off, beside it; and on again.
