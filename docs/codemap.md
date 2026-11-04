@@ -396,7 +396,9 @@ Everything built is shared, and anyone can take a building down.
   drops go through it) and rough fight odds by weapon (read by the economy simulator; tune them there)
 - `shared/guardians.ts` — walkers (rare giant guardians with cannons, player-sized crawlers at crash sites and in
   small packs roaming the open by night) + night
-  searchlight drones (constants, beam test); walkers, bolts and missiles simulated in `server/guardians.ts`, which ticks
+  searchlight drones (constants, beam test; `lineOfSight`, what guardians, drones and the carrier see by: the sand and
+  shared/terrain.ts `shotSolid`, so a hut, solar shed or radio tower hides you); walkers, bolts (bursting on the sand or
+  a wall, `shotGround`; the burst's blast only on those it sees) and missiles simulated in `server/guardians.ts`, which ticks
   the drones (`server/drones.ts`; their beams call the guardians, `alert`), what both share in `server/bots.ts`; legs
   are client IK in `src/world/guardians.ts`, bolts `src/world/bolts.ts`, drones `src/world/drones.ts`, glue/sound/shake
   in `src/guardians.ts`, `src/guardianSound.ts`

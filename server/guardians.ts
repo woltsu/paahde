@@ -30,7 +30,7 @@ import type { ServerMsg } from '../shared/protocol.ts';
 import { allBroken, bites, GUARDIAN_POINT_HP, type Gun, HULL_HP, kills, shotPasses, weakPoints, WRECK_S } from '../shared/rifle.ts';
 import { ENEMIES } from '../shared/enemies.ts';
 import { sunElevation } from '../shared/sun.ts';
-import { heightAt } from '../shared/terrain.ts';
+import { heightAt, shotGround } from '../shared/terrain.ts';
 import { type BotPlayer, type Kill, open, r2, r3, rand, SEND_R, SITE_LEAVE_R, SITE_NEAR_R, sitesNear, wrap } from './bots.ts';
 import { DroneServer } from './drones.ts';
 import { flank, keepOut, skirt, type Skirt } from './pack.ts';
@@ -489,20 +489,29 @@ export class GuardianServer {
     events.push({ x: b.x, z: b.z, msg: { t: 'shot', id: b.id, g: g.id, time: now, x: r2(b.x), y: r2(b.y), z: r2(b.z), dx: r3(b.dx), dy: r3(b.dy), dz: r3(b.dz) } });
   }
 
-  /** Bolts fly on; one that meets a player or the ground bursts there and kills whoever is within BLAST_R. */
+  /** Bolts fly on; one that meets a player, the sand or a wall (a shelter's hut, a solar farm's tower or shed, a radio
+   *  tower: shared/terrain.ts shotSolid) bursts there and kills whoever is within BLAST_R. */
   private tickBolts(dt: number, exposed: BotPlayer[], shot: number[], events: BoltEvent[]) {
     const step = BOLT_SPEED * dt;
     this.bolts = this.bolts.filter((b) => {
-      // Along this tick's segment in short steps: the first player or sand it touches.
+      // Along this tick's segment in short steps: the first player it touches, or what stops it (looked for from the
+      // segment's start, the last one's end: none of it skipped).
+      const wall = shotGround(b.x, b.y, b.z, b.dx, b.dy, b.dz, step, b.flown > 0 ? 0 : 0.5);
       const n = Math.ceil(step / 1.5);
       for (let i = 1; i <= n; i++) {
-        const t = (step * i) / n;
+        const stopped = (step * i) / n >= wall && wall < step;
+        // Stopped: it bursts just this side of the wall or the sand, so the blast sees who is behind it.
+        const t = stopped ? Math.max(0, wall - 0.05) : (step * i) / n;
         const x = b.x + b.dx * t, y = b.y + b.dy * t, z = b.z + b.dz * t;
         const hit = exposed.find((p) => Math.hypot(p.x - x, p.z - z) < BOLT_R + 0.35 && y > p.y - BOLT_R && y < p.y + 1.8 + BOLT_R);
-        const ground = y < heightAt(x, z);
-        if (hit || ground || b.flown + t >= BOLT_RANGE) {
+        const ground = stopped && y <= heightAt(x, z) + 0.1;
+        if (hit || stopped || b.flown + t >= BOLT_RANGE) {
+          // The blast reaches those in the open to it (seen from half a metre over the burst, clear of the sand it hit):
+          // a hut's wall or a dune between keeps it off.
           for (const p of exposed) {
-            if (p === hit || Math.hypot(p.x - x, p.y + 0.9 - y, p.z - z) < BLAST_R) if (!shot.includes(p.id)) shot.push(p.id);
+            if (p === hit || (Math.hypot(p.x - x, p.y + 0.9 - y, p.z - z) < BLAST_R && lineOfSight(x, y + 0.5, z, p.x, p.y + 0.9, p.z))) {
+              if (!shot.includes(p.id)) shot.push(p.id);
+            }
           }
           events.push({ x, z, msg: { t: 'boom', id: b.id, x: r2(x), y: r2(ground ? heightAt(x, z) : y), z: r2(z), ground } });
           return false;

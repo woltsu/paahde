@@ -246,14 +246,20 @@ export function shotSolid(x: number, y: number, z: number): boolean {
   return shelterSolid(x, y, z) ?? solarSolid(x, y, z) ?? towerSolid(x, y, z) ?? y <= heightAt(x, z);
 }
 
+/** shotGround's finest step (m): by a shelter, a solar farm's buildings or a radio tower (their walls are ~0.5 m). */
+export const SHOT_FINE = 0.15;
+
 /**
  * How far a shot from (ox, oy, oz) along unit (dx, dy, dz) goes before the sand or a shelter's walls stop it, or
- * `range` if nothing does. Sampled every 0.75 m (0.15 m by a shelter), then refined.
+ * `range` if nothing does. Sampled every `coarse` m (SHOT_FINE by a shelter, solar farm buildings or a tower) from
+ * `from` m on, and at `range` itself, then refined. A shot flown in stretches (a plasma bolt each frame, a guardian's
+ * each tick) looks from 0 after its first: the default skips the first half metre (the eye, the muzzle), which would let
+ * each stretch jump a wall.
  */
-export function shotGround(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, range: number): number {
+export function shotGround(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, range: number, from = 0.5, coarse = 0.75): number {
   const at = (t: number) => shotSolid(ox + dx * t, oy + dy * t, oz + dz * t);
   let prev = 0;
-  for (let t = 0.5; t <= range;) {
+  for (let t = Math.min(from, range); ;) {
     if (at(t)) {
       let lo = prev, hi = t;
       for (let i = 0; i < 8; i++) {
@@ -263,9 +269,9 @@ export function shotGround(ox: number, oy: number, oz: number, dx: number, dy: n
       }
       return hi;
     }
+    if (t >= range) return range;
     prev = t;
     const px = ox + dx * t, pz = oz + dz * t;
-    t += nearShelter(px, pz, 2) || nearSolarBuildings(px, pz) || nearTower(px, pz) ? 0.15 : 0.75;
+    t = Math.min(range, t + (nearShelter(px, pz, 2) || nearSolarBuildings(px, pz) || nearTower(px, pz) ? SHOT_FINE : coarse));
   }
-  return range;
 }

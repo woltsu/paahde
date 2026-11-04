@@ -2,6 +2,24 @@
 
 What we built, why, and what's left. Dated sessions newest first, then undated topic entries (oldest first, 17–19 October). Add an entry when you land something big.
 
+## 2026-11-04 — Bolts and sight stop at walls
+
+- **Bug:** blaster shots went through the shelters' huts (the old starting bunker is gone: "bunkers" are the shelters).
+  Two holes. A guardian's cannon bolt (`server/guardians.ts` `tickBolts`) burst only on a player or the sand, and its
+  aim (`shared/guardians.ts` `lineOfSight`, also the drones' and the carrier's) only looked at the sand: a guardian saw
+  you through a hut, a solar farm's shed or a radio tower, and its bolt flew through the concrete and killed you. And
+  your own blaster's plasma bolt, flown a stretch each frame (`src/rifle.ts` `flyBolts`), skipped the first half metre
+  of every stretch (`shotGround` starts there, for the eye) and never looked at its last few centimetres: one bolt in a
+  few hundred jumped a 0.5 m hut wall.
+- **Fix:** `shotGround` takes where to start (`from`; 0 for a stretch after the first, which starts where the last one
+  ended clear) and a coarse step (`coarse`), and always looks at its end. `lineOfSight` is `shotGround` with 2 m steps
+  over the sand (fine by the buildings), stopping 0.25 m short of the target (a wall someone hides behind is further
+  off). A guardian's bolt bursts on the first solid of its tick's stretch, just this side of it (`ground` only on the
+  sand, else drawn as on a wall), and its blast kills only those it can see from half a metre over the burst: behind
+  the wall you live. `floorShot` (levels) likewise for the blaster's stretches.
+- **Cost:** `lineOfSight` ~17% slower per call (74 → 87 µs on 100–400 m lines), the same answers off the buildings.
+- **Tests:** `tools/shots-walls.test.mjs` (beam, bolt at 30–240 fps, sight, a guardian's bolt on a hut).
+
 ## 2026-11-01 — The cart's canopy gets drop edges
 
 - **Why:** the high flat canopy shaded the camp only around midday; a low morning or evening sun got under it.

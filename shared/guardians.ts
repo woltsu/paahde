@@ -25,7 +25,7 @@
 // and leaves you be for IGNORE_MS.
 import { collideCrash } from './crashsites.ts';
 import { collideScrap } from './scrap.ts';
-import { heightAt } from './terrain.ts';
+import { heightAt, SHOT_FINE, shotGround } from './terrain.ts';
 import { KILL } from './health.ts';
 import { indoors } from './shelters.ts';
 
@@ -210,16 +210,16 @@ export function sweepAt(id: number, t: number): number {
   return SWEEP * Math.sin((t / 1000 / SWEEP_S) * Math.PI * 2 + id * 1.7);
 }
 
-/** Is the open line from (ax, ay, az) to (bx, by, bz) clear of the ground? */
+/** How far short of its end (m) lineOfSight stops looking: under a player's radius (shared/sim.ts PLAYER_RADIUS). */
+const SIGHT_SHORT = 0.25;
+
+/** Is the open line from (ax, ay, az) to (bx, by, bz) clear of the sand and of what stops a shot (shared/terrain.ts
+ *  shotSolid: a shelter's hut, a solar farm's tower and shed, a radio tower)? The sand every 2 m, those finely; up to
+ *  SIGHT_SHORT short of the end (someone's chest: a wall they hide behind is further from it than that). */
 export function lineOfSight(ax: number, ay: number, az: number, bx: number, by: number, bz: number): boolean {
-  const len = Math.hypot(bx - ax, by - ay, bz - az);
-  const n = Math.ceil(len / 2);
-  for (let i = 1; i < n; i++) {
-    const t = i / n;
-    const x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;
-    if (y < heightAt(x, z)) return false;
-  }
-  return true;
+  const len = Math.hypot(bx - ax, by - ay, bz - az), reach = len - SIGHT_SHORT;
+  if (reach <= 0) return true;
+  return shotGround(ax, ay, az, (bx - ax) / len, (by - ay) / len, (bz - az) / len, reach, SHOT_FINE, 2) >= reach;
 }
 
 /**

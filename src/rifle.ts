@@ -54,13 +54,14 @@ import { gunSound } from './gunSound';
 import { Reticle } from './reticle';
 
 /** In a level with flat floors (src/ground.ts): how far along the shot a floor or a wall (the level's solids) is, or
+ *  `range`. Every 0.25 m from `from` m on (as shared/terrain.ts shotGround: 0 for a bolt's later stretches), and at
  *  `range`. */
-function floorShot(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, range: number): number {
-  for (let t = 0.25; t < range; t += 0.25) {
+function floorShot(o: { x: number; y: number; z: number }, d: { x: number; y: number; z: number }, range: number, from: number): number {
+  for (let t = Math.min(from, range); ; t = Math.min(range, t + 0.25)) {
     const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
     if (y <= groundAt(x, z, y) || solidAt(x, y, z, 0.02)) return t;
+    if (t >= range) return range;
   }
-  return range;
 }
 import { shelterSolid } from '../shared/shelters.ts';
 import { SPRINT_SPEED, WALK_SPEED } from '../shared/sim.ts';
@@ -294,7 +295,7 @@ export class Rifle {
       _d.divideScalar(len);
       const left = range - t0 * PLASMA_SPEED, last = len >= left;
       if (last) len = Math.max(0, left);
-      const stopped = this.strike(_a, _d, len, b.o, b.gun, last);
+      const stopped = this.strike(_a, _d, len, b.o, b.gun, last, t0 === 0);
       // Drawn from the muzzle, closing onto the path.
       const w0 = Math.max(0, 1 - t0 / BOLT_MERGE), w1 = Math.max(0, 1 - t1 / BOLT_MERGE);
       const end = stopped ? _e : _b;
@@ -487,12 +488,14 @@ export class Rifle {
    * drone, jet, harvester, spiderling or boss before it, as drawn now. Something met (or `last`: the shot's end, in the
    * air if nothing): it stops there (_e): sparks, the sound, a weak point shattering at once, a heavy gun's impact, and
    * the server is told (Net.fire, from `from`: the eye it was fired from) what it hit. Returns whether it stopped.
-   * A beam is one stretch, its whole reach; a plasma bolt one per frame (flyBolts).
+   * A beam is one stretch, its whole reach; a plasma bolt one per frame (flyBolts), `first` only from the eye.
    */
-  private strike(o: THREE.Vector3, d: THREE.Vector3, len: number, from: THREE.Vector3, gunName: Gun, last: boolean): boolean {
+  private strike(o: THREE.Vector3, d: THREE.Vector3, len: number, from: THREE.Vector3, gunName: Gun, last: boolean, first = true): boolean {
     const kind = FEEL[gunName].kind;
     // The sand first, then anything of a walker before it.
-    let dist = onFlat() ? floorShot(o, d, len) : shotGround(o.x, o.y, o.z, d.x, d.y, d.z, len);
+    // A bolt's later stretches are looked along from their start, the last one's end (a wall in a gap skipped there
+    // would let it through).
+    let dist = onFlat() ? floorShot(o, d, len, first ? 0.25 : 0) : shotGround(o.x, o.y, o.z, d.x, d.y, d.z, len, first ? 0.5 : 0);
     const ground = dist < len;
     const hit = this.guardians.raycast(o, d, dist);
     if (hit) dist = hit.dist;
