@@ -64,8 +64,10 @@ const GALLOP = [0.5, 0.6, 0, 0.1];
 const DUTY_WALK = 0.62, DUTY_TROT = 0.5, DUTY_GALLOP = 0.32;
 /** A foot's rest spot sits this far forward of its hip (m), so it stands a little splayed. */
 const REST_FWD = [0.06, 0.06, -0.04, -0.04];
+/** World size over model size (shared/runner.ts): the IK works in the body's (model) frame, lengths in the world × S. */
+const S = RUNNER.scale;
 /** Stopped, a foot further than this (m) from its rest spot steps to it. */
-const SETTLE = 0.1;
+const SETTLE = 0.1 * S;
 
 type Leg = {
   side: 1 | -1;
@@ -145,6 +147,7 @@ export class Runner {
       this.legs.push({ side, sx, sz, hip, thigh, shin, foot: new THREE.Vector3(), from: new THREE.Vector3(), s: -1, dur: 0, cycle: -1 });
     }
     this.body.rotation.order = 'YXZ';
+    this.body.scale.setScalar(S);
   }
 
   /** The body's centre (world), as last drawn. */
@@ -160,17 +163,17 @@ export class Runner {
       this.rest(i, 0, leg.foot);
       leg.s = -1;
     });
-    this.y = this.ground(x, z) + RUNNER.standY;
+    this.y = this.ground(x, z) + RUNNER.standY * S;
     this.placed = true;
   }
 
   /** Leg i's rest spot (world, on the ground), `lead` s ahead along its velocity, into `out`. */
   private rest(i: number, lead: number, out: THREE.Vector3) {
     const leg = this.legs[i];
-    const lx = leg.sx + leg.side * RUNNER.hipOut, lz = leg.sz + REST_FWD[i];
+    const lx = (leg.sx + leg.side * RUNNER.hipOut) * S, lz = (leg.sz + REST_FWD[i]) * S;
     const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
     // Ahead, no further than a leg can take in a stride.
-    const lv = Math.min(1, 0.9 / Math.max(1e-6, Math.hypot(this.vx, this.vz) * lead));
+    const lv = Math.min(1, (0.9 * S) / Math.max(1e-6, Math.hypot(this.vx, this.vz) * lead));
     out.x = this.x + lx * c + lz * s + this.vx * lead * lv;
     out.z = this.z - lx * s + lz * c + this.vz * lead * lv;
     out.y = this.ground(out.x, out.z);
@@ -180,7 +183,7 @@ export class Runner {
   /** Per frame: where it now is and faces (moved by its driver), what it looks at (null: about), the time (ms). */
   update(dt: number, x: number, z: number, yaw: number, look: THREE.Vector3 | null, now: number) {
     if (dt <= 0) return;
-    if (!this.placed || Math.hypot(x - this.x, z - this.z) > 5) this.place(x, z, yaw);
+    if (!this.placed || Math.hypot(x - this.x, z - this.z) > 5 * S) this.place(x, z, yaw);
     // Velocity from how it moved, a little smoothed (the driver's steps can be uneven).
     const speed0 = Math.hypot(this.vx, this.vz);
     this.vx = ease(this.vx, (x - this.x) / dt, 20, dt);
@@ -197,7 +200,7 @@ export class Runner {
     const g = smooth(RUNNER_TROT, RUNNER_GALLOP, speed);
     const duty = lerp(lerp(DUTY_WALK, DUTY_TROT, smooth(0.5, RUNNER_TROT, speed)), DUTY_GALLOP, g);
     // A stance covers this much ground (m), and no more: strides quicken with speed.
-    const stance = Math.min(1.0, 0.45 + 0.055 * speed);
+    const stance = S * Math.min(1.0, 0.45 + 0.035 * speed);
     let freq: number;
     if (speed > 0.15) freq = Math.max(1.4, (speed * duty) / stance);
     else {
@@ -225,7 +228,7 @@ export class Runner {
       const span = Math.hypot(_v.x - leg.from.x, _v.z - leg.from.z);
       leg.foot.lerpVectors(leg.from, _v, e);
       // Up and over: higher for a longer stride, the claw snatched up early and set down late.
-      leg.foot.y += Math.sin(Math.PI * Math.pow(leg.s, 0.7)) * Math.min(0.32, 0.07 + 0.22 * span);
+      leg.foot.y += Math.sin(Math.PI * Math.pow(leg.s, 0.7)) * S * Math.min(0.32, 0.07 + (0.22 * span) / S);
       if (leg.s >= 1) {
         leg.s = -1;
         leg.foot.copy(_v);
@@ -245,12 +248,12 @@ export class Runner {
     const under = (front + back) / 2;
     // The stride's bob: trotting, down as each pair lands (twice a stride); galloping, a heave and a rocking pitch.
     const ph = this.t * Math.PI * 2;
-    const bob = -0.035 * Math.cos(2 * ph) * moving * (1 - g) + 0.06 * Math.sin(ph) * g;
+    const bob = S * (-0.035 * Math.cos(2 * ph) * moving * (1 - g) + 0.06 * Math.sin(ph) * g);
     const rock = 0.07 * Math.sin(ph + 1.3) * g;
-    const crouch = 0.06 * moving + 0.08 * g;
-    this.y = ease(this.y, under + R.standY - crouch, 12, dt);
-    const slope = Math.atan2(front - back, 2 * R.sockZ);
-    const tilt = Math.atan2(left - right, 2 * (R.sockX + R.hipOut));
+    const crouch = S * (0.06 * moving + 0.08 * g);
+    this.y = ease(this.y, under + R.standY * S - crouch, 12, dt);
+    const slope = Math.atan2(front - back, 2 * R.sockZ * S);
+    const tilt = Math.atan2(left - right, 2 * (R.sockX + R.hipOut) * S);
     const lean = Math.max(-0.12, Math.min(0.12, this.accel * 0.02));
     const bank = Math.max(-0.22, Math.min(0.22, -this.yawRate * speed * 0.025));
     this.pitch = ease(this.pitch, -slope + lean + 0.04 * g, 8, dt);
@@ -332,10 +335,10 @@ export class Prowl {
   private pick(cx: number, cz: number, now: number) {
     const r = Math.random(), from = Math.atan2(this.x - cx, this.z - cz);
     this.staring = false;
-    if (Math.hypot(this.x - cx, this.z - cz) > 45 || r < 0.35) {
+    if (Math.hypot(this.x - cx, this.z - cz) > 55 || r < 0.35) {
       // A sprint, round the centre: a third to two thirds of a lap, either way.
       const a = from + (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 2);
-      const d = 14 + Math.random() * 14;
+      const d = 18 + Math.random() * 16;
       this.set(cx + Math.sin(a) * d, cz + Math.cos(a) * d, RUNNER_SPRINT * (0.7 + 0.3 * Math.random()), 1.8);
     } else if (r < 0.55) {
       this.staring = true;
@@ -344,7 +347,7 @@ export class Prowl {
     } else {
       // A prowl to a spot not far off, a little in or out.
       const a = from + (Math.random() - 0.5) * 1.6;
-      const d = 7 + Math.random() * 12;
+      const d = 9 + Math.random() * 12;
       this.set(cx + Math.sin(a) * d, cz + Math.cos(a) * d, RUNNER_WALK + Math.random() * (RUNNER_TROT - RUNNER_WALK), 2.6);
     }
   }
@@ -403,9 +406,9 @@ export class Runners {
     if (pending && !parts) void loadRunner();
     while (pending && parts) {
       pending--;
-      // In view, 14 m ahead, side on.
+      // In view, 18 m ahead, side on.
       camera.getWorldDirection(_v).setY(0).normalize();
-      const x = focus.x + _v.x * 14, z = focus.z + _v.z * 14, yaw = Math.atan2(_v.x, _v.z) + Math.PI / 2;
+      const x = focus.x + _v.x * 18, z = focus.z + _v.z * 18, yaw = Math.atan2(_v.x, _v.z) + Math.PI / 2;
       const view = new Runner(this.ground);
       view.place(x, z, yaw);
       this.scene.add(view.root);
@@ -417,7 +420,7 @@ export class Runners {
     this.eye.set(focus.x, focus.y + 1.5, focus.z);
     for (const { view, prowl } of this.list) {
       prowl.update(dt, focus.x, focus.z, now);
-      const near = Math.hypot(prowl.x - focus.x, prowl.z - focus.z) < 30;
+      const near = Math.hypot(prowl.x - focus.x, prowl.z - focus.z) < 40;
       view.alert = prowl.speed > RUNNER_TROT ? 1 : 0;
       view.update(dt, prowl.x, prowl.z, prowl.yaw, near && prowl.speed < RUNNER_TROT ? this.eye : null, now);
     }

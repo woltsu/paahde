@@ -1,4 +1,4 @@
-"""The runner: a four-legged hunting robot the size of a horse, after Spot's layout (a long box body, a hip at each
+"""The runner: a four-legged hunting robot (built the size of a horse; the game draws it RUNNER.scale times that), after Spot's layout (a long box body, a hip at each
 corner, every knee bending backwards) but built to frighten: an armoured wedge of a hull with blade fins down the spine,
 a low predator's head with a spider's cluster of red eyes and two mandible blades, bladed shins ending in claws.
 
