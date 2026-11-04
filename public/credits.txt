@@ -80,6 +80,39 @@ Firework Explosion, Firework Explosion 2, 3 and 4 (sounds)
   Mixed to mono, high-passed at 30 Hz, leading silence trimmed, faded out and levelled to the same loudness.
   Files: audio/firework-1.mp3, audio/firework-2.mp3, audio/firework-3.mp3, audio/firework-4.mp3
 
+Explosive.flac (sound)
+  By qubodup on Freesound (https://freesound.org/s/189778/), CC0
+  (http://creativecommons.org/publicdomain/zero/1.0/).
+  Cut into its three explosions, mixed to mono, high-passed at 30 Hz, leading silence trimmed,
+  faded out and levelled to the same loudness (-23 LUFS).
+  Files: audio/explosion-1.mp3, audio/explosion-2.mp3, audio/explosion-3.mp3
+
+Beefy Explosions (sound)
+  By SamsterBirdies on Freesound (https://freesound.org/s/745549/), CC0
+  (http://creativecommons.org/publicdomain/zero/1.0/).
+  Cut into its four explosions, mixed to mono, high-passed at 30 Hz, silence trimmed,
+  faded out and levelled to the same loudness (-23 LUFS).
+  Files: audio/explosion-beefy-1.mp3, audio/explosion-beefy-2.mp3, audio/explosion-beefy-3.mp3,
+  audio/explosion-beefy-4.mp3
+
+Explosion / Gun, Explosion / Gun - 2 (sounds)
+  By SamsterBirdies on Freesound (https://freesound.org/s/587445/, https://freesound.org/s/587444/), CC0
+  (http://creativecommons.org/publicdomain/zero/1.0/).
+  Mixed to mono, high-passed at 30 Hz, trailing silence trimmed, faded out and levelled (-23 LUFS).
+  Files: audio/explosion-gun-1.mp3, audio/explosion-gun-2.mp3
+
+Astronomical Explosion (sound)
+  By SamsterBirdies on Freesound (https://freesound.org/s/760509/), CC0
+  (http://creativecommons.org/publicdomain/zero/1.0/).
+  Mixed to mono, high-passed at 30 Hz, trailing silence trimmed, faded out and levelled (-23 LUFS).
+  File: audio/explosion-astronomical.mp3
+
+Sci-Fi_Explosion_2.wav (sound)
+  By Anomaex on Freesound (https://freesound.org/s/490266/), CC0
+  (http://creativecommons.org/publicdomain/zero/1.0/).
+  Mixed to mono, high-passed at 30 Hz, faded out and levelled (-23 LUFS).
+  File: audio/explosion-scifi.mp3
+
 Made for this game
 ------------------
 

@@ -3227,3 +3227,14 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   model's own colour while third person showed the tier's (src/tierLook.ts LAMP).
 - **Fix:** src/viewmodel.ts tracks the glowing meshes instead of their materials and pulses whichever material the mesh
   wears, its tier variant included (a variant's `materialEmissive` reads its own `emissiveIntensity`).
+
+## Explosion samples, ready for use
+
+- **What:** eleven CC0 explosion one-shots from Freesound in `public/audio/` (credits.txt), not wired to anything yet:
+  `explosion-1..3` (qubodup's Explosive: sharp crack and rumble, 1.8–3.8 s), `explosion-beefy-1..4` (big rolling booms,
+  2.6–5.1 s), `explosion-gun-1..2` (short punchy blasts, 1.5–2 s), `explosion-scifi` (4.4 s) and
+  `explosion-astronomical` (a 10 s roar, for something huge).
+- **How:** cut at the recordings' own silences (Explosive's three overlap, split at their fades, 1.98 s and 3.99 s), mono,
+  high-passed at 30 Hz, leading silence trimmed (at −30 dB for Explosive, so the crack starts on the first frame), tails
+  faded, each levelled to −23 LUFS integrated (−22.6 to −23.0); true peak −1.9 dBTP at most. Set play gains in the full
+  mix as usual (docs/audio.md).
