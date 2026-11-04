@@ -20,7 +20,7 @@
 // Laser rifle (src/rifle.ts): RifleIdle / RifleWalk with both hands on it, RifleAim (to the eye, played clamped
 // while `playerHands.aim` rises; once there the scope view takes over and the hands hide) on the `Rifle` mesh. Firing
 // kicks it back into the shoulder and up on a spring (`playerHands.kick`); its `RifleGlow` material dims as the cell
-// empties and brightens as it recharges. While aiming the mouse-look sway is mostly taken out, so the sights stay on.
+// empties and brightens as it recharges (in its tier's lamp colour, src/tierLook.ts, as the avatar shows it). While aiming the mouse-look sway is mostly taken out, so the sights stay on.
 // Laser pistol: the same with PistolIdle / PistolWalk / PistolAim (out at arm's length onto the iron sights; the hands
 // stay in view) on the `Pistol` mesh, one-handed. The jammer (src/jammer.ts): JammerIdle / JammerWalk, and JammerAim
 // (scrubbed like the guns' aim while jamming: up in front in both hands); its model (src/models/jammer.ts) sits on the
@@ -101,7 +101,8 @@ export class ViewModel {
   private telescope: THREE.Object3D | null = null;
   private rifle: THREE.Object3D | null = null;
   private rifleMuzzle: THREE.Object3D | null = null;
-  private rifleGlow: THREE.MeshStandardMaterial[] = [];
+  /** The guns' glowing meshes and their glow's own brightness (findGlow). */
+  private glows: { mesh: THREE.Mesh; base: number }[] = [];
   private pistol: THREE.Object3D | null = null;
   private pistolMuzzle: THREE.Object3D | null = null;
   /** The blaster, the graviton pistol and the piercer on their mounts, with their muzzles. */
@@ -256,18 +257,16 @@ export class ViewModel {
     mesh.material = Array.isArray(mesh.material) ? own : own[0];
   }
 
-  /** A gun's emissive '<Name>Glow' materials, pulsed with the cell's charge. */
+  /** A gun's meshes wearing an emissive '<Name>Glow' material, pulsed with the cell's charge. The tier look still applies
+   *  (src/tierLook.ts swaps in its variant, lamps in the tier's colour, as on the avatar): the pulse drives whichever
+   *  material the mesh wears. */
   private findGlow(gun: THREE.Object3D) {
     gun.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        if (m.name.endsWith('Glow') && !this.rifleGlow.includes(m as THREE.MeshStandardMaterial)) {
-          m.userData.base = (m as THREE.MeshStandardMaterial).emissiveIntensity || 1;
-          m.userData.noTier = true; // it shows the cell's charge
-          this.rifleGlow.push(m as THREE.MeshStandardMaterial);
-        }
-      }
+      if (!mesh.isMesh || this.glows.some((g) => g.mesh === mesh)) return;
+      const m = (mesh.userData.tierBase ?? mesh.material) as THREE.Material | THREE.Material[];
+      if (Array.isArray(m) || !m.name.endsWith('Glow')) return;
+      this.glows.push({ mesh, base: (m as THREE.MeshStandardMaterial).emissiveIntensity || 1 });
     });
   }
 
@@ -420,7 +419,8 @@ export class ViewModel {
       -swayYaw * 0.35 * steady + kick * 0.02,
     );
     this.sway.position.set(-swayYaw * 0.04 * steady, -kick * 0.01, kick * 0.09);
-    for (const g of this.rifleGlow) g.emissiveIntensity = (g.userData.base as number) * (0.15 + 0.85 * playerHands.charge ** 3 + 4 * playerHands.kick);
+    const pulse = 0.15 + 0.85 * playerHands.charge ** 3 + 4 * playerHands.kick;
+    for (const g of this.glows) (g.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = g.base * pulse;
 
     if (!this.mixer) return;
     const draw = this.shown === 'telescope' && playerHands.looking ? 1 : 0;

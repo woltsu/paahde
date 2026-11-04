@@ -2081,7 +2081,8 @@ drawn by `src/world/shelters.ts`).
   variant per material and tier and swaps it in per mesh (`applyTier`, cheap enough to call every frame, so models that
   load late catch up). On: the first-person hands (`playerHands.tier`), the avatar (held item, backpack, wrist, belt,
   shield, carried canteen and sidearm), the bike (from `PlayerState.bike`) and loot on the sand (broken gear is Scrap).
-  Animated materials opt out with `userData.noTier` (the bike's headlight, the guns' charge glow, the player tint).
+  Animated materials opt out with `userData.noTier` (the bike's headlight, the player tint); the guns' charge glow takes
+  its tier's lamp colour and the first-person pulse drives the variant the mesh wears.
 - **Others see it:** `PlayerSnap.tiers`, 2 bits per `TIER_SLOTS` entry (hand, each equipment slot, carried canteen and
   sidearm), omitted when all Scrap. Gear slots in the Tab inventory get the tier's rarity colour too.
 - **Shield plate** (`shield`, new `armor` equipment slot, found at crawler sites and in caches): a torch-cut shard of
@@ -3218,3 +3219,11 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - **How:** `startup.warmup` in the perf result splits the warm-up (`buildMs`, `compileWaitMs`, `gpuWaitMs`, `pauseMs`,
   `objects`, `rounds`) and a `terrain-built` milestone separates terrain from models. A Chrome trace doubles the warm-up's
   waits, so compare untraced runs; Chrome's shader cache barely helps a second join (the cost is the page's own TSL builds).
+
+## Gun glow matches its tier in first person
+
+- **Bug:** a Quality piercer's lamps were orange on the avatar but blue in your own hands: the viewmodel marked every
+  '<Name>Glow' material `noTier` so it could pulse it with the cell's charge, so first person always showed the
+  model's own colour while third person showed the tier's (src/tierLook.ts LAMP).
+- **Fix:** src/viewmodel.ts tracks the glowing meshes instead of their materials and pulses whichever material the mesh
+  wears, its tier variant included (a variant's `materialEmissive` reads its own `emissiveIntensity`).
