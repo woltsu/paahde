@@ -5,7 +5,7 @@
 // of SLOT seconds, each a step starting near the slot start. Outside it is a walk on a gravel trail,
 // levelled so a steady walk at ~2.4 steps/s measures −23 LUFS; inside a shelter it is footsteps on concrete,
 // which only peak-normalise to about −30 LUFS, so their gain is higher to sound as loud. `gain` pulls both
-// well under the wind, since in game you take ~4.4 steps/s. Carrying a heavy gun (shared/rifle.ts HEAVY) a step is a
+// well under the wind, since in game you take ~4.4 steps/s. Carrying what weighs you down (shared/effects.ts weighsDown: the piercer) a step is a
 // plod: pitched down, a little louder, with a dull thud of the weight coming down under it.
 import { audio } from './audio';
 import { reflect } from './acoustics';

@@ -29,7 +29,8 @@ import { CLIMB_D, RUNG_A, towersNear, towerToWorld } from '../shared/towers.ts';
 import { crashSitesNear } from '../shared/crashsites.ts';
 import { BLAST_R, CRATER_MM, CRATER_R, GUARDIAN } from '../shared/guardians.ts';
 import { BLAST_R as MISSILE_BLAST_R } from '../shared/missiles.ts';
-import { GRAVITON, GUNS, HEAVY, RIFLE, PLASMA_SPEED, blastDamage, type Gun } from '../shared/rifle.ts';
+import { GRAVITON, GUNS, RIFLE, PLASMA_SPEED, blastDamage, type Gun } from '../shared/rifle.ts';
+import { effectsOf } from '../shared/effects.ts';
 import { inCone, JAM_BLEED, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { THROW_MS, THROWABLE } from '../shared/throw.ts';
 import { MACE, MACE_MS, MACE_REACH, MACE_SLACK } from '../shared/mace.ts';
@@ -1652,12 +1653,6 @@ function carryPassengers() {
   }
 }
 
-/** The item in hand is a heavy gun (shared/rifle.ts HEAVY), repaired or not: it weighs the same. */
-function heavyInHand(p: Player): boolean {
-  const kind = p.slot < 0 ? undefined : items.slots(p.browserId, 'bag')[p.slot]?.kind;
-  return !!kind && HEAVY.has(kind);
-}
-
 function simulate(p: Player, now: number) {
   const command = p.inputs.take(now);
   p.input = command?.input ?? 0;
@@ -1668,9 +1663,9 @@ function simulate(p: Player, now: number) {
   if (tutorial.riding(p.id)) return;
   const drag = L.weather ? stormDrag(storms.storms, p.state.x, p.state.y, p.state.z, now) : 0;
   const pull = L.weather ? vortexPull(storms.vorticesNear(p.state.x, p.state.z, 500, nearScratch), p.state.x, p.state.y, p.state.z, now, { x: 0, z: 0 }) : NO_PULL;
-  // A heavy gun in hand (shared/rifle.ts HEAVY) weighs them down on foot (shared/sim.ts PlayerState.heavy).
-  const heavy = !p.down && !p.state.riding && heavyInHand(p);
-  if (heavy !== (p.state.heavy === true)) p.state = { ...p.state, heavy: heavy || undefined };
+  // Gear effects from their bag and hand (shared/effects.ts: the piercer in hand is bulky), read by step() on foot.
+  const effects = p.down ? 0 : effectsOf(items.slots(p.browserId, 'bag'), p.slot);
+  if (effects !== (p.state.effects ?? 0)) p.state = { ...p.state, effects: effects || undefined };
   const before = p.state;
   p.state = tickTriggers(step(p.state, p.input, p.yaw, drag, L.enemies ? guardians.posts : NO_LEGS, pull));
   offBike(p, before);

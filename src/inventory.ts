@@ -19,6 +19,7 @@
 import { WELL, wellSpec } from '../shared/wells.ts';
 import { buildingId, cargoId, fittedBox, takeOnly, vehicleBox, vehicleId } from '../shared/boxes.ts';
 import { bagShape, EQUIP_LABELS, EQUIP_SLOTS, fitsSlot, GEAR, isGear, partsOf, quality, repaired, slotLabel, tierOf } from '../shared/gear.ts';
+import { effectsList } from '../shared/effects.ts';
 import { type Boxes, boxShape, holdsCargo, tryMove } from '../shared/moves.ts';
 import { chargeOf, findSpot, HOTBAR, ITEMS, makeItem, partAt, scrapItem, setData, TOOLS, sizeOf, strandedAt, URANIUM, type Item, type Shape, type Slots } from '../shared/items.ts';
 import { partOf, URANIUM_LOOK } from '../shared/parts.ts';
@@ -149,6 +150,13 @@ body.pad #invOverlay .slot .key { display: none; }
 #invTip .use { margin-top: 4px; opacity: 0.85; }
 #invTip .level { display: flex; align-items: center; gap: 8px; }
 #invTip .level .charge { position: static; width: 90px; }
+/* Gear effects (shared/effects.ts): a chip each, coloured by tone. */
+#invTip .fx { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; }
+#invTip .chip { padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; border: 1px solid; }
+#invTip .chip i { font-style: normal; font-weight: 400; opacity: 0.75; }
+#invTip .chip.bad { color: #ffb08a; background: rgba(220, 80, 40, 0.22); border-color: rgba(255, 130, 80, 0.55); }
+#invTip .chip.neutral { color: #ddd6cc; background: rgba(180, 175, 165, 0.16); border-color: rgba(210, 205, 195, 0.4); }
+#invTip .chip.good { color: #a8d4ff; background: rgba(60, 140, 230, 0.22); border-color: rgba(110, 175, 255, 0.55); }
 /* A battery's charge (shared/items.ts chargeOf): a bar along the bottom of its icon, green full to red empty. */
 .charge { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 4px; border-radius: 2px; pointer-events: none;
   background: rgba(20, 10, 4, 0.7); box-shadow: 0 0 0 1px rgba(255, 244, 228, 0.25); }
@@ -233,15 +241,22 @@ const rarityColor = (kind: string) => {
 /** An item's rarity colour: a part's tier, or repaired gear's (shared/gear.ts tierOf: what it looks like, src/tierLook.ts). */
 const itemColor = (it: Item) => (isGear(it.kind) && repaired(it) ? hex(RARITY[TIERS[tierOf(it)]].color) : rarityColor(it.kind));
 
+/** An item's gear effects (shared/effects.ts) as chips coloured by tone, held-only ones marked "in hand"; '' if none. */
+function effectChips(kind: string): string {
+  const fx = effectsList(kind);
+  if (!fx.length) return '';
+  return `<div class="fx">${fx.map(({ def, held }) => `<span class="chip ${def.tone}">${def.label}${held ? ` <i>${TEXT.inventory.inHand}</i>` : ''}</span>`).join('')}</div>`;
+}
+
 /** Tooltip for an item: its name in its rarity colour; gear says how good it is, the part in each slot (or what's
- *  missing) and how to use it. */
+ *  missing) and how to use it; and its gear effects as chips. */
 function tipHtml(it: Item): string {
   const c = itemColor(it);
   let html = `<div class="name"${c ? ` style="color:${c}"` : ''}>${itemLabel(it.kind)}${it.n > 1 ? ` ×${it.n}` : ''}</div>`;
   const q = chargeOf(it);
   const cell = cells([it.kind])[0];
   if (q !== null && cell) html += `<div class="sub level">${chargeBar(it)}${kwh(q * cell.kwh)} / ${kwh(cell.kwh)} kWh</div>`;
-  if (!isGear(it.kind)) return html;
+  if (!isGear(it.kind)) return html + effectChips(it.kind);
   const ok = repaired(it);
   const parts = partsOf(it);
   html += `<div class="sub">${ok ? qualityName(quality(it)) : `<span class="miss">${TEXT.inventory.broken}</span>`}</div><div class="parts">`;
@@ -252,6 +267,7 @@ function tipHtml(it: Item): string {
       + (p ? `<span${pc ? ` style="color:${pc}"` : ''}>${itemLabel(p)}</span>` : `<span class="miss">${TEXT.inventory.missing}</span>`);
   });
   html += '</div>';
+  html += effectChips(it.kind);
   if (ok) html += `<div class="use">${GEAR[it.kind].use(hintKeys())}</div>`;
   return html;
 }

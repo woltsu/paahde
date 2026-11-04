@@ -3,7 +3,7 @@
 //
 // Feel: the eye height is smoothed a little so slopes don't jitter, the head bobs with stride, hard
 // landings dip the view on a spring, strafing rolls it slightly, and sprinting kicks the FOV out. With a heavy gun in
-// hand (ViewPose.heavy: the piercer, shared/sim.ts PlayerState.heavy) the steps are slow and the bob deep, a plod
+// hand (ViewPose.slow: the piercer's bulky effect, shared/effects.ts) the steps are slow and the bob deep, a plod
 // rolling from foot to foot, and trying to jump only sags the knees (`heave`).
 // T toggles a third-person view over the right shoulder: the camera backs off behind the eye and to its right, turned
 // in so the screen centre (crosshair) crosses the dig/pickup ray at about arm's reach, and the boom shortens so it
@@ -16,7 +16,7 @@ import { tools } from './input';
 import { comfort, COMFORT_RANGES } from './comfort';
 import { groundAt, onFlat, solidAt } from './ground.ts';
 import { canvasYAt, tarpRigs } from '../shared/tarp.ts';
-import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, HEAVY_SLOW, slopeAt } from '../shared/sim.ts';
+import { WALK_SPEED, SPRINT_SPEED, CROUCH_SPEED, slopeAt } from '../shared/sim.ts';
 import { CROUCH_CYCLE } from './models/crouchGait';
 import { EYE_HEIGHT } from '../shared/dig.ts'; // the dig and pickup rays start here too
 import { sandHidden, shelterSolid } from '../shared/shelters.ts';
@@ -66,8 +66,9 @@ export type ViewPose = { x: number; y: number; z: number; vx: number; vy: number
   /** Crouched or sliding where that makes you short (Level.crouchUnder, shared/sim.ts CROUCH_HEIGHT): the eye goes lower
    *  with the body, under the tray and the blast door's edge. */
   short?: boolean;
-  /** A heavy gun in hand (shared/sim.ts PlayerState.heavy): a slow, deep plod. */
-  heavy?: boolean };
+  /** The speed factor on foot from gear effects (shared/effects.ts moveOf: the piercer in hand, 0.5). Under 1: a slow,
+   *  deep plod. Absent: 1. */
+  slow?: number };
 
 export class FirstPersonCamera {
   readonly camera: THREE.PerspectiveCamera;
@@ -82,7 +83,8 @@ export class FirstPersonCamera {
   private bobPhase = 0;
   private bobAmount = 0; // about 0..1 (more when trudging uphill), fades in with walking, out when airborne/stopped
   private climb = 0; // 0..1, eased: how much of a trudge uphill the step is
-  private heft = 0; // 0..1, eased: a heavy gun in hand (the plod)
+  private heft = 0; // 0..1, eased: slowed by gear effects (the plod)
+  private slowBy = 1; // the last speed factor that slowed us (ViewPose.slow), for the plod's pace
   private crouch = 0; // 0..1, eased in while sliding (crouching: 0.7): the eye drops and the view rolls a touch
   private dip = 0; // landing dip offset (m), spring back to 0
   private dipVel = 0;
@@ -191,7 +193,7 @@ export class FirstPersonCamera {
     return this.boom;
   }
 
-  /** Trying to jump under a heavy gun (shared/sim.ts: you can't): the knees bend for it and nothing comes of it. */
+  /** Trying to jump when gear effects won't let you (shared/effects.ts noJump: the piercer in hand): the knees bend for it and nothing comes of it. */
   heave() {
     this.dipVel -= 0.32;
   }
@@ -239,8 +241,10 @@ export class FirstPersonCamera {
     // at footfall where |sin| had a hard cusp.
     // A heavy gun in hand: the pace is reckoned from the slowed walk (a full stride's bob at half the speed, so half
     // the steps a second), and the bob goes deeper, rolling from foot to foot.
-    this.heft += ((p.heavy && !p.riding ? 1 : 0) - this.heft) * (1 - Math.exp(-dt * 4));
-    const pace = speed / (WALK_SPEED * (1 - (1 - HEAVY_SLOW) * this.heft));
+    const slow = p.riding ? 1 : (p.slow ?? 1);
+    if (slow < 1) this.slowBy = slow; // kept while the plod eases out
+    this.heft += ((slow < 1 ? 1 : 0) - this.heft) * (1 - Math.exp(-dt * 4));
+    const pace = speed / (WALK_SPEED * (1 - (1 - this.slowBy) * this.heft));
     // Crouched: short quick steps (the body's, src/models/crouchGait.ts), the bob gentle.
     const crouched = !!p.crouching && !p.sliding;
     const walking = moving && !p.sliding && !p.riding;

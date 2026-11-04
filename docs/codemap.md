@@ -362,6 +362,13 @@ Everything built is shared, and anyone can take a building down.
   `shared/storage.ts`), Tab overlay in `src/inventory.ts`. Box ids and each kind's traits (own or shared, grows,
   fitted, take-only) are in `shared/boxes.ts` (`BOX_KINDS`); what depends on the world (size, label, shape) is a
   `Record<BoxKind, ...>` in `shared/storage.ts` and `shared/gear.ts`, so a new kind of box is added in those places
+- `shared/effects.ts` — gear effects: modifiers an item puts on whoever has it, in hand (`held`) or anywhere in the bag
+  (`carried`). `EFFECTS` (each one's tone bad/neutral/good, its `TEXT.effects` label, and its movement modifiers:
+  `speed`, `noJump`, `noSlide`), `ITEM_EFFECTS` (kind → its effects: the piercer is `bulky` in hand). The server sets
+  shared/sim.ts `PlayerState.effects` (a bit per effect) each tick from bag and hand (server/world.ts simulate:
+  `effectsOf`); step() reads it on foot through `moveOf`; the snapshot carries it to prediction. Shown as chips in the
+  item tooltip (src/inventory.ts `effectChips`). A new effect: an entry in `EFFECTS` (and in `moveOf` if it changes
+  something new), named on items in `ITEM_EFFECTS`.
 - `shared/gear.ts` — gear found broken and repaired with parts at the workbench (part slots, quality, what each does);
   `shared/moves.ts` the move and repair rules for client and server (tryMove, fitPart, unfitPart, boxShape);
   `shared/gearBits.ts` what others see worn and carried (wornGear, carriedGear, gearTiers); `shared/loot.ts` + `server/loot.ts` — finds and caches in the world, drawn
@@ -437,8 +444,7 @@ Everything built is shared, and anyone can take a building down.
   graviton pistol; gear found broken and repaired, shared/gear.ts; model `tools/models/pistol.py`), armour (`bites`:
   a hull's plate, shared/enemies.ts `armor`, turns every gun but the piercer (the walkers' plate, wearing their hull:
   `HULL_HP`) and the graviton pistol, which kills anything it touches; weak points and thin-skinned things are always
-  hurt), the heavy guns (`HEAVY`: in hand, shared/sim.ts `PlayerState.heavy` halves your speed and takes away jumping
-  and sliding; set by the server each tick, server/world.ts `heavyInHand`), the walkers'
+  hurt), the piercer's bulk in hand (a gear effect, shared/effects.ts), the walkers'
   red weak points (a guardian's take `GUARDIAN_POINT_HP` hits, cracked and blinking after the first; all broken: it
   dies), drone hits and the burst's `blastDamage`; aim, sway, recoil, scope and the hitscan in `src/rifle.ts`,
   beam/sparks/smoke `src/world/zaps.ts`, sounds `src/rifleSound.ts`, targets, cracks and the collapse in
@@ -460,8 +466,8 @@ Everything built is shared, and anyone can take a building down.
 - The piercer as fired and carried: `FEEL.piercer` (`wander`/`settle`: steady braced, wandering on the move), its
   lingering ionised trail (`BEAMS.piercer` `trail`), the muzzle blast and the punch-through with molten metal
   (`blasts.piercerMuzzle`, `blasts.piercer`), crack/roll, plate clang and capacitor whine (`gunSound.piercer*`); the
-  weight in hand is presentation only: a slow deep camera plod (`ViewPose.heavy`, `heave` on a jump that can't happen,
-  src/camera.ts) and heavy footsteps (`footsteps.step` `heavy`, from src/players.ts's held item)
+  weight in hand is presentation only: a slow deep camera plod (`ViewPose.slow`, `heave` on a jump that can't happen,
+  src/camera.ts) and heavy footsteps (`footsteps.step` `heavy`, from src/players.ts's held item: `weighsDown`)
 - Explosions: `blasts.explode` / `explodeOnSand` (`src/world/blasts.ts`), each tuned by a `BlastSpec` made by
   `blastSpec(strength)` (the fireball's radius in m; burn time, rise, ring, sparks, debris, smoke, sand, scorch, light
   and shake follow it, any field can be set over it); `BLASTS` has the game's: blaster, guardian bolt (sand / air),

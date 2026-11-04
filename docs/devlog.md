@@ -3147,3 +3147,21 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   above, an open chevron with a lit blue-white tip. The rifle keeps the duplex.
 - On iron sights only first person hides the crosshair now; aiming a pistol in third person had shown nothing.
 - Looked at in a headless preview (bright and dark, settled/hip/moving, recharging, hit); not yet in a running game.
+
+## Gear effects
+
+- **What:** items can put modifiers on whoever has them (shared/effects.ts): `held` effects while the item is in hand,
+  `carried` ones while it's anywhere in the bag. Each effect has a tone (bad, neutral, good), a label in
+  `TEXT.effects`, and movement modifiers (`speed` factor, `noJump`, `noSlide`). The piercer's weight is the first:
+  `bulky` in hand (half speed on foot, no jump, air jump or slide), as before.
+- **Why:** the piercer's one-off `heavy` flag (the `HEAVY` set, `PlayerState.heavy`, `HEAVY_SLOW`, `heavyInHand`) is
+  now a general registry, so more items can carry more modifiers without touching the sim, server or netcode.
+- **How:** the server works out `PlayerState.effects` (a bit per effect, in `EFFECT_IDS` order) each tick from the bag
+  and the slot in hand (server/world.ts simulate, `effectsOf`; none while down). step() reads it on foot only through
+  `moveOf` (speeds multiply, any no-jump/no-slide wins); the snapshot carries it to the client's prediction
+  (src/net.ts). The plod (src/camera.ts `ViewPose.slow`, the knee `heave`) and heavy footsteps (`weighsDown`) follow
+  whatever slows you, not the piercer by name.
+- Item tooltips show an item's effects as chips coloured by tone (red-orange bad, grey neutral, blue good), a held-only
+  one marked "in hand" (src/inventory.ts `effectChips`).
+- Tests in tools/weapons.test.mjs: the registry (in hand only, the move it makes, the tooltip list), the sim with the
+  mask, and the server setting and clearing it with the hotbar slot.

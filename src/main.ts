@@ -3,6 +3,7 @@ import { buildingBox, cargoBox, towerBox, vehicleBox } from '../shared/boxes.ts'
 import * as THREE from 'three/webgpu';
 import { BACK, DT, FORWARD, GRAB, isSlipFace, JUMP, quantizeYaw } from '../shared/sim.ts';
 import { EYE_HEIGHT, quantizePitch } from '../shared/dig.ts';
+import { moveOf } from '../shared/effects.ts';
 import { scrapTarget } from '../shared/scrap.ts';
 import { allBeaten } from '../shared/bosses.ts';
 import { BENCH, CALM, LAB, TEST, WORLD_ID } from '../shared/world.ts';
@@ -693,9 +694,9 @@ renderer.setAnimationLoop((time) => {
   if (L.things) corpseView.update(frameDt, focus);
   orbit.rumble = Math.max(stage.level === net.me.level ? (stage.rumble ?? 0) : 0, blasts.shake); // and bursts nearby (src/world/blasts.ts)
   orbit.update({ x: focus.x, y: focus.y, z: focus.z, vx: s.vx, vy: s.vy, vz: s.vz, grounded: s.grounded, sliding: s.sliding, crouching: s.crouching, riding: s.riding || backSeat, heading: backSeat ? rideHeading : v.heading, lean: bikes.get(backSeat ? driver!.id : 0)?.leanAngle, short: L.crouchUnder,
-    ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined, heavy: s.heavy }, frameDt);
-  // Jump pressed under a heavy gun (the sim won't): the knees give a little, no more.
-  if (s.heavy && s.grounded && !s.riding && input & JUMP && !(lastInput & JUMP)) orbit.heave();
+    ladder: s.climb ? climbingOn(v.x, v.y, v.z)?.facing : undefined, slow: moveOf(s.effects).speed }, frameDt);
+  // Jump pressed when gear effects won't let you (shared/effects.ts: the piercer in hand): the knees give a little, no more.
+  if (!moveOf(s.effects).jump && s.grounded && !s.riding && input & JUMP && !(lastInput & JUMP)) orbit.heave();
   lastInput = input;
   bossFx.update(net, frameDt, orbit.camera);
   bossBar.update(frameDt, bossFx.bar);

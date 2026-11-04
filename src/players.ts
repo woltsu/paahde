@@ -9,7 +9,7 @@ import { isSlipFace, slopeAt } from '../shared/sim.ts';
 import { wornBit } from '../shared/gearBits.ts';
 import { bodyScale, unpackLook } from '../shared/look.ts';
 import { heightAt } from '../shared/terrain.ts';
-import { HEAVY } from '../shared/rifle.ts';
+import { weighsDown } from '../shared/effects.ts';
 import { groundAt, onFlat } from './ground.ts';
 import { END_FADE, footprints, streaks } from './footprints.ts';
 import { footsteps } from './footsteps.ts';
@@ -119,7 +119,7 @@ export class Avatar {
    *  Set by main.ts from the local player's level (remotes are only ever in the same one). */
   levelFloor = false;
   readonly root = new THREE.Group();
-  /** What's in hand (setOutfit): a heavy gun makes the steps heavy. */
+  /** What's in hand (setOutfit): one that weighs you down (shared/effects.ts weighsDown) makes the steps heavy. */
   private item: string | null = null;
   /** Remote actors retain movement/sound updates; only their pose work is reduced with distance. */
   remote = false;
@@ -403,7 +403,7 @@ export class Avatar {
     const fx = pose.x + Math.cos(this.facing) * side, fz = pose.z - Math.sin(this.facing) * side;
     // Toes turned out a little; the boot print mirrors per foot.
     if (prints) footprints.add(fx, heightAt(fx, fz), fz, this.facing - this.foot * 0.08, this.size.stride, this.size.stride, this.foot);
-    footsteps.step(fx, fz, pose.speed, this.levelFloor || indoors(fx, pose.y, fz) ? 'concrete' : 'sand', this.item !== null && HEAVY.has(this.item));
+    footsteps.step(fx, fz, pose.speed, this.levelFloor || indoors(fx, pose.y, fz) ? 'concrete' : 'sand', weighsDown(this.item));
   }
 
   private animate(pose: ModelPose, dt: number) {

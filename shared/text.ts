@@ -113,6 +113,10 @@ const en = {
     bag: 'Inventory', equip: 'Equipment', bench: 'Workbench', cargo: 'Cargo', corpse: 'Left behind', chest: 'Chest',
     storage: 'Storage', ground: 'On the ground',
   },
+  /** Gear effects (shared/effects.ts EFFECTS): a chip each in an item's tooltip. */
+  effects: {
+    bulky: 'Bulky',
+  },
   /** How each piece of gear is used, under its tooltip once it works (shared/gear.ts GEAR); `k` gives the current
    *  key or button names (src/bindings.ts hintKeys). */
   gearUse: {
@@ -279,6 +283,8 @@ const en = {
     drop: 'Drop',
     sort: 'Sort',
     sortTip: 'Packs everything tight, biggest first. The hotbar stays put.',
+    /** After a gear effect's chip that only works with the item in hand (shared/effects.ts held). */
+    inHand: 'in hand',
     storeAll: 'Store all',
     takeAll: 'Take all',
     noBackpack: 'No backpack',

@@ -17,6 +17,7 @@ import { CORE_HP, CORES, harvesterAt, harvesterPose, SPEED, toWorld } from '../s
 import { SP_DIE, SP_DROP } from '../shared/queen.ts';
 import { BLAST_R, BLASTER, blastDamage, DRONE_HP, GRAVITON, GUARDIAN_POINT_HP, GUNS, HULL_HP, PIERCER, PISTOL, PLASMA_SPEED, plasmaAt, RIFLE, shotPasses } from '../shared/rifle.ts';
 import { FORWARD, JUMP, SLIDE, spawnState, step, WALK_SPEED } from '../shared/sim.ts';
+import { effectsList, effectsOf, hasEffect, itemEffects, moveOf, weighsDown } from '../shared/effects.ts';
 import { ORIGIN } from '../shared/origin.ts';
 import { PROTOCOL_VERSION } from '../shared/protocol.ts';
 import { EYE_HEIGHT } from '../shared/dig.ts';
@@ -221,9 +222,24 @@ test("the blaster's plasma bolt flies at the speed of sound and drops a little: 
   assert.ok(o.y - out.y < drop / 2, 'a curve, falling faster as it goes');
 });
 
+test('gear effects: the piercer is bulky in hand only, and bulky is half speed, no jump, no slide', () => {
+  const piercer = { id: 1, kind: PIERCER, n: 1 }, blaster = { id: 2, kind: BLASTER, n: 1 };
+  assert.equal(effectsOf([blaster, piercer], 0), 0, 'in the bag, not in hand: nothing');
+  assert.equal(effectsOf([blaster, piercer], -1), 0, 'empty hands');
+  const m = effectsOf([blaster, piercer, null], 1);
+  assert.ok(hasEffect(m, 'bulky'), 'in hand: bulky');
+  assert.equal(m, itemEffects(PIERCER, true));
+  assert.deepEqual(moveOf(m), { speed: 0.5, jump: false, slide: false });
+  assert.deepEqual(moveOf(undefined), { speed: 1, jump: true, slide: true });
+  assert.ok(weighsDown(PIERCER) && !weighsDown(BLASTER) && !weighsDown(null));
+  assert.deepEqual(effectsList(PIERCER).map((e) => [e.id, e.def.tone, e.held]), [['bulky', 'bad', true]]);
+  assert.deepEqual(effectsList(BLASTER), []);
+});
+
 test('the piercer in hand: half speed on foot, no jump, no air jump, no slide', () => {
+  const BULKY = itemEffects(PIERCER, true);
   const run = (heavy, input, n) => {
-    let s = { ...spawnState(), ...(heavy ? { heavy: true } : {}) };
+    let s = { ...spawnState(), ...(heavy ? { effects: BULKY } : {}) };
     for (let i = 0; i < n; i++) s = step(s, input, 0);
     return s;
   };
@@ -231,7 +247,7 @@ test('the piercer in hand: half speed on foot, no jump, no air jump, no slide', 
   const speed = (s) => Math.hypot(s.vx, s.vz);
   assert.ok(Math.abs(speed(light) - WALK_SPEED) < 0.5, `walks at ${speed(light)}`);
   assert.ok(Math.abs(speed(heavy) - WALK_SPEED / 2) < 0.3, `half speed: ${speed(heavy)}`);
-  assert.ok(heavy.heavy, 'step() keeps the flag');
+  assert.equal(heavy.effects, BULKY, 'step() keeps the effects');
   let s = { ...run(true, FORWARD, 30) };
   const y0 = s.y;
   for (let i = 0; i < 10; i++) s = step(s, FORWARD | JUMP, 0);
@@ -345,16 +361,16 @@ test("through the world server: a blaster shot bursting beside a summoned drone 
   assert.equal(other.messages.findLast((m) => m.t === 'zap').hit, true, 'the burst hurt something');
   await until(() => crawlers().some((o) => o.broken || o.dead), 6000, 'a crawler hurt by the burst');
 
-  // The piercer in hand weighs us down (the server's PlayerState.heavy, in the snapshot); another slot, and it's off.
+  // The piercer in hand is bulky (the server's PlayerState.effects, in the snapshot); another slot, and it's off.
   send({ t: 'debugGive', kind: PIERCER, tier: 1 });
   await until(() => bag().some((s) => s?.kind === PIERCER), 6000, 'the piercer');
   const before = me.messages.length;
   send({ t: 'move', from: 'bag', fi: bag().findIndex((s) => s?.kind === PIERCER), to: 'bag', ti: 1 });
   await until(() => me.messages.slice(before).some((m) => m.t === 'items' && m.box === 'bag' && m.slots[1]?.kind === PIERCER), 6000, 'the piercer on the hotbar');
   const snapState = () => me.messages.findLast((m) => m.t === 'snap').state;
-  assert.ok(!snapState().heavy, 'the blaster weighs nothing');
+  assert.ok(!hasEffect(snapState().effects, 'bulky'), 'the blaster weighs nothing');
   send({ t: 'hands', hands: 0, aim: false, slot: 1 });
-  await until(() => snapState().heavy === true, 6000, 'heavy with the piercer in hand');
+  await until(() => hasEffect(snapState().effects, 'bulky'), 6000, 'bulky with the piercer in hand');
   send({ t: 'hands', hands: 0, aim: false, slot: 0 });
-  await until(() => !snapState().heavy, 6000, 'light again');
+  await until(() => !hasEffect(snapState().effects, 'bulky'), 6000, 'light again');
 });
