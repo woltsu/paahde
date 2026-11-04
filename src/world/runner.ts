@@ -67,9 +67,10 @@ const DUTY_WALK = 0.62, DUTY_TROT = 0.5, DUTY_GALLOP = 0.32;
 const REST_FWD = [0.06, 0.06, -0.04, -0.04];
 /** World size over model size (shared/runner.ts): the IK works in the body's (model) frame, lengths in the world × S. */
 const S = RUNNER.scale;
-/** The gun arm's wrist (y, z from the shoulder, model units): carried, folded over the back; raised, high to aim.
- *  A shot every FIRE_S while on target. */
-const CARRY = [0.12, 0.35] as const, AIM = [0.55, 0.45] as const;
+/** The gun arm's wrist (y, z from the shoulder, model units): carried, the gun borne low over the back; raised, high
+ *  to aim. Both keep the elbow below the wrist, so the forearm comes up to the gun's pylon from below. A shot every
+ *  FIRE_S while on target. */
+const CARRY = [0.4, 0.0] as const, AIM = [0.75, 0.2] as const;
 const FIRE_S = 2.4;
 /** Stopped, a foot further than this (m) from its rest spot steps to it. */
 const SETTLE = 0.1 * S;
@@ -342,10 +343,11 @@ export class Runner {
   }
 
   /**
-   * The gun arm. Going about, it carries the rifle folded over its back, level and forward. Staring at something
-   * (`look`), it raises the rifle high, the base turning to it and the rifle pitched onto it, and once on target fires
-   * every FIRE_S: the coils brighten as it charges, the rifle kicks back on its slide and up, the muzzle flares.
-   * The arm's two links are two-bone IK from the shoulder to the wrist, elbow up; the wrist holds the rifle's pitch.
+   * The gun arm. Going about, it bears the gun low over its back, level and forward. Staring at something
+   * (`look`), it raises the gun high, the base turning to it and the gun pitched onto it, and once on target fires
+   * every FIRE_S: the coils brighten as it charges, the gun kicks back on its slide and up, the muzzle flares.
+   * The arm's two links are two-bone IK from the shoulder to the wrist, elbow up and behind; the wrist, under the gun's
+   * balance point, holds its pitch.
    */
   private gun(dt: number, look: THREE.Vector3 | null, now: number) {
     const A = RUNNER.arm, arm = this.arm!;
@@ -356,7 +358,7 @@ export class Runner {
       this.body.worldToLocal(_v).sub(_q.set(...A.mount));
       yaw = Math.atan2(_v.x, _v.z);
       const wy = A.shoulder[1] + lerp(CARRY[0], AIM[0], this.raise), wz = lerp(CARRY[1], AIM[1], this.raise);
-      pitch = Math.max(-0.6, Math.min(0.9, Math.atan2(_v.y - wy, Math.hypot(_v.x, _v.z) - wz)));
+      pitch = Math.max(-0.6, Math.min(0.4, Math.atan2(_v.y - wy, Math.hypot(_v.x, _v.z) - wz)));
     }
     this.raise = ease(this.raise, look ? 1 : 0, look ? 2.2 : 3, dt);
     const turn = 2.5 * dt;
@@ -376,7 +378,8 @@ export class Runner {
     const d = Math.max(Math.abs(L1 - L2) + 0.02, Math.min(L1 + L2 - 1e-3, Math.hypot(wy, wz)));
     const up = Math.atan2(wy, wz) + Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))));
     const fore = Math.atan2(wy - L1 * Math.sin(up), wz - L1 * Math.cos(up));
-    const aim = (look ? this.aimPitch : 0) * this.raise + kick * 0.18;
+    // Never pitched up past the forearm (it would swing down into the gun's belly).
+    const aim = Math.min(fore - 0.2, (look ? this.aimPitch : 0) * this.raise + kick * 0.18);
     // three.js Rx: + turns +Z down, so an elevation is a negative angle.
     arm.base.rotation.set(0, this.armYaw, 0);
     arm.upper.rotation.set(-up, 0, 0);
@@ -392,7 +395,7 @@ export class Runner {
   muzzle(out: THREE.Vector3): THREE.Vector3 | null {
     if (!this.arm) return null;
     this.arm.slide.updateWorldMatrix(true, false);
-    return out.set(0, 0, RUNNER.arm.muzzle).applyMatrix4(this.arm.slide.matrixWorld);
+    return out.set(...RUNNER.arm.muzzle).applyMatrix4(this.arm.slide.matrixWorld);
   }
 
   /** Hip roll, thigh and knee for leg `leg` to put its claw on its foot: the hip rolls the leg's plane through the

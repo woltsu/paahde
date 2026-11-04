@@ -3313,3 +3313,8 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   (`Runner_ArmBase` yaw, `Runner_ArmUpper` / `Runner_ArmFore` pitch, `Runner_Rifle` on the wrist; numbers in
   `RUNNER.arm`). `Runner.gun` (src/world/runner.ts): two-bone IK from shoulder to wrist (elbow up) between a carry and
   an aim wrist spot, the rifle's pitch held by the wrist, recoil on a slide; `Runner.muzzle` gives the muzzle for later.
+- **Then:** the long rifle became a heavy rail gun (no scope, stock or magazine): a broad flat armoured housing with
+  heat-sink fins and a glowing core at the back, capacitor pods ringed with coils down its flanks, twin rails ahead
+  with a glowing channel between them. It is held at its balance point, the wrist under its belly on a pylon (the
+  housing behind, the rails ahead); the arm's poses keep the elbow below the wrist so the forearm comes up to it from
+  beneath, and the gun is never pitched up past the forearm. `RUNNER.arm.muzzle` is now a point (it sits up on the rails).

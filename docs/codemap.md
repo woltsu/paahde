@@ -402,7 +402,7 @@ Everything built is shared, and anyone can take a building down.
   the drones (`server/drones.ts`; their beams call the guardians, `alert`), what both share in `server/bots.ts`; legs
   are client IK in `src/world/guardians.ts`, bolts `src/world/bolts.ts`, drones `src/world/drones.ts`, glue/sound/shake
   in `src/guardians.ts`, `src/guardianSound.ts`
-- `shared/runner.ts` — the runner (work in progress, drawn only): a four-legged robot after Spot, far bigger than a horse, with great hinged insect jaws, and an armed variant (a long rifle on a robotic arm on its back, `RunnerKind`); rig numbers
+- `shared/runner.ts` — the runner (work in progress, drawn only): a four-legged robot after Spot, far bigger than a horse, with great hinged insect jaws, and an armed variant (a heavy rail gun on a robotic arm on its back, `RunnerKind`); rig numbers
   shared with its model `tools/blender/runner.py` (-> `runner.glb`); rig, IK and trot/gallop gait in
   `src/world/runner.ts` (`Runner`; `Prowl` moves one about for show; `Runners`, in `GuardianFx`, keeps the debug menu's,
   `summonRunner`); seen in the models lab (`models-lab.html?runner`, `src/models/runnerLab.ts`)
