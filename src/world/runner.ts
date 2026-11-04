@@ -19,9 +19,9 @@
 // menu's in the desert (summonRunner).
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK } from '../../shared/runner.ts';
+import { RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK, type RunnerKind } from '../../shared/runner.ts';
 
-const PARTS = ['Runner_Body', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
+const PARTS = ['Runner_Body', 'Runner_BodyArmed', 'Runner_ArmBase', 'Runner_ArmUpper', 'Runner_ArmFore', 'Runner_Rifle', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
 type PartName = (typeof PARTS)[number];
 
 let parts: Record<PartName, THREE.Object3D> | null = null;
@@ -67,6 +67,10 @@ const DUTY_WALK = 0.62, DUTY_TROT = 0.5, DUTY_GALLOP = 0.32;
 const REST_FWD = [0.06, 0.06, -0.04, -0.04];
 /** World size over model size (shared/runner.ts): the IK works in the body's (model) frame, lengths in the world × S. */
 const S = RUNNER.scale;
+/** The gun arm's wrist (y, z from the shoulder, model units): carried, folded over the back; raised, high to aim.
+ *  A shot every FIRE_S while on target. */
+const CARRY = [0.12, 0.35] as const, AIM = [0.55, 0.45] as const;
+const FIRE_S = 2.4;
 /** Stopped, a foot further than this (m) from its rest spot steps to it. */
 const SETTLE = 0.1 * S;
 
@@ -95,6 +99,12 @@ export class Runner {
   private gape = 0;
   private legs: Leg[] = [];
   private eyes: THREE.MeshStandardMaterial[] = [];
+  /** The armed one's gun arm (null on a plain one): joints, the rifle on a slide (its recoil), the glowing coils. */
+  private arm: { base: THREE.Group; upper: THREE.Group; fore: THREE.Group; rifle: THREE.Group; slide: THREE.Group } | null = null;
+  private coils: THREE.MeshStandardMaterial[] = [];
+  /** Arm: how far raised to aim (0 carried .. 1), base yaw, rifle pitch (up from level, body frame), recoil 0..1, and
+   *  when it last fired (s). */
+  private raise = 0; private armYaw = 0; private aimPitch = 0; private recoil = 0; private firedAt = 0;
   private x = 0; private z = 0; private yaw = 0;
   private vx = 0; private vz = 0; private yawRate = 0; private accel = 0;
   private y = 0; private pitch = 0; private roll = 0;
@@ -108,8 +118,11 @@ export class Runner {
 
   private ground: Ground;
 
-  constructor(ground: Ground) {
+  readonly kind: RunnerKind;
+
+  constructor(ground: Ground, kind: RunnerKind = 'plain') {
     this.ground = ground;
+    this.kind = kind;
     if (!parts) throw new Error('runner: loadRunner() first');
     const p = parts;
     const mount = (o: THREE.Object3D) => {
@@ -125,12 +138,35 @@ export class Runner {
           e.userData.base = mat.emissiveIntensity;
           mesh.material = e;
           this.eyes.push(e);
+        } else if (mat.name === 'RunnerGunGlow') {
+          const e = mat.clone();
+          e.userData.base = mat.emissiveIntensity;
+          mesh.material = e;
+          this.coils.push(e);
         }
       });
       return c;
     };
     this.root.add(this.body);
-    this.body.add(mount(p.Runner_Body));
+    this.body.add(mount(kind === 'armed' ? p.Runner_BodyArmed : p.Runner_Body));
+    if (kind === 'armed') {
+      const A = RUNNER.arm;
+      const base = new THREE.Group(), upper = new THREE.Group(), fore = new THREE.Group(), rifle = new THREE.Group(), slide = new THREE.Group();
+      base.position.set(...A.mount);
+      base.add(mount(p.Runner_ArmBase));
+      upper.position.set(...A.shoulder);
+      upper.add(mount(p.Runner_ArmUpper));
+      fore.position.set(0, 0, A.upper);
+      fore.add(mount(p.Runner_ArmFore));
+      rifle.position.set(0, 0, A.fore);
+      slide.add(mount(p.Runner_Rifle));
+      rifle.add(slide);
+      fore.add(rifle);
+      upper.add(fore);
+      base.add(upper);
+      this.body.add(base);
+      this.arm = { base, upper, fore, rifle, slide };
+    }
     this.neck.position.set(...RUNNER.neck);
     this.neck.rotation.order = 'YXZ';
     this.neck.add(mount(p.Runner_Head));
@@ -299,8 +335,64 @@ export class Runner {
     this.jaws[0].rotation.y = this.gape;
     this.jaws[1].rotation.y = -this.gape;
 
+    if (this.arm) this.gun(dt, look, now);
+
     const pulse = 0.75 + 0.25 * Math.sin(now / 170 + this.seed);
     for (const e of this.eyes) e.emissiveIntensity = (e.userData.base as number) * pulse * (1 + 1.5 * this.alert);
+  }
+
+  /**
+   * The gun arm. Going about, it carries the rifle folded over its back, level and forward. Staring at something
+   * (`look`), it raises the rifle high, the base turning to it and the rifle pitched onto it, and once on target fires
+   * every FIRE_S: the coils brighten as it charges, the rifle kicks back on its slide and up, the muzzle flares.
+   * The arm's two links are two-bone IK from the shoulder to the wrist, elbow up; the wrist holds the rifle's pitch.
+   */
+  private gun(dt: number, look: THREE.Vector3 | null, now: number) {
+    const A = RUNNER.arm, arm = this.arm!;
+    let yaw = 0, pitch = 0;
+    if (look) {
+      // The target from the turret ring, in the body's frame.
+      _v.copy(look);
+      this.body.worldToLocal(_v).sub(_q.set(...A.mount));
+      yaw = Math.atan2(_v.x, _v.z);
+      const wy = A.shoulder[1] + lerp(CARRY[0], AIM[0], this.raise), wz = lerp(CARRY[1], AIM[1], this.raise);
+      pitch = Math.max(-0.6, Math.min(0.9, Math.atan2(_v.y - wy, Math.hypot(_v.x, _v.z) - wz)));
+    }
+    this.raise = ease(this.raise, look ? 1 : 0, look ? 2.2 : 3, dt);
+    const turn = 2.5 * dt;
+    this.armYaw += Math.max(-turn, Math.min(turn, wrap(yaw - this.armYaw)));
+    this.aimPitch += Math.max(-3 * dt, Math.min(3 * dt, pitch - this.aimPitch));
+    // Firing: on target and raised, every FIRE_S.
+    const t = now / 1000, on = look && this.raise > 0.9 && Math.abs(wrap(yaw - this.armYaw)) < 0.06 && Math.abs(pitch - this.aimPitch) < 0.06;
+    if (on && t - this.firedAt > FIRE_S) {
+      this.firedAt = t;
+      this.recoil = 1;
+    }
+    this.recoil = Math.max(0, this.recoil - dt * 4);
+    const kick = this.recoil * this.recoil;
+    // IK, in the base's (yawed) frame: shoulder and elbow elevations for the wrist.
+    const wy = lerp(CARRY[0], AIM[0], this.raise), wz = lerp(CARRY[1], AIM[1], this.raise);
+    const L1 = A.upper, L2 = A.fore;
+    const d = Math.max(Math.abs(L1 - L2) + 0.02, Math.min(L1 + L2 - 1e-3, Math.hypot(wy, wz)));
+    const up = Math.atan2(wy, wz) + Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))));
+    const fore = Math.atan2(wy - L1 * Math.sin(up), wz - L1 * Math.cos(up));
+    const aim = (look ? this.aimPitch : 0) * this.raise + kick * 0.18;
+    // three.js Rx: + turns +Z down, so an elevation is a negative angle.
+    arm.base.rotation.set(0, this.armYaw, 0);
+    arm.upper.rotation.set(-up, 0, 0);
+    arm.fore.rotation.set(-(fore - up), 0, 0);
+    arm.rifle.rotation.set(-(aim - fore), 0, 0);
+    arm.slide.position.z = -0.14 * kick;
+    // The coils: a low glow, building through the last second before a shot, a flare as it fires.
+    const charge = on ? smooth(FIRE_S - 1, FIRE_S, t - this.firedAt) : 0;
+    for (const c of this.coils) c.emissiveIntensity = (c.userData.base as number) * (0.5 + 2.5 * charge + 10 * kick);
+  }
+
+  /** The muzzle (world), into `out`. */
+  muzzle(out: THREE.Vector3): THREE.Vector3 | null {
+    if (!this.arm) return null;
+    this.arm.slide.updateWorldMatrix(true, false);
+    return out.set(0, 0, RUNNER.arm.muzzle).applyMatrix4(this.arm.slide.matrixWorld);
   }
 
   /** Hip roll, thigh and knee for leg `leg` to put its claw on its foot: the hip rolls the leg's plane through the
@@ -400,10 +492,10 @@ export class Prowl {
   }
 }
 
-let pending = 0;
+const pending: RunnerKind[] = [];
 /** The debug menu's Runner: one more prowling round you, seen by you alone (src/debugMenu.ts). */
-export function summonRunner() {
-  pending++;
+export function summonRunner(kind: RunnerKind = 'plain') {
+  pending.push(kind);
 }
 
 /** At most this many summoned at once; the oldest goes. */
@@ -423,13 +515,13 @@ export class Runners {
   }
 
   update(dt: number, focus: { x: number; y: number; z: number }, camera: THREE.Camera) {
-    if (pending && !parts) void loadRunner();
-    while (pending && parts) {
-      pending--;
+    if (pending.length && !parts) void loadRunner();
+    while (pending.length && parts) {
+      const kind = pending.shift()!;
       // In view, 22 m ahead, side on.
       camera.getWorldDirection(_v).setY(0).normalize();
       const x = focus.x + _v.x * 22, z = focus.z + _v.z * 22, yaw = Math.atan2(_v.x, _v.z) + Math.PI / 2;
-      const view = new Runner(this.ground);
+      const view = new Runner(this.ground, kind);
       view.place(x, z, yaw);
       this.scene.add(view.root);
       this.list.push({ view, prowl: new Prowl(x, z, yaw) });

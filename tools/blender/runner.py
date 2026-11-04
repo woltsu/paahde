@@ -15,6 +15,14 @@ in shared/runner.ts and must match the constants below.
   Runner_Head     origin = neck pivot; yaws about Y, then pitches about X (+ = nose down). Eyes: RunnerEye.
   Runner_JawL/R   origin = hinge at (+-JAW) in the head, turning about Y (+ opens the left jaw, - the right): a great
                   curved pincer, serrated inside, the tips crossing in front of the snout when shut.
+  Runner_BodyArmed  the armed variant's body: the same, but a turret ring on the saddle (at MOUNT) where the middle
+                  spine blades were.
+  Runner_ArmBase  origin = MOUNT; yaws about Y. The shoulder's pitch axis is X through SHOULDER.
+  Runner_ArmUpper origin = shoulder, runs along +Z to the elbow at (0, 0, UPPER); turns about X (+ = down, as
+                  three.js: Rx maps +Z to (0, -sin, cos)).
+  Runner_ArmFore  origin = elbow, along +Z to the wrist at (0, 0, FORE); turns about X.
+  Runner_Rifle    origin = wrist pivot, turns about X; barrel along +Z, muzzle at (0, 0, MUZZLE). Coil rings and the
+                  muzzle are RunnerGunGlow, the scope's lens RunnerEye.
   Runner_HipL/R   origin = socket, rolls about local Z (abduction). The thigh's pitch axis is local X through
                   (+-HIP_OUT, 0, 0); L is the +X (left) side, R its mirror image.
   Runner_ThighL/R origin = hip pitch joint, hangs down -Y to the knee at (0, -THIGH, 0); turns about X
@@ -43,7 +51,13 @@ HIP_OUT = 0.20
 THIGH = 0.72
 SHIN = 0.78
 NECK = (0.0, 0.07, 1.0)
-JAW = (0.13, -0.06, 0.34)  # the left jaw's hinge in the head (vertical axis); the right one mirrored
+JAW = (0.13, -0.06, 0.34)
+# --- the armed runner's gun arm (shared/runner.ts RUNNER.arm) ---
+MOUNT = (0.0, 0.21, -0.05)   # the turret ring on its back (body frame): the base yaws about Y here
+SHOULDER = (0.0, 0.17, 0.0)  # the shoulder's pitch axis (X) in the base
+UPPER = 0.6                  # shoulder to elbow, along the upper arm's +Z
+FORE = 0.55                  # elbow to wrist, along the forearm's +Z
+MUZZLE = 1.66                # the rifle's muzzle along its +Z from the wrist pivot  # the left jaw's hinge in the head (vertical axis); the right one mirrored
 STAND_Y = 1.15  # body centre over level ground, standing (previews)
 SCALE = 2.0  # drawn this many times the built size in the game (shared/runner.ts RUNNER.scale): the previews too
 
@@ -57,6 +71,7 @@ MATERIALS = {
     'RunnerDark': (0x110e0d, 0.2, 0.85, None),      # hoses, sockets, recesses
     'RunnerEye': (0xff2a0e, 0.0, 0.4, 10.0),        # the eyes (pulsed by the game)
     'RunnerGlow': (0xff3a12, 0.0, 0.5, 3.0),        # flank vents, the maw
+    'RunnerGunGlow': (0xff3a12, 0.0, 0.4, 4.0),     # the rifle's coil rings and muzzle (the game flares them as it fires)
 }
 
 # three.js (Y up) -> Blender (Z up): (x, y, z) -> (x, -z, y), a +90 degree turn about X.
@@ -121,6 +136,14 @@ def aim(p, d):
     y = d.cross(x)
     m = Matrix((x, y, d)).transposed().to_4x4()
     return T(p) @ m
+
+
+def oct_ring(z, w, h, ch=None):
+    """Chamfered rectangle across Z at z."""
+    ch = ch if ch is not None else min(w, h) * 0.25
+    hw, hh = w / 2, h / 2
+    return [(x, y, z) for x, y in ((hw, hh - ch), (hw, -hh + ch), (hw - ch, -hh), (-hw + ch, -hh), (-hw, -hh + ch),
+                                   (-hw, hh - ch), (-hw + ch, hh), (hw - ch, hh))]
 
 
 def sup(a, w, h, n=0.55):
@@ -236,6 +259,23 @@ class MB:
         mm = self.stack[-1] @ (M if M is not None else Matrix.Identity(4)) @ T(c) @ Euler(rot).to_matrix().to_4x4()
         bmesh.ops.transform(self.bm, matrix=mm, verts=verts)
         return self.tag(verts, mat)
+
+    def disc(self, c, n, r, segs, mat):
+        """Flat polygon at c facing n."""
+        self.push(aim(Vector(c), n))
+        f = [self.F([self.V((r * math.cos(2 * PI * k / segs), r * math.sin(2 * PI * k / segs), 0)) for k in range(segs)], mat)]
+        self.pop()
+        return f
+
+    def beam(self, a, b, w, h, mat, up=(0, 1, 0)):
+        """Box from a to b with cross-section w x h, h along `up`."""
+        a, b = Vector(a), Vector(b)
+        z = (b - a).normalized()
+        y = Vector(up)
+        y = (y - z * y.dot(z)).normalized()
+        x = y.cross(z)
+        m = Matrix((x, y, z)).transposed().to_4x4()
+        return self.box((0, 0, (b - a).length / 2), (w, h, (b - a).length), mat, M=T(a) @ m)
 
     def sphere(self, c, r, mat, u=8, v=5, scale=(1, 1, 1)):
         # built by hand: bmesh's create_uvsphere orders its faces differently from run to run
@@ -354,7 +394,7 @@ HULL = [(-1.02, 0.28, 0.20, 0.04), (-0.94, 0.50, 0.34, 0.03), (-0.72, 0.62, 0.42
         (1.02, 0.30, 0.26, 0.03)]
 
 
-def build_body():
+def build_body(armed=False):
     mb = MB()
     segs = 12
     # hull: a long rounded box, waisted between the shoulders and the haunches; dark belly
@@ -380,6 +420,8 @@ def build_body():
             mb.box((x, q.y + 0.03, z), (0.05, 0.012, 0.035), 'RunnerHazard', rot=(0, 0.6 if x > 0 else -0.6, 0))
     # the spine: a row of swept-back blades, tallest over the shoulders and haunches
     for i, z in enumerate((0.78, 0.56, 0.34, 0.12, -0.12, -0.36, -0.58, -0.8)):
+        if armed and abs(z - MOUNT[2]) < 0.3:
+            continue  # the turret ring's place
         q, _ = surf(0, z)
         h = 0.1 + 0.1 * abs(math.sin((i + 0.5) / 8 * 2 * PI))
         mb.fin((0, q.y + 0.03, z), 0.18, h, 0.85, 0.025, 'RunnerSteel' if i % 2 else 'RunnerIron')
@@ -407,7 +449,114 @@ def build_body():
         mb.sphere(tuple(b), 0.02, 'RunnerEye', 6, 4)
         mb.cyl(a - Vector((0, 0.03, 0)), a + Vector((0, 0.03, 0)), 0.035, None, 6, 'RunnerIron')
     mb.box((0, 0.04, -1.03), (0.18, 0.025, 0.02), 'RunnerGlow')
-    return finish(mb, 'Runner_Body')
+    if armed:
+        # the turret ring: a steel race on a raised iron collar, bolted through the saddle, hoses down into the hull
+        mx, my, mz = MOUNT
+        mb.cyl((mx, my - 0.06, mz), (mx, my - 0.01, mz), 0.21, 0.2, 12, 'RunnerIron')
+        mb.cyl((mx, my - 0.01, mz), (mx, my, mz), 0.2, 0.19, 12, 'RunnerSteel')
+        for k in range(8):
+            a = 2 * PI * (k + 0.5) / 8
+            mb.box((mx + math.cos(a) * 0.205, my - 0.035, mz + math.sin(a) * 0.205), (0.03, 0.04, 0.03), 'RunnerRust')
+        for s in (-1, 1):
+            mb.sweep([(s * 0.16, my - 0.04, mz - 0.12), (s * 0.24, my - 0.07, mz - 0.25), (s * 0.27, 0.05, -0.38)], 0.02,
+                     'RunnerDark', 5)
+    return finish(mb, 'Runner_BodyArmed' if armed else 'Runner_Body')
+
+
+# ================================================================================================= gun arm
+
+def build_arm_base():
+    mb = MB()
+    sx, sy, sz = SHOULDER
+    # the turntable drum, a rust band, and a yoke of two cheeks rising to the shoulder axle (round about it)
+    mb.cyl((0, 0, 0), (0, 0.07, 0), 0.18, 0.17, 12, 'RunnerIron')
+    mb.cyl((0, 0.02, 0), (0, 0.045, 0), 0.185, None, 12, 'RunnerRust')
+    poly = [(0.04, 0.12)] + [(sy + 0.085 * math.sin(a), 0.085 * math.cos(a))
+                             for a in (-PI / 2 + PI * i / 6 for i in range(7))] + [(0.04, -0.12)]
+    for s in (-1, 1):
+        mb.prism_x(poly, s * 0.085, s * 0.115, 'RunnerIron', side='RunnerDark')
+        mb.cyl((s * 0.115, sy, sz), (s * 0.14, sy, sz), 0.06, 0.05, 8, 'RunnerSteel')
+    # hazard marks round the drum and a sensor pod on its back
+    for k in range(6):
+        a = 2 * PI * k / 6
+        mb.box((math.sin(a) * 0.172, 0.055, math.cos(a) * 0.172), (0.05, 0.02, 0.012), 'RunnerHazard', rot=(0, a, 0))
+    mb.box((0, 0.1, -0.13), (0.1, 0.07, 0.07), 'RunnerIron')
+    mb.box((0, 0.1, -0.168), (0.05, 0.02, 0.005), 'RunnerEye')
+    return finish(mb, 'Runner_ArmBase')
+
+
+def build_arm_upper():
+    mb = MB()
+    L = UPPER
+    # shoulder knuckle between the yoke's cheeks, a girder, the elbow fork; a ram underneath, armour on top
+    mb.cyl((-0.08, 0, 0), (0.08, 0, 0), 0.075, None, 10, 'RunnerIron')
+    rings = [sup_ring(0.04, 0.12, 0.13, 0.0, 8), sup_ring(0.2, 0.13, 0.14, 0.0, 8), sup_ring(L - 0.12, 0.1, 0.1, 0.0, 8)]
+    mb.loft(rings, 'RunnerIron', cap1=True, matfn=lambda i, k: 'RunnerRust' if k in (3, 4, 5) else 'RunnerIron')
+    poly = [(0.05, L - 0.15)] + [(0.065 * math.cos(a), L + 0.065 * math.sin(a))
+                                 for a in (PI / 2 - PI * i / 6 for i in range(7))] + [(-0.05, L - 0.15)]
+    for s in (-1, 1):
+        mb.prism_x(poly, s * 0.055, s * 0.075, 'RunnerIron')
+
+    def plate(u, v):
+        a = lerp(-1.0, 1.0, u)
+        return Vector((math.sin(a) * 0.075, math.cos(a) * 0.075, v)), Vector((math.sin(a), math.cos(a), 0))
+    mb.shell(plate, 0, 1, 0.1, L - 0.16, 2, 2, 0.005, 0.02, 'RunnerCeramic', 'RunnerIron', inset=0.1)
+    mb.cyl((0, -0.08, 0.06), (0, -0.075, 0.36), 0.025, None, 6, 'RunnerIron')
+    mb.cyl((0, -0.075, 0.34), (0, -0.05, L - 0.06), 0.012, None, 5, 'RunnerSteel')
+    mb.box((0.078, 0.0, 0.3), (0.006, 0.025, 0.16), 'RunnerGlow')
+    return finish(mb, 'Runner_ArmUpper')
+
+
+def build_arm_fore():
+    mb = MB()
+    L = FORE
+    mb.cyl((-0.05, 0, 0), (0.05, 0, 0), 0.06, None, 10, 'RunnerIron')
+    rings = [sup_ring(0.03, 0.09, 0.1, 0.0, 8), sup_ring(L - 0.12, 0.07, 0.075, 0.0, 8)]
+    mb.loft(rings, 'RunnerIron', cap1=True, matfn=lambda i, k: 'RunnerSteel' if k in (0, 1, 7) else 'RunnerIron')
+    poly = [(0.04, L - 0.14)] + [(0.05 * math.cos(a), L + 0.05 * math.sin(a))
+                                 for a in (PI / 2 - PI * i / 6 for i in range(7))] + [(-0.04, L - 0.14)]
+    for s in (-1, 1):
+        mb.prism_x(poly, s * 0.045, s * 0.062, 'RunnerIron')
+        mb.cyl((s * 0.062, 0, L), (s * 0.072, 0, L), 0.035, 0.03, 8, 'RunnerSteel')
+    mb.sweep([(0.05, 0.03, 0.05), (0.06, 0.06, 0.25), (0.045, 0.04, L - 0.1)], 0.012, 'RunnerDark', 4)
+    mb.box((0, -0.06, 0.22), (0.05, 0.03, 0.18), 'RunnerHazard', taper=(0.8, 1))
+    return finish(mb, 'Runner_ArmFore')
+
+
+def build_rifle():
+    """A long rifle, the wrist pivot through its receiver: skeleton stock behind, scope on top, a magazine under, then
+    a shrouded barrel ringed with coils and a muzzle brake."""
+    mb = MB()
+    # receiver, the wrist's trunnion through it
+    mb.loft([oct_ring(-0.3, 0.075, 0.11), oct_ring(-0.05, 0.08, 0.12), oct_ring(0.28, 0.07, 0.1)], 'RunnerIron', True, True,
+            matfn=lambda i, k: 'RunnerDark' if k == 2 else 'RunnerIron')
+    mb.cyl((-0.042, 0, 0), (0.042, 0, 0), 0.03, None, 8, 'RunnerSteel')
+    # skeleton stock: two struts to a butt plate
+    for y in (0.035, -0.035):
+        mb.beam((0, y, -0.28), (0, y * 0.6 - 0.02, -0.62), 0.025, 0.022, 'RunnerIron')
+    mb.box((0, -0.025, -0.64), (0.05, 0.13, 0.04), 'RunnerRust')
+    # magazine, raked forward
+    mb.box((0, -0.11, 0.05), (0.05, 0.14, 0.09), 'RunnerDark', rot=(0.25, 0, 0))
+    # scope on a rail, a red lens at its front
+    mb.box((0, 0.07, 0.0), (0.03, 0.03, 0.3), 'RunnerSteel')
+    mb.cyl((0, 0.12, -0.17), (0, 0.12, 0.2), 0.03, None, 8, 'RunnerIron')
+    mb.cyl((0, 0.12, 0.2), (0, 0.12, 0.26), 0.03, 0.04, 8, 'RunnerIron', cap1=False)
+    mb.disc((0, 0.12, 0.255), (0, 0, 1), 0.034, 8, 'RunnerEye')
+    # barrel: a vented shroud ringed with glowing coils, then the bare barrel and a muzzle brake
+    mb.cyl((0, 0, 0.28), (0, 0, 0.95), 0.042, 0.038, 8, 'RunnerIron', phase=PI / 8)
+    for z in (0.38, 0.52, 0.66, 0.8):
+        mb.cyl((0, 0, z), (0, 0, z + 0.03), 0.048, None, 8, 'RunnerGunGlow', phase=PI / 8)
+    for s in (-1, 1):
+        mb.box((s * 0.039, 0.0, 0.62), (0.008, 0.02, 0.5), 'RunnerDark')
+    mb.cyl((0, 0, 0.95), (0, 0, MUZZLE - 0.12), 0.022, 0.02, 8, 'RunnerSteel')
+    mb.box((0, 0, MUZZLE - 0.06), (0.065, 0.045, 0.12), 'RunnerIron')
+    for z in (MUZZLE - 0.09, MUZZLE - 0.04):
+        mb.box((0, 0, z), (0.072, 0.012, 0.012), 'RunnerDark')
+    mb.cyl((0, 0, MUZZLE - 0.005), (0, 0, MUZZLE), 0.02, None, 8, 'RunnerGunGlow')
+    # a folded bipod under the shroud
+    for s in (-1, 1):
+        mb.beam((s * 0.02, -0.045, 0.9), (s * 0.03, -0.055, 0.5), 0.012, 0.012, 'RunnerSteel')
+    return finish(mb, 'Runner_Rifle')
 
 
 # ==================================================================================================== head
@@ -643,6 +792,26 @@ def pose(body_M, strides=(0.0, 0.0, 0.0, 0.0), head=(0.0, 0.15), jaws=0.3):
     return out
 
 
+def arm_ik(wrist_y, wrist_z):
+    """Shoulder and elbow elevations (radians, up from level) putting the wrist at (wrist_y, wrist_z) from the
+    shoulder, elbow up (as src/world/runner.ts)."""
+    d = max(abs(UPPER - FORE) + 0.02, min(UPPER + FORE - 1e-3, math.hypot(wrist_y, wrist_z)))
+    up = math.atan2(wrist_y, wrist_z) + math.acos(max(-1, min(1, (UPPER ** 2 + d ** 2 - FORE ** 2) / (2 * UPPER * d))))
+    ey, ez = UPPER * math.sin(up), UPPER * math.cos(up)
+    return up, math.atan2(wrist_y - ey, wrist_z - ez)
+
+
+def arm_pose(body_M, yaw, wrist, aim):
+    """three.js matrices of the gun arm on the armed body: base yawed `yaw`, the wrist at `wrist` (y, z) from the
+    shoulder, the rifle `aim` up from level."""
+    base = body_M @ T(MOUNT) @ Ry(yaw)
+    up, fore = arm_ik(*wrist)
+    upper = base @ T(SHOULDER) @ Rx(-up)
+    forearm = upper @ T(0, 0, UPPER) @ Rx(-(fore - up))
+    rifle = forearm @ T(0, 0, FORE) @ Rx(-(aim - fore))
+    return [('Runner_ArmBase', base), ('Runner_ArmUpper', upper), ('Runner_ArmFore', forearm), ('Runner_Rifle', rifle)]
+
+
 def place(src, M3, coll):
     o = src.copy()
     o.hide_render = False
@@ -721,6 +890,23 @@ def render_previews(parts, out_dir):
     look((-5.4, 4.4, -6.0), (0, 1.8, 0), 38)
     shoot('runner_rear.png')
 
+    # the armed one: carrying (the rifle folded over its back), then raised and aiming at the post ahead
+    coll.hide_render = True
+    body = T(0, STAND_Y * SCALE, 0) @ S(SCALE, SCALE, SCALE)
+    for name, (wrist, aim) in (('carry', ((0.12, 0.35), 0.0)), ('aim', ((0.55, 0.45), -0.12))):
+        c = bpy.data.collections.new('armed_' + name)
+        scene.collection.children.link(c)
+        for n, M in pose(body, strides=(0.12, 0.02, -0.04, 0.1), head=(0.0, 0.2), jaws=0.3):
+            place(parts['Runner_BodyArmed' if n == 'Runner_Body' else n], M, c)
+        for n, M in arm_pose(body, 0.0, wrist, aim):
+            place(parts[n], M, c)
+        look((8.5, 3.4, 4.0), (0, 2.6, 1.0), 34)
+        shoot(f'runner_armed_{name}.png')
+        if name == 'aim':
+            look((2.6, 5.4, 4.6), (0, 4.2, 1.2), 40)
+            shoot('runner_armed_gun.png')
+        c.hide_render = True
+
 
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
@@ -733,7 +919,9 @@ def main():
     for name, spec in MATERIALS.items():
         make_material(name, *spec)
 
-    parts = {'Runner_Body': build_body(), 'Runner_Head': build_head()}
+    parts = {'Runner_Body': build_body(), 'Runner_BodyArmed': build_body(armed=True), 'Runner_Head': build_head(),
+             'Runner_ArmBase': build_arm_base(), 'Runner_ArmUpper': build_arm_upper(), 'Runner_ArmFore': build_arm_fore(),
+             'Runner_Rifle': build_rifle()}
     for build in (build_jaw, build_hip, build_thigh, build_shin):
         left = build()
         base = left.name
@@ -743,15 +931,18 @@ def main():
 
     os.makedirs(args.out, exist_ok=True)
     export_glb(list(parts.values()), os.path.join(args.out, 'runner.glb'))
-    total = 0
+    total, arm = 0, 0
     for o in parts.values():
         bb = [C.inverted() @ Vector(c) for c in o.bound_box]
         lo = [min(v[i] for v in bb) for i in range(3)]
         hi = [max(v[i] for v in bb) for i in range(3)]
-        total += tri_count(o) * (1 if o.name in ('Runner_Body', 'Runner_Head') else 2)
+        if o.name.startswith(('Runner_Arm', 'Runner_Rifle')):
+            arm += tri_count(o)
+        elif o.name != 'Runner_BodyArmed':
+            total += tri_count(o) * (2 if o.name.startswith(('Runner_Hip', 'Runner_Thigh', 'Runner_Shin')) else 1)
         print(f'{o.name}: tris={tri_count(o)} bbox x {lo[0]:.2f}..{hi[0]:.2f} y {lo[1]:.2f}..{hi[1]:.2f} '
               f'z {lo[2]:.2f}..{hi[2]:.2f}')
-    print(f'assembled runner tris: {total}')
+    print(f'assembled runner tris: {total}; the gun arm adds {arm}')
 
     if args.preview:
         render_previews(parts, os.path.abspath(args.preview))

@@ -122,7 +122,8 @@ ${scenarios}<div id="dbgMain">
 <button id="dbgJet" title="A jet flying over you in about 15 s (for everyone; the drone and the flying wing take turns)">Jet</button>
 <button id="dbgHarvester" title="A harvester crawling past 50 m away in about a minute (for everyone)">Harvester</button>
 <button id="dbgCrawlers" title="A pack of six crawlers 30 m off, coming for you (for everyone)">Crawlers</button>
-<button id="dbgRunner" title="A runner prowling round you, 22 m ahead (only you see it; looks only: it doesn't hunt yet; at most four)">Runner</button></div>
+<button id="dbgRunner" title="A runner prowling round you, 22 m ahead (only you see it; looks only: it doesn't hunt yet; at most four)">Runner</button>
+<button id="dbgRunnerArmed" title="A runner with a long rifle on an arm on its back, prowling round you; it aims at you when it stops (only you see it; looks only: no shots yet)">Runner (rifle)</button></div>
 <div class="sub">Bosses</div>
 <div class="grid">${BOSS_KINDS.map((k) => `<button data-boss="${k}" title="The ${k} boss near you for ten minutes (for everyone)">${BOSSES[k].label}</button>`).join('')}</div></details>
 <details data-sec="weather"><summary>Weather</summary>
@@ -225,7 +226,8 @@ ${scenarios}<div id="dbgMain">
     p.querySelector('#dbgTowerVisit')!.addEventListener('click', () => summonStorm('towerVisit'));
     p.querySelector('#dbgTowerFix')!.addEventListener('click', () => summonStorm('towerFix'));
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
-    p.querySelector('#dbgRunner')!.addEventListener('click', summonRunner);
+    p.querySelector('#dbgRunner')!.addEventListener('click', () => summonRunner('plain'));
+    p.querySelector('#dbgRunnerArmed')!.addEventListener('click', () => summonRunner('armed'));
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);
     p.querySelector('#dbgBikeBroken')!.addEventListener('click', () => spawnBike(false, false));

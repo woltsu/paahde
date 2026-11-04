@@ -4,6 +4,9 @@
 //                      in the middle watching the camera
 //   ?runner=7.5        one circling at that speed (m/s), the camera following it
 //   ?runner=prowl      one prowling round the middle as summoned ones do in the game (debug menu), the camera following
+//   ?runner=armed      the armed one (a rifle on an arm on its back) prowling so, aiming at the camera when it stops
+//   &armed             with a speed: the armed one circling
+// The four: the trotting one and the standing one are armed (the standing one aims at the camera and fires).
 import * as THREE from 'three/webgpu';
 import { loadRunner, Prowl, Runner, type Ground } from '../world/runner';
 import { RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK } from '../../shared/runner.ts';
@@ -23,7 +26,8 @@ export async function runnerLab(scene: THREE.Scene, ground: Ground, mode: string
   await loadRunner();
   const drivers: Driver[] = [];
   const single = mode !== '';
-  if (mode === 'prowl') {
+  const armedOnly = mode === 'armed' || new URLSearchParams(location.search).has('armed');
+  if (mode === 'prowl' || mode === 'armed') {
     const p = new Prowl(0, -6, 0);
     drivers.push((dt, now) => {
       p.update(dt, 0, 0, now);
@@ -37,8 +41,8 @@ export async function runnerLab(scene: THREE.Scene, ground: Ground, mode: string
     drivers.push(circle(0, 0, 20, RUNNER_SPRINT, 4));
     drivers.push(() => ({ x: 0, z: 0, yaw: 0.6, look: true }));
   }
-  const runners = drivers.map(() => {
-    const r = new Runner(ground);
+  const runners = drivers.map((_, i) => {
+    const r = new Runner(ground, armedOnly || (!single && (i === 1 || i === 3)) ? 'armed' : 'plain');
     scene.add(r.root);
     return r;
   });
@@ -49,7 +53,7 @@ export async function runnerLab(scene: THREE.Scene, ground: Ground, mode: string
     update(dt: number, now: number, eye: THREE.Vector3): THREE.Vector3 | null {
       drivers.forEach((d, i) => {
         const at = d(dt, now);
-        runners[i].alert = mode === 'prowl' ? 0 : i === 2 ? 1 : 0;
+        runners[i].alert = single ? 0 : i === 2 ? 1 : 0;
         runners[i].update(dt, at.x, at.z, at.yaw, at.look ? eye : null, now);
       });
       if (!single) return null;

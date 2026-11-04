@@ -2,6 +2,9 @@
 // laid out like Boston Dynamics' Spot (a long body, a hip at each corner, every knee bending backwards) but built to
 // frighten. Model: tools/blender/runner.py -> public/models/runner.glb; rig, gait and look: src/world/runner.ts.
 //
+// The armed variant carries a long rifle on a robotic arm on its back: folded over its back as it goes, raised high
+// to track you when it stops to stare, kicking back with a flash at the muzzle now and then (no shots yet).
+//
 // Work in progress: so far it is only drawn. It walks and runs about in the models lab (models-lab.html?runner) and,
 // summoned from the debug menu (Spawn -> Runner), prowls round you in the desert, seen by you alone. No server side,
 // hunting, damage or loot yet (and so no shared/enemies.ts entry).
@@ -23,7 +26,13 @@ export const RUNNER = {
   jaw: [0.13, -0.06, 0.34] as const,
   /** The body's centre over level ground, standing (model units). */
   standY: 1.15,
+  /** The armed runner's gun arm: a turret base yawing on its back at `mount`, the shoulder's pitch axis at `shoulder`
+   *  in the base, upper arm and forearm lengths, the rifle's muzzle along it from the wrist. */
+  arm: { mount: [0, 0.21, -0.05] as const, shoulder: [0, 0.17, 0] as const, upper: 0.6, fore: 0.55, muzzle: 1.66 },
 };
+
+/** Two kinds: the plain runner, and one carrying a long rifle on a robotic arm on its back. */
+export type RunnerKind = 'plain' | 'armed';
 
 /** Speeds (m/s): a prowling walk, a trot, a flat-out sprint (a player runs 7.5, slides 15: it outruns both). The gait
  *  (src/world/runner.ts) goes from trot to gallop between TROT and GALLOP. */

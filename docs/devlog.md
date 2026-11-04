@@ -3299,3 +3299,17 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   quickening with speed; the body bobs, rocks, crouches, banks into turns and pitches/rolls to the ground; the head
   watches you or looks about. `Prowl` moves one about for show (walks, sprints in arcs round you, stops to stare).
 - **Next:** server-side movement and hunting, its attack, weak points, drops (`shared/enemies.ts`), footfall sounds.
+
+## The armed runner: a long rifle on its back
+
+- **What:** a variant of the runner (`RunnerKind` 'armed', shared/runner.ts) carrying a long rifle (~3.8 m: skeleton
+  stock, scope with a red lens, magazine, a shrouded barrel ringed with glowing coils, muzzle brake) on a turreted
+  robotic arm on its back. Going about, the arm carries the rifle folded over its back like a scorpion's tail; when it
+  stops to stare it raises the rifle high (~4 m up), the turret turning and the wrist pitching onto you, and fires every
+  2.4 s once on target: the coils charge up, the rifle kicks back and up, the muzzle flares. Looks only: no shots,
+  sounds or damage yet. Debug menu: Spawn → Runner (rifle); models lab: `?runner=armed`, and in `?runner` the trotting
+  and the standing ones are armed.
+- **How:** runner.glb gains `Runner_BodyArmed` (a turret ring where the middle spine blades were) and the arm's parts
+  (`Runner_ArmBase` yaw, `Runner_ArmUpper` / `Runner_ArmFore` pitch, `Runner_Rifle` on the wrist; numbers in
+  `RUNNER.arm`). `Runner.gun` (src/world/runner.ts): two-bone IK from shoulder to wrist (elbow up) between a carry and
+  an aim wrist spot, the rifle's pitch held by the wrist, recoil on a slide; `Runner.muzzle` gives the muzzle for later.
