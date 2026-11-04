@@ -1,7 +1,7 @@
 // Every sound the game plays, how loud each is, and the sound events that play them: the one place to swap a sound
 // for another, rebalance a sound against its set or tune an event's level. The audio workbench (src/audioBench.ts,
-// ?debug, F3 → Sound) plays any of these through the game's own audio graph at a spot round you and edits the trims
-// and gains live; its "Copy edits" gives the changes to paste back in here.
+// ?debug, F3 → "Audio workbench") plays any of these through the game's own audio graph at a spot round you and edits
+// the trims and gains live; its "Copy edits" gives the changes to paste back in here.
 //
 // A sound is a sample (a file, SAMPLES) or a synth (made in code, SYNTHS); both make their sound into a node from a
 // given time and say how long it lasts (src/sounds.ts), so an event plays either the same way and may mix them. Both

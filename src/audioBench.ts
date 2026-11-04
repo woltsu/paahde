@@ -1,6 +1,6 @@
-// The audio workbench (debug menu → Sound → Audio workbench, ?debug only): plays any sound event, sample or synth of
-// src/audioConfig.ts through the game's own audio graph (src/sounds.ts, src/acoustics.ts, the buses and limiter of
-// src/audio.ts) from a spot round you, and tunes the config live.
+// The audio workbench (?debug only; F3 → "Audio workbench" at the top of the debug menu, opening on the left): plays
+// any sound event, sample or synth of src/audioConfig.ts through the game's own audio graph (src/sounds.ts,
+// src/acoustics.ts, the buses and limiter of src/audio.ts) from a spot round you, and tunes the config live.
 //
 // - Events / Sounds: the lists of the config (sounds: the samples, then the synths), filtered by the search box; ▶
 //   plays one, a click opens it below. A synth plays as its first event would have it (its argument, pitch).
@@ -13,7 +13,7 @@
 //   `lufs`).
 //   Edits apply at once (the game reads the config on every play), are kept in this browser and come back on
 //   reload; "Copy edits" gives them as a list to carry into src/audioConfig.ts, "Reset" drops them.
-// The panel is clickable while the mouse is free (F3 frees it).
+// It closes with its Close button or the debug menu's again. The panel is clickable while the mouse is free (F3 frees it).
 import { audio } from './audio';
 import type { P } from './acoustics';
 import { EVENTS, SAMPLES, SYNTHS, event, isSynth, sample, sound, soundId, synth, type EventDef, type EventId, type Route, type SampleId, type SoundDef, type SoundId } from './audioConfig';
@@ -23,7 +23,6 @@ import { loadSample, play, playSound, sampleBuffer, synthDefined, type Voice } f
 import { BIKE_HARD_LANDING } from '../shared/sim.ts';
 
 const EDITS_KEY = 'audioBench.edits';
-const OPEN_KEY = 'audioBench.open';
 /** The pad's reach (m) and its rings. */
 const PAD_MAX = 600;
 const RINGS = [5, 20, 100, 600];
@@ -72,17 +71,26 @@ export class AudioBench {
     this.view = view;
     this.load();
     this.build();
-    try { if (localStorage.getItem(OPEN_KEY) === '1') this.toggle(true); } catch { /* no storage */ }
   }
 
-  toggle(open = this.panel.style.display === 'none') {
+  /** Whether the panel is showing. */
+  open = false;
+  /** Told whenever it opens or closes (the debug menu's button). */
+  onToggle?: (open: boolean) => void;
+
+  /** Open or close it (from the debug menu, F3, or its own Close); closing stops a running repeat. */
+  toggle(open = !this.open) {
+    this.open = open;
     this.panel.style.display = open ? 'flex' : 'none';
-    try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch { /* no storage */ }
     if (open) {
       this.list();
       this.detail();
       this.pad();
+    } else {
+      clearInterval(this.repeat);
+      this.q<HTMLInputElement>('#abRepeat').checked = false;
     }
+    this.onToggle?.(open);
   }
 
   // ---- edits ----
@@ -263,7 +271,7 @@ export class AudioBench {
     document.head.append(style);
     const p = this.panel;
     p.id = 'audioBench';
-    p.innerHTML = `<h4>Audio workbench<span class="sp"></span><button id="abStop" title="Stop everything the bench started">Stop</button><button id="abClose" title="Close">×</button></h4>
+    p.innerHTML = `<h4>Audio workbench<span class="sp"></span><button id="abStop" title="Stop everything the bench started">Stop</button><button id="abClose" title="Close the workbench (or its button in the F3 menu)">Close</button></h4>
 <div class="row"><button data-tab="events">Events</button><button data-tab="sounds">Sounds</button>
 <input id="abFilter" placeholder="search" style="flex:1;min-width:0"></div>
 <div class="list" id="abList"></div>

@@ -93,7 +93,7 @@ Continuous sounds driven every frame (wind, engines, drones' buzz, missiles' and
 carrier's thrum, the grinder, the tower, the well, the levels' beds, the cart) are not events: their levels are still in
 their own modules (todo-issues.md).
 
-The audio workbench (`?debug`, F3 → Sound → Audio workbench, `src/audioBench.ts`) plays any event or sample through
+The audio workbench (`?debug`, F3 → "Audio workbench" at the top, `src/audioBench.ts`) plays any event or sample through
 the real graph (placement, reverb, echoes, buses, limiter) from a spot round you, and edits trims and event fields
 live; "Copy edits" lists the changes to carry into the config. Listening there is for balancing a sound against its
 set and its neighbours; the full-mix numbers below still come from the capture tool.

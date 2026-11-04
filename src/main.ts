@@ -248,7 +248,8 @@ buildMenu.available = (kind) => {
   if (free) trophies.need(kind); // (for the preview)
   return free;
 };
-// The audio workbench (?debug: debug menu → Sound): any sound event or sample played round the camera (src/audioBench.ts).
+// The audio workbench (?debug: F3 → "Audio workbench"): any sound event, sample or synth played round the camera
+// (src/audioBench.ts); the debug menu opens and closes it.
 const audioBench = location.search.includes('debug') ? new AudioBench(() => ({ ear: orbit.camera.position, yaw: orbit.viewYaw })) : null;
 new DebugMenu(() => sky.day.tod, (tod) => net.shareTimeOfDay(tod), () => net.resetSharedTime(), (front) => net.summonStorm(front), (tier) => net.debugGear(tier), () => net.debugHit(), (what) => net.summonBot(what),
   (all) => (all ? net.labReset() : net.labReset(machines.nearestLab(net.me.x, net.me.z)?.site.id)),
@@ -259,7 +260,7 @@ new DebugMenu(() => sky.day.tod, (tod) => net.shareTimeOfDay(tod), () => net.res
   (working, quad) => net.debugBike(working, quad),
   (key) => net.debugLevel(key),
   net,
-  () => audioBench?.toggle());
+  audioBench ?? undefined);
 // The art-style bench (?w=bench, dev only): fixed shots and the look panel (src/artBench.ts).
 const artBench = BENCH ? new ArtBench({ fly, camera: orbit.camera, day: sky.day, post, blownSand, startFly: () => fly.start(orbit.camera, orbit.yaw, orbit.pitch) }) : null;
 new Chat(net);

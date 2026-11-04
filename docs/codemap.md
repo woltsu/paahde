@@ -521,7 +521,7 @@ Everything built is shared, and anyone can take a building down.
   it): swap or rebalance sounds here; `tools/audio-config.test.mjs` keeps it in step with `public/audio/`, the synths
   defined and the code. `src/sounds.ts` — the sample bank, `defineSynth`, and `play(event, at, ear, { level, arg })`
   for either kind (`playSound`, `playSample` for one sound by a route)
-- `src/audioBench.ts` — the audio workbench (?debug: debug menu → Sound): any event, sample or synth played from a spot
+- `src/audioBench.ts` — the audio workbench (?debug: F3 → "Audio workbench", opening on the left): any event, sample or synth played from a spot
   round you through the game's graph, trims and gains edited live, "Copy edits" for the config
 - `tools/audio-bench.html`, `tools/audio-bench.ts`, `tools/audio-measure.mjs` — real browser sound graphs captured
   after the limiter, measured by FFmpeg; scenarios, target levels and recorded results in `docs/audio.md`

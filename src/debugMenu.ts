@@ -9,7 +9,8 @@
 // "Guardian here" / "Drone here" bring the nearest guardian, or a drone (by day too), to you, for everyone; "Jet here"
 // sends a jet over you (the drone and the flying wing take turns); "Crawlers here" sets a pack of crawlers on you.
 // "Tone" switches the tone curve live (post.ts toneControl); "white" is the filmic curve's white point.
-// "Audio workbench" (Sound) opens src/audioBench.ts: any sound event or sample played round you, levels tuned live.
+// "Audio workbench" (at the top) opens src/audioBench.ts on the left: any sound event, sample or synth played round you,
+// levels tuned live; it closes with its own Close button or this one again.
 // "Fly camera" (src/flyCam.ts) leaves the body and flies the view freely, for shooting video; "Hide HUD" clears the
 // screen while flying, and FOV / smooth / bank shape the shot.
 // "Give gear" puts one of every piece of gear (shared/gear.ts), repaired with Scrap parts, and a laser rifle, pistol and jammer in your bag and equipment.
@@ -43,7 +44,7 @@ export class DebugMenu {
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean, quad: boolean) => void = () => {},
-    goLevel: (key: string) => void = () => {}, net?: Net, openAudio?: () => void) {
+    goLevel: (key: string) => void = () => {}, net?: Net, audioBench?: { toggle(open?: boolean): void; onToggle?: (open: boolean) => void }) {
     const style = document.createElement('style');
     style.textContent = `
 #debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh / var(--ui, 1) - 60px); overflow-y: auto;
@@ -80,6 +81,7 @@ export class DebugMenu {
 #debugMenu button:active { background: rgba(255, 233, 204, 0.4); }
 #debugMenu button.go { background: rgba(255, 190, 110, 0.28); }
 #debugMenu button.go:hover { background: rgba(255, 190, 110, 0.45); }
+#debugMenu #dbgAudio.on { background: rgba(255, 190, 110, 0.6); }
 #debugMenu #dbgItem { flex: 1; min-width: 0; }
 #debugMenu input:not([type]), #debugMenu input[type=number] { font: inherit; color: inherit; background: rgba(255, 233, 204, 0.12); border: 0; border-radius: 4px; padding: 3px 5px; }
 #debugMenu label { display: flex; gap: 6px; align-items: center; margin-top: 5px; }
@@ -101,6 +103,7 @@ body.clean > :not(canvas):not(#debugMenu):not(#menu):not(#artBench):not(#artBenc
 <div class="row"><button id="dbgToTest" class="go">Go to the test world</button></div>`}</div>` : '';
     p.innerHTML = `<h4>${scenarios ? '<div class="tabs"><button data-view="main" class="on">Debug</button><button data-view="scenarios">Scenarios</button></div>' : '<span>Debug</span>'}<span>F3</span></h4>
 ${scenarios}<div id="dbgMain">
+<div class="row" style="margin:0 0 6px"><button id="dbgAudio" class="go" title="Open the audio workbench on the left: play any sound event, sample or synth from a spot round you and tune their levels (src/audioBench.ts)">Audio workbench</button></div>
 <details data-sec="time" open><summary>Time <b id="dbgTime"></b></summary>
 <input id="dbgTod" type="range" min="0" max="1439" step="1">
 <div class="row" id="dbgPresets"></div>
@@ -145,8 +148,6 @@ ${scenarios}<div id="dbgMain">
 <div class="grid">${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
 <div class="sub">Beginning beat</div>
 <div class="row">${BEATS.map((b, i) => `<button data-level="beginning:${i}" title="At the start of the beginning's ${b} beat, what comes before it open">${i}</button>`).join('')}</div></details>
-<details data-sec="sound"><summary>Sound</summary>
-<div class="row"><button id="dbgAudio" class="go" title="Play any sound event or sample from a spot round you, and tune their levels (src/audioBench.ts)">Audio workbench</button></div></details>
 <details data-sec="camera"><summary>Camera & look</summary>
 <div class="row"><button id="dbgFly" class="go" title="Leave the body and fly the view (WASD, Space/Ctrl up and down, Shift fast, Alt slow, wheel sets speed)">Fly camera</button>
 <label style="margin-top:0"><input id="dbgClean" type="checkbox"> Hide HUD</label></div>
@@ -265,7 +266,13 @@ ${scenarios}<div id="dbgMain">
     p.querySelector('#dbgCrawlers')!.addEventListener('click', () => summonBot('crawlers'));
     for (const b of p.querySelectorAll<HTMLElement>('[data-boss]')) b.addEventListener('click', () => summonBot(b.dataset.boss as BossKind));
 
-    p.querySelector('#dbgAudio')!.addEventListener('click', () => openAudio?.());
+    // The audio workbench: opened and closed here (or by its own Close); the button is lit while it's open.
+    const audioBtn = p.querySelector<HTMLButtonElement>('#dbgAudio')!;
+    if (audioBench) audioBench.onToggle = (open) => {
+      audioBtn.classList.toggle('on', open);
+      audioBtn.textContent = open ? 'Close audio workbench' : 'Audio workbench';
+    };
+    audioBtn.addEventListener('click', () => audioBench?.toggle());
     const flyBtn = p.querySelector<HTMLButtonElement>('#dbgFly')!;
     const flyOpts = p.querySelector<HTMLElement>('#dbgFlyOpts')!;
     const clean = p.querySelector<HTMLInputElement>('#dbgClean')!;
