@@ -21,7 +21,7 @@ import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK, type RunnerKind } from '../../shared/runner.ts';
 
-const PARTS = ['Runner_Body', 'Runner_BodyArmed', 'Runner_ArmBase', 'Runner_ArmUpper', 'Runner_ArmFore', 'Runner_Rifle', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
+const PARTS = ['Runner_Body', 'Runner_BodyArmed', 'Runner_ArmBase', 'Runner_ArmUpper', 'Runner_ArmFore', 'Runner_GunMount', 'Runner_Rifle', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
 type PartName = (typeof PARTS)[number];
 
 let parts: Record<PartName, THREE.Object3D> | null = null;
@@ -73,6 +73,8 @@ const S = RUNNER.scale;
  *  FIRE_S while on target. */
 const CARRY = [0.6, 0.05] as const, AIM = [0.75, 0.2] as const;
 const FIRE_S = 2.4;
+/** Firing, the gun slams back along its rails in RECOIL_BACK s, stays there till RECOIL_HOLD and is home by RECOIL_HOME. */
+const RECOIL_BACK = 0.04, RECOIL_HOLD = 0.12, RECOIL_HOME = 0.7;
 /** The gun is never pitched up past the forearm's line by more than -FOREARM_CLEAR (rad): further, the forearm would
  *  swing up into its belly (which sits 0.065 over the pivot; the forearm is 0.04 thick either side of its line, and
  *  0.55 long: sin(0.04) * 0.55 + 0.04 < 0.065). */
@@ -115,12 +117,12 @@ export class Runner {
   private gape = 0;
   private legs: Leg[] = [];
   private eyes: THREE.MeshStandardMaterial[] = [];
-  /** The armed one's gun arm (null on a plain one): joints, the rifle on a slide (its recoil), the glowing coils. */
+  /** The armed one's gun arm (null on a plain one): joints, the gun's mount at the wrist (`rifle`) with the gun on it
+   *  (`slide`, sliding back along the mount's rails as it fires), the glowing coils. */
   private arm: { base: THREE.Group; upper: THREE.Group; fore: THREE.Group; rifle: THREE.Group; slide: THREE.Group } | null = null;
   private coils: THREE.MeshStandardMaterial[] = [];
-  /** Arm: how far raised to aim (0 carried .. 1), base yaw, rifle pitch (up from level, body frame), recoil 0..1, and
-   *  when it last fired (s). */
-  private raise = 0; private gunYaw = 0; private aimPitch = 0; private recoil = 0; private firedAt = 0;
+  /** Arm: how far raised to aim (0 carried .. 1), the gun's heading and pitch (world), and when it last fired (s). */
+  private raise = 0; private gunYaw = 0; private aimPitch = 0; private firedAt = -1e9;
   /** The gun's steady frame (see `gun`): its heading. */
   private steadyOn = false; private steadyYaw = 0;
   /** The armed one holds its gun steady while it runs (false: the gun rides the body; the models lab's ?runner=stab). */
@@ -179,6 +181,7 @@ export class Runner {
       fore.position.set(0, 0, A.upper);
       fore.add(mount(p.Runner_ArmFore));
       rifle.position.set(0, 0, A.fore);
+      rifle.add(mount(p.Runner_GunMount));
       slide.add(mount(p.Runner_Rifle));
       rifle.add(slide);
       fore.add(rifle);
@@ -364,7 +367,8 @@ export class Runner {
   /**
    * The gun arm. Going about, it bears the gun low over its back, level and forward. Staring at something
    * (`look`), it raises the gun high, the base turning to it and the gun pitched onto it, and once on target fires
-   * every FIRE_S: the coils brighten as it charges, the gun kicks back on its slide and up, the muzzle flares.
+   * every FIRE_S: the coils brighten as it charges, the gun slams back along the rails of its mount (no kick up: the
+   * mount takes it), the muzzle flares, and the buffers ease it forward again.
    *
    * Stabilised (`stabilize`, the default), the gun holds still in the world while the body bounces under it, like a
    * tank's gun or a hen's head: where it should be is worked out in a steady frame that follows the runner's path and
@@ -397,19 +401,18 @@ export class Runner {
     this.aimPitch += Math.max(-3 * dt, Math.min(3 * dt, pitch - this.aimPitch));
     // Firing: on target and raised, every FIRE_S.
     const t = now / 1000, on = look && this.raise > 0.9 && Math.abs(wrap(yaw - this.gunYaw)) < 0.06 && Math.abs(pitch - this.aimPitch) < 0.06;
-    if (on && t - this.firedAt > FIRE_S) {
-      this.firedAt = t;
-      this.recoil = 1;
-    }
-    this.recoil = Math.max(0, this.recoil - dt * 4);
-    const kick = this.recoil * this.recoil;
-    const elev = (look ? this.aimPitch : 0) * this.raise + kick * 0.18;
+    if (on && t - this.firedAt > FIRE_S) this.firedAt = t;
+    // The recoil: back along the rails in RECOIL_BACK, held a moment, eased home by the buffers by RECOIL_HOME (s).
+    const since = t - this.firedAt;
+    const back = since < RECOIL_BACK ? since / RECOIL_BACK : 1 - smooth(RECOIL_HOLD, RECOIL_HOME, since);
+    const flash = Math.max(0, 1 - since / 0.15);
+    const elev = (look ? this.aimPitch : 0) * this.raise;
     if (this.stabilize) this.steady(wy, wz, elev);
     else this.locked(wy, wz, elev);
-    this.arm!.slide.position.z = -0.14 * kick;
+    this.arm!.slide.position.z = -A.recoil * back;
     // The coils: a low glow, building through the last second before a shot, a flare as it fires.
     const charge = on ? smooth(FIRE_S - 1, FIRE_S, t - this.firedAt) : 0;
-    for (const m of this.coils) m.emissiveIntensity = (m.userData.base as number) * (0.5 + 2.5 * charge + 10 * kick);
+    for (const m of this.coils) m.emissiveIntensity = (m.userData.base as number) * (0.5 + 2.5 * charge + 10 * flash);
   }
 
   /** Stabilised: the wrist reaches for where the steady frame puts it (_sh: its shoulder, in the world), and the gun
@@ -449,7 +452,7 @@ export class Runner {
     arm.rifle.rotation.set(-(Math.min(fore - FOREARM_CLEAR, elev) - fore), 0, 0);
   }
 
-  /** The gun (its slide: the part that recoils), for looking at; null on a plain one. */
+  /** The gun (the part that slides back as it fires), for looking at; null on a plain one. */
   get gunObject(): THREE.Object3D | null {
     return this.arm?.slide ?? null;
   }

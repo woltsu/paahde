@@ -3337,3 +3337,7 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - **Measured** (lab, galloping 12 m/s round the dunes, 200 frames): gun pitch level in 100% of frames (fixed: ±17°),
   roll 0° (fixed: 8°), height bounce 0.028 m RMS against the body's 0.07–0.10 m; the forearm never near its clamp.
   Aiming at a standing target holds within 1.6°.
+- **Recoil on rails:** firing, the gun no longer kicks up: it slams back 0.17 (0.34 m) along two rails in 0.04 s,
+  holds, and hydraulic buffers ease it home by 0.7 s (`RECOIL_*`, `RUNNER.arm.recoil`). The model splits for it:
+  `Runner_GunMount` (knuckle, pylon, the rail cradle, stops and buffers) stays on the wrist, `Runner_Rifle` (now with
+  slide shoes under its belly) slides on it. Measured live: full travel each shot, pitch unchanged through it.

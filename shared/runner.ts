@@ -28,8 +28,9 @@ export const RUNNER = {
   /** The body's centre over level ground, standing (model units). */
   standY: 1.15,
   /** The armed runner's gun arm: a turret base yawing on its back at `mount`, the shoulder's pitch axis at `shoulder`
-   *  in the base, upper arm and forearm lengths, the gun's muzzle from the wrist (its balance point, under its belly). */
-  arm: { mount: [0, 0.21, -0.05] as const, shoulder: [0, 0.17, 0] as const, upper: 0.6, fore: 0.55, muzzle: [0, 0.2, 1.23] as const },
+   *  in the base, upper arm and forearm lengths, the gun's muzzle from the wrist (its balance point, under its belly),
+   *  how far the gun slides back on its mount's rails as it fires. */
+  arm: { mount: [0, 0.21, -0.05] as const, shoulder: [0, 0.17, 0] as const, upper: 0.6, fore: 0.55, muzzle: [0, 0.2, 1.23] as const, recoil: 0.17 },
 };
 
 /** Two kinds: the plain runner, and one carrying a rail gun on a robotic arm on its back. */

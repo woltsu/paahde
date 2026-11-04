@@ -21,7 +21,8 @@ in shared/runner.ts and must match the constants below.
   Runner_ArmUpper origin = shoulder, runs along +Z to the elbow at (0, 0, UPPER); turns about X (+ = down, as
                   three.js: Rx maps +Z to (0, -sin, cos)).
   Runner_ArmFore  origin = elbow, along +Z to the wrist at (0, 0, FORE); turns about X.
-  Runner_Rifle    origin = wrist pivot, turns about X: under the gun's belly at its balance point (the heavy housing
+  Runner_GunMount origin = wrist pivot, fixed to the wrist: the knuckle, a pylon and two rails under the gun's belly.
+  Runner_Rifle    origin = wrist pivot (at rest; it slides back along -Z on the mount's rails up to RECOIL as it fires), turns about X: under the gun's belly at its balance point (the heavy housing
                   behind, the rails ahead), the gun entirely above it (y > 0.06). Rails along +Z, muzzle at
                   (0, 0.2, MUZZLE). The rail channel, coils, core and muzzle are RunnerGunGlow.
   Runner_HipL/R   origin = socket, rolls about local Z (abduction). The thigh's pitch axis is local X through
@@ -58,6 +59,9 @@ MOUNT = (0.0, 0.21, -0.05)   # the turret ring on its back (body frame): the bas
 SHOULDER = (0.0, 0.17, 0.0)  # the shoulder's pitch axis (X) in the base
 UPPER = 0.6                  # shoulder to elbow, along the upper arm's +Z
 FORE = 0.55                  # elbow to wrist, along the forearm's +Z
+RAIL_X = 0.06               # the gun mount's two rails, either side under the gun's belly
+RAIL_Z = (-0.5, 0.3)        # where they run (the gun's shoes, at -0.25 and 0.12, slide back on them as it recoils)
+RECOIL = 0.17               # how far back the gun slides firing (shared/runner.ts RUNNER.arm.recoil)
 MUZZLE = 1.23                # the gun's muzzle along its +Z from the wrist pivot (its balance point, under its belly)
 STAND_Y = 1.15  # body centre over level ground, standing (previews)
 SCALE = 2.0  # drawn this many times the built size in the game (shared/runner.ts RUNNER.scale): the previews too
@@ -532,9 +536,10 @@ def build_rifle():
     """A heavy rail gun, held at its balance point: a broad armoured housing behind the wrist, capacitor pods down its
     flanks, twin rails reaching ahead with a glowing channel between them; carried on a pylon under its belly."""
     mb = MB()
-    # the mount: a knuckle on the wrist's axis between the forearm's fork, a pylon up into the belly
-    mb.cyl((-0.04, 0, 0), (0.04, 0, 0), 0.05, None, 8, 'RunnerSteel')
-    mb.box((0, 0.07, 0), (0.07, 0.08, 0.22), 'RunnerIron', taper=(1.2, 1.3))
+    # slide shoes under the belly, riding the mount's rails (Runner_GunMount)
+    for s in (-1, 1):
+        for z in (-0.25, 0.12):
+            mb.box((s * RAIL_X, 0.072, z), (0.045, 0.03, 0.09), 'RunnerDark')
     # the housing: wide and flat, dark beneath; armour over the top
     mb.loft([sup_ring(z, w, h, cy, 12, 0.45) for z, w, h, cy in GUN], 'RunnerIron', True, True, capmat='RunnerDark',
             matfn=lambda i, k: 'RunnerDark' if k in (5, 6, 7) else 'RunnerIron')
@@ -574,10 +579,32 @@ def build_rifle():
     mb.box((0, 0.19, -0.845), (0.13, 0.08, 0.02), 'RunnerDark')
     for x in (-0.04, 0.0, 0.04):
         mb.box((x, 0.19, -0.857), (0.018, 0.06, 0.006), 'RunnerGunGlow')
-    # a cable from the pylon into each pod
+    # a cable from each rear shoe into its pod
     for s in (-1, 1):
-        mb.sweep([(s * 0.03, 0.06, -0.08), (s * 0.12, 0.05, -0.15), (s * 0.18, 0.1, -0.25)], 0.014, 'RunnerDark', 4)
+        mb.sweep([(s * RAIL_X, 0.07, -0.3), (s * 0.12, 0.06, -0.38), (s * 0.18, 0.1, -0.45)], 0.014, 'RunnerDark', 4)
     return finish(mb, 'Runner_Rifle')
+
+
+def build_gun_mount():
+    """What stays on the wrist when the gun recoils: the knuckle on the wrist's axis (between the forearm's fork), a
+    pylon, and a cradle of two rails under the gun's belly that it slides back along, stops at either end and a
+    hydraulic buffer behind each rail that catches it."""
+    mb = MB()
+    mb.cyl((-0.04, 0, 0), (0.04, 0, 0), 0.05, None, 8, 'RunnerSteel')
+    mb.box((0, 0.03, -0.02), (0.07, 0.05, 0.2), 'RunnerIron', taper=(1.6, 1.4))
+    # the cradle: a crossbeam, the rails, stops
+    mb.box((0, 0.045, -0.02), (2 * RAIL_X + 0.05, 0.022, 0.12), 'RunnerIron')
+    for s in (-1, 1):
+        mb.box((s * RAIL_X, 0.05, (RAIL_Z[0] + RAIL_Z[1]) / 2), (0.022, 0.016, RAIL_Z[1] - RAIL_Z[0]), 'RunnerSteel')
+        mb.box((s * RAIL_X, 0.042, (RAIL_Z[0] + RAIL_Z[1]) / 2), (0.034, 0.012, RAIL_Z[1] - RAIL_Z[0]), 'RunnerIron')
+        for z in RAIL_Z:
+            mb.box((s * RAIL_X, 0.055, z), (0.04, 0.035, 0.025), 'RunnerRust')
+        # the buffer: a cylinder along the rail's outside, its rod reaching forward to the rear shoe's place
+        bx = s * (RAIL_X + 0.045)
+        mb.cyl((bx, 0.045, RAIL_Z[0] + 0.02), (bx, 0.045, -0.36), 0.022, None, 8, 'RunnerIron')
+        mb.cyl((bx, 0.045, -0.36), (bx, 0.045, -0.3), 0.008, None, 5, 'RunnerSteel')
+        mb.box((bx, 0.045, -0.4), (0.012, 0.03, 0.03), 'RunnerHazard')
+    return finish(mb, 'Runner_GunMount')
 
 
 # ==================================================================================================== head
@@ -822,7 +849,7 @@ def arm_ik(wrist_y, wrist_z):
     return up, math.atan2(wrist_y - ey, wrist_z - ez)
 
 
-def arm_pose(body_M, yaw, wrist, aim):
+def arm_pose(body_M, yaw, wrist, aim, slide=0.0):
     """three.js matrices of the gun arm on the armed body: base yawed `yaw`, the wrist at `wrist` (y, z) from the
     shoulder, the rifle `aim` up from level."""
     base = body_M @ T(MOUNT) @ Ry(yaw)
@@ -830,7 +857,8 @@ def arm_pose(body_M, yaw, wrist, aim):
     upper = base @ T(SHOULDER) @ Rx(-up)
     forearm = upper @ T(0, 0, UPPER) @ Rx(-(fore - up))
     rifle = forearm @ T(0, 0, FORE) @ Rx(-(aim - fore))
-    return [('Runner_ArmBase', base), ('Runner_ArmUpper', upper), ('Runner_ArmFore', forearm), ('Runner_Rifle', rifle)]
+    return [('Runner_ArmBase', base), ('Runner_ArmUpper', upper), ('Runner_ArmFore', forearm), ('Runner_GunMount', rifle),
+            ('Runner_Rifle', rifle @ T(0, 0, -slide))]
 
 
 def place(src, M3, coll):
@@ -926,6 +954,15 @@ def render_previews(parts, out_dir):
         if name == 'aim':
             look((2.6, 5.4, 4.6), (0, 4.2, 1.2), 40)
             shoot('runner_armed_gun.png')
+            # recoiled: slid back to the end of its travel on the rails
+            for o in list(c.objects):
+                if o.name.startswith('Runner_Rifle'):
+                    bpy.data.objects.remove(o)
+            for n, M in arm_pose(body, 0.0, wrist, aim, RECOIL):
+                if n == 'Runner_Rifle':
+                    place(parts[n], M, c)
+            look((3.4, 4.6, 1.2), (0, 4.2, 0.6), 40)
+            shoot('runner_armed_recoil.png')
         c.hide_render = True
 
 
@@ -942,7 +979,7 @@ def main():
 
     parts = {'Runner_Body': build_body(), 'Runner_BodyArmed': build_body(armed=True), 'Runner_Head': build_head(),
              'Runner_ArmBase': build_arm_base(), 'Runner_ArmUpper': build_arm_upper(), 'Runner_ArmFore': build_arm_fore(),
-             'Runner_Rifle': build_rifle()}
+             'Runner_Rifle': build_rifle(), 'Runner_GunMount': build_gun_mount()}
     for build in (build_jaw, build_hip, build_thigh, build_shin):
         left = build()
         base = left.name
@@ -957,7 +994,7 @@ def main():
         bb = [C.inverted() @ Vector(c) for c in o.bound_box]
         lo = [min(v[i] for v in bb) for i in range(3)]
         hi = [max(v[i] for v in bb) for i in range(3)]
-        if o.name.startswith(('Runner_Arm', 'Runner_Rifle')):
+        if o.name.startswith(('Runner_Arm', 'Runner_Rifle', 'Runner_Gun')):
             arm += tri_count(o)
         elif o.name != 'Runner_BodyArmed':
             total += tri_count(o) * (2 if o.name.startswith(('Runner_Hip', 'Runner_Thigh', 'Runner_Shin')) else 1)
