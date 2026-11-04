@@ -31,6 +31,8 @@ import { tyreDust } from './tyreDust';
 import { zaps } from './world/zaps';
 import type { Net } from './net';
 import { claim } from './kills';
+import { Runners } from './world/runner';
+import { heightAt } from '../shared/terrain.ts';
 
 /** Footfalls shake the camera within this distance (m), up to SHAKE metres at the foot. */
 const SHAKE_R = 90;
@@ -68,6 +70,8 @@ export class GuardianFx {
   readonly harvesters: Harvesters;
   /** The solar farms' nests' spiderlings (shared/nest.ts). */
   readonly nest: Brood;
+  /** Runners summoned from the debug menu, prowling round us (src/world/runner.ts; drawn only, ours alone). */
+  readonly runners: Runners;
   /** Nest spiderlings awake within NEST_NEAR m of us. */
   private nested = false;
   private scene: THREE.Object3D;
@@ -112,6 +116,7 @@ export class GuardianFx {
     this.harvesters = new Harvesters(scene);
     this.scene = scene;
     this.nest = new Brood(scene, NEST_N * 2);
+    this.runners = new Runners(scene, heightAt);
     // A shot into a core: a heavy clang; one shot out: a burst of fire and sparks out of its maw.
     this.harvesters.onHit = (x, y, z) => guardianSound.footfall(x, y, z, 0.8, this.ear);
     this.harvesters.onCoreOut = (x, y, z, dx, dz) => {
@@ -276,8 +281,9 @@ export class GuardianFx {
   }
 
   /** Every frame, after the camera has been placed: draws them and shakes the camera. */
-  update(net: Net, dt: number, camera: THREE.Camera, focus: { x: number; z: number }) {
+  update(net: Net, dt: number, camera: THREE.Camera, focus: { x: number; y: number; z: number }) {
     this.net = net;
+    this.runners.update(dt, focus, camera);
     this.ear.copy(camera.position);
     if (!this.bound) {
       this.bound = true;

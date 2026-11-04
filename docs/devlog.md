@@ -3277,3 +3277,21 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   queen, the worm's howl) now reserve their real length, not 8 s; the bolt boom is one voice of two footfalls, not two.
 - **Not yet:** continuous sounds steered every frame (wind, engines, roars, drones' buzz, rumbles, beds) need a second
   interface (todo-issues.md).
+
+## The runner: model and gait (work in progress)
+
+- **What:** a new enemy, the runner: a horse-sized four-legged hunting robot (hips ~1.15 m, ~2.7 m nose to antenna
+  tips: bigger than a crawler, nothing like a guardian), Spot's layout (long body, a hip at each corner, every knee
+  bending back) made menacing: an armoured hull with blade fins down the spine and glowing flank vents, a low scowling
+  head with eight red eyes and two mandible blades, bladed shins with spurs ending in claws. So far it is only drawn:
+  it walks and runs in the models lab (`models-lab.html?runner`, `?runner=12` follows one at 12 m/s, `?runner=prowl`)
+  and the debug menu's Spawn → Runner puts one prowling round you in the desert, seen by you alone. No server side,
+  hunting, damage, loot or sounds yet.
+- **How:** `tools/blender/runner.py` → `public/models/runner.glb` (body, head, and hip/thigh/shin, each built for the
+  left and mirrored for the right so the outer-side armour stays outside; ~5.3k triangles assembled), rig numbers in
+  `shared/runner.ts`. `src/world/runner.ts`: the parts on a real hierarchy (hip roll → thigh pitch → shin pitch),
+  feet placed by hip roll + two-bone IK; one stride clock with per-leg offsets blending a trot into a transverse
+  gallop, stance feet planted in the world, swings landing at the rest spot half a stance ahead (Raibert), strides
+  quickening with speed; the body bobs, rocks, crouches, banks into turns and pitches/rolls to the ground; the head
+  watches you or looks about. `Prowl` moves one about for show (walks, sprints in arcs round you, stops to stare).
+- **Next:** server-side movement and hunting, its attack, weak points, drops (`shared/enemies.ts`), footfall sounds.

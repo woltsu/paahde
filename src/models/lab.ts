@@ -10,6 +10,7 @@
 // ?ride seats each character on a sand bike (?ride=quad: on the sand quad, src/quad.ts), to check the fit of every body;
 // &pillion puts a passenger of the same body on the back of each quad; &turn=6 drives them round on the spot as if in a 6 m circle to the left (-6: right), for the riders' lean; &body=0,1,2
 // gives them those bodies (shared/look.ts BODIES) over the plain look. With one clip (?clip, ?ride), one character per look.
+// ?runner: the runner enemy walking and running over the dunes instead of the characters (src/models/runnerLab.ts).
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ScavengerModel, type ScavengerClip } from './scavenger';
@@ -17,6 +18,7 @@ import { CROUCH_SPEED } from '../../shared/sim.ts';
 import { packLook, unpackLook } from '../../shared/look.ts';
 import { Bike } from '../bike';
 import { Quad } from '../quad';
+import { runnerLab } from './runnerLab';
 
 const renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -39,7 +41,8 @@ sun.shadow.bias = -0.0005;
 scene.add(sun);
 
 const params = new URLSearchParams(location.search);
-const walking = params.has('walk');
+const runnerMode = params.get('runner');
+const walking = params.has('walk') || runnerMode !== null;
 const heading = Number(params.get('heading') ?? 0);
 const dune = (x: number, z: number) => (walking ? 0.45 * Math.sin(x * 0.55) * Math.cos(z * 0.45) + 0.12 * x : 0);
 const groundGeo = walking ? new THREE.PlaneGeometry(60, 60, 240, 240).rotateX(-Math.PI / 2) : new THREE.CircleGeometry(80, 64).rotateX(-Math.PI / 2);
@@ -55,6 +58,7 @@ const ground = new THREE.Mesh(
 ground.receiveShadow = true;
 scene.add(ground);
 
+if (runnerMode !== null) Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22 }); // the gallop's circle
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 300);
 const target = new THREE.Vector3(0, 1.0, 0);
 let yaw = 0.35;
@@ -79,9 +83,10 @@ const pillions = quads && params.has('pillion');
 const bodyLooks = (params.get('body') ?? '').split(',').filter(Boolean).map((b) => packLook({ ...unpackLook(0), body: Number(b) }));
 const looks = [...(params.get('look') ?? '').split(',').filter(Boolean).map(Number), ...bodyLooks];
 const one: ScavengerClip | null = riding ? 'Idle' : only;
-const clips: ScavengerClip[] = one ? (looks.length ? looks.map(() => one) : [one]) : ['Idle', 'Walk', 'Run', 'Jump', 'Dig', 'Slide', 'Powerslide', 'Crouch', 'CrouchWalk'];
+const clips: ScavengerClip[] = runnerMode !== null ? [] : one ? (looks.length ? looks.map(() => one) : [one]) : ['Idle', 'Walk', 'Run', 'Jump', 'Dig', 'Slide', 'Powerslide', 'Crouch', 'CrouchWalk'];
 const colors = [0xd8452b, 0x2f8fd8, 0xe0b23a, 0x4fae5a, 0xb455c8, 0xe8e2d6];
 if (only) dist = 4;
+if (runnerMode !== null) [dist, pitch] = runnerMode ? [6, 0.15] : [30, 0.45];
 if (params.has('yaw')) yaw = Number(params.get('yaw'));
 if (params.has('dist')) dist = Number(params.get('dist'));
 if (params.has('target')) target.fromArray(params.get('target')!.split(',').map(Number)); // e.g. &target=0.3,0.95,0 to look at a hand
@@ -112,7 +117,7 @@ clips.forEach((clip, i) => {
 
 // optional extras (first-person hands, canteen) laid out behind the characters
 const loader = new GLTFLoader();
-const extras = ['hands', 'canteen'];
+const extras = runnerMode !== null ? [] : ['hands', 'canteen'];
 extras.forEach((name, i) => {
   loader.load(
     `./models/${name}.glb`,
@@ -157,6 +162,8 @@ await renderer.init();
 const timer = new THREE.Timer();
 const label = document.getElementById('label')!;
 label.textContent = clips.join(' · ');
+const runners = runnerMode !== null ? await runnerLab(scene, dune, runnerMode) : null;
+if (runners) label.textContent = runners.label;
 
 renderer.setAnimationLoop((time) => {
   timer.update(time);
@@ -208,6 +215,8 @@ renderer.setAnimationLoop((time) => {
   }
   for (const mx of mixers) mx.update(dt);
   if (walking && only) target.copy(models[0].m.root.position).setY(models[0].m.root.position.y + 0.6);
+  const follow = runners?.update(dt, time, camera.position);
+  if (follow) target.copy(follow);
   camera.position.set(
     target.x + Math.sin(yaw) * Math.cos(pitch) * dist,
     target.y + Math.sin(pitch) * dist,
