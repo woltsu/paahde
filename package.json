@@ -2,6 +2,7 @@
   "name": "dadajam",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=24" },
   "scripts": {
     "test": "node --disable-warning=ExperimentalWarning --test tools/*.test.mjs",
     "check": "npm test && node tools/check-graphics.ts && node tools/check-gpu-timing.ts && node tools/check-machine-boxes.ts && node tools/check-teardown-order.ts && node tools/check-machines.ts",
