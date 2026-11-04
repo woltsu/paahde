@@ -216,7 +216,7 @@ try {
     console.log('   Do not compare these numbers with other runs. Use --spawn field --yaw 3.14 (no enemies, open ground) and an early --tod, or --allow-death to keep the run going and leave the player-down frames out.');
     process.exitCode = 2;
   }
-  console.log('startup (ms):', JSON.stringify(result.startup.milestonesMs), '| long tasks', JSON.stringify(result.startup.longTasks));
+  console.log('startup (ms):', JSON.stringify(result.startup.milestonesMs), '| long tasks', JSON.stringify(result.startup.longTasks), '| shader warm-up', JSON.stringify(result.startup.warmup));
   if (g) {
     for (const e of g.events as { type: string; atS: number; x: number; z: number; heat: number }[]) console.log(`  event: player ${e.type} at ${e.atS} s, (${e.x}, ${e.z}), heat ${e.heat}`);
     if (g.framesExcluded) console.log(`  ${g.framesExcluded} frames left out of the numbers (player down or just respawned)`);

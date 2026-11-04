@@ -75,6 +75,7 @@ class Perf {
   private phaseT = 0;
   private marks: Record<string, number> = {};
   private longTasks = { count: 0, ms: 0, before: 0 };
+  private warm: Record<string, number> | null = null;
   private rec = { gap: [] as number[], cpu: [] as number[], submit: [] as number[], gpu: [] as number[], draws: [] as number[], tris: [] as number[], ratio: [] as number[] };
   private held = new Set<string>();
   private env: Record<string, unknown> = {};
@@ -123,6 +124,11 @@ class Perf {
     this.diagnostics.push({ atMs: Math.round(at), type, detail, ...(durationMs === undefined ? {} : { durationMs: Math.round(durationMs * 10) / 10 }) });
     if (this.diagnostics.length > 500) this.diagnostics.shift();
     if (this.collect) measure(`${type}: ${detail}`, at, at + (durationMs ?? 0), { dataType: durationMs ? 'track-entry' : 'marker', track: 'Diagnostics', trackGroup: 'dadajam', color: 'secondary' });
+  }
+
+  /** The loading screen's shader warm-up, where its time went (src/warmup.ts). Only the first counts. */
+  warmup(stats: Record<string, number>) {
+    this.warm ??= Object.fromEntries(Object.entries(stats).map(([k, v]) => [k, Math.round(v)]));
   }
 
   /** A point on the startup timeline (ms since the page started), also a marker in the trace. Only the first call of a name counts. */
@@ -308,7 +314,7 @@ class Perf {
       env: { ...this.env, dpr: devicePixelRatio, screen: `${screen.width}x${screen.height}`, window: `${innerWidth}x${innerHeight}`, ua: navigator.userAgent },
       graphics: { ...graphics },
       census: this.census(),
-      startup: { milestonesMs: this.marks, longTasks: { count: this.longTasks.count, totalMs: Math.round(this.longTasks.ms), beforePlayableMs: Math.round(this.longTasks.before) } },
+      startup: { milestonesMs: this.marks, longTasks: { count: this.longTasks.count, totalMs: Math.round(this.longTasks.ms), beforePlayableMs: Math.round(this.longTasks.before) }, warmup: this.warm },
       diagnostics: this.diagnostics,
       // false when something other than the game's own frame cost decided the numbers: the player died, the walk was blocked, the run ended early.
       // The reasons are listed; tools/perf.ts prints them and exits with 2.

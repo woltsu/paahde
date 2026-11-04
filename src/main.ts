@@ -537,6 +537,7 @@ renderer.setAnimationLoop((time) => {
   // frame would take seconds to build every shader and freeze the page. Nothing else is drawn until that is done.
   // (Joined inside a level, a new player's beginning above all, the desert's terrain isn't streamed: nothing to wait for.)
   const modelsIn = bodyLoaded && (terrain.built || !level(net.me.level).things);
+  if (terrain.built) perf.milestone('terrain-built');
   if (modelsIn) perf.milestone('models-in');
   loaded ||= coverTimedOut || warmed;
   if (loaded) perf.milestone('loaded');
@@ -1009,6 +1010,7 @@ renderer.setAnimationLoop((time) => {
       coverProgress();
       warmed = true;
       perf.milestone('warmed');
+      perf.warmup(warm.stats);
     });
   }
   if (PERF_RUN || BENCH) document.getElementById('name')?.querySelector<HTMLElement>('.skip')?.click(); // (a benchmark, or the art bench, answers the name box itself)

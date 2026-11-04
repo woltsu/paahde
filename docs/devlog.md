@@ -3207,3 +3207,14 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - **Tuned:** in the lab at noon, a bomb at 30 m: 0 (before) a readable ball with no glow; 3 washed the billows into a
   flat yellow blob; 2 glows over the cart and horizon and keeps some of the billows. `hotBloom` is a live uniform for the
   art bench, if wanted.
+
+## Where the join's loading time goes
+
+- **What:** joining a world on the dev server measured end to end (`npm run perf -- --seconds 0 --spawn field`, untraced):
+  playable at 8–12 s. Page to joined ~0.8 s; the first terrain layout 2.3–2.9 s (~1.2 s of CPU, paced at 25 ms per 66 ms
+  loading frame); the shader warm-up 3.9–8 s; the cover's fade 0.6 s. The warm-up is the biggest part and grows with
+  what is round the spawn (161 objects 3.9 s, 284 objects 8 s), about 22 ms of node-material building per distinct
+  material plus per-round waits. Table in docs/perf.md "Startup timeline"; the three ways to cut it in todo-issues.md.
+- **How:** `startup.warmup` in the perf result splits the warm-up (`buildMs`, `compileWaitMs`, `gpuWaitMs`, `pauseMs`,
+  `objects`, `rounds`) and a `terrain-built` milestone separates terrain from models. A Chrome trace doubles the warm-up's
+  waits, so compare untraced runs; Chrome's shader cache barely helps a second join (the cost is the page's own TSL builds).

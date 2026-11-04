@@ -31,6 +31,9 @@ export class Warmup {
   private pending: Promise<void>[] = [];
   private unpatch: (() => void) | null = null;
   private labels: string[] = [];
+  /** Where the time went (ms), for the startup timeline (src/perf.ts): building the shaders (the page's own work in the
+   *  real render), waiting for the GPU to compile their pipelines and to finish the round, and the rests in between. */
+  readonly stats = { objects: 0, rounds: 0, buildMs: 0, compileWaitMs: 0, gpuWaitMs: 0, pauseMs: 0, totalMs: 0 };
 
   constructor(roots: THREE.Object3D[], render: () => void, backend: unknown) {
     this.roots = roots;
@@ -64,16 +67,30 @@ export class Warmup {
    *  batch freezes that too; waiting for the GPU to finish a batch before sending the next lets the screen update in
    *  between and gives the batch size the real time it cost, not just the page's share. */
   async run(settle: () => Promise<void>): Promise<void> {
+    const st = this.stats;
+    const start = performance.now();
     for (;;) {
       const t0 = performance.now();
-      if (this.draw()) return;
+      if (this.draw()) {
+        st.objects = this.total;
+        st.totalMs = performance.now() - start;
+        return;
+      }
+      const t1 = performance.now();
       await settle();
+      const t2 = performance.now();
       await Promise.all(this.pending.splice(0));
-      const ms = performance.now() - t0;
+      const t3 = performance.now();
+      st.rounds++;
+      st.buildMs += t1 - t0;
+      st.gpuWaitMs += t2 - t1;
+      st.compileWaitMs += t3 - t2;
+      const ms = t3 - t0;
       perf.event('shader-warmup', this.labels.join(', ').slice(0, 240), ms, t0);
       if (ms > 500) console.info(`[warmup] slow round ${Math.round(ms)} ms:`, this.labels.join(', '));
       this.batch = ms < FAST_MS ? this.batch * 2 : ms > SLOW_MS ? Math.max(1, this.batch >> 1) : this.batch;
       await new Promise((r) => setTimeout(r, PAUSE_MS));
+      st.pauseMs += performance.now() - t3;
     }
   }
 

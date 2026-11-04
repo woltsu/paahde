@@ -71,8 +71,21 @@ Compare settings by running the same command with different `--set`s and `--labe
 `?w=<id>&perf=30` in a normal tab runs the same walk and downloads the JSON. `?perf=startup` records only the startup timeline.
 
 ## Startup timeline
-Milestones (ms since page start): main-start, renderer-ready, joined, models-in, warmup-start, warmed, loaded, cover-gone, playable. First measured run: models in
-at 2.0 s, **the shader warm-up took 22 s** (2.1 → 24.4 s), playable at 25.6 s. That is the first thing to look at for start-up time.
+Milestones (ms since page start): main-start, renderer-ready, joined, terrain-built, models-in, warmup-start, warmed, loaded, cover-gone, playable.
+`startup.warmup` splits the loading screen's shader warm-up (src/warmup.ts): `objects` (distinct material + geometry layouts), `rounds`, `buildMs` (the page
+building node materials into WGSL, synchronous, inside the real render), `compileWaitMs` (pipelines compiling in the GPU process), `gpuWaitMs` (the round's
+GPU work), `pauseMs` (rests between rounds). `npm run perf -- --seconds 0 --trace none --spawn field` prints it. (A traced run, `--trace startup`, about doubles the waits: compare untraced.)
+
+Measured 4 November 2026 (M-series Mac, Chrome WebGPU, dev server, desert spawn beside a scrap field, untraced): **playable at 8–12 s**.
+| stretch | time | what it is |
+| --- | ---: | --- |
+| page → joined | 0.5–1.0 s | module loading (dev: unbundled), renderer init, the welcome |
+| joined → terrain-built (= models-in) | 2.3–2.9 s | the first terrain layout: ~1.2 s of CPU (src/world/terrain.ts `fill`, dunes, canyons, rocks, biomes), but at `LOADING_BUDGET_MS` 25 ms per 66 ms loading frame (`LOADING_FRAME_MS`) |
+| shader warm-up | 3.9–8 s | ~22 ms of `buildMs` per distinct material (the first round, post passes and sky, ~0.5 s; the terrain's two sand materials ~0.25 s each), plus per-round waits and rests |
+| warmed → playable | 0.6 s | three covered frames and the cover's fade |
+
+The warm-up grows with what is round the spawn: 161 objects took 3.9 s, 284 took 8 s (~25 ms each all in). Every new distinct material in view at the
+start adds about that much. Earlier (October): models in at 2.0 s, the warm-up 22 s, playable at 25.6 s.
 
 ## What the first rounds changed (this machine, default settings, same walk)
 Before: ~66 fps, cpu 12.4 ms, ~1100 draw calls, 4 shadow cascades redrawn every frame or every other. After: ~130 fps (the screen's limit), cpu 5 ms, ~380 draws.
