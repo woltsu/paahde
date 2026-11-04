@@ -745,6 +745,7 @@ def render_previews(parts, points, out_dir, only=None):
     bpy.ops.mesh.primitive_plane_add(size=1200, location=(0, 0, 0))
     ground = bpy.context.active_object
     gm = bpy.data.materials.new('ground')
+    gm.use_nodes = True
     gm.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = (*lin(0xc46a24), 1)
     gm.node_tree.nodes.get('Principled BSDF').inputs['Roughness'].default_value = 1.0
     ground.data.materials.append(gm)
@@ -779,6 +780,7 @@ def render_previews(parts, points, out_dir, only=None):
         bpy.ops.render.render(write_still=True)
 
     hm = bpy.data.materials.new('human')
+    hm.use_nodes = True
     hm.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = (0.05, 0.15, 0.6, 1)
     lm = bpy.data.materials['QueenEye']
 

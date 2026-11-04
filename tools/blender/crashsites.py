@@ -2163,6 +2163,7 @@ def setup_scene():
     ground = bpy.context.active_object
     ground.name = 'ground'
     gm = bpy.data.materials.new('ground')
+    gm.use_nodes = True
     b = gm.node_tree.nodes.get('Principled BSDF')
     b.inputs['Base Color'].default_value = (*lin(SAND), 1)
     b.inputs['Roughness'].default_value = 1.0

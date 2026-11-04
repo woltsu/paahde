@@ -399,6 +399,7 @@ def render_previews(parts, out_dir, open_jaw):
     bpy.ops.mesh.primitive_plane_add(size=1200, location=(0, 0, 0))
     ground = bpy.context.active_object
     gm = bpy.data.materials.new('ground')
+    gm.use_nodes = True
     gm.node_tree.nodes.get('Principled BSDF').inputs['Base Color'].default_value = (*lin(0xc46a24), 1)
     gm.node_tree.nodes.get('Principled BSDF').inputs['Roughness'].default_value = 1.0
     ground.data.materials.append(gm)
