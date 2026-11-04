@@ -8,6 +8,7 @@ import * as THREE from 'three/webgpu';
 import { abs, dot, float, instancedBufferAttribute, length, min, mx_noise_float, normalView, positionGeometry, positionViewDirection, pow, smoothstep, uniform, uv, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { groundAt } from '../ground.ts';
+import { glowsHot } from '../post.ts';
 import { hazeColor, sunColor } from './env.ts';
 import { uAt, ustarFrom10, wind } from './wind.ts';
 
@@ -179,6 +180,7 @@ class Zaps {
       m.colorNode = vec3(3.2, 1.3, 0.35).mul(heat.mul(heat)).add(vec3(1.4, 0.25, 0.05).mul(heat));
       m.opacityNode = float(1).sub(smoothstep(0.2, 1, r));
       m.scaleNode = vec2(d.y, d.y);
+      glowsHot(m);
     }, true);
     // Smoke: dark, oily, lit by the sun and the haze; lumpy and billowing as it rises.
     this.smoke = new SpritePool(SMOKE, (m, d) => {

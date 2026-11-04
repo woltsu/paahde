@@ -18,6 +18,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { graphics, onGraphics } from '../graphics.ts';
+import { glowsHot } from '../post.ts';
 import { hazeColor, hazeColorFor, hazeFactor, moonColor, nightLevel, sunColor, sunDirection } from './env.ts';
 
 type N = Node<'vec3'>;
@@ -84,6 +85,8 @@ function material(s: Omit<Slot, 'mesh' | 'age' | 'look' | 'base'>, seed: number)
   const centre = c3(s.centre), radius = f1(s.radius), heat = f1(s.heat), dens = f1(s.dens), erode = f1(s.erode);
   const boil = f1(s.boil), squash = f1(s.squash), flash = f1(s.flash), soot = f1(s.soot), gain = f1(s.gain);
   const plane = s.plane as unknown as Node<'vec4'>, tint = c3(s.tint);
+  // The fire's own glow, without the smoke, for the bloom (post.ts glowsHot): set by the march below.
+  const fire = vec3(0).toVar('fireGlow');
   const out = Fn(() => {
     const ro = cameraPosition;
     const rd = normalize(positionWorld.sub(ro)).toVar();
@@ -110,6 +113,7 @@ function material(s: Omit<Slot, 'mesh' | 'age' | 'look' | 'base'>, seed: number)
     const jitter = fract(fract(dot(floor(screenCoordinate.xy), vec2(0.06711056, 0.00583715))).mul(52.9829189));
     const trans = float(1).toVar();
     const col = vec3(0).toVar();
+    fire.assign(vec3(0));
     // Lit by: the sun from its side, the sky's haze all round (and the moon at night), the fire within.
     // (The haze stays bright after dark: dimmed by the night, or the smoke glows grey against a dark sky.)
     const ambient = c3(hazeColor).mul(float(1).sub(f1(nightLevel).mul(0.75)).mul(0.3)).add(c3(moonColor).mul(0.08));
@@ -143,7 +147,9 @@ function material(s: Omit<Slot, 'mesh' | 'age' | 'look' | 'base'>, seed: number)
         const within = vec3(2.2, 0.7, 0.16).mul(tint).mul(heat.mul(heat)).mul(saturate(float(1.3).sub(r)));
         const smoke = sunlit.add(sky).mul(albedo).add(within.mul(0.35));
         const glow = blackbody(T).mul(tint).mul(gain).mul(flash.mul(2).add(1));
-        col.addAssign(trans.mul(smoke.mul(a).add(glow.mul(rho).mul(dq).mul(EMIT))));
+        const lit = trans.mul(rho).mul(dq).mul(EMIT);
+        col.addAssign(trans.mul(smoke.mul(a)).add(glow.mul(lit)));
+        fire.addAssign(glow.mul(lit));
         trans.mulAssign(float(1).sub(a));
       });
     });
@@ -151,10 +157,12 @@ function material(s: Omit<Slot, 'mesh' | 'age' | 'look' | 'base'>, seed: number)
     // The air between: as the scene's haze (fog is off; it would tint the whole proxy, not just what's in it).
     const flat = normalize(vec3(rd.x, min(rd.y, 0), rd.z));
     const hz = hazeFactor(centre);
+    fire.mulAssign(float(1).sub(hz));
     return vec4(col.mul(float(1).sub(hz)).add(hazeColorFor(flat).mul(hz).mul(alpha)), alpha);
   })();
   m.colorNode = out.xyz;
   m.opacityNode = out.w;
+  glowsHot(m, fire);
   return m;
 }
 

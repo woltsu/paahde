@@ -75,6 +75,12 @@ export const grade = {
 };
 /** Bloom: strength, radius and threshold of the half-res bloom chain, in Post's constructor. */
 export const BLOOM = { strength: 0.4, radius: 0.45, threshold: 2.0 };
+/** What hot things (explosions, sparks, molten metal: `glowsHot`) add to the bloom past its threshold, × their glow. */
+export const HOT_BLOOM = 2;
+/** The `hot` target is 8-bit: it holds a hot glow ÷ this (blending stays linear), so up to this much before it clips. */
+const HOT_RANGE = 8;
+/** How much hot things' own glow blooms (`glowsHot`), on top of the threshold's; live, like the bloom's uniforms. */
+export const hotBloom = uniform(HOT_BLOOM);
 
 /**
  * What a stage (src/levels/stage.ts) wants of the post passes while it is active, all through uniforms (Post.setProfile):
@@ -267,6 +273,11 @@ export class Post {
     // none (and cover it), smoke in front fades it, as on the colour.
     scenePass.setMRT(mrt({ output, glow: vec4(0) }).setBlendMode('glow', new THREE.BlendMode(THREE.MaterialBlending)).setClearColor('glow', 0, 0));
     scenePass.getTexture('glow').type = THREE.UnsignedByteType;
+    // Hot things' glow (glowsHot) into a target of its own, for the bloom alone: the threshold sits above lit sand for the
+    // sun, so a fireball's core barely crossed it. Opaque things write none and cover it; blended as their colour.
+    scenePass.setMRT(scenePass.getMRT()!.merge(mrt({ hot: vec4(0) })).setBlendMode('hot', new THREE.BlendMode(THREE.MaterialBlending)).setClearColor('hot', 0, 0));
+    scenePass.getTexture('hot').type = THREE.UnsignedByteType;
+    const hot = scenePass.getTextureNode('hot');
     const glow = scenePass.getTextureNode('glow');
     const color = scenePass.getTextureNode('output');
     const depth = scenePass.getTextureNode('depth');
@@ -662,6 +673,11 @@ export class Post {
     // --- Bloom (half-res mip chain). Threshold sits just above lit sand so the sun, its halo and
     // glints bloom, and bloom bleeds over the dune crests that occlude the sun.
     const bloomPass = (this.bloom = bloom(color, BLOOM.strength, BLOOM.radius, BLOOM.threshold));
+    // Its high pass (three's, then the hot glow on top, past the threshold).
+    bloomPass.highPassFn = Fn(({ input, threshold, smoothWidth }: { input: Node<'vec4'>; threshold: F; smoothWidth: F }) => {
+      const bright = input.mul(smoothstep(threshold, threshold.add(smoothWidth), dot(input.rgb, vec3(0.2126, 0.7152, 0.0722))));
+      return vec4(bright.rgb.add(hot.rgb.mul(hotBloom.mul(HOT_RANGE))), 1);
+    }) as unknown as typeof bloomPass.highPassFn;
 
     // --- Sun visibility: fraction of depth taps around the sun that see sky (players and dunes occlude).
     const sunVis = Fn(() => {
@@ -898,5 +914,16 @@ export class Post {
 /** A light's glow (an additive beam, glare) shows in front of the sand vortex: it's drawn into the scene behind all the
  *  dust, and the vortex, marched to the depth behind it, covered it. Call once its colour and opacity are set. */
 export function glowsThroughDust(m: THREE.NodeMaterial) {
-  m.mrtNode = mrt({ glow: vec4((m.colorNode ?? vec3(1)) as N, (m.opacityNode ?? float(1)) as F) });
+  addMrt(m, mrt({ glow: vec4((m.colorNode ?? vec3(1)) as N, (m.opacityNode ?? float(1)) as F) }));
+}
+
+/** Something hot (a fireball, sparks, molten metal) blooms on its own, whatever the threshold: `glow` (its colour unless
+ *  given, linear HDR; premultiplied where the material's blending is) goes into the bloom alone. Call once its colour and
+ *  opacity are set. */
+export function glowsHot(m: THREE.NodeMaterial, glow?: N) {
+  addMrt(m, mrt({ hot: vec4(((glow ?? m.colorNode ?? vec3(1)) as N).div(HOT_RANGE), (m.opacityNode ?? float(1)) as F) }));
+}
+
+function addMrt(m: THREE.NodeMaterial, n: THREE.MRTNode) {
+  m.mrtNode = m.mrtNode ? m.mrtNode.merge(n) : n;
 }

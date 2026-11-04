@@ -473,7 +473,9 @@ Everything built is shared, and anyone can take a building down.
   and shake follow it, any field can be set over it); `BLASTS` has the game's: blaster, guardian bolt (sand / air),
   missile (guardians', worm's, colossus'), carrier bomb, crash (jets, the harvester). The fireball itself is
   raymarched (`src/world/fireball.ts`: noise-displaced ball, blackbody glow by temperature, sun-shadowed soot, clipped
-  to the surface struck; steps by the sand detail setting)
+  to the surface struck; steps by the sand detail setting). The hot parts (the fire's glow but not its smoke, ring,
+  sparks, embers, molten metal, plasma, the graviton's halo and motes) also write a `hot` scene target
+  (`glowsHot` in `src/post.ts`) that the bloom adds past its threshold (`hotBloom`), so they glow without the sand blooming
 - `shared/jammer.ts` — the jammer (gear, found broken and repaired): hold it 3.5 s on a jet or drone in its cone and it
   glides down whole; the lock is added up by `onJam` (server/world.ts), aimed and heard in `src/jammer.ts`, model
   `src/models/jammer.ts`

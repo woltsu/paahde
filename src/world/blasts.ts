@@ -23,6 +23,7 @@ import type { Node } from 'three/webgpu';
 import { BLAST_R } from '../../shared/rifle.ts';
 import { heightAt } from '../../shared/terrain.ts';
 import { groundAt } from '../ground.ts';
+import { glowsHot } from '../post.ts';
 import { tyreDust } from '../tyreDust.ts';
 import { fireballs, type FireballLook } from './fireball.ts';
 import { SpritePool, zaps } from './zaps.ts';
@@ -137,6 +138,7 @@ class Blasts {
       const d = disc().add(mx_noise_float(vec3(uv().mul(9), i)).mul(0.04));
       m.colorNode = c3(color);
       m.opacityNode = smoothstep(0.6, 0.94, d).mul(float(1).sub(smoothstep(0.94, 1, d))).mul(fade);
+      glowsHot(m);
       const mesh = new THREE.Mesh(quad, m);
       mesh.visible = false;
       mesh.frustumCulled = false;
@@ -169,6 +171,7 @@ class Blasts {
       const flicker = mx_noise_float(positionGeometry.mul(4).add(vec3(seed, fade.mul(23), 0))).mul(0.6).add(0.8);
       rm.colorNode = vec3(1.6, 0.35, 4.2);
       rm.opacityNode = pow(float(1).sub(facing()), float(2.5)).mul(flicker).mul(fade);
+      glowsHot(rm);
       const rim = new THREE.Mesh(ball, rm);
       rim.renderOrder = 2;
       const g = new THREE.Group();
@@ -184,12 +187,14 @@ class Blasts {
       m.colorNode = vec3(1.4, 0.4, 3.6).mul(d.x);
       m.opacityNode = float(1).sub(smoothstep(0.1, 1, r));
       m.scaleNode = vec2(d.y, d.y);
+      glowsHot(m);
     }, true);
     // The debris' heads: small orange-white points, dulling as they cool.
     this.embers = new SpritePool(EMBERS, (m, d) => {
       m.colorNode = vec3(4, 1.6, 0.4).mul(d.x);
       m.opacityNode = float(1).sub(smoothstep(0.1, 1, disc()));
       m.scaleNode = vec2(d.y, d.y);
+      glowsHot(m);
     }, true);
     this.root.add(this.motes.sprite, this.embers.sprite);
     // Molten metal torn out by the piercer's slug: white-yellow drops cooling to orange and dull red, lying glowing a
@@ -199,6 +204,7 @@ class Blasts {
       m.colorNode = vec3(9, 5, 1.8).mul(heat.mul(heat).mul(heat)).add(vec3(3.2, 0.8, 0.12).mul(heat));
       m.opacityNode = float(1).sub(smoothstep(0.25, 1, r)).mul(smoothstep(0, 0.12, heat));
       m.scaleNode = vec2(d.y, d.y);
+      glowsHot(m);
     }, true);
     this.root.add(this.molten.sprite);
     // The blaster's plasma bolt in flight (src/rifle.ts): a white-hot head and an orange trail fading behind it.
@@ -207,6 +213,7 @@ class Blasts {
       m.colorNode = vec3(7, 3, 0.7).mul(k).add(vec3(5, 4.5, 3.5).mul(k.mul(k).mul(k)));
       m.opacityNode = float(1).sub(smoothstep(0.15, 1, r)).mul(k);
       m.scaleNode = vec2(d.y, d.y);
+      glowsHot(m);
     }, true);
     this.root.add(this.plasma.sprite);
   }

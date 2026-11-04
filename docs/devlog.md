@@ -3175,3 +3175,17 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   canteen's height are divided by `size` too, since root space is the body's size; `grip()` composes the item with its
   own scale, so its reach target and its grip frame agree. The holds' anchors from the shoulder stay in body units.
   Hand sizes come out about equal in the world (dwarf 0.85 × 1.4, gnome 0.6 × 1.65), so the human grip offsets fit.
+
+## Explosions bloom on their own
+
+- **What:** fireballs, sparks, embers, molten metal, plasma bolts, the shock ring and the graviton's halo glow out over
+  what's round them. The pipeline was already HDR (the scene pass is half float, bloom runs before the tone curve), but
+  the bloom's threshold (2) sits just above lit sand for the sun, so only a fireball's very core crossed it, weakly.
+- **How:** a third scene target, `hot` (8-bit, holding glow ÷ 8, blended like the material's colour, opaque things write
+  none and cover it), filled by materials through `glowsHot(m, glow?)` in `src/post.ts`. The bloom's high pass is
+  replaced: three's threshold on the colour, plus `hot × hotBloom` (2) on top, so one blur chain does both. The fireball
+  splits its march: the fire's emission (hazed like the rest) goes to `hot`, the lit smoke doesn't. `glowsThroughDust`
+  and `glowsHot` merge into a material's MRT, so one can do both.
+- **Tuned:** in the lab at noon, a bomb at 30 m: 0 (before) a readable ball with no glow; 3 washed the billows into a
+  flat yellow blob; 2 glows over the cart and horizon and keeps some of the billows. `hotBloom` is a live uniform for the
+  art bench, if wanted.
