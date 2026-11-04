@@ -1,4 +1,4 @@
-// The runner: a four-legged hunting robot bigger than a horse (bigger than a crawler, far smaller than a guardian),
+// The runner: a four-legged hunting robot far bigger than a horse, with great insect jaws (bigger than a crawler, far smaller than a guardian),
 // laid out like Boston Dynamics' Spot (a long body, a hip at each corner, every knee bending backwards) but built to
 // frighten. Model: tools/blender/runner.py -> public/models/runner.glb; rig, gait and look: src/world/runner.ts.
 //
@@ -9,8 +9,8 @@
 /** Rig lengths (body frame: +Z forward, Y up) in the model's units, which must match tools/blender/runner.py; in the
  *  world everything is `scale` times that. */
 export const RUNNER = {
-  /** The model is drawn this many times its built size (hips ~1.6 m, ~3.8 m long). */
-  scale: 1.4,
+  /** The model is drawn this many times its built size (hips ~2.3 m, ~5.4 m long, jaws ~1.5 m). */
+  scale: 2.0,
   /** Hip sockets at (±sockX, sockY, ±sockZ) from the body's centre: each hip rolls (abduction) about Z through it. */
   sockX: 0.31, sockY: -0.02, sockZ: 0.7,
   /** The thigh's pitch joint, out from the socket along the hip's X (mirrored on the right). */
@@ -19,6 +19,8 @@ export const RUNNER = {
   thigh: 0.72, shin: 0.78,
   /** The head's pivot (yaw, then pitch). */
   neck: [0, 0.07, 1.0] as const,
+  /** The left jaw's hinge in the head (it swings about Y; the right one's is mirrored). */
+  jaw: [0.13, -0.06, 0.34] as const,
   /** The body's centre over level ground, standing (model units). */
   standY: 1.15,
 };

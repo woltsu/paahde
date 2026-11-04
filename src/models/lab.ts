@@ -58,7 +58,7 @@ const ground = new THREE.Mesh(
 ground.receiveShadow = true;
 scene.add(ground);
 
-if (runnerMode !== null) Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22 }); // the gallop's circle
+if (runnerMode !== null) Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26 }); // the gallop's circle
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 300);
 const target = new THREE.Vector3(0, 1.0, 0);
 let yaw = 0.35;
@@ -86,7 +86,7 @@ const one: ScavengerClip | null = riding ? 'Idle' : only;
 const clips: ScavengerClip[] = runnerMode !== null ? [] : one ? (looks.length ? looks.map(() => one) : [one]) : ['Idle', 'Walk', 'Run', 'Jump', 'Dig', 'Slide', 'Powerslide', 'Crouch', 'CrouchWalk'];
 const colors = [0xd8452b, 0x2f8fd8, 0xe0b23a, 0x4fae5a, 0xb455c8, 0xe8e2d6];
 if (only) dist = 4;
-if (runnerMode !== null) [dist, pitch] = runnerMode ? [6, 0.15] : [30, 0.45];
+if (runnerMode !== null) [dist, pitch] = runnerMode ? [10, 0.15] : [40, 0.45];
 if (params.has('yaw')) yaw = Number(params.get('yaw'));
 if (params.has('dist')) dist = Number(params.get('dist'));
 if (params.has('target')) target.fromArray(params.get('target')!.split(',').map(Number)); // e.g. &target=0.3,0.95,0 to look at a hand

@@ -10,6 +10,7 @@
 // asks a leg to reach further than it can. Stopped, it steps until every foot stands at its rest spot; then the clock
 // stops.
 //
+// The jaws flex idly, open slowly and snap shut while it stares, gape and chatter while it runs hot (`alert`).
 // The body rides standY over the ground, pitched and rolled to the ground under its feet, bobbing with the stride
 // (twice a stride trotting; galloping, a rocking pitch), crouching lower the faster it goes, leaning into turns and
 // forward as it speeds up. The head looks at what it's given (`look`) or about, its eyes pulsing.
@@ -20,7 +21,7 @@ import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK } from '../../shared/runner.ts';
 
-const PARTS = ['Runner_Body', 'Runner_Head', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
+const PARTS = ['Runner_Body', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
 type PartName = (typeof PARTS)[number];
 
 let parts: Record<PartName, THREE.Object3D> | null = null;
@@ -89,6 +90,9 @@ export class Runner {
   readonly root = new THREE.Group();
   private body = new THREE.Group();
   private neck = new THREE.Group();
+  /** The jaws' hinges (left, right) and how far open they are (rad). */
+  private jaws: THREE.Group[] = [];
+  private gape = 0;
   private legs: Leg[] = [];
   private eyes: THREE.MeshStandardMaterial[] = [];
   private x = 0; private z = 0; private yaw = 0;
@@ -130,6 +134,13 @@ export class Runner {
     this.neck.position.set(...RUNNER.neck);
     this.neck.rotation.order = 'YXZ';
     this.neck.add(mount(p.Runner_Head));
+    for (const side of [1, -1]) {
+      const jaw = new THREE.Group();
+      jaw.position.set(side * RUNNER.jaw[0], RUNNER.jaw[1], RUNNER.jaw[2]);
+      jaw.add(mount(side > 0 ? p.Runner_JawL : p.Runner_JawR));
+      this.neck.add(jaw);
+      this.jaws.push(jaw);
+    }
     this.body.add(this.neck);
     for (const { side, front } of LEGS) {
       const sx = side * RUNNER.sockX, sz = (front ? 1 : -1) * RUNNER.sockZ;
@@ -279,6 +290,15 @@ export class Runner {
     this.headPitch = ease(this.headPitch, hp - rock * 0.8, 7, dt);
     this.neck.rotation.set(this.headPitch, this.headYaw, 0);
 
+    // The jaws: flexing idly; staring at you, slowly opening wide and snapping shut; running hot, agape and chattering.
+    const k = now / 1000 + this.seed;
+    const snap = frac(k / 2.6), wide = snap < 0.85 ? 0.85 * smooth(0, 0.85, snap) : 0;
+    const gape = this.alert > 0 ? 0.55 + 0.12 * Math.sin(k * 40) : look ? 0.04 + wide : 0.08 + 0.07 * Math.sin(k * 1.3) * Math.sin(k * 0.45);
+    // Shutting is a snap, opening a slow spread.
+    this.gape = ease(this.gape, gape, gape < this.gape ? 30 : 6, dt);
+    this.jaws[0].rotation.y = this.gape;
+    this.jaws[1].rotation.y = -this.gape;
+
     const pulse = 0.75 + 0.25 * Math.sin(now / 170 + this.seed);
     for (const e of this.eyes) e.emissiveIntensity = (e.userData.base as number) * pulse * (1 + 1.5 * this.alert);
   }
@@ -338,7 +358,7 @@ export class Prowl {
     if (Math.hypot(this.x - cx, this.z - cz) > 55 || r < 0.35) {
       // A sprint, round the centre: a third to two thirds of a lap, either way.
       const a = from + (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 2);
-      const d = 18 + Math.random() * 16;
+      const d = 22 + Math.random() * 16;
       this.set(cx + Math.sin(a) * d, cz + Math.cos(a) * d, RUNNER_SPRINT * (0.7 + 0.3 * Math.random()), 1.8);
     } else if (r < 0.55) {
       this.staring = true;
@@ -347,7 +367,7 @@ export class Prowl {
     } else {
       // A prowl to a spot not far off, a little in or out.
       const a = from + (Math.random() - 0.5) * 1.6;
-      const d = 9 + Math.random() * 12;
+      const d = 11 + Math.random() * 12;
       this.set(cx + Math.sin(a) * d, cz + Math.cos(a) * d, RUNNER_WALK + Math.random() * (RUNNER_TROT - RUNNER_WALK), 2.6);
     }
   }
@@ -406,9 +426,9 @@ export class Runners {
     if (pending && !parts) void loadRunner();
     while (pending && parts) {
       pending--;
-      // In view, 18 m ahead, side on.
+      // In view, 22 m ahead, side on.
       camera.getWorldDirection(_v).setY(0).normalize();
-      const x = focus.x + _v.x * 18, z = focus.z + _v.z * 18, yaw = Math.atan2(_v.x, _v.z) + Math.PI / 2;
+      const x = focus.x + _v.x * 22, z = focus.z + _v.z * 22, yaw = Math.atan2(_v.x, _v.z) + Math.PI / 2;
       const view = new Runner(this.ground);
       view.place(x, z, yaw);
       this.scene.add(view.root);

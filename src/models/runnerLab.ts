@@ -30,11 +30,11 @@ export async function runnerLab(scene: THREE.Scene, ground: Ground, mode: string
       return { x: p.x, z: p.z, yaw: p.yaw, look: p.speed < RUNNER_TROT };
     });
   } else if (single) {
-    drivers.push(circle(0, 0, Math.max(4, Number(mode) * 1.4), Number(mode) || RUNNER_WALK, 0));
+    drivers.push(circle(0, 0, Math.max(6, Number(mode) * 1.4), Number(mode) || RUNNER_WALK, 0));
   } else {
-    drivers.push(circle(0, 0, 5, RUNNER_WALK, 0));
-    drivers.push(circle(0, 0, 10, RUNNER_TROT, 2));
-    drivers.push(circle(0, 0, 17, RUNNER_SPRINT, 4));
+    drivers.push(circle(0, 0, 6, RUNNER_WALK, 0));
+    drivers.push(circle(0, 0, 12, RUNNER_TROT, 2));
+    drivers.push(circle(0, 0, 20, RUNNER_SPRINT, 4));
     drivers.push(() => ({ x: 0, z: 0, yaw: 0.6, look: true }));
   }
   const runners = drivers.map(() => {

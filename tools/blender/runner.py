@@ -13,6 +13,8 @@ in shared/runner.ts and must match the constants below.
   Runner_Body     origin = body centre, forward +Z. Hip sockets at (+-SOCK_X, SOCK_Y, +-SOCK_Z): each hip's
                   abduction axis runs along Z through its socket. Neck pivot at NECK.
   Runner_Head     origin = neck pivot; yaws about Y, then pitches about X (+ = nose down). Eyes: RunnerEye.
+  Runner_JawL/R   origin = hinge at (+-JAW) in the head, turning about Y (+ opens the left jaw, - the right): a great
+                  curved pincer, serrated inside, the tips crossing in front of the snout when shut.
   Runner_HipL/R   origin = socket, rolls about local Z (abduction). The thigh's pitch axis is local X through
                   (+-HIP_OUT, 0, 0); L is the +X (left) side, R its mirror image.
   Runner_ThighL/R origin = hip pitch joint, hangs down -Y to the knee at (0, -THIGH, 0); turns about X
@@ -41,7 +43,9 @@ HIP_OUT = 0.20
 THIGH = 0.72
 SHIN = 0.78
 NECK = (0.0, 0.07, 1.0)
+JAW = (0.13, -0.06, 0.34)  # the left jaw's hinge in the head (vertical axis); the right one mirrored
 STAND_Y = 1.15  # body centre over level ground, standing (previews)
+SCALE = 2.0  # drawn this many times the built size in the game (shared/runner.ts RUNNER.scale): the previews too
 
 # name -> (sRGB hex, metallic, roughness, emission strength or None)
 MATERIALS = {
@@ -432,17 +436,60 @@ def build_head():
         for x, y, z, r in eyes:
             mb.sphere((s * x, y, z - r * 0.3), r * 1.35, 'RunnerDark', 8, 4)
             mb.sphere((s * x, y, z + r * 0.15), r, 'RunnerEye', 8, 4)
-    # mandibles: two curved blades under the snout, closing in front of it
+    # jaw hinges: dark sockets low on each cheek, the jaws (Runner_JawL/R) swing in them
     for s in (-1, 1):
-        mb.sweep([(s * 0.085, -0.05, 0.3), (s * 0.1, -0.075, 0.46), (s * 0.06, -0.085, 0.6), (s * 0.016, -0.07, 0.68)],
-                 0.02, 'RunnerSteel', 5, radii=[0.026, 0.02, 0.012, 0.003])
-        mb.cyl((s * 0.06, -0.05, 0.3), (s * 0.11, -0.05, 0.3), 0.032, None, 6, 'RunnerIron')
+        mb.box((s * (JAW[0] - 0.035), JAW[1], JAW[2]), (0.06, 0.12, 0.12), 'RunnerDark')
+        mb.cyl((s * (JAW[0] - 0.01), JAW[1] + 0.07, JAW[2]), (s * (JAW[0] - 0.01), JAW[1] + 0.09, JAW[2]), 0.05, None, 8, 'RunnerSteel')
     # the maw between them: a dim red slit
     mb.box((0, -0.045, 0.52), (0.07, 0.016, 0.05), 'RunnerGlow')
     # two sensor fins raking back off the crown
     for s in (-1, 1):
         mb.fin((s * 0.07, 0.12, 0.16), 0.12, 0.09, 0.9, 0.018, 'RunnerSteel', up=(s * 0.35, 1, 0))
     return finish(mb, 'Runner_Head')
+
+
+# Centre line of the left jaw from its hinge: out, forward, then hooking in to the tip; widths (across) and heights.
+JAW_LINE = [(0.0, 0.0, 0.0), (0.075, -0.005, 0.15), (0.11, -0.015, 0.32), (0.09, -0.025, 0.49), (0.02, -0.035, 0.62),
+            (-0.07, -0.04, 0.69)]
+JAW_W = [0.075, 0.075, 0.065, 0.05, 0.035, 0.018]
+JAW_H = [0.13, 0.12, 0.1, 0.075, 0.05, 0.025]
+
+
+def build_jaw():
+    """The left jaw, in its hinge's frame: a curved blade, heavy at the root, hooked at the tip, toothed along the
+    inside (the side facing the other jaw)."""
+    mb = MB()
+    pts = [Vector(p) for p in JAW_LINE]
+    n = len(pts)
+    up = Vector((0, 1, 0))
+    rings, inner = [], []
+    for i, p in enumerate(pts):
+        t = (pts[min(i + 1, n - 1)] - pts[max(i - 1, 0)]).normalized()
+        side = up.cross(t).normalized()  # outwards (the convex side)
+        u = t.cross(side).normalized()
+        inner.append((p, -side, t))
+        rings.append([tuple(p + u * math.cos(a) * JAW_H[i] / 2 + side * math.sin(a) * JAW_W[i] / 2)
+                      for a in (2 * PI * k / 8 for k in range(8))])
+    # the blade: dark iron above, a steel cutting edge along the inside (k 5..7 face it)
+    mb.loft(rings, 'RunnerIron', cap0=True, matfn=lambda i, k: 'RunnerSteel' if k in (5, 6, 7) else ('RunnerRust' if k in (3, 4) else 'RunnerIron'))
+    tip = pts[-1] + (pts[-1] - pts[-2]).normalized() * 0.07
+    mb.fan(rings[-1], tuple(tip), 'RunnerSteel')
+    # teeth along the inside: a big one near the root (a stag beetle's), then a row of smaller ones, raked forward
+    for i, (f, size) in enumerate(((0.9, 0.11), (1.6, 0.06), (2.2, 0.075), (2.8, 0.05), (3.3, 0.055), (3.8, 0.04))):
+        k = min(n - 2, int(f))
+        a = f - k
+        p = pts[k].lerp(pts[k + 1], a)
+        w = lerp(JAW_W[k], JAW_W[k + 1], a)
+        _, ins, t = inner[k]
+        base = p + ins * w * 0.35
+        mb.cyl(tuple(base), tuple(base + ins * size + t * size * 0.45), 0.022 + size * 0.15, 0, 5, 'RunnerSteel', cap0=False)
+    # the hinge knuckle, and two blades raking back along the jaw's back
+    mb.cyl((0, -0.07, 0), (0, 0.07, 0), 0.055, None, 8, 'RunnerIron')
+    for k, h in ((1, 0.07), (2, 0.05)):
+        t = (pts[k + 1] - pts[k - 1]).normalized()
+        mb.fin(tuple(pts[k] + up * JAW_H[k] * 0.42), 0.12, h, 0.7, 0.016, 'RunnerCeramic', along=tuple(t))
+    mb.sweep([(0.03, -0.05, 0.03), (0.0, -0.09, -0.04), (-0.05, -0.06, -0.06)], 0.016, 'RunnerDark', 4)
+    return finish(mb, 'Runner_Jaw')
 
 
 # ==================================================================================================== legs
@@ -580,9 +627,12 @@ def leg_ik(foot_y, foot_z):
     return t1, ts - t1
 
 
-def pose(body_M, strides=(0.0, 0.0, 0.0, 0.0), head=(0.0, 0.15)):
-    """three.js matrices for every part, the feet on y = 0 under the hips shifted by `strides` (z, per leg FL FR RL RR)."""
-    out = [('Runner_Body', body_M), ('Runner_Head', body_M @ T(NECK) @ Ry(head[0]) @ Rx(head[1]))]
+def pose(body_M, strides=(0.0, 0.0, 0.0, 0.0), head=(0.0, 0.15), jaws=0.3):
+    """three.js matrices for every part, the feet on y = 0 under the hips shifted by `strides` (z, per leg FL FR RL RR),
+    the jaws open `jaws` radians."""
+    H = body_M @ T(NECK) @ Ry(head[0]) @ Rx(head[1])
+    out = [('Runner_Body', body_M), ('Runner_Head', H), ('Runner_JawL', H @ T(JAW) @ Ry(jaws)),
+           ('Runner_JawR', H @ T(-JAW[0], JAW[1], JAW[2]) @ Ry(-jaws))]
     for i, (sx, sz) in enumerate(((1, 1), (-1, 1), (1, -1), (-1, -1))):
         side = 'L' if sx > 0 else 'R'
         hip = body_M @ T(sx * SOCK_X, SOCK_Y, sz * SOCK_Z)
@@ -650,7 +700,7 @@ def render_previews(parts, out_dir):
 
     coll = bpy.data.collections.new('rig')
     scene.collection.children.link(coll)
-    for name, M in pose(T(0, STAND_Y, 0), strides=(0.12, 0.02, -0.04, 0.1), head=(0.25, 0.2)):
+    for name, M in pose(T(0, STAND_Y * SCALE, 0) @ S(SCALE, SCALE, SCALE), strides=(0.12, 0.02, -0.04, 0.1), head=(0.25, 0.2), jaws=0.45):
         place(parts[name], M, coll)
     # a player-sized post for scale, off the left shoulder
     hm = bpy.data.materials.new('human')
@@ -659,16 +709,16 @@ def render_previews(parts, out_dir):
     bpy.ops.mesh.primitive_cube_add(size=1)
     human = bpy.context.active_object
     human.scale = (0.45, 0.3, 1.8)
-    human.location = C @ Vector((-1.3, 0.9, 0.9))  # beside it, behind from the cameras
+    human.location = C @ Vector((-2.4, 0.9, 1.6))  # beside it, behind from the cameras
     human.data.materials.append(hm)
-    look((3.6, 1.9, 3.4), (0, 0.9, 0.1), 38)
+    look((7.0, 3.6, 7.0), (0, 1.8, 0.3), 38)
     shoot('runner_34.png')
-    look((4.6, 1.0, 0.0), (0, 0.85, 0.0), 40)
+    look((9.5, 2.0, 0.6), (0, 1.7, 0.6), 40)
     shoot('runner_side.png')
     human.hide_render = True
-    look((0.55, 1.2, 2.2), (0, 1.05, 1.3), 45)
+    look((1.6, 3.0, 5.4), (0.2, 2.3, 2.9), 40)
     shoot('runner_face.png')
-    look((-2.6, 2.2, -3.0), (0, 0.9, 0), 38)
+    look((-5.4, 4.4, -6.0), (0, 1.8, 0), 38)
     shoot('runner_rear.png')
 
 
@@ -684,7 +734,7 @@ def main():
         make_material(name, *spec)
 
     parts = {'Runner_Body': build_body(), 'Runner_Head': build_head()}
-    for build in (build_hip, build_thigh, build_shin):
+    for build in (build_jaw, build_hip, build_thigh, build_shin):
         left = build()
         base = left.name
         left.name = left.data.name = base + 'L'

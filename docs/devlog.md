@@ -3280,11 +3280,14 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 
 ## The runner: model and gait (work in progress)
 
-- **What:** a new enemy, the runner: a four-legged hunting robot bigger than a horse (drawn at 1.4× its built size,
-  `RUNNER.scale`: hips ~1.6 m, ~3.8 m nose to antenna tips; bigger than a crawler, nothing like a guardian), sprinting
+- **What:** a new enemy, the runner: a four-legged hunting robot far bigger than a horse (drawn at 2× its built size,
+  `RUNNER.scale`: hips ~2.3 m, ~5.4 m long, its head about a player's height; bigger than a crawler, nothing like a
+  guardian), sprinting
   at 16 m/s (outruns a sliding player; walk 3, trot 7), Spot's layout (long body, a hip at each corner, every knee
   bending back) made menacing: an armoured hull with blade fins down the spine and glowing flank vents, a low scowling
-  head with eight red eyes and two mandible blades, bladed shins with spurs ending in claws. So far it is only drawn:
+  head with eight red eyes and two great insect jaws (~1.5 m curved pincers, a big tooth at the root and serrated
+  inside, hinged: flexing idly, slowly spreading and snapping shut while it stares at you, agape and chattering at a
+  sprint), bladed shins with spurs ending in claws. So far it is only drawn:
   it walks and runs in the models lab (`models-lab.html?runner`, `?runner=16` follows one at 16 m/s, `?runner=prowl`)
   and the debug menu's Spawn → Runner puts one prowling round you in the desert, seen by you alone. No server side,
   hunting, damage, loot or sounds yet.
