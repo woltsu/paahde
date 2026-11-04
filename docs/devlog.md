@@ -3238,3 +3238,22 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   high-passed at 30 Hz, leading silence trimmed (at −30 dB for Explosive, so the crack starts on the first frame), tails
   faded, each levelled to −23 LUFS integrated (−22.6 to −23.0); true peak −1.9 dBTP at most. Set play gains in the full
   mix as usual (docs/audio.md).
+
+## Audio config and the audio workbench
+
+- **What:** `src/audioConfig.ts` lists every sample (file, measured LUFS, a trim in dB, sprite slices, a song's loop)
+  and every sound event that plays one (samples, gain, pitch and spread, route, reach, which code plays it): 31
+  samples, 32 events. Swapping a sound is an edit there; e.g. the explosion samples are listed and await an event.
+  The audio workbench (`?debug`, F3 → Sound) plays any event or sample through the game's own graph from a spot round
+  you (a top-down pad, log distance to 600 m, height, presets, in your head), with the route forced if wanted, Repeat
+  to walk about while it plays, and live edits of trims and event fields that the game hears at once; edits stay in
+  the browser and "Copy edits" lists them for the config.
+- **How:** `src/samples.ts` is one sample bank (each file fetched and decoded once; music still loads its own, two
+  songs at most) and `play(event, at, ear)`, which reads the entry on every play. The modules that played samples
+  (rifle and its bursts, pickup, drink, footsteps, bike landing, teardown, music, the landing page) read their files,
+  gains and reach from the config; the firework bursts that were `rifleSound.firework(at, ear, level, pitch)` calls
+  in eight places are now named events (weakPoint.break, drone.crash, carrier.bomb, ...) with those levels and pitches,
+  unchanged. Picks never repeat the last sample (they could before, except footsteps).
+- **Checked:** `tools/audio-config.test.mjs` (files ↔ config, `lufs` and lengths against ffmpeg, no file names in
+  code, the player's reservations, slices and trims; replaces tools/rifle-audio.test.mjs). In the browser: events
+  placed and in your head, a sample, footsteps via their module, a song on the music bus, edits, copy and reset.

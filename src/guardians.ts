@@ -25,7 +25,8 @@ import { SPEED_OF_SOUND } from './acoustics';
 import { CHARGE_MS, CRAWLER, FIRE_R, FOOT_CRUSH_R, GUARDIAN, KINDS, LUNGE_DASH, LUNGE_HIT_R, LUNGE_WIND, LUNGE_WIND_MS } from '../shared/guardians.ts';
 import { guardianSound } from './guardianSound';
 import { rifleSound } from './rifleSound';
-import { gunSound, MISSILE_FIREWORK_PITCH } from './gunSound';
+import { gunSound } from './gunSound';
+import { play } from './samples';
 import { tyreDust } from './tyreDust';
 import { zaps } from './world/zaps';
 import type { Net } from './net';
@@ -53,10 +54,6 @@ function perchAt(n: number[], o: number): Perch | null {
   return f ? nestPerches(f)[i] ?? null : null;
 }
 
-/** Firework bursts (rifleSound.firework) besides a guardian's weak point: a crawler's and a crashing drone's softer
- *  (×level), a missile's blast lower (pitch) to sound bigger. */
-const CRAWLER_FIREWORK = 0.4;
-const DRONE_FIREWORK = 0.5;
 
 /** What can turn on us, and what we can kill (the character's remarks: src/speechLines.ts). */
 export type Aggro = 'guardian' | 'crawler' | 'drone' | 'harvester';
@@ -121,7 +118,7 @@ export class GuardianFx {
       zaps.burst(x, y, z, dx, 0.5, dz, 40, 4);
       for (let i = 0; i < 6; i++) zaps.puff(x + dx * 2, y, z + dz * 2, 3 + Math.random() * 3, 3);
       guardianSound.boom(x, y, z, this.ear);
-      rifleSound.firework({ x, y, z }, this.ear, 0.7, MISSILE_FIREWORK_PITCH);
+      play('harvester.coreOut', { x, y, z }, this.ear);
     };
     // The last core: the engine seizes, a blast through the hull, fire and a column of smoke, a shake felt far off.
     this.harvesters.onDeath = (x, y, z) => {
@@ -130,7 +127,7 @@ export class GuardianFx {
       zaps.shatter(x, y + 6, z, 0, 1, 0, 9);
       for (let i = 0; i < 24; i++) zaps.puff(x + (Math.random() - 0.5) * 16, y + Math.random() * 10, z + (Math.random() - 0.5) * 24, 8 + Math.random() * 10, 5 + Math.random() * 4);
       guardianSound.boom(x, y, z, this.ear);
-      rifleSound.firework({ x, y, z }, this.ear, 1, MISSILE_FIREWORK_PITCH * 0.8);
+      play('harvester.death', { x, y, z }, this.ear);
       rifleSound.slam({ x, y, z }, this.ear, true);
       this.thump(x, y - 8, z, 3, 60, 14, 8);
     };
@@ -147,7 +144,7 @@ export class GuardianFx {
       for (let i = 0; i < 16; i++) zaps.puff(x + (Math.random() - 0.5) * 12, y + Math.random() * 6, z + (Math.random() - 0.5) * 12, 8 + Math.random() * 8, 5 + Math.random() * 4);
       this.thump(x, y, z, 0, 40, 22, 7);
       guardianSound.boom(x, y, z, this.ear);
-      rifleSound.firework({ x, y, z }, this.ear, 1, MISSILE_FIREWORK_PITCH);
+      play('jet.crash', { x, y, z }, this.ear);
       rifleSound.slam({ x, y, z }, this.ear, true);
       this.thump(x, y, z, 3, 48, 12, 5);
     };
@@ -161,7 +158,7 @@ export class GuardianFx {
     this.drones.onHit = (x, y, z) => guardianSound.footfall(x, y, z, 0.7, this.ear);
     // A shot-down drone hitting the sand: a softer firework than a weak point's, and a clatter.
     this.drones.onCrash = (x, y, z) => {
-      rifleSound.firework({ x, y, z }, this.ear, DRONE_FIREWORK);
+      play('drone.crash', { x, y, z }, this.ear);
       rifleSound.slam({ x, y, z }, this.ear, false);
       this.thump(x, y, z, 0.6, 0, 0, 0);
     };
@@ -170,7 +167,7 @@ export class GuardianFx {
       const heavy = e.kind === GUARDIAN;
       if (e.what === 'break') {
         rifleSound.impact('glass', e, this.ear);
-        rifleSound.firework(e, this.ear, heavy ? 1 : CRAWLER_FIREWORK);
+        play(heavy ? 'weakPoint.break' : 'crawler.weakPoint.break', e, this.ear);
       }
       else if (e.what === 'fail') rifleSound.fail(e, this.ear, heavy);
       else {

@@ -9,6 +9,7 @@
 // "Guardian here" / "Drone here" bring the nearest guardian, or a drone (by day too), to you, for everyone; "Jet here"
 // sends a jet over you (the drone and the flying wing take turns); "Crawlers here" sets a pack of crawlers on you.
 // "Tone" switches the tone curve live (post.ts toneControl); "white" is the filmic curve's white point.
+// "Audio workbench" (Sound) opens src/audioBench.ts: any sound event or sample played round you, levels tuned live.
 // "Fly camera" (src/flyCam.ts) leaves the body and flies the view freely, for shooting video; "Hide HUD" clears the
 // screen while flying, and FOV / smooth / bank shape the shot.
 // "Give gear" puts one of every piece of gear (shared/gear.ts), repaired with Scrap parts, and a laser rifle, pistol and jammer in your bag and equipment.
@@ -42,7 +43,7 @@ export class DebugMenu {
   constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean, quad: boolean) => void = () => {},
-    goLevel: (key: string) => void = () => {}, net?: Net) {
+    goLevel: (key: string) => void = () => {}, net?: Net, openAudio?: () => void) {
     const style = document.createElement('style');
     style.textContent = `
 #debugMenu { position: fixed; top: 48px; right: 12px; width: 280px; max-height: calc(100vh / var(--ui, 1) - 60px); overflow-y: auto;
@@ -144,6 +145,8 @@ ${scenarios}<div id="dbgMain">
 <div class="grid">${LEVELS.map((l) => `<button data-level="${l.key}" title="Into ${l.key} the way its door takes you (out to the desert: by its door)">${l.key}</button>`).join('')}</div>
 <div class="sub">Beginning beat</div>
 <div class="row">${BEATS.map((b, i) => `<button data-level="beginning:${i}" title="At the start of the beginning's ${b} beat, what comes before it open">${i}</button>`).join('')}</div></details>
+<details data-sec="sound"><summary>Sound</summary>
+<div class="row"><button id="dbgAudio" class="go" title="Play any sound event or sample from a spot round you, and tune their levels (src/audioBench.ts)">Audio workbench</button></div></details>
 <details data-sec="camera"><summary>Camera & look</summary>
 <div class="row"><button id="dbgFly" class="go" title="Leave the body and fly the view (WASD, Space/Ctrl up and down, Shift fast, Alt slow, wheel sets speed)">Fly camera</button>
 <label style="margin-top:0"><input id="dbgClean" type="checkbox"> Hide HUD</label></div>
@@ -262,6 +265,7 @@ ${scenarios}<div id="dbgMain">
     p.querySelector('#dbgCrawlers')!.addEventListener('click', () => summonBot('crawlers'));
     for (const b of p.querySelectorAll<HTMLElement>('[data-boss]')) b.addEventListener('click', () => summonBot(b.dataset.boss as BossKind));
 
+    p.querySelector('#dbgAudio')!.addEventListener('click', () => openAudio?.());
     const flyBtn = p.querySelector<HTMLButtonElement>('#dbgFly')!;
     const flyOpts = p.querySelector<HTMLElement>('#dbgFlyOpts')!;
     const clean = p.querySelector<HTMLInputElement>('#dbgClean')!;

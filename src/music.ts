@@ -9,7 +9,8 @@
 // outdoors. A trigger picks a piece from AMBIENT (the variants that answer it, not the one played last); anything
 // else that takes over ends the piece, and it isn't picked up again.
 //
-// Songs (public/credits.txt), levelled to −23 LUFS, with gapless LAME headers:
+// Songs (public/credits.txt; their files, levels and loop regions are the music.* events in src/audioConfig.ts),
+// levelled to −23 LUFS, with gapless LAME headers:
 // - "Desert ambience" (desert-ambience.mp3), ambient (both triggers): exactly 112 s, played once.
 // - "Epic battle" (epic-battle.mp3, by Veikko Suhonen), against a boss or a guardian hunting close by: 150 bpm in
 //   4/4 (1.6 s a bar), 25 bars (1764000 samples, exactly 40 s). Bar 1 is the intro and bars 2–9 part A, played once
@@ -23,6 +24,7 @@
 //
 // Everything plays through `audio.music` (music slider, then the volume slider and limiter).
 import { audio } from './audio';
+import { event, sample, sampleId, sampleUrl, trimGain, type EventId } from './audioConfig';
 
 export type MusicState = 'dead' | 'epic' | 'combat' | 'sandstorm' | 'indoors' | 'ambient';
 /** What is going on, from main.ts. `ambient` is not a cue: it plays a triggered piece when none of these is.
@@ -33,12 +35,12 @@ export type MusicCues = Partial<Record<Exclude<MusicState, 'ambient'>, boolean>>
 export type AmbientTrigger = 'surface' | 'sunrise';
 
 interface Song {
-  src: string;
+  readonly src: string;
   /** Level at full slider volumes. */
-  gain: number;
+  readonly gain: number;
   /** Loop region (s); `loopEnd` is the file's length. */
-  loopStart: number;
-  loopEnd: number;
+  readonly loopStart: number;
+  readonly loopEnd: number;
   /** Come back to it where it was stopped, not from the top. */
   resume: boolean;
   /** Played once, not looped. */
@@ -47,11 +49,22 @@ interface Song {
   cut?: number;
 }
 
-const DESERT_AMBIENCE: Song = { src: './audio/desert-ambience.mp3', gain: 0.45, loopStart: 0, loopEnd: 112, resume: false, once: true };
-const COMBAT_DRUMS: Song = { src: './audio/combat-drums.mp3', gain: 0.55, loopStart: 0, loopEnd: 1333418 / 44100, resume: false };
-const EPIC_BAR = 1.6;
-const EPIC_BATTLE: Song = { src: './audio/epic-battle.mp3', gain: 0.7, loopStart: 9 * EPIC_BAR, loopEnd: 1764000 / 44100, resume: false };
-const DEATH: Song = { src: './audio/death.mp3', gain: 0.55, loopStart: 0, loopEnd: 421707 / 44100, resume: false, once: true, cut: 0.15 };
+/** A song from its event in src/audioConfig.ts (its file, level and loop region, read live). */
+function song(id: EventId, o: { resume: boolean; once?: boolean; cut?: number }): Song {
+  const s = sampleId(event(id).samples[0]);
+  return {
+    ...o,
+    get src() { return sampleUrl(s); },
+    get gain() { return event(id).gain * trimGain(s); },
+    get loopStart() { return sample(s).loop?.[0] ?? 0; },
+    get loopEnd() { return sample(s).loop?.[1] ?? 0; },
+  };
+}
+
+const DESERT_AMBIENCE = song('music.ambient', { resume: false, once: true });
+const COMBAT_DRUMS = song('music.combat', { resume: false });
+const EPIC_BATTLE = song('music.epic', { resume: false });
+const DEATH = song('music.death', { resume: false, once: true, cut: 0.15 });
 
 /** Ambient pieces and the triggers each answers. Add variants here (`once`, not `resume`). */
 const AMBIENT: { song: Song; on: AmbientTrigger[] }[] = [{ song: DESERT_AMBIENCE, on: ['surface', 'sunrise'] }];

@@ -14,6 +14,7 @@ import { QueenView } from './world/queen';
 import { WormView } from './world/worm';
 import { zaps } from './world/zaps';
 import { rifleSound } from './rifleSound';
+import { play } from './samples';
 import { claim } from './kills';
 import type { Net } from './net';
 
@@ -87,7 +88,7 @@ export class BossFx {
       this.syncBroken(v, s.br);
       this.smoulder(v, dt);
       if (s.dead > 0 && !v.dead) {
-        rifleSound.firework(s, c.ear, 1.4, 0.6);
+        play('boss.death', s, c.ear);
         if (claim(`b${s.id}`)) this.onKill(s.k);
       }
       v.dead = s.dead > 0;
@@ -167,7 +168,7 @@ export class BossFx {
       _n.set(0, 0, 1).transformDirection(p.matrixWorld);
       zaps.shatter(_w.x, _w.y, _w.z, _n.x, _n.y, _n.z, _s.x);
       rifleSound.impact('glass', _w, this.ctx.ear);
-      rifleSound.firework(_w, this.ctx.ear, 1);
+      play('weakPoint.break', _w, this.ctx.ear);
     });
     v.shown = mask;
   }

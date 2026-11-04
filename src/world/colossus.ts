@@ -36,7 +36,7 @@ import { float, length, smoothstep, uv, vec3 } from 'three/tsl';
 import { heightAt, normalAt } from '../../shared/terrain.ts';
 import { colossusSound } from '../colossusSound';
 import { guardianSound } from '../guardianSound';
-import { rifleSound } from '../rifleSound';
+import { play } from '../samples';
 import { tyreDust } from '../tyreDust';
 import { BLASTS, blasts } from './blasts';
 import { weakPoint, type BossCtx, type BossFxMsg, type BossView } from './bossParts';
@@ -847,7 +847,7 @@ export class ColossusView implements BossView {
     ctx.thump(x, y, z, 2.4, 0, 7, 3.2); // the shake (the explosion throws the sand)
     guardianSound.boom(x, y, z, ctx.ear);
     _v.set(x, y, z);
-    rifleSound.firework(_v, ctx.ear, 1, 0.75);
+    play('colossus.missile', _v, ctx.ear);
   }
 
   /** Where the shot from `o` along unit `d` first meets its metal (capsules round its limbs and body) within `max`. */

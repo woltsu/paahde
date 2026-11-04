@@ -77,6 +77,20 @@ The first and calibrated capture sets are `/tmp/dadajam-audio-20261025` and
 use the command above to regenerate them. The six-source isolation set is
 `/tmp/dadajam-audio-components2-20261025`.
 
+## Samples, events and the workbench
+
+Every sample file and every sound event that plays one is in `src/audioConfig.ts`: a sample's measured loudness
+(`lufs`) and `trim` (dB, applied wherever it plays), an event's samples, `gain`, pitch and spread, route and reach.
+Swap an event's sound or rebalance a sample there, not in the module that plays it. `npm test`
+(`tools/audio-config.test.mjs`) checks every file in `public/audio/` is listed, every `lufs` against ffmpeg, and that
+no code loads a sample by file name. Synthesised sounds (wind, engines, guardians, the guns' whines) keep their
+levels in their own modules.
+
+The audio workbench (`?debug`, F3 → Sound → Audio workbench, `src/audioBench.ts`) plays any event or sample through
+the real graph (placement, reverb, echoes, buses, limiter) from a spot round you, and edits trims and event fields
+live; "Copy edits" lists the changes to carry into the config. Listening there is for balancing a sound against its
+set and its neighbours; the full-mix numbers below still come from the capture tool.
+
 ## Routing, headroom and budgets
 
 `src/audio.ts` owns the master gain, compressor, finite-sample guard and final AudioWorklet limiter. The limiter

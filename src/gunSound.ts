@@ -2,7 +2,7 @@
 // - blasterShot: the laser pulse the rifle, pistol and guardians' cannon share, pitched down (src/rifleSound.ts
 //   `blaster`).
 // - blast / explosion: where the blaster's plasma bolt lands, the same explosion as a guardian's missile: the bolt
-//   boom (src/guardianSound.ts) under a low firework burst (src/rifleSound.ts), carried far through src/acoustics.ts.
+//   boom (src/guardianSound.ts) under a low firework burst (missile.blast, src/audioConfig.ts), carried far through src/acoustics.ts.
 // - blasterRecharge: the heavy cell's slow, grinding whine back up between shots (much longer than the rifle's), and a
 //   heavy latch when it's ready: yours only.
 // - gravitonShot: a deep sub-bass drop under a high tearing shimmer, as if the air were ripped.
@@ -21,9 +21,7 @@ import { audio } from './audio';
 import { placed, type P } from './acoustics';
 import { rifleSound } from './rifleSound';
 import { guardianSound } from './guardianSound';
-
-/** A missile-sized explosion's firework: its level and pitch (src/rifleSound.ts `firework`; lower is bigger). */
-export const MISSILE_FIREWORK = 0.7, MISSILE_FIREWORK_PITCH = 0.8;
+import { play } from './samples';
 
 /** Each sound's level (into src/acoustics.ts `placed`), calibrated in the full mix (docs/audio.md). */
 const LEVEL = { recharge: 0.012, gravitonShot: 0.2, gravitonImpact: 0.33, piercerShot: 0.37, piercerImpact: 0.5, piercerCharge: 0.005 };
@@ -231,7 +229,7 @@ class GunSound {
   /** A missile-sized explosion at `at`, heard from `ear`: the bolt boom under a low firework. */
   explosion(at: P, ear: P) {
     guardianSound.boom(at.x, at.y, at.z, ear);
-    rifleSound.firework(at, ear, MISSILE_FIREWORK, MISSILE_FIREWORK_PITCH);
+    play('missile.blast', at, ear);
   }
 
   /** A graviton shot: yours (`at` null) or someone else's at `at`, heard from `ear`. */

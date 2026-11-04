@@ -516,6 +516,11 @@ Everything built is shared, and anyone can take a building down.
   `src/audioWorklet.js`, `src/limiterKernel.mjs` — stereo-linked look-ahead limiter with intersample peak detection
 - `src/acoustics.ts` — placed sounds, distance/air filtering, shared reverbs and echoes; `src/audioBudget.ts` bounds
   transient voices/echoes, and `src/obstruction.ts` caches conservative line-of-sight attenuation
+- `src/audioConfig.ts` — every sample (file, measured LUFS, trim dB, slices, loop) and every sound event (samples,
+  gain, pitch/spread, route, reach, what plays it): swap or rebalance sounds here; `tools/audio-config.test.mjs`
+  keeps it in step with `public/audio/` and the code. `src/samples.ts` — the sample bank and `play(event, at, ear)`
+- `src/audioBench.ts` — the audio workbench (?debug: debug menu → Sound): any event or sample played from a spot
+  round you through the game's graph, trims and gains edited live, "Copy edits" for the config
 - `tools/audio-bench.html`, `tools/audio-bench.ts`, `tools/audio-measure.mjs` — real browser sound graphs captured
   after the limiter, measured by FFmpeg; scenarios, target levels and recorded results in `docs/audio.md`
 

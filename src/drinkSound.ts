@@ -7,20 +7,21 @@
 // three gulps (1.07 s, fits in DRINK_MS), peak-limited to −1.6 dBTP (−29 LUFS); sigh.mp3 the sigh after
 // (1.02 s), levelled to −23 LUFS. fill.mp3 is the first 1.75 s of Lastered's "Bottle Filling" (CC BY 4.0), the
 // pour with its resonance rising as the bottle fills; mono, high-passed at 250 Hz (the recording's hum), faded
-// out over its last 0.3 s, −25.6 LUFS, −2.2 dBTP. The gains keep them about as loud as your own footsteps.
+// out over its last 0.3 s, −25.6 LUFS, −2.2 dBTP. Their events' gains (drink.gulps, drink.sigh, well.pour in
+// src/audioConfig.ts) keep them about as loud as your own footsteps; another player's are placed by the events' `ref`
+// and `hear`.
 import { FILL_MS } from '../shared/water.ts';
 import { audio } from './audio';
-import { placed, type P } from './acoustics';
+import type { P } from './acoustics';
+import { event, type EventId } from './audioConfig';
+import { playSample, spread, type Voice } from './samples';
 
 /** Heat (0..HEAT_MAX) above which a finished sip gets the sigh. */
 export const SIGH_ABOVE = 50;
 
-const DRINK = { src: './audio/drink.mp3', gain: 0.7 };
-const SIGH = { src: './audio/sigh.mp3', gain: 0.4 };
-const FILL = { src: './audio/fill.mp3', gain: 0.5 };
-/** Other players' sounds: level at REMOTE_REF (m), out of earshot past REMOTE_HEAR (m). */
-const REMOTE_REF = 1.5;
-const REMOTE_HEAR = 30;
+const DRINK: EventId = 'drink.gulps';
+const SIGH: EventId = 'drink.sigh';
+const FILL: EventId = 'well.pour';
 
 /** The pour speeds up by this much over FILL_MS, so it rises in pitch as the bottle fills. */
 const FILL_RISE = 0.12;
@@ -30,22 +31,10 @@ const FILL_FAST = 1.25;
 const FILL_LOOP: [number, number] = [0.35, 1.35];
 
 class DrinkSound {
-  private bufs = new Map<string, AudioBuffer>();
   /** The gulps playing now, cut short if you stop drinking. */
-  private gulps: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private gulps: Voice | null = null;
   /** Per other player: what their hands were doing last frame, and the sound they're making. */
-  private others = new Map<number, { act: 0 | 1 | 2; voice: { src: AudioBufferSourceNode; gain: GainNode } | null }>();
-
-  constructor() {
-    audio.onStart((ctx) => {
-      for (const { src } of [DRINK, SIGH, FILL]) {
-        fetch(src)
-          .then((r) => r.arrayBuffer())
-          .then((d) => ctx.decodeAudioData(d))
-          .then((b) => this.bufs.set(src, b), (e) => console.warn('drink sound failed to load', src, e));
-      }
-    });
-  }
+  private others = new Map<number, { act: 0 | 1 | 2; voice: Voice | null }>();
 
   /** You started a sip. */
   drink() {
@@ -67,7 +56,7 @@ class DrinkSound {
       if (o.voice && ctx) this.cut(ctx, o.voice);
       o.voice = null;
       o.act = act;
-      if (act) o.voice = this.playAt(act === 1 ? DRINK : FILL, act === 1, { x: p.x, y: p.y + 1.4, z: p.z }, ear);
+      if (act) o.voice = this.playAt(act === 1 ? DRINK : FILL, { x: p.x, y: p.y + 1.4, z: p.z }, ear);
     }
     for (const [id, o] of this.others) {
       if (seen.has(id)) continue;
@@ -80,7 +69,7 @@ class DrinkSound {
    *  pour a little slower or quicker, its middle looped for as long as a slow one needs. */
   fill(ms = FILL_MS) {
     this.stop();
-    this.gulps = this.play(FILL, false);
+    this.gulps = this.play(FILL);
     const ctx = audio.ctx;
     if (!ctx || !this.gulps) return;
     const src = this.gulps.src;
@@ -106,7 +95,7 @@ class DrinkSound {
     this.gulps = null;
   }
 
-  private cut(ctx: AudioContext, { src, gain }: { src: AudioBufferSourceNode; gain: GainNode }) {
+  private cut(ctx: AudioContext, { src, gain }: Voice) {
     gain.gain.setTargetAtTime(0, ctx.currentTime, 0.03);
     src.stop(ctx.currentTime + 0.2);
   }
@@ -117,33 +106,18 @@ class DrinkSound {
     if (heat > SIGH_ABOVE) this.play(SIGH);
   }
 
-  private play(s: { src: string; gain: number }, vary = true) {
-    const ctx = audio.ctx;
-    if (!ctx || !audio.out || !audio.running) return null;
-    return this.start(ctx, s, vary, audio.out, s.gain, ctx.currentTime);
+  /** Yours: dry and centred. */
+  private play(id: EventId) {
+    const e = event(id);
+    return playSample(e.samples[0], { route: 'direct', level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
   }
 
   /** Another player's sound, at `at`, heard from `ear`; a pour rises like yours. */
-  private playAt(s: { src: string; gain: number }, vary: boolean, at: P, ear: P) {
-    const ctx = audio.ctx;
-    const out = ctx && this.bufs.has(s.src) ? placed(at, ear, s.gain, REMOTE_REF, REMOTE_HEAR) : null;
-    if (!ctx || !out) return null;
-    const v = this.start(ctx, s, vary, out.input, 1, out.t);
-    if (v && s === FILL) this.rise(ctx, v.src, out.t);
+  private playAt(id: EventId, at: P, ear: P) {
+    const e = event(id), ctx = audio.ctx;
+    const v = playSample(e.samples[0], { route: 'placed', at, ear, ref: e.ref, hear: e.hear, level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
+    if (v && ctx && id === FILL) this.rise(ctx, v.src, v.t);
     return v;
-  }
-
-  private start(ctx: AudioContext, s: { src: string }, vary: boolean, out: AudioNode, level: number, t: number) {
-    const buf = this.bufs.get(s.src);
-    if (!buf) return null;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = vary ? 0.96 + Math.random() * 0.08 : 1;
-    const gain = ctx.createGain();
-    gain.gain.value = level;
-    src.connect(gain).connect(out);
-    src.start(t);
-    return { src, gain };
   }
 
   /** Speed the pour up over FILL_MS from `t`. */

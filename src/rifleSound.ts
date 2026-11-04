@@ -3,13 +3,12 @@
 //   0.40–0.55 s, each levelled to −18.5 LUFS momentary, true peak ≤ −1.5 dBTP), picked at random and a little
 //   off pitch each time; the pistol plays them higher and lighter. Your own is dry and in your head; another
 //   player's carries across the desert (src/acoustics.ts: late, duller, softer and more reverb with distance). A
-//   guardian's cannon fires the same pulses an octave down (CANNON_PITCH), slower and heavier: −15 LUFS momentary
-//   max within CANNON_REF (peaks about 0 dBFS: the limiter takes them), −21 at 80 m. The blaster fires them a
-//   fifth or so down (BLASTER_PITCH): heavier than the rifle, lighter than the cannon.
-// - firework: a weak point shattering (a crawler's softer), a shot-down drone crashing (softer) and a missile's blast
-//   (lower) burst like a firework: one of
-//   four of TB0Y298's "Firework Explosion" 1–4 (CC BY 4.0; firework-1..4.mp3, mono, each levelled to −18.9 LUFS
-//   momentary max, true peak ≤ −4 dBTP), at random and a little off pitch, carried through src/acoustics.ts.
+//   guardian's cannon fires the same pulses an octave down (cannon.shot), slower and heavier: −15 LUFS momentary
+//   max within its `ref` (peaks about 0 dBFS: the limiter takes them), −21 at 80 m. The blaster fires them a
+//   fifth or so down (blaster.shot): heavier than the rifle, lighter than the cannon. Levels and pitches are the
+//   events' in src/audioConfig.ts.
+// - A weak point shattering, a drone crashing, a missile's blast and the like burst like a firework (TB0Y298's
+//   "Firework Explosion" 1–4, CC BY 4.0): events of their own in src/audioConfig.ts, played where they happen.
 // The rest is synthesised:
 // - recharge: the cell whining back up between shots, with a click when it's ready.
 // - impact: where the beam struck: a hiss of sand, a metal ping, or the red glass of a weak point shattering with an
@@ -21,27 +20,13 @@
 // music and the master limiter (docs/audio.md); the source assets' levels alone do not predict that mix.
 import { audio } from './audio';
 import { placed, type P } from './acoustics';
+import { play } from './samples';
 
-// Measured with the full browser mix (docs/audio.md), leaving room for simultaneous players and warnings.
-const SHOT_GAIN = 0.3;
-/** Pulse multiplier on top of the calibrated SHOT_GAIN. */
-const PULSE_GAIN = 1.3;
-const PULSES = ['./audio/laser-1.mp3', './audio/laser-2.mp3', './audio/laser-3.mp3'];
-/** A guardian's cannon: the pulses at this pitch (lower: slower, heavier), level and full-level distance (m). */
-const CANNON_PITCH = 0.5;
-const CANNON_GAIN = 1.4;
-const CANNON_REF = 40;
-/** The blaster: the pulses at this pitch, level (× SHOT_GAIN) and full-level distance (m). */
-const BLASTER_PITCH = 0.68;
-const BLASTER_GAIN = 1.5;
-const BLASTER_REF = 20;
+// The pulses' and the fireworks' levels, pitches and distances are their events in src/audioConfig.ts (rifle.shot,
+// pistol.shot, blaster.shot, cannon.shot; the bursts are played by what blew up, src/samples.ts `play`).
 const CHARGE_GAIN = 0.035;
 const IMPACT_GAIN = 1.2;
 const DEATH_GAIN = 1.8;
-const FIREWORKS = ['./audio/firework-1.mp3', './audio/firework-2.mp3', './audio/firework-3.mp3', './audio/firework-4.mp3'];
-/** Full level within FIREWORK_REF m. */
-const FIREWORK_GAIN = 2;
-const FIREWORK_REF = 35;
 
 let noiseBuf: AudioBuffer | null = null;
 function noise(ctx: AudioContext) {
@@ -88,80 +73,20 @@ function tone(ctx: AudioContext, to: AudioNode, t: number, len: number, type: Os
 
 class RifleSound {
   private charge: { osc: OscillatorNode; gain: GainNode } | null = null;
-  private pulses: AudioBuffer[] = [];
-  private fireworks: AudioBuffer[] = [];
-
-  constructor() {
-    audio.onStart((ctx) => {
-      for (const src of PULSES) {
-        fetch(src)
-          .then((r) => r.arrayBuffer())
-          .then((d) => ctx.decodeAudioData(d))
-          .then((b) => this.pulses.push(b), (e) => console.warn('laser sound failed to load', src, e));
-      }
-      for (const src of FIREWORKS) {
-        fetch(src)
-          .then((r) => r.arrayBuffer())
-          .then((d) => ctx.decodeAudioData(d))
-          .then((b) => this.fireworks.push(b), (e) => console.warn('firework sound failed to load', src, e));
-      }
-    });
-  }
-
   /** A shot: yours (`at` null) or someone else's at `at`, heard from `ear`. `pistol`: the laser pistol's, higher,
    *  shorter and lighter. */
   shot(at: P | null = null, ear: P | null = null, pistol = false) {
-    // The pistol: up in pitch (so quicker), less body.
-    this.pulse(at, ear, pistol ? 1.35 : 1, SHOT_GAIN * (pistol ? 0.75 : 1), 15, 600);
+    play(pistol ? 'pistol.shot' : 'rifle.shot', at, ear);
   }
 
   /** A blaster shot: yours (`at` null) or someone else's at `at`, heard from `ear`: the pulse pitched down, heavier. */
   blaster(at: P | null = null, ear: P | null = null) {
-    this.pulse(at, ear, BLASTER_PITCH, SHOT_GAIN * BLASTER_GAIN, BLASTER_REF, 700);
-  }
-
-  /** One of the pulses at `pitch` (a little off each time), `level`, full within `ref` m, heard out to `far`. */
-  private pulse(at: P | null, ear: P | null, pitch: number, level: number, ref: number, far: number) {
-    const ctx = audio.ctx;
-    if (!ctx || !audio.running || !this.pulses.length) return;
-    const buf = this.pulses[Math.floor(Math.random() * this.pulses.length)];
-    const rate = pitch * (0.96 + Math.random() * 0.08);
-    const s = placed(at, ear, level, ref, far, { duration: buf.duration / rate + 0.1 });
-    if (!s) return;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = rate;
-    const g = ctx.createGain();
-    g.gain.value = PULSE_GAIN;
-    src.connect(g).connect(s.input);
-    src.start(s.t);
-    src.onended = () => g.disconnect();
-  }
-
-  /** A firework burst at `at`, heard from `ear`, at `level` × FIREWORK_GAIN and `pitch` (about 1, lower is bigger). */
-  firework(at: P, ear: P, level = 1, pitch = 1) {
-    const ctx = audio.ctx, buf = this.fireworks[Math.floor(Math.random() * this.fireworks.length)];
-    const rate = Math.max(0.05, pitch) * (0.92 + Math.random() * 0.16);
-    const s = buf ? placed(at, ear, FIREWORK_GAIN * level, FIREWORK_REF, 600, { duration: buf.duration / rate + 0.1 }) : null;
-    if (!ctx || !s) return;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = rate;
-    src.connect(s.input);
-    src.start(s.t);
+    play('blaster.shot', at, ear);
   }
 
   /** A guardian's cannon firing at `at`, heard from `ear` (src/guardians.ts): a rifle shot an octave down. */
   cannon(at: P, ear: P) {
-    const ctx = audio.ctx, buf = this.pulses[Math.floor(Math.random() * this.pulses.length)];
-    const rate = CANNON_PITCH * (0.95 + Math.random() * 0.1);
-    const s = buf ? placed(at, ear, CANNON_GAIN, CANNON_REF, 500, { duration: buf.duration / rate + 0.1 }) : null;
-    if (!ctx || !s) return;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = rate;
-    src.connect(s.input);
-    src.start(s.t);
+    play('cannon.shot', at, ear);
   }
 
   /** The cell recharging over `s` seconds, then a click: yours only. */

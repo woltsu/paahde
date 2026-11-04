@@ -45,6 +45,7 @@ import { coreCrashSites, crashSitesNear, debrisTarget } from '../shared/crashsit
 import { CRASH_KINDS } from '../shared/crashKinds.ts';
 import { clockText } from './world/dayNight';
 import { DebugMenu } from './debugMenu.ts';
+import { AudioBench } from './audioBench';
 import { FlyCam } from './flyCam';
 import { ArtBench } from './artBench';
 import { wind } from './world/wind';
@@ -247,6 +248,8 @@ buildMenu.available = (kind) => {
   if (free) trophies.need(kind); // (for the preview)
   return free;
 };
+// The audio workbench (?debug: debug menu → Sound): any sound event or sample played round the camera (src/audioBench.ts).
+const audioBench = location.search.includes('debug') ? new AudioBench(() => ({ ear: orbit.camera.position, yaw: orbit.viewYaw })) : null;
 new DebugMenu(() => sky.day.tod, (tod) => net.shareTimeOfDay(tod), () => net.resetSharedTime(), (front) => net.summonStorm(front), (tier) => net.debugGear(tier), () => net.debugHit(), (what) => net.summonBot(what),
   (all) => (all ? net.labReset() : net.labReset(machines.nearestLab(net.me.x, net.me.z)?.site.id)),
   (off) => net.debugHeat(off),
@@ -255,7 +258,8 @@ new DebugMenu(() => sky.day.tod, (tod) => net.shareTimeOfDay(tod), () => net.res
   (kind, n, tier) => net.debugGive(kind, n, tier),
   (working, quad) => net.debugBike(working, quad),
   (key) => net.debugLevel(key),
-  net);
+  net,
+  () => audioBench?.toggle());
 // The art-style bench (?w=bench, dev only): fixed shots and the look panel (src/artBench.ts).
 const artBench = BENCH ? new ArtBench({ fly, camera: orbit.camera, day: sky.day, post, blownSand, startFly: () => fly.start(orbit.camera, orbit.yaw, orbit.pitch) }) : null;
 new Chat(net);

@@ -7,6 +7,7 @@
 // page plays the desert guitar (the game's outdoor music, src/music.ts) once the browser lets it, after the first
 // click or key.
 import { audio } from './audio';
+import { event, sample, sampleId, sampleUrl, trimGain } from './audioConfig';
 import { BOSS_KINDS } from '../shared/bosses.ts';
 import { checkName, GAME_NAME, MAX_PLAYERS } from '../shared/names.ts';
 import type { WorldStats } from '../shared/protocol.ts';
@@ -630,13 +631,13 @@ function options() {
   menu.addEventListener('pointerdown', (e) => e.target === menu && close());
 }
 
-/** "Desert ambience" (src/music.ts DESERT_AMBIENCE: exactly 112 s, loops whole) through the music slider,
+/** The ambient music (music.ambient in src/audioConfig.ts: "Desert ambience", exactly 112 s, looped whole) through the music slider,
  * faded in; it fades out if the page goes away without leaving (the victory screen's Play on, the lobby's Join). */
 export function music(el: HTMLElement) {
-  const LENGTH = 112;
+  const id = sampleId(event('music.ambient').samples[0]), LENGTH = sample(id).loop?.[1] ?? 112;
   /** Decoder delay (s) when the browser ignores the LAME header, as in src/music.ts. */
   const MP3_DELAY = 1105 / 44100;
-  const buffer = fetch('./audio/desert-ambience.mp3').then((r) => r.arrayBuffer());
+  const buffer = fetch(sampleUrl(id)).then((r) => r.arrayBuffer());
   audio.onStart(async (ctx) => {
     const buf = await ctx.decodeAudioData(await buffer);
     if (!el.isConnected || !audio.music) return;
@@ -648,7 +649,7 @@ export function music(el: HTMLElement) {
     src.loopEnd = lead + LENGTH;
     const gain = ctx.createGain();
     gain.gain.value = 0;
-    gain.gain.setTargetAtTime(0.45, ctx.currentTime, 1.5);
+    gain.gain.setTargetAtTime(event('music.ambient').gain * trimGain(id), ctx.currentTime, 1.5);
     src.connect(gain).connect(audio.music);
     src.start(ctx.currentTime, lead);
     const gone = new MutationObserver(() => {

@@ -28,6 +28,7 @@ import { heightAt } from '../../shared/terrain.ts';
 import { carrierSound } from '../carrierSound';
 import { guardianSound } from '../guardianSound';
 import { rifleSound } from '../rifleSound';
+import { play } from '../samples';
 import { glowsThroughDust } from '../post.ts';
 import { tyreDust } from '../tyreDust';
 import { BLASTS, blasts } from './blasts';
@@ -487,7 +488,7 @@ export class CarrierView implements BossView {
     }
     _v.set(v.x, g + 0.5, v.z);
     rifleSound.impact('metal', _v, ctx.ear);
-    rifleSound.firework(_v, ctx.ear, 0.5, 1.4);
+    play('carrier.droneCrash', _v, ctx.ear);
   }
 
   /** Lay a unit tube from a to b, r m across. */
@@ -685,7 +686,7 @@ export class CarrierView implements BossView {
     rifleSound.slam(_v, ctx.ear, true);
     guardianSound.boom(x, g + 3, z, ctx.ear);
     guardianSound.boom(x + 20, g + 3, z - 15, ctx.ear);
-    rifleSound.firework(_v, ctx.ear, 1.6, 0.45);
+    play('carrier.wreck', _v, ctx.ear);
   }
 
   fx(m: BossFxMsg) {
@@ -749,7 +750,7 @@ export class CarrierView implements BossView {
     ctx.thump(x, y, z, 2.6, 0, 7, 3.4); // the shake (the explosion throws the sand)
     guardianSound.boom(x, y, z, ctx.ear);
     _v.set(x, y, z);
-    rifleSound.firework(_v, ctx.ear, 1.1, 0.7);
+    play('carrier.bomb', _v, ctx.ear);
   }
 
   /** A ball of fire at (x, y, z) growing to `size` m over `life` s. */

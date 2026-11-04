@@ -4,7 +4,7 @@
 //   whoosh nearer in. Late by the distance at the speed of sound (a delay line, so it also bends a little as it comes
 //   and goes), duller further off, and thinner with every dead fan.
 // - whistle: a falling bomb's whistle, dropping in pitch and swelling until it lands (the burst is the walkers' boom).
-// - bombs and the crash reuse guardianSound.boom, rifleSound.firework and rifleSound.slam.
+// - bombs and the crash reuse guardianSound.boom, the bursts' events (src/audioConfig.ts) and rifleSound.slam.
 // - its gun drones: a launch clunk out of the bay, a waspish buzz each (the nearest few), the rising whine while
 //   one aims, and the crack of its shot.
 // Through the shared output (src/audio.ts: master gain and limiter); every level ramped. Levels set against the jets'
