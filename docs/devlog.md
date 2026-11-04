@@ -3165,3 +3165,13 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   one marked "in hand" (src/inventory.ts `effectChips`).
 - Tests in tools/weapons.test.mjs: the registry (in hand only, the move it makes, the tooltip list), the sim with the
   mask, and the server setting and clearing it with the hotbar slot.
+
+## Held things keep their size on any body
+
+- **What:** what's in hand (the guns, the mace, tools, the spyglass, the canteen, carried parts) is the human's size on
+  every body; before, it was scaled with the body, so a gnome's rifle was 0.6 of a human's.
+- **How:** src/models/scavenger.ts counter-scales `held` and the canteen by `1 / size` every frame (only the mace was
+  before). The hands' places on a gun or the spyglass (wrist, knuckles, the left hand's `support`, `SCOPE_EYE`) and the
+  canteen's height are divided by `size` too, since root space is the body's size; `grip()` composes the item with its
+  own scale, so its reach target and its grip frame agree. The holds' anchors from the shoulder stay in body units.
+  Hand sizes come out about equal in the world (dwarf 0.85 × 1.4, gnome 0.6 × 1.65), so the human grip offsets fit.

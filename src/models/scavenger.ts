@@ -11,8 +11,9 @@
 // merged with the body into one skinned mesh per material (cached per set of pieces, shared by every instance), and the
 // dyed cloth (DyeRobe / DyeCape / DyeWrap, this instance's copies) takes the chosen dyes. The look's body (human, dwarf,
 // gnome: shared/look.ts bodyScale) scales the root, the legs, the chest and the head bone: everything placed in root
-// space (held things, the hand and foot targets) grows with the body, the bike's contact points (RidePose, the parent's
-// space) stay where they are and the rider tucks and tucks its feet up to reach them. Each body walks its own way (GAITS).
+// space (the hand and foot targets) grows with the body, except what's in hand: that is counter-scaled to the same
+// size on any body (a gun is a gun, however small its holder), the hands' places on it too. The bike's contact points
+// (RidePose, the parent's space) stay where they are and the rider tucks and tucks its feet up to reach them. Each body walks its own way (GAITS).
 // setOutfit() says what's in the hand (carried at the right hip, src/models/outfit.ts) and which gear is worn:
 // the backpack (its own mesh in the glb), the wrist computer and the storm detector on the belt, the shield plate on
 // the chest (SHIELD_URL), and which things in the bag are carried on the body (CARRIED: their own meshes too). Each
@@ -501,11 +502,10 @@ export class ScavengerModel {
   }
 
   /** The mace's hold now: shouldered, or along MACE_STROKE while it's swung, with the torso's turn and lean into it
-   *  (strokeTurn, strokeLean). The mace is the same size on any body (holdGun counter-scales it), so the left fist's
-   *  place on it is too. */
+   *  (strokeTurn, strokeLean). */
   private maceHold(): GunHold {
     const h = this.strokeHold, t = (performance.now() - this.swingAt) / 1000 / MACE_SWING_S;
-    h.support = MACE_LEFT / this.body.size;
+    h.support = MACE_LEFT;
     this.strokeTurn = this.strokeLean = 0;
     if (!(t >= 0 && t < 1)) {
       h.ready.copy(MACE.ready);
@@ -676,7 +676,11 @@ export class ScavengerModel {
     this.sip += ((pose.drinking ? 1 : 0) - this.sip) * (1 - Math.exp(-dt * 8));
     const loose = !pose.grounded || !!pose.sliding || !!pose.powerSlide;
     const busy = !!pose.ride || !!pose.ladder; // both hands on something: nothing held shows
+    // What's in hand is the same size on any body (the root is scaled by it): a gun is as big in a gnome's hands.
+    const unit = 1 / this.body.size;
     if (this.canteen) this.canteen.visible = this.item === 'canteen' && !busy;
+    this.canteen?.scale.setScalar(unit);
+    this.held?.scale.setScalar(unit);
     if (this.canteen?.visible) this.holdCanteen(this.canteen, loose);
     if (this.held) this.held.visible = !busy;
     this.aimT += ((pose.aiming && !loose && !pose.digging ? 1 : 0) - this.aimT) * (1 - Math.exp(-dt * 12));
@@ -697,8 +701,6 @@ export class ScavengerModel {
           rotateAboutRoot(this.root, this.neck, X_AXIS, this.strokeLean * 0.7);
         }
       }
-      // The mace is the same size whatever the body (the root is scaled by it).
-      if (mace) this.held.scale.setScalar(1 / this.body.size);
       this.holdGun(this.held, g, loose || !!pose.digging, pitch);
     }
     else if (this.held?.visible && this.item === 'spyglass') this.holdScope(this.held, loose || !!pose.digging, pitch);
@@ -940,8 +942,8 @@ export class ScavengerModel {
       // Neck at the mouth: bottom = mouth - (rotated up axis × height).
       this.root.updateMatrixWorld(true);
       this.root.worldToLocal(_p.copy(MOUTH).applyMatrix4(this.head.matrixWorld));
-      _p.y -= Math.cos(tip) * CANTEEN_HEIGHT;
-      _p.z -= Math.sin(tip) * CANTEEN_HEIGHT;
+      _p.y -= (Math.cos(tip) * CANTEEN_HEIGHT) / this.body.size;
+      _p.z -= (Math.sin(tip) * CANTEEN_HEIGHT) / this.body.size;
       _t.lerp(_p, this.sip);
     }
     can.position.copy(_t);
@@ -971,7 +973,7 @@ export class ScavengerModel {
     const arm = this.arms[1], hand = this.hands[1];
     if (!arm || !hand) return;
     this.root.updateMatrixWorld(true);
-    _gm.compose(o.position, o.quaternion, ONE).premultiply(this.root.matrixWorld);
+    _gm.compose(o.position, o.quaternion, o.scale).premultiply(this.root.matrixWorld);
     if (!loose) reach(arm[0], arm[1], arm[2], _t.copy(g.wrist).applyMatrix4(_gm), pole.transformDirection(this.root.matrixWorld));
     orient(arm[2], hand.a, hand.t, _ga.copy(g.a).transformDirection(_gm), _gt.copy(g.t).transformDirection(_gm));
     this.close(1, g.curl);
@@ -1014,20 +1016,22 @@ export class ScavengerModel {
     o.position.copy(_s0).add(g.readyAt);
     _t.copy(_s0).add(g.aimFrom).addScaledVector(_fwd, g.aimOut);
     o.position.lerp(_t, k);
+    // The hands' places on the gun are in its own size (u: root space is the body's size, the gun isn't).
+    const u = 1 / this.body.size;
     // Right hand: wrist behind and above the grip, a little to the gun's right; knuckles forward round it.
-    _t.copy(o.position).addScaledVector(_fwd, -0.06).addScaledVector(_up, 0.035).addScaledVector(_right, 0.02);
+    _t.copy(o.position).addScaledVector(_fwd, -0.06 * u).addScaledVector(_up, 0.035 * u).addScaledVector(_right, 0.02 * u);
     this.root.localToWorld(_t);
     reach(arm[0], arm[1], arm[2], _t, _pole.copy(g.elbow).lerp(g.aimElbow, k).transformDirection(this.root.matrixWorld));
-    _t.copy(o.position).addScaledVector(_fwd, 0.04).addScaledVector(_up, -0.03).addScaledVector(_right, -0.01);
+    _t.copy(o.position).addScaledVector(_fwd, 0.04 * u).addScaledVector(_up, -0.03 * u).addScaledVector(_right, -0.01 * u);
     aim(arm[2], arm[3], this.root.localToWorld(_t));
     this.close(1, GUN_FIST);
     // Left hand under the handguard, wrist to the left of it, fingers round under it to the right.
     const left = this.arms[0];
     if (g.support && left) {
-      _t.copy(o.position).addScaledVector(_fwd, g.support).addScaledVector(_up, 0.03).addScaledVector(_right, -0.055);
+      _t.copy(o.position).addScaledVector(_fwd, g.support * u).addScaledVector(_up, 0.03 * u).addScaledVector(_right, -0.055 * u);
       this.root.localToWorld(_t);
       reach(left[0], left[1], left[2], _t, _pole.set(-0.5, -1, 0.2).transformDirection(this.root.matrixWorld));
-      _t.copy(o.position).addScaledVector(_fwd, g.support + 0.03).addScaledVector(_up, 0.05).addScaledVector(_right, 0.03);
+      _t.copy(o.position).addScaledVector(_fwd, (g.support + 0.03) * u).addScaledVector(_up, 0.05 * u).addScaledVector(_right, 0.03 * u);
       aim(left[2], left[3], this.root.localToWorld(_t));
       this.close(0, GUN_FIST);
     }
@@ -1039,7 +1043,7 @@ export class ScavengerModel {
   private holdScope(o: THREE.Object3D, loose: boolean, pitch: number) {
     const arm = this.arms[1];
     if (!arm) return;
-    const k = this.aimT;
+    const k = this.aimT, u = 1 / this.body.size; // u: the spyglass's own size in root space (see holdGun)
     for (const [i, d] of ((o.userData.draws ?? []) as THREE.Object3D[]).entries()) d.position.z = DRAW_IN[i] * (1 - k);
     const p = clamp(pitch, -0.9, 0.9);
     _fwd.copy(SCOPE_READY).lerp(_t.set(0, Math.sin(p), -Math.cos(p)), k).normalize();
@@ -1058,13 +1062,13 @@ export class ScavengerModel {
     if (k > 1e-3 && this.head) {
       // Eyepiece (drawn out, SCOPE_EYE behind the grip) just in front of the right eye.
       this.root.worldToLocal(_p.set(0, 0.09, 0.1).applyMatrix4(this.head.matrixWorld)); // glTF space: the face is +Z
-      o.position.lerp(_p.addScaledVector(_right, 0.032).addScaledVector(_fwd, SCOPE_EYE), k);
+      o.position.lerp(_p.addScaledVector(_right, 0.032).addScaledVector(_fwd, SCOPE_EYE * u), k);
     }
     // Right fist round the barrel: wrist behind and under it, knuckles forward.
-    _t.copy(o.position).addScaledVector(_fwd, -0.06).addScaledVector(_up, -0.02).addScaledVector(_right, 0.025);
+    _t.copy(o.position).addScaledVector(_fwd, -0.06 * u).addScaledVector(_up, -0.02 * u).addScaledVector(_right, 0.025 * u);
     this.root.localToWorld(_t);
     reach(arm[0], arm[1], arm[2], _t, _pole.set(0.6, -0.5, 0.6).lerp(_o.set(1, -0.8, 0.1), k).transformDirection(this.root.matrixWorld));
-    aim(arm[2], arm[3], this.root.localToWorld(_t.copy(o.position).addScaledVector(_fwd, 0.04).addScaledVector(_up, 0.01)));
+    aim(arm[2], arm[3], this.root.localToWorld(_t.copy(o.position).addScaledVector(_fwd, 0.04 * u).addScaledVector(_up, 0.01 * u)));
     this.close(1, GUN_FIST);
     // Left hand cupped under the objective, coming up with it.
     const left = this.arms[0];
@@ -1072,10 +1076,10 @@ export class ScavengerModel {
       _q0.copy(left[0].quaternion);
       _q1.copy(left[1].quaternion);
       _wq.copy(left[2].quaternion);
-      _t.copy(o.position).addScaledVector(_fwd, 0.09).addScaledVector(_up, -0.045).addScaledVector(_right, -0.03);
+      _t.copy(o.position).addScaledVector(_fwd, 0.09 * u).addScaledVector(_up, -0.045 * u).addScaledVector(_right, -0.03 * u);
       this.root.localToWorld(_t);
       reach(left[0], left[1], left[2], _t, _pole.set(-0.4, -1, 0.1).transformDirection(this.root.matrixWorld));
-      aim(left[2], left[3], this.root.localToWorld(_t.copy(o.position).addScaledVector(_fwd, 0.12).addScaledVector(_up, -0.01).addScaledVector(_right, 0.02)));
+      aim(left[2], left[3], this.root.localToWorld(_t.copy(o.position).addScaledVector(_fwd, 0.12 * u).addScaledVector(_up, -0.01 * u).addScaledVector(_right, 0.02 * u)));
       if (k < 0.999) {
         left[0].quaternion.slerpQuaternions(_q0, _q.copy(left[0].quaternion), k);
         left[1].quaternion.slerpQuaternions(_q1, _q.copy(left[1].quaternion), k);
@@ -1245,7 +1249,6 @@ function makeGrip(a: THREE.Vector3, t: THREE.Vector3, wrist: THREE.Vector3, curl
 const CANTEEN_GRIP = makeGrip(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0.09, 0.09, 0.06), [0.8, 0.6, 0.5]);
 /** A fist round a handle at the origin, running fore and aft (thumb forward), fingers down. */
 const FIST = makeGrip(new THREE.Vector3(-0.2, -1, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0.044, 0.068, 0), [1.1, 1.0, 1.2]);
-const ONE = new THREE.Vector3(1, 1, 1);
 /** Fingers and thumb round a gun's grip or the spyglass's barrel. */
 const GUN_FIST = [0.9, 0.8, 0.7];
 

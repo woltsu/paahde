@@ -59,8 +59,9 @@ about 1 m, the head nearly a quarter of it, big hands and boots on a slight body
 for the sizes; fixed presets, not sliders (a body is a choice, not a tuning job). They are drawn only: the player
 moves, collides, is hit and sees from the same height in any body (shared/sim.ts knows nothing of them).
 
-src/models/scavenger.ts scales bones, not meshes: the root by `size` (so the held things and the hand and foot
-targets grow with it), the thighs by `legs` (the body drops by what they lose, the feet stay on the ground), the chest
+src/models/scavenger.ts scales bones, not meshes: the root by `size` (so the hand and foot targets grow with it;
+what's in hand, the guns, tools, mace, spyglass and canteen, is counter-scaled to stay the human's size on any body,
+and the hands' places on it are in its own size: a gnome's rifle is as long as a human's), the thighs by `legs` (the body drops by what they lose, the feet stay on the ground), the chest
 (Spine2) by `chest` with the shoulders scaled back (broad shoulders, arms of the same length), the neck by `neck` and
 the head by `head`, the hands and feet by `hands` and `feet`; the arms and legs are set further apart (`shoulders`,
 `hips`: the legs not much, or the robe's hem parts between them like trousers). Only uniform bone scales: a squashed
