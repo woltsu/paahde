@@ -914,7 +914,7 @@ def render_previews(parts, out_dir):
     # the armed one: carrying (the rifle folded over its back), then raised and aiming at the post ahead
     coll.hide_render = True
     body = T(0, STAND_Y * SCALE, 0) @ S(SCALE, SCALE, SCALE)
-    for name, (wrist, aim) in (('carry', ((0.4, 0.0), 0.0)), ('aim', ((0.75, 0.2), -0.12))):
+    for name, (wrist, aim) in (('carry', ((0.6, 0.05), 0.0)), ('aim', ((0.75, 0.2), -0.12))):
         c = bpy.data.collections.new('armed_' + name)
         scene.collection.children.link(c)
         for n, M in pose(body, strides=(0.12, 0.02, -0.04, 0.1), head=(0.0, 0.2), jaws=0.3):

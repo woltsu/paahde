@@ -3318,3 +3318,22 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   with a glowing channel between them. It is held at its balance point, the wrist under its belly on a pylon (the
   housing behind, the rails ahead); the arm's poses keep the elbow below the wrist so the forearm comes up to it from
   beneath, and the gun is never pitched up past the forearm. `RUNNER.arm.muzzle` is now a point (it sits up on the rails).
+
+## The armed runner holds its gun steady
+
+- **What:** running, the armed runner's gun no longer rides the body's bounce: it holds level and still in the world
+  while the body heaves, rocks and banks under it (a tank's stabilised gun, a hen's head), the arm working to keep it
+  there. Models lab `?runner=stab`: two galloping side by side, the inner held steady, the outer with its gun fixed to
+  the body (`&nostab` turns it off everywhere; `Runner.stabilize`).
+- **How:** `Runner.gun` (src/world/runner.ts) works out the gun's wanted place and turn in a steady frame: on the
+  runner's path at its height over the ground (the body's `y`, which follows the terrain but carries none of the
+  stride's bob, rock, bank or tilt, those being put only on the drawn body), heading smoothed, gun level (or on its
+  target). `steady` takes the wanted wrist into the body as it is, turns the base to the gun's heading as the body sees
+  it, solves shoulder and elbow by two-bone IK in that plane, and turns the gun at the wrist by whatever is left of the
+  wanted world rotation after the forearm's (a quaternion: pitch and roll both). The arm is planar, so a sideways lean
+  (banking in a turn) still carries the gun aside a little; the wrist keeps it level. The carry pose was raised so the
+  forearm comes up to the gun steeply enough to take the bounce, and the forearm clamp loosened to what the geometry
+  allows (`FOREARM_CLEAR`).
+- **Measured** (lab, galloping 12 m/s round the dunes, 200 frames): gun pitch level in 100% of frames (fixed: ±17°),
+  roll 0° (fixed: 8°), height bounce 0.028 m RMS against the body's 0.07–0.10 m; the forearm never near its clamp.
+  Aiming at a standing target holds within 1.6°.

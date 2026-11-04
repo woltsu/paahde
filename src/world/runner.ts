@@ -67,11 +67,25 @@ const DUTY_WALK = 0.62, DUTY_TROT = 0.5, DUTY_GALLOP = 0.32;
 const REST_FWD = [0.06, 0.06, -0.04, -0.04];
 /** World size over model size (shared/runner.ts): the IK works in the body's (model) frame, lengths in the world × S. */
 const S = RUNNER.scale;
-/** The gun arm's wrist (y, z from the shoulder, model units): carried, the gun borne low over the back; raised, high
- *  to aim. Both keep the elbow below the wrist, so the forearm comes up to the gun's pylon from below. A shot every
+/** The gun arm's wrist (y, z from the shoulder, model units): carried, the gun borne over the back; raised, high to
+ *  aim. Both keep the elbow well below the wrist, so the forearm comes up to the gun's pylon from below, steeply enough
+ *  to take up the body's bounce (held steady) without swinging into the gun. A shot every
  *  FIRE_S while on target. */
-const CARRY = [0.4, 0.0] as const, AIM = [0.75, 0.2] as const;
+const CARRY = [0.6, 0.05] as const, AIM = [0.75, 0.2] as const;
 const FIRE_S = 2.4;
+/** The gun is never pitched up past the forearm's line by more than -FOREARM_CLEAR (rad): further, the forearm would
+ *  swing up into its belly (which sits 0.065 over the pivot; the forearm is 0.04 thick either side of its line, and
+ *  0.55 long: sin(0.04) * 0.55 + 0.04 < 0.065). */
+const FOREARM_CLEAR = -0.03;
+
+/** Shoulder and elbow elevations (rad, up from level) putting the gun arm's wrist at (y, z) from the shoulder (model
+ *  units, the base's frame), elbow up and behind. */
+function armIk(y: number, z: number): [number, number] {
+  const L1 = RUNNER.arm.upper, L2 = RUNNER.arm.fore;
+  const d = Math.max(Math.abs(L1 - L2) + 0.02, Math.min(L1 + L2 - 1e-3, Math.hypot(y, z)));
+  const up = Math.atan2(y, z) + Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))));
+  return [up, Math.atan2(y - L1 * Math.sin(up), z - L1 * Math.cos(up))];
+}
 /** Stopped, a foot further than this (m) from its rest spot steps to it. */
 const SETTLE = 0.1 * S;
 
@@ -87,7 +101,8 @@ type Leg = {
   s: number; dur: number; cycle: number;
 };
 
-const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Vector3();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Vector3(), _d = new THREE.Vector3(), _sh = new THREE.Vector3();
+const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion(), _e = new THREE.Euler();
 
 export type Ground = (x: number, z: number) => number;
 
@@ -105,7 +120,11 @@ export class Runner {
   private coils: THREE.MeshStandardMaterial[] = [];
   /** Arm: how far raised to aim (0 carried .. 1), base yaw, rifle pitch (up from level, body frame), recoil 0..1, and
    *  when it last fired (s). */
-  private raise = 0; private armYaw = 0; private aimPitch = 0; private recoil = 0; private firedAt = 0;
+  private raise = 0; private gunYaw = 0; private aimPitch = 0; private recoil = 0; private firedAt = 0;
+  /** The gun's steady frame (see `gun`): its heading. */
+  private steadyOn = false; private steadyYaw = 0;
+  /** The armed one holds its gun steady while it runs (false: the gun rides the body; the models lab's ?runner=stab). */
+  stabilize = true;
   private x = 0; private z = 0; private yaw = 0;
   private vx = 0; private vz = 0; private yawRate = 0; private accel = 0;
   private y = 0; private pitch = 0; private roll = 0;
@@ -346,49 +365,93 @@ export class Runner {
    * The gun arm. Going about, it bears the gun low over its back, level and forward. Staring at something
    * (`look`), it raises the gun high, the base turning to it and the gun pitched onto it, and once on target fires
    * every FIRE_S: the coils brighten as it charges, the gun kicks back on its slide and up, the muzzle flares.
-   * The arm's two links are two-bone IK from the shoulder to the wrist, elbow up and behind; the wrist, under the gun's
-   * balance point, holds its pitch.
+   *
+   * Stabilised (`stabilize`, the default), the gun holds still in the world while the body bounces under it, like a
+   * tank's gun or a hen's head: where it should be is worked out in a steady frame that follows the runner's path and
+   * the lie of the ground but not its stride (no bob, rock, bank or tilt; its heading smoothed), and the arm reaches for that from the
+   * body as it is (`steady`). Otherwise the arm is fixed in the body's frame and the gun rides every bounce (`locked`).
    */
   private gun(dt: number, look: THREE.Vector3 | null, now: number) {
-    const A = RUNNER.arm, arm = this.arm!;
-    let yaw = 0, pitch = 0;
+    const A = RUNNER.arm;
+    // The steady frame: on its path at the body's height over the ground (`y`: following the terrain, but without the
+    // stride's bob, rock, bank or tilt, which are only put on the body as it is drawn), its heading smoothed.
+    if (!this.steadyOn) {
+      this.steadyOn = true;
+      this.steadyYaw = this.gunYaw = this.yaw;
+    }
+    this.steadyYaw += wrap(this.yaw - this.steadyYaw) * (1 - Math.exp(-6 * dt));
+    const c = Math.cos(this.steadyYaw), s = Math.sin(this.steadyYaw);
+    const mx = A.mount[0] * S, mz = A.mount[2] * S;
+    _sh.set(this.x + mx * c + mz * s, this.y + (A.mount[1] + A.shoulder[1]) * S, this.z - mx * s + mz * c);
+    const wy = lerp(CARRY[0], AIM[0], this.raise), wz = lerp(CARRY[1], AIM[1], this.raise);
+    // What it aims at, as a heading and elevation in the world: its target, or ahead and level.
+    let yaw = this.steadyYaw, pitch = 0;
     if (look) {
-      // The target from the turret ring, in the body's frame.
-      _v.copy(look);
-      this.body.worldToLocal(_v).sub(_q.set(...A.mount));
-      yaw = Math.atan2(_v.x, _v.z);
-      const wy = A.shoulder[1] + lerp(CARRY[0], AIM[0], this.raise), wz = lerp(CARRY[1], AIM[1], this.raise);
-      pitch = Math.max(-0.6, Math.min(0.4, Math.atan2(_v.y - wy, Math.hypot(_v.x, _v.z) - wz)));
+      const dx = look.x - _sh.x, dz = look.z - _sh.z;
+      yaw = Math.atan2(dx, dz);
+      pitch = Math.max(-0.6, Math.min(0.4, Math.atan2(look.y - (_sh.y + wy * S), Math.hypot(dx, dz) - wz * S)));
     }
     this.raise = ease(this.raise, look ? 1 : 0, look ? 2.2 : 3, dt);
-    const turn = 2.5 * dt;
-    this.armYaw += Math.max(-turn, Math.min(turn, wrap(yaw - this.armYaw)));
+    const turn = (look ? 2.5 : 6) * dt;
+    this.gunYaw += Math.max(-turn, Math.min(turn, wrap(yaw - this.gunYaw)));
     this.aimPitch += Math.max(-3 * dt, Math.min(3 * dt, pitch - this.aimPitch));
     // Firing: on target and raised, every FIRE_S.
-    const t = now / 1000, on = look && this.raise > 0.9 && Math.abs(wrap(yaw - this.armYaw)) < 0.06 && Math.abs(pitch - this.aimPitch) < 0.06;
+    const t = now / 1000, on = look && this.raise > 0.9 && Math.abs(wrap(yaw - this.gunYaw)) < 0.06 && Math.abs(pitch - this.aimPitch) < 0.06;
     if (on && t - this.firedAt > FIRE_S) {
       this.firedAt = t;
       this.recoil = 1;
     }
     this.recoil = Math.max(0, this.recoil - dt * 4);
     const kick = this.recoil * this.recoil;
-    // IK, in the base's (yawed) frame: shoulder and elbow elevations for the wrist.
-    const wy = lerp(CARRY[0], AIM[0], this.raise), wz = lerp(CARRY[1], AIM[1], this.raise);
-    const L1 = A.upper, L2 = A.fore;
-    const d = Math.max(Math.abs(L1 - L2) + 0.02, Math.min(L1 + L2 - 1e-3, Math.hypot(wy, wz)));
-    const up = Math.atan2(wy, wz) + Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d))));
-    const fore = Math.atan2(wy - L1 * Math.sin(up), wz - L1 * Math.cos(up));
-    // Never pitched up past the forearm (it would swing down into the gun's belly).
-    const aim = Math.min(fore - 0.2, (look ? this.aimPitch : 0) * this.raise + kick * 0.18);
-    // three.js Rx: + turns +Z down, so an elevation is a negative angle.
-    arm.base.rotation.set(0, this.armYaw, 0);
-    arm.upper.rotation.set(-up, 0, 0);
-    arm.fore.rotation.set(-(fore - up), 0, 0);
-    arm.rifle.rotation.set(-(aim - fore), 0, 0);
-    arm.slide.position.z = -0.14 * kick;
+    const elev = (look ? this.aimPitch : 0) * this.raise + kick * 0.18;
+    if (this.stabilize) this.steady(wy, wz, elev);
+    else this.locked(wy, wz, elev);
+    this.arm!.slide.position.z = -0.14 * kick;
     // The coils: a low glow, building through the last second before a shot, a flare as it fires.
     const charge = on ? smooth(FIRE_S - 1, FIRE_S, t - this.firedAt) : 0;
-    for (const c of this.coils) c.emissiveIntensity = (c.userData.base as number) * (0.5 + 2.5 * charge + 10 * kick);
+    for (const m of this.coils) m.emissiveIntensity = (m.userData.base as number) * (0.5 + 2.5 * charge + 10 * kick);
+  }
+
+  /** Stabilised: the wrist reaches for where the steady frame puts it (_sh: its shoulder, in the world), and the gun
+   *  is turned at the wrist to the heading and elevation wanted in the world, whatever the forearm's doing. */
+  private steady(wy: number, wz: number, elev: number) {
+    const A = RUNNER.arm, arm = this.arm!;
+    const gs = Math.sin(this.gunYaw), gc = Math.cos(this.gunYaw);
+    // The wrist where the steady frame wants it, then seen from the body as it is now (bobbing, rocking, tilted).
+    _w.set(_sh.x + gs * wz * S, _sh.y + wy * S, _sh.z + gc * wz * S);
+    this.body.worldToLocal(_w).sub(_q.set(...A.mount));
+    // The base turns to the gun's heading as the body sees it; the arm reaches in that plane (what's off to the side,
+    // a roll's worth, it can't: the wrist takes up the turn).
+    this.body.getWorldQuaternion(_qa).invert();
+    _d.set(gs, 0, gc).applyQuaternion(_qa);
+    const b = Math.atan2(_d.x, _d.z), sb = Math.sin(b), cb = Math.cos(b);
+    const [up, fore] = armIk(_w.y - A.shoulder[1], _w.x * sb + _w.z * cb);
+    arm.base.rotation.set(0, b, 0);
+    arm.upper.rotation.set(-up, 0, 0);
+    arm.fore.rotation.set(-(fore - up), 0, 0);
+    // The gun: what's left of the wanted world turn after the forearm's, never pitched up past the forearm.
+    arm.fore.updateWorldMatrix(true, false);
+    arm.fore.getWorldQuaternion(_qb);
+    _d.set(0, 0, 1).applyQuaternion(_qb);
+    const e = Math.min(Math.asin(Math.max(-1, Math.min(1, _d.y))) - FOREARM_CLEAR, elev);
+    _qc.setFromEuler(_e.set(-e, this.gunYaw, 0, 'YXZ'));
+    arm.rifle.quaternion.copy(_qb.invert().multiply(_qc));
+  }
+
+  /** Not stabilised: the arm's pose fixed in the body's frame, the gun riding every bounce. */
+  private locked(wy: number, wz: number, elev: number) {
+    const arm = this.arm!;
+    const [up, fore] = armIk(wy, wz);
+    arm.base.rotation.set(0, wrap(this.gunYaw - this.yaw), 0);
+    arm.upper.rotation.set(-up, 0, 0);
+    arm.fore.rotation.set(-(fore - up), 0, 0);
+    // three.js Rx: + turns +Z down, so an elevation is a negative angle. Never pitched up past the forearm.
+    arm.rifle.rotation.set(-(Math.min(fore - FOREARM_CLEAR, elev) - fore), 0, 0);
+  }
+
+  /** The gun (its slide: the part that recoils), for looking at; null on a plain one. */
+  get gunObject(): THREE.Object3D | null {
+    return this.arm?.slide ?? null;
   }
 
   /** The muzzle (world), into `out`. */

@@ -6,6 +6,9 @@
 //   ?runner=prowl      one prowling round the middle as summoned ones do in the game (debug menu), the camera following
 //   ?runner=armed      the armed one (a rifle on an arm on its back) prowling so, aiming at the camera when it stops
 //   &armed             with a speed: the armed one circling
+//   ?runner=stab       two armed ones galloping side by side: the inner holding its gun steady (as in the game), the
+//                      outer with the gun fixed to its body, riding every bounce
+//   &nostab            no gun held steady
 // The four: the trotting one and the standing one are armed (the standing one aims at the camera and fires).
 import * as THREE from 'three/webgpu';
 import { loadRunner, Prowl, Runner, type Ground } from '../world/runner';
@@ -25,9 +28,13 @@ function circle(cx: number, cz: number, r: number, speed: number, a0: number): D
 export async function runnerLab(scene: THREE.Scene, ground: Ground, mode: string) {
   await loadRunner();
   const drivers: Driver[] = [];
-  const single = mode !== '';
+  const single = mode !== '' && mode !== 'stab';
   const armedOnly = mode === 'armed' || new URLSearchParams(location.search).has('armed');
-  if (mode === 'prowl' || mode === 'armed') {
+  const stab = mode === 'stab';
+  if (stab) {
+    drivers.push(circle(0, 0, 11, 12, 0));
+    drivers.push(circle(0, 0, 15, 12 * 15 / 11, 0));
+  } else if (mode === 'prowl' || mode === 'armed') {
     const p = new Prowl(0, -6, 0);
     drivers.push((dt, now) => {
       p.update(dt, 0, 0, now);
@@ -42,18 +49,20 @@ export async function runnerLab(scene: THREE.Scene, ground: Ground, mode: string
     drivers.push(() => ({ x: 0, z: 0, yaw: 0.6, look: true }));
   }
   const runners = drivers.map((_, i) => {
-    const r = new Runner(ground, armedOnly || (!single && (i === 1 || i === 3)) ? 'armed' : 'plain');
+    const r = new Runner(ground, armedOnly || mode === 'stab' || (!single && (i === 1 || i === 3)) ? 'armed' : 'plain');
+    r.stabilize = !new URLSearchParams(location.search).has('nostab') && !(stab && i === 1);
     scene.add(r.root);
     return r;
   });
+  Object.assign(window, { runnerLab: { runners } }); // for poking at from the console
   const focus = new THREE.Vector3();
   return {
-    label: single ? `runner ${mode}` : `runners: walk ${RUNNER_WALK} · trot ${RUNNER_TROT} · gallop ${RUNNER_SPRINT} m/s · standing`,
+    label: stab ? 'gun held steady (inner) · gun fixed to the body (outer)' : single ? `runner ${mode}` : `runners: walk ${RUNNER_WALK} · trot ${RUNNER_TROT} · gallop ${RUNNER_SPRINT} m/s · standing`,
     /** Where the camera should look, following the one runner (null: the camera's own target). */
     update(dt: number, now: number, eye: THREE.Vector3): THREE.Vector3 | null {
       drivers.forEach((d, i) => {
         const at = d(dt, now);
-        runners[i].alert = single ? 0 : i === 2 ? 1 : 0;
+        runners[i].alert = single || stab ? 0 : i === 2 ? 1 : 0;
         runners[i].update(dt, at.x, at.z, at.yaw, at.look ? eye : null, now);
       });
       if (!single) return null;
