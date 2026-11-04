@@ -9,7 +9,7 @@
 import { receiverBoss } from '../shared/bosses.ts';
 import { quality, receiverWobble, repaired } from '../shared/gear.ts';
 import type { Item } from '../shared/items.ts';
-import { audio } from './audio';
+import { defineSynth, play } from './sounds';
 import type { FirstPersonCamera } from './camera';
 import { useHeld } from './input';
 import type { Net } from './net';
@@ -21,8 +21,6 @@ const FAST = 0.12;
 const LOW_HZ = 520;
 const HIGH_HZ = 1500;
 const TICK = 0.05;
-const TICK_GAIN = 0.13;
-const SWEEP_GAIN = 0.12;
 /** Needle spring (1/s): how fast it swings round to the bearing. */
 const SWING = 6;
 
@@ -92,48 +90,59 @@ export class Receiver {
   }
 }
 
-/** One short sine tick (src/detector.ts tick). */
+/** One short sine tick at `hz` (the event receiver.tick, src/audioConfig.ts). */
 function tick(hz: number) {
-  const ctx = audio.ctx, out = audio.out;
-  if (!ctx || !out || !audio.running) return;
-  const t0 = ctx.currentTime + 0.01;
-  const osc = ctx.createOscillator();
-  osc.frequency.value = hz;
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
-  osc.connect(gain).connect(out);
-  gain.gain.setTargetAtTime(TICK_GAIN, t0, 0.003);
-  gain.gain.setTargetAtTime(0, t0 + TICK, 0.006);
-  osc.start(t0);
-  osc.stop(t0 + TICK + 0.06);
-  osc.onended = () => gain.disconnect();
+  play('receiver.tick', null, null, { arg: hz });
 }
 
-/** The signal goes out: a rising sweep with a warble. */
+/** The signal goes out (the event receiver.sweep). */
 function sweep() {
-  const ctx = audio.ctx, out = audio.out;
-  if (!ctx || !out || !audio.running) return;
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator();
-  o.type = 'triangle';
-  o.frequency.setValueAtTime(300, t);
-  o.frequency.exponentialRampToValueAtTime(2400, t + 0.9);
-  const lfo = ctx.createOscillator();
-  lfo.frequency.value = 14;
-  const depth = ctx.createGain();
-  depth.gain.value = 60;
-  lfo.connect(depth).connect(o.frequency);
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(SWEEP_GAIN, t + 0.05);
-  g.gain.setTargetAtTime(0, t + 0.85, 0.08);
-  o.connect(g).connect(out);
-  o.start(t);
-  lfo.start(t);
-  o.stop(t + 1.4);
-  lfo.stop(t + 1.4);
-  o.onended = () => {
-    g.disconnect();
-    depth.disconnect();
-  };
+  play('receiver.sweep');
 }
+
+// One short sine tick at arg Hz.
+defineSynth('receiver-tick', {
+  length: 0.13,
+  voice(ctx, out, t, m) {
+    const t0 = t + 0.01;
+    const osc = ctx.createOscillator();
+    osc.frequency.value = typeof m.arg === 'number' ? m.arg : LOW_HZ;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    osc.connect(gain).connect(out);
+    gain.gain.setTargetAtTime(1, t0, 0.003);
+    gain.gain.setTargetAtTime(0, t0 + TICK, 0.006);
+    osc.start(t0);
+    osc.stop(t0 + TICK + 0.06);
+    osc.onended = () => gain.disconnect();
+  },
+});
+
+// The signal going out: a rising sweep with a warble.
+defineSynth('receiver-sweep', {
+  length: 1.4,
+  voice(ctx, out, t) {
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(300, t);
+    o.frequency.exponentialRampToValueAtTime(2400, t + 0.9);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 14;
+    const depth = ctx.createGain();
+    depth.gain.value = 60;
+    lfo.connect(depth).connect(o.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(1, t + 0.05);
+    g.gain.setTargetAtTime(0, t + 0.85, 0.08);
+    o.connect(g).connect(out);
+    o.start(t);
+    lfo.start(t);
+    o.stop(t + 1.4);
+    lfo.stop(t + 1.4);
+    o.onended = () => {
+      g.disconnect();
+      depth.disconnect();
+    };
+  },
+});

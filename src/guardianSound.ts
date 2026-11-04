@@ -15,22 +15,15 @@
 // src/audio.ts; levels ramped. Footfalls and their blasts are calibrated together with shots, music and warnings
 // through the actual browser master/limiter, rather than summing isolated sample readings; see docs/audio.md.
 import { audio } from './audio';
-import { placed, SPEED_OF_SOUND, type P } from './acoustics';
+import { SPEED_OF_SOUND, type P } from './acoustics';
+import { defineSynth, play } from './sounds';
 import type { JetKind } from '../shared/jetbreak.ts';
 
-/** Footfalls are heard within this distance (m); full level at REF. */
-const STEP_HEAR = 500;
-const STEP_REF = 12;
-/** Full-mix calibration, including simultaneous shots and blasts; see docs/audio.md. */
-const STEP_GAIN = 0.7;
-/** A bolt's or missile's blast: its two booms, as footfall weights. */
-const BOOM_GAIN = 0.7;
 /** Drone buzz within this distance (m), at most this many at once. */
 const BUZZ_HEAR = 110;
 const BUZZ_REF = 15;
 const BUZZ_GAIN = 0.16;
 const MAX_BUZZ = 3;
-const CHIRP_GAIN = 0.07;
 /** Missile roar: heard within ROAR_HEAR m, at most MAX_ROAR at once; full level within ROAR_REF (1/d past it); the
  *  hiss opens up from ROAR_FAR to ROAR_NEAR. Turbulence wobbles the level by ±FLUTTER. */
 const ROAR_HEAR = 700;
@@ -53,20 +46,12 @@ const MAX_JET = 2;
 /** The fixed-wing drone (JetKind 'drone') is smaller than the stealth wing: −6 dB, and heard only within this far (m). */
 const DRONE_JET_GAIN = 0.5;
 const DRONE_JET_HEAR = 2200;
-const HORN_GAIN = 0.22;
-const CHARGE_GAIN = 0.035;
-/** Crawler feet are heard within this distance (m). */
-const TICK_HEAR = 30;
-const TICK_GAIN = 0.12;
-const CHITTER_GAIN = 0.05;
-/** A crawler crouching to lunge: the warning to move, so it carries over the fight. */
-const RATTLE_GAIN = 0.12;
 
 type Buzz = { id: number; osc: OscillatorNode; whine: OscillatorNode; gain: GainNode; panner: PannerNode };
 type Roar = { srcs: AudioBufferSourceNode[]; gain: GainNode; hiss: GainNode; air: BiquadFilterNode; panner: PannerNode; whine?: OscillatorNode };
 
 let noiseBuf: AudioBuffer | null = null;
-function noise(ctx: AudioContext) {
+function noise(ctx: BaseAudioContext) {
   if (noiseBuf) return noiseBuf;
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
@@ -86,63 +71,68 @@ function panner(ctx: AudioContext, x: number, y: number, z: number, ref: number)
   return p;
 }
 
-class GuardianSound {
-  private buzz = new Map<number, Buzz>();
-  private roar = new Map<number, Roar>();
-  private jet = new Map<number, Roar>();
+// The one-shots are synths (src/audioConfig.ts SYNTHS, defined here), played by their events, which hold their levels
+// and reach; the continuous sounds (drones' buzz, missiles' and jets' roar) are still made and levelled here.
 
-  /** A foot landed at (x, y, z), `weight` 0..1; the listener is at `ear`. */
-  footfall(x: number, y: number, z: number, weight: number, ear: { x: number; y: number; z: number }) {
-    const ctx = audio.ctx, s = placed({ x, y, z }, ear, STEP_GAIN * weight, STEP_REF, STEP_HEAR, { duration: 1.6 });
-    if (!ctx || !s) return;
-    const { input: air, t } = s;
+/** A guardian's foot (or anything as heavy) coming down: a thump, rumble and sand, the joints clanking. */
+function footfallVoice(ctx: BaseAudioContext, air: AudioNode, t: number) {
+  // Thump.
+  const o = ctx.createOscillator();
+  o.frequency.setValueAtTime(55, t);
+  o.frequency.exponentialRampToValueAtTime(24, t + 0.5);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0, t);
+  og.gain.linearRampToValueAtTime(1, t + 0.01);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+  o.connect(og).connect(air);
+  o.start(t);
+  o.stop(t + 1);
+  // Rumble and sand.
+  const n = ctx.createBufferSource();
+  n.buffer = noise(ctx);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 260;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0, t);
+  ng.gain.linearRampToValueAtTime(0.9, t + 0.02);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+  n.connect(lp).connect(ng).connect(air);
+  n.start(t, Math.random());
+  n.stop(t + 1.5);
+  // Clank of the joints taking the weight.
+  const c = ctx.createBufferSource();
+  c.buffer = noise(ctx);
+  const bp = ctx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 700 + Math.random() * 400;
+  bp.Q.value = 9;
+  const cg = ctx.createGain();
+  cg.gain.setValueAtTime(0, t + 0.04);
+  cg.gain.linearRampToValueAtTime(0.5, t + 0.05);
+  cg.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+  c.connect(bp).connect(cg).connect(air);
+  c.start(t + 0.04, Math.random());
+  c.stop(t + 0.5);
+}
 
-    // Thump.
-    const o = ctx.createOscillator();
-    o.frequency.setValueAtTime(55, t);
-    o.frequency.exponentialRampToValueAtTime(24, t + 0.5);
-    const og = ctx.createGain();
-    og.gain.setValueAtTime(0, t);
-    og.gain.linearRampToValueAtTime(1, t + 0.01);
-    og.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
-    o.connect(og).connect(air);
-    o.start(t);
-    o.stop(t + 1);
-    // Rumble and sand.
-    const n = ctx.createBufferSource();
-    n.buffer = noise(ctx);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 260;
-    const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0, t);
-    ng.gain.linearRampToValueAtTime(0.9, t + 0.02);
-    ng.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
-    n.connect(lp).connect(ng).connect(air);
-    n.start(t, Math.random());
-    n.stop(t + 1.5);
-    // Clank of the joints taking the weight.
-    const c = ctx.createBufferSource();
-    c.buffer = noise(ctx);
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 700 + Math.random() * 400;
-    bp.Q.value = 9;
-    const cg = ctx.createGain();
-    cg.gain.setValueAtTime(0, t + 0.04);
-    cg.gain.linearRampToValueAtTime(0.5, t + 0.05);
-    cg.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-    c.connect(bp).connect(cg).connect(air);
-    c.start(t + 0.04, Math.random());
-    c.stop(t + 0.5);
-  }
+defineSynth('footfall', { length: 1.6, voice: (ctx, out, t) => footfallVoice(ctx, out, t) });
+// A bolt's or missile's blast: a footfall's boom, twice over (the second at 0.8).
+defineSynth('boom', {
+  length: 1.6,
+  voice(ctx, out, t) {
+    footfallVoice(ctx, out, t);
+    const g = ctx.createGain();
+    g.gain.value = 0.8;
+    g.connect(out);
+    footfallVoice(ctx, g, t);
+  },
+});
 
-  /** A crawler's foot at (x, y, z): a dry little tick of claw on sand and metal, heard within TICK_HEAR. */
-  tick(x: number, y: number, z: number, ear: { x: number; y: number; z: number }) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    if (Math.hypot(x - ear.x, y - ear.y, z - ear.z) > TICK_HEAR) return;
-    const t = ctx.currentTime;
+// A crawler's foot: a dry little tick of claw on sand and metal.
+defineSynth('crawler-tick', {
+  length: 0.05,
+  voice(ctx, out, t) {
     const n = ctx.createBufferSource();
     n.buffer = noise(ctx);
     const bp = ctx.createBiquadFilter();
@@ -150,20 +140,19 @@ class GuardianSound {
     bp.frequency.value = 2500 + Math.random() * 2500;
     bp.Q.value = 6;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(TICK_GAIN, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-    n.connect(bp).connect(g).connect(panner(ctx, x, y, z, 3)).connect(out);
+    g.gain.setValueAtTime(1, t);
+    g.gain.exponentialRampToValueAtTime(0.001 / 0.12, t + 0.04); // (to 0.001 at the tick's old level, 0.12)
+    n.connect(bp).connect(g).connect(out);
     n.start(t, Math.random());
     n.stop(t + 0.05);
-  }
+  },
+});
 
-  /** A crawler at (x, y, z) crouches to lunge, springing `s` seconds from now: a dry rattle, quickening and rising to
-   *  the spring. */
-  rattle(x: number, y: number, z: number, s: number, ear: P) {
-    if (s <= 0) return;
-    const ctx = audio.ctx, sound = placed({ x, y, z }, ear, RATTLE_GAIN, 4, 40, { warning: true, duration: s + 0.1 });
-    if (!ctx || !sound) return;
-    const { t, input: p } = sound;
+// A crawler crouching to lunge, springing arg s from now: a dry rattle, quickening and rising to the spring.
+defineSynth('crawler-rattle', {
+  length: (o) => Math.max(0, Number(o.arg) || 0) + 0.1,
+  voice(ctx, p, t, m) {
+    const s = Math.max(0, Number(m.arg) || 0);
     // Clicks closer and closer together right up to the spring, each a little higher and louder.
     for (let at = 0; at < s; at += 0.09 - 0.072 * (at / s)) {
       const k = at / s, when = t + at + Math.random() * 0.006;
@@ -178,16 +167,14 @@ class GuardianSound {
       o.start(when);
       o.stop(when + 0.03);
     }
-  }
+  },
+});
 
-  /** A crawler at (x, y, z) goes for you (`bite`: and gets you): a rattling chitter, a snap of mandibles. */
-  chitter(x: number, y: number, z: number, bite: boolean) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
-    const p = panner(ctx, x, y, z, 4);
-    p.connect(out);
-    const n = bite ? 3 : 9;
+// A crawler going for you (arg 'bite': and getting you): a rattling chitter, or a snap of mandibles.
+defineSynth('crawler-chitter', {
+  length: (m) => (m.arg === 'bite' ? 0.2 : 0.37),
+  voice(ctx, p, t, m) {
+    const bite = m.arg === 'bite', n = bite ? 3 : 9;
     for (let i = 0; i < n; i++) {
       const at = t + i * (bite ? 0.05 : 0.035) + Math.random() * 0.01;
       const o = ctx.createOscillator();
@@ -195,20 +182,21 @@ class GuardianSound {
       o.frequency.setValueAtTime(bite ? 900 : 1800 + Math.random() * 900, at);
       o.frequency.exponentialRampToValueAtTime(bite ? 200 : 700, at + 0.03);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(CHITTER_GAIN * (bite ? 2 : 1), at);
-      g.gain.exponentialRampToValueAtTime(0.001, at + 0.03);
+      // (Decays to 0.001 at the chitter's old level, 0.05.)
+      g.gain.setValueAtTime(1, at);
+      g.gain.exponentialRampToValueAtTime(0.001 / 0.05, at + 0.03);
       o.connect(g).connect(p);
       o.start(at);
       o.stop(at + 0.04);
     }
-  }
+  },
+});
 
-  /** A guardian's cannon at (x, y, z) starts charging: a rising whine over `s` seconds. */
-  charge(x: number, y: number, z: number, s: number) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
-    const p = panner(ctx, x, y, z, 30);
+// A guardian's cannon charging: a rising whine over arg s.
+defineSynth('cannon-charge', {
+  length: (m) => Math.max(0.05, Number(m.arg) || 1) + 0.1,
+  voice(ctx, out, t, m) {
+    const s = Math.max(0.05, Number(m.arg) || 1);
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(110, t);
@@ -219,25 +207,18 @@ class GuardianSound {
     lp.frequency.exponentialRampToValueAtTime(3000, t + s);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(CHARGE_GAIN, t + s);
+    g.gain.linearRampToValueAtTime(1, t + s);
     g.gain.linearRampToValueAtTime(0, t + s + 0.05);
-    o.connect(lp).connect(g).connect(p).connect(out);
+    o.connect(lp).connect(g).connect(out);
     o.start(t);
     o.stop(t + s + 0.1);
-  }
+  },
+});
 
-  /** A bolt burst at (x, y, z): a footfall's boom, twice over, with a crackle. */
-  boom(x: number, y: number, z: number, ear: { x: number; y: number; z: number }) {
-    this.footfall(x, y, z, BOOM_GAIN, ear);
-    this.footfall(x, y, z, BOOM_GAIN * 0.8, ear);
-  }
-
-  /** A guardian at (x, y, z) has started hunting you. */
-  horn(x: number, y: number, z: number) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
-    const p = panner(ctx, x, y, z, 60);
+// A guardian has started hunting you: a low brass chord swelling and fading.
+defineSynth('guardian-horn', {
+  length: 4.5,
+  voice(ctx, out, t) {
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.setValueAtTime(180, t);
@@ -245,9 +226,9 @@ class GuardianSound {
     lp.frequency.linearRampToValueAtTime(300, t + 3);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(HORN_GAIN, t + 0.4);
+    g.gain.linearRampToValueAtTime(1, t + 0.4);
     g.gain.setTargetAtTime(0, t + 2.2, 0.4);
-    lp.connect(g).connect(p).connect(out);
+    lp.connect(g).connect(out);
     for (const f of [41, 41.6, 61.7, 82.4]) {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
@@ -256,13 +237,13 @@ class GuardianSound {
       o.start(t);
       o.stop(t + 4.5);
     }
-  }
+  },
+});
 
-  /** A drone just locked on to you: two short rising chirps. */
-  chirp() {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t0 = ctx.currentTime;
+// A drone locking on to you: two short rising chirps.
+defineSynth('lock-chirp', {
+  length: 0.45,
+  voice(ctx, out, t0) {
     for (let i = 0; i < 2; i++) {
       const t = t0 + i * 0.16;
       const o = ctx.createOscillator();
@@ -271,12 +252,58 @@ class GuardianSound {
       o.frequency.exponentialRampToValueAtTime(1300 + i * 300, t + 0.1);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(CHIRP_GAIN, t + 0.01);
+      g.gain.linearRampToValueAtTime(1, t + 0.01);
       g.gain.setTargetAtTime(0, t + 0.08, 0.02);
       o.connect(g).connect(out);
       o.start(t);
       o.stop(t + 0.25);
     }
+  },
+});
+
+class GuardianSound {
+  private buzz = new Map<number, Buzz>();
+  private roar = new Map<number, Roar>();
+  private jet = new Map<number, Roar>();
+
+  /** A foot landed at (x, y, z), `weight` 0..1; the listener is at `ear`. */
+  footfall(x: number, y: number, z: number, weight: number, ear: P) {
+    play('guardian.footfall', { x, y, z }, ear, { level: weight });
+  }
+
+  /** A crawler's foot at (x, y, z): a dry little tick, heard close by. */
+  tick(x: number, y: number, z: number, ear: P) {
+    play('crawler.tick', { x, y, z }, ear);
+  }
+
+  /** A crawler at (x, y, z) crouches to lunge, springing `s` seconds from now. */
+  rattle(x: number, y: number, z: number, s: number, ear: P) {
+    if (s > 0) play('crawler.rattle', { x, y, z }, ear, { arg: s });
+  }
+
+  /** A crawler at (x, y, z) goes for you (`bite`: and gets you). */
+  chitter(x: number, y: number, z: number, bite: boolean) {
+    play(bite ? 'crawler.bite' : 'crawler.chitter', { x, y, z });
+  }
+
+  /** A guardian's cannon at (x, y, z) starts charging: a rising whine over `s` seconds. */
+  charge(x: number, y: number, z: number, s: number) {
+    play('cannon.charge', { x, y, z }, null, { arg: s });
+  }
+
+  /** A bolt or missile burst at (x, y, z): a footfall's boom, twice over. */
+  boom(x: number, y: number, z: number, ear: P) {
+    play('blast.boom', { x, y, z }, ear);
+  }
+
+  /** A guardian at (x, y, z) has started hunting you. */
+  horn(x: number, y: number, z: number) {
+    play('guardian.horn', { x, y, z });
+  }
+
+  /** A drone just locked on to you. */
+  chirp() {
+    play('drone.lockOn');
   }
 
   /** Every frame: the missiles in the air (position, velocity m/s), roaring where they are. */

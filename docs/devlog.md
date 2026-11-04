@@ -3257,3 +3257,23 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 - **Checked:** `tools/audio-config.test.mjs` (files ↔ config, `lufs` and lengths against ffmpeg, no file names in
   code, the player's reservations, slices and trims; replaces tools/rifle-audio.test.mjs). In the browser: events
   placed and in your head, a sample, footsteps via their module, a song on the music bus, edits, copy and reset.
+
+## Synths in the audio config
+
+- **What:** synthesised one-shots join samples in `src/audioConfig.ts`: 52 synths (`SYNTHS`: what each sounds like and
+  the module that makes it) beside the 31 samples, and 92 events, each playing either kind (or a mix). The guns, the
+  rifle's impacts and charges, the guardians, crawlers and drones, the worm, colossus, queen and brood, the carrier's
+  gun drones, the shield, receiver, jammer, storm warning, ladder rungs, the inventory plops and the speech blips all
+  play by event; their levels, reaches, warning bus and variants (`arg`: 'sand' / 'metal' / 'glass', a charge's
+  seconds, a plate's tier) are there, unchanged from the modules' old constants. The workbench lists and plays synths
+  (at their first event's gain and argument) and trims them like samples.
+- **How:** one interface in `src/sounds.ts`: a sound makes itself into a node from a context time and says how long it
+  lasts. A sample is a decoded file; a synth is `defineSynth(id, { length, voice(ctx, out, t, { rate, arg }) })`,
+  built on any context at unity-ish level, called by the module at load. `play` does the rest for both: pick, gain ×
+  trim, pitch and spread, the route, the voice budget, the warning bus. A fifth route, 'spatial', is the plain Web
+  Audio panner (equal-power, 1/d) the crawler ticks, horn, cannon charge, rungs and carrier drones used.
+- **Changed on the way:** a recharge cut by the next shot now cuts its "ready" latch too (it used to clack anyway); one-
+  shots that never told the voice budget their length (rifle impacts, swish, clank, leg fail, slam, the colossus, the
+  queen, the worm's howl) now reserve their real length, not 8 s; the bolt boom is one voice of two footfalls, not two.
+- **Not yet:** continuous sounds steered every frame (wind, engines, roars, drones' buzz, rumbles, beds) need a second
+  interface (todo-issues.md).

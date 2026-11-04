@@ -3,17 +3,14 @@
 // - a hand: a gloved slap (low-passed noise, 20 ms) and the rung's thin ring (two inharmonic partials, ~0.1 s);
 // - a foot: a boot's thud (a sine dropping from 150 Hz, 60 ms), a scuff of grit (band-passed noise) and a lower,
 //   longer ring.
-// Pitch varies a little from rung to rung. Others' are placed (a panner) and fade 1/d past REF, gone past HEAR; your own
-// are head-locked. Through the shared output (src/audio.ts: master gain and limiter).
+// Pitch varies a little from rung to rung. Others' are placed (a panner) and fade 1/d past `ref`, gone past `hear`; your
+// own are head-locked: the events climb.hand and climb.foot (src/audioConfig.ts, route 'spatial'). Through the shared output (src/audio.ts: master gain and limiter).
 //
 // Levels (measured offline: a steady climb, three steps a second, both kinds, rendered in headless Chrome's
 // OfflineAudioContext at the default volume, ffmpeg ebur128): −31 LUFS integrated, about the footsteps on concrete;
 // true peak ≤ −14 dBTP.
-import { audio } from './audio';
+import { defineSynth, play } from './sounds';
 
-/** Your own: full level. Others': full within REF (m), 1/d past it, silent past HEAR. */
-const REF = 2.5;
-const HEAR = 30;
 /** Levels: the hand's knock and the foot's, and each one's ring. */
 const HAND = 0.11, FOOT = 0.155, RING = 0.02;
 
@@ -67,31 +64,16 @@ export function clank(ctx: BaseAudioContext, out: AudioNode, hand: boolean, t: n
   }
 }
 
-class ClimbSound {
-  private n = 1;
+// A hand (arg 'hand') or foot on a rung; the event's spread (`vary` 0.06) is the rung-to-rung pitch, 0.94..1.06.
+defineSynth('rung', {
+  length: 0.6,
+  voice: (ctx, out, t, o) => clank(ctx, out, o.arg === 'hand', t, Math.min(1, Math.max(0, (o.rate - 0.94) / 0.12))),
+});
 
+class ClimbSound {
   /** A hand (`hand`) or foot landed on a rung at (x, y, z); `placed`: someone else's (else your own, head-locked). */
   land(hand: boolean, x: number, y: number, z: number, placed: boolean) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    let into: AudioNode = out;
-    if (placed) {
-      const l = ctx.listener, d = Math.hypot(x - l.positionX.value, y - l.positionY.value, z - l.positionZ.value);
-      if (d > HEAR) return;
-      const g = ctx.createGain();
-      g.gain.value = REF / Math.max(REF, d);
-      const p = ctx.createPanner();
-      p.panningModel = 'equalpower';
-      p.rolloffFactor = 0;
-      p.positionX.value = x;
-      p.positionY.value = y;
-      p.positionZ.value = z;
-      g.connect(p).connect(out);
-      into = g;
-      setTimeout(() => p.disconnect(), 1000);
-    }
-    this.n = (Math.imul(this.n, 0x2c1b3c6d) + 0x6d2b79f5) >>> 0;
-    clank(ctx, into, hand, ctx.currentTime, this.n / 4294967296);
+    play(hand ? 'climb.hand' : 'climb.foot', placed ? { x, y, z } : null);
   }
 }
 

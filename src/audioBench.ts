@@ -1,23 +1,25 @@
-// The audio workbench (debug menu → Sound → Audio workbench, ?debug only): plays any sound event or sample of
-// src/audioConfig.ts through the game's own audio graph (src/samples.ts, src/acoustics.ts, the buses and limiter of
+// The audio workbench (debug menu → Sound → Audio workbench, ?debug only): plays any sound event, sample or synth of
+// src/audioConfig.ts through the game's own audio graph (src/sounds.ts, src/acoustics.ts, the buses and limiter of
 // src/audio.ts) from a spot round you, and tunes the config live.
 //
-// - Events / Samples: the two lists of the config, filtered by the search box; ▶ plays one, a click opens it below.
+// - Events / Sounds: the lists of the config (sounds: the samples, then the synths), filtered by the search box; ▶
+//   plays one, a click opens it below. A synth plays as its first event would have it (its argument, pitch).
 // - Where: a top-down pad round you (you at the centre facing up, distance on a log scale out to 600 m; click or drag
 //   to place the sound), its height over your ears, and presets. "In your head" plays it as your own (no spot).
 //   The spot is taken relative to where you stand and look each time it plays, so "Repeat" follows you about.
-// - Route: as the event says, or forced (direct, placed, panned, music). Samples play placed when given a spot.
+// - Route: as the event says, or forced (direct, placed, spatial, panned, music). Sounds play placed when given a spot.
 //   Footsteps and the bike's landing are played by their own modules (src/footsteps.ts, src/bikeLandSound.ts).
-// - Editing: an event's gain, pitch, spread and reach, a sample's trim (dB; "→ −23" levels it from its `lufs`).
+// - Editing: an event's gain, pitch, spread and reach, a sound's trim (dB; for a sample "→ −23" levels it from its
+//   `lufs`).
 //   Edits apply at once (the game reads the config on every play), are kept in this browser and come back on
 //   reload; "Copy edits" gives them as a list to carry into src/audioConfig.ts, "Reset" drops them.
 // The panel is clickable while the mouse is free (F3 frees it).
 import { audio } from './audio';
 import type { P } from './acoustics';
-import { EVENTS, SAMPLES, event, sample, sampleId, type EventDef, type EventId, type Route, type SampleDef, type SampleId } from './audioConfig';
+import { EVENTS, SAMPLES, SYNTHS, event, isSynth, sample, sound, soundId, synth, type EventDef, type EventId, type Route, type SampleId, type SoundDef, type SoundId } from './audioConfig';
 import { bikeLandSound } from './bikeLandSound';
 import { footsteps } from './footsteps';
-import { loadSample, play, playSample, sampleBuffer, type Voice } from './samples';
+import { loadSample, play, playSound, sampleBuffer, synthDefined, type Voice } from './sounds';
 import { BIKE_HARD_LANDING } from '../shared/sim.ts';
 
 const EDITS_KEY = 'audioBench.edits';
@@ -28,7 +30,10 @@ const RINGS = [5, 20, 100, 600];
 const PRESETS: [string, number, number][] = [['Front 5 m', 0, 5], ['Left 20 m', -90, 20], ['Right 50 m', 90, 50], ['Behind 100 m', 180, 100], ['Front 300 m', 0, 300]];
 const EVENT_FIELDS = ['gain', 'pitch', 'vary', 'jitter', 'ref', 'hear'] as const;
 type EventField = (typeof EVENT_FIELDS)[number];
-interface Edits { samples: Partial<Record<SampleId, { trim: number }>>; events: Partial<Record<EventId, Partial<Record<EventField, number>>>> }
+interface Edits { sounds: Partial<Record<SoundId, { trim: number }>>; events: Partial<Record<EventId, Partial<Record<EventField, number>>>> }
+const SOUND_IDS = [...Object.keys(SAMPLES), ...Object.keys(SYNTHS)] as SoundId[];
+/** The samples a sound list needs loaded (synths need nothing). */
+const samplesOf = (ids: SoundId[]) => ids.filter((id): id is SampleId => !isSynth(id));
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 const db = (g: number) => 20 * Math.log10(g);
@@ -42,9 +47,9 @@ export interface BenchView {
 
 export class AudioBench {
   private panel = document.createElement('div');
-  private tab: 'events' | 'samples' = 'events';
+  private tab: 'events' | 'sounds' = 'events';
   private filter = '';
-  private sel: { kind: 'event'; id: EventId } | { kind: 'sample'; id: SampleId } | null = null;
+  private sel: { kind: 'event'; id: EventId } | { kind: 'sound'; id: SoundId } | null = null;
   /** The spot: bearing (degrees clockwise from where you look), distance (m), height over the ears (m); or your head. */
   private bearing = 0;
   private dist = 20;
@@ -55,8 +60,11 @@ export class AudioBench {
   private voices = new Set<Voice>();
   private last: (() => void) | null = null;
   /** The config as written, to diff edits against and reset to. */
-  private original = { samples: structuredClone(SAMPLES) as Record<SampleId, SampleDef>, events: structuredClone(EVENTS) as Record<EventId, EventDef> };
-  private edits: Edits = { samples: {}, events: {} };
+  private original = {
+    sounds: { ...structuredClone(SAMPLES), ...structuredClone(SYNTHS) } as Record<SoundId, SoundDef>,
+    events: structuredClone(EVENTS) as Record<EventId, EventDef>,
+  };
+  private edits: Edits = { sounds: {}, events: {} };
 
   private view: () => BenchView;
 
@@ -81,10 +89,10 @@ export class AudioBench {
 
   private load() {
     try {
-      const e = JSON.parse(localStorage.getItem(EDITS_KEY) ?? 'null') as Edits | null;
-      if (e) this.edits = { samples: e.samples ?? {}, events: e.events ?? {} };
+      const e = JSON.parse(localStorage.getItem(EDITS_KEY) ?? 'null') as (Edits & { samples?: Edits['sounds'] }) | null;
+      if (e) this.edits = { sounds: e.sounds ?? e.samples ?? {}, events: e.events ?? {} };
     } catch { /* no storage, or junk */ }
-    for (const [id, s] of Object.entries(this.edits.samples) as [SampleId, { trim: number }][]) if (SAMPLES[id]) sample(id).trim = s.trim;
+    for (const [id, s] of Object.entries(this.edits.sounds) as [SoundId, { trim: number }][]) if (this.original.sounds[id]) sound(id).trim = s.trim;
     for (const [id, f] of Object.entries(this.edits.events) as [EventId, Partial<Record<EventField, number>>][]) if (EVENTS[id]) Object.assign(event(id), f);
   }
 
@@ -93,11 +101,11 @@ export class AudioBench {
     this.footer();
   }
 
-  private setTrim(id: SampleId, trim: number) {
+  private setTrim(id: SoundId, trim: number) {
     trim = Math.round(trim * 10) / 10;
-    sample(id).trim = trim;
-    if (trim === this.original.samples[id].trim) delete this.edits.samples[id];
-    else this.edits.samples[id] = { trim };
+    sound(id).trim = trim;
+    if (trim === this.original.sounds[id].trim) delete this.edits.sounds[id];
+    else this.edits.sounds[id] = { trim };
     this.save();
   }
 
@@ -113,20 +121,20 @@ export class AudioBench {
 
   private diff() {
     const lines = ['// Audio workbench edits, for src/audioConfig.ts'];
-    for (const [id, s] of Object.entries(this.edits.samples) as [SampleId, { trim: number }][])
-      lines.push(`SAMPLES['${id}'].trim: ${this.original.samples[id].trim} → ${s.trim}`);
+    for (const [id, s] of Object.entries(this.edits.sounds) as [SoundId, { trim: number }][])
+      lines.push(`${isSynth(id) ? 'SYNTHS' : 'SAMPLES'}['${id}'].trim: ${this.original.sounds[id].trim} → ${s.trim}`);
     for (const [id, f] of Object.entries(this.edits.events) as [EventId, Partial<Record<EventField, number>>][])
       for (const [k, v] of Object.entries(f)) lines.push(`EVENTS['${id}'].${k}: ${fmt((this.original.events[id] as unknown as Record<string, number>)[k], 4)} → ${fmt(v, 4)}`);
     return lines.join('\n');
   }
 
   private reset() {
-    for (const id of Object.keys(this.edits.samples) as SampleId[]) sample(id).trim = this.original.samples[id].trim;
+    for (const id of Object.keys(this.edits.sounds) as SoundId[]) sound(id).trim = this.original.sounds[id].trim;
     for (const id of Object.keys(this.edits.events) as EventId[]) {
       const e = event(id) as unknown as Record<string, number | undefined>, o = this.original.events[id] as unknown as Record<string, number | undefined>;
       for (const f of EVENT_FIELDS) e[f] = o[f];
     }
-    this.edits = { samples: {}, events: {} };
+    this.edits = { sounds: {}, events: {} };
     this.save();
     this.detail();
   }
@@ -145,13 +153,12 @@ export class AudioBench {
   private keep(v: Voice | null) {
     if (!v) return;
     this.voices.add(v);
-    v.src.addEventListener('ended', () => this.voices.delete(v));
+    setTimeout(() => this.voices.delete(v), (v.end - (audio.ctx?.currentTime ?? 0)) * 1000 + 500);
   }
 
   private playEvent(id: EventId) {
     const go = () => {
       const { at, ear } = this.spot(), e = event(id), route = this.route || e.route;
-      for (const r of e.samples) void loadSample(sampleId(r));
       // The bespoke ones, as the game plays them (they keep their own listener: where you are).
       if (route === 'panned' && (id === 'footstep.sand' || id === 'footstep.concrete')) {
         const p = at ?? ear;
@@ -164,11 +171,18 @@ export class AudioBench {
     this.run(go);
   }
 
-  private playSampleId(id: SampleId) {
+  private playSoundId(id: SoundId) {
+    if (isSynth(id) && !synthDefined(id)) return this.flash(`${id} isn't defined (${synth(id).by})`);
+    // A synth plays as its first event has it (its argument and pitch), at the event's gain: a lone synth at unity
+    // can be far off its level in the game.
+    const first = this.usedBy().get(id)?.[0], e = first ? event(first) : null;
     const go = () => {
-      const { at, ear } = this.spot(), s = sample(id);
-      const route = this.route || (s.loop ? 'music' : at ? 'placed' : 'direct');
-      this.keep(playSample(id, { route, at, ear, level: 1, ref: route === 'panned' ? 2.5 : 15, hear: route === 'panned' ? 30 : 600 }));
+      const { at, ear } = this.spot();
+      const route = this.route || (!isSynth(id) && sample(id).loop ? 'music' : at ? 'placed' : 'direct');
+      this.keep(playSound(id, {
+        route, at, ear, level: isSynth(id) && e ? e.gain : 1, rate: isSynth(id) ? e?.pitch ?? 1 : 1, arg: e?.arg,
+        ref: route === 'panned' ? 2.5 : 15, hear: route === 'panned' ? 30 : 600,
+      }));
     };
     this.run(go);
   }
@@ -183,7 +197,7 @@ export class AudioBench {
 
   private wanted(): SampleId[] {
     if (!this.sel) return [];
-    return this.sel.kind === 'sample' ? [this.sel.id] : event(this.sel.id).samples.map(sampleId);
+    return samplesOf(this.sel.kind === 'sound' ? [this.sel.id] : event(this.sel.id).sounds.map(soundId));
   }
 
   private rearm() {
@@ -250,7 +264,7 @@ export class AudioBench {
     const p = this.panel;
     p.id = 'audioBench';
     p.innerHTML = `<h4>Audio workbench<span class="sp"></span><button id="abStop" title="Stop everything the bench started">Stop</button><button id="abClose" title="Close">×</button></h4>
-<div class="row"><button data-tab="events">Events</button><button data-tab="samples">Samples</button>
+<div class="row"><button data-tab="events">Events</button><button data-tab="sounds">Sounds</button>
 <input id="abFilter" placeholder="search" style="flex:1;min-width:0"></div>
 <div class="list" id="abList"></div>
 <div class="detail" id="abDetail"></div>
@@ -258,12 +272,12 @@ export class AudioBench {
 <div class="side"><div id="abWhere"></div>
 <label class="row">Height <input id="abHeight" type="range" min="-30" max="60" step="1" style="flex:1;min-width:0"> <span id="abHeightV"></span></label>
 <div class="row"><button id="abHead" title="Play it as your own: in your head, no spot">In your head</button>${PRESETS.map(([n], i) => `<button data-preset="${i}">${n}</button>`).join('')}</div>
-<label class="row">Route <select id="abRoute"><option value="">as configured</option><option>direct</option><option>placed</option><option>panned</option><option>music</option></select></label>
+<label class="row">Route <select id="abRoute"><option value="">as configured</option><option>direct</option><option>placed</option><option>spatial</option><option>panned</option><option>music</option></select></label>
 <div class="row"><button id="abPlay" class="go">▶ Play</button><label><input id="abRepeat" type="checkbox"> Repeat every</label>
 <input id="abEvery" type="number" min="0.1" max="30" step="0.1" value="2" style="width:46px"> s</div></div></div>
 <div class="foot row"><span id="abEdits"></span><span class="sp" style="flex:1"></span><button id="abCopy" title="The edits as a list, for src/audioConfig.ts">Copy edits</button><button id="abReset" title="Back to src/audioConfig.ts as written">Reset</button></div>
 <div id="abMsg"></div>`;
-    for (const b of p.querySelectorAll<HTMLButtonElement>('[data-tab]')) b.addEventListener('click', () => { this.tab = b.dataset.tab as 'events' | 'samples'; this.list(); });
+    for (const b of p.querySelectorAll<HTMLButtonElement>('[data-tab]')) b.addEventListener('click', () => { this.tab = b.dataset.tab as 'events' | 'sounds'; this.list(); });
     const filter = this.q<HTMLInputElement>('#abFilter');
     filter.addEventListener('input', () => { this.filter = filter.value.trim().toLowerCase(); this.list(); });
     // Typing and scrolling here aren't the game's keys and wheel.
@@ -303,9 +317,9 @@ export class AudioBench {
   }
 
   private playSelected() {
-    if (!this.sel) return this.flash('Pick an event or a sample');
+    if (!this.sel) return this.flash('Pick an event or a sound');
     if (this.sel.kind === 'event') this.playEvent(this.sel.id);
-    else this.playSampleId(this.sel.id);
+    else this.playSoundId(this.sel.id);
   }
 
   private list() {
@@ -314,23 +328,24 @@ export class AudioBench {
     const sel = (kind: string, id: string) => (this.sel?.kind === kind && this.sel.id === id ? ' sel' : '');
     if (this.tab === 'events') {
       for (const id of Object.keys(EVENTS) as EventId[]) {
-        const e = event(id), names = e.samples.map(sampleId).join(' ');
+        const e = event(id), names = e.sounds.map(soundId).join(' ');
         if (f && !`${id} ${names} ${e.by}`.toLowerCase().includes(f)) continue;
         html.push(`<div class="item${sel('event', id)}" data-event="${id}"><button data-play title="Play">▶</button><span class="n">${esc(id)}</span><span class="m">${e.route} · ${fmt(e.gain)}</span></div>`);
       }
     } else {
       const used = this.usedBy();
-      for (const id of Object.keys(SAMPLES) as SampleId[]) {
-        const s = sample(id);
-        if (f && !`${id} ${s.from}`.toLowerCase().includes(f)) continue;
-        const n = used.get(id)?.length ?? 0;
-        html.push(`<div class="item${sel('sample', id)}" data-sample="${id}"><button data-play title="Play">▶</button><span class="n">${esc(id)}</span><span class="m">${fmt(s.lufs + s.trim, 1)} LUFS · ${n ? `${n} event${n > 1 ? 's' : ''}` : 'unused'}</span></div>`);
+      for (const id of SOUND_IDS) {
+        const what = isSynth(id) ? `${synth(id).what} ${synth(id).by}` : sample(id).from;
+        if (f && !`${id} ${what}`.toLowerCase().includes(f)) continue;
+        const n = used.get(id)?.length ?? 0, d = sound(id);
+        const kind = isSynth(id) ? `synth${d.trim ? ` ${d.trim > 0 ? '+' : ''}${fmt(d.trim, 1)} dB` : ''}` : `${fmt(sample(id).lufs + d.trim, 1)} LUFS`;
+        html.push(`<div class="item${sel('sound', id)}" data-sound="${id}"><button data-play title="Play">▶</button><span class="n">${esc(id)}</span><span class="m">${kind} · ${n ? `${n} event${n > 1 ? 's' : ''}` : 'unused'}</span></div>`);
       }
     }
     box.innerHTML = html.join('') || '<div class="dim">Nothing matches.</div>';
     for (const el of box.querySelectorAll<HTMLElement>('.item')) {
       const pick = () => {
-        this.sel = el.dataset.event ? { kind: 'event', id: el.dataset.event as EventId } : { kind: 'sample', id: el.dataset.sample as SampleId };
+        this.sel = el.dataset.event ? { kind: 'event', id: el.dataset.event as EventId } : { kind: 'sound', id: el.dataset.sound as SoundId };
         for (const o of box.querySelectorAll('.item')) o.classList.toggle('sel', o === el);
         this.detail();
       };
@@ -340,9 +355,9 @@ export class AudioBench {
   }
 
   private usedBy() {
-    const m = new Map<SampleId, EventId[]>();
-    for (const id of Object.keys(EVENTS) as EventId[]) for (const r of event(id).samples) {
-      const s = sampleId(r), l = m.get(s) ?? [];
+    const m = new Map<SoundId, EventId[]>();
+    for (const id of Object.keys(EVENTS) as EventId[]) for (const r of event(id).sounds) {
+      const s = soundId(r), l = m.get(s) ?? [];
       if (!l.includes(id)) l.push(id);
       m.set(s, l);
     }
@@ -356,32 +371,45 @@ export class AudioBench {
 
   private detail() {
     const box = this.q<HTMLElement>('#abDetail'), s = this.sel;
-    if (!s) { box.innerHTML = '<div class="dim">Pick an event or a sample.</div>'; return; }
-    if (s.kind === 'sample') {
-      const d = sample(s.id), o = this.original.samples[s.id], buf = sampleBuffer(s.id), used = this.usedBy().get(s.id) ?? [];
-      box.innerHTML = `<b>${esc(s.id)}</b> <span class="dim">${esc(d.file)}</span>
-<div class="dim">${esc(d.from)}</div>
-<div>${fmt(d.lufs, 1)} LUFS as the file${d.trim ? `, ${fmt(d.lufs + d.trim, 1)} trimmed` : ''}${buf ? ` · ${fmt(buf.duration)} s` : ''}${d.slices ? ` · ${d.slices.count} slices of ${d.slices.len} s` : ''}${d.loop ? ` · loops ${fmt(d.loop[0])}–${fmt(d.loop[1])} s` : ''}</div>
-${this.slider('trim', 'Trim', -24, 24, 0.1, d.trim, `${d.trim > 0 ? '+' : ''}${fmt(d.trim, 1)} dB`, d.trim !== o.trim)}
-<div class="row" style="margin-top:4px"><button id="abLevel" title="Trim it to −23 LUFS (docs/audio.md)">→ −23 LUFS</button><button id="abTrim0">Trim 0</button></div>
+    if (!s) { box.innerHTML = '<div class="dim">Pick an event or a sound.</div>'; return; }
+    if (s.kind === 'sound') {
+      const id = s.id, d = sound(id), o = this.original.sounds[id], used = this.usedBy().get(id) ?? [];
+      const trimText = () => `${d.trim > 0 ? '+' : ''}${fmt(d.trim, 1)} dB`;
+      let head: string, buf: AudioBuffer | null = null;
+      if (isSynth(id)) {
+        const y = synth(id);
+        head = `<b>${esc(id)}</b> <span class="dim">synth · ${esc(y.by)}${synthDefined(id) ? '' : ' · not defined!'}</span>
+<div class="dim">${esc(y.what)}</div>`;
+      } else {
+        const m = sample(id);
+        buf = sampleBuffer(id);
+        head = `<b>${esc(id)}</b> <span class="dim">${esc(m.file)}</span>
+<div class="dim">${esc(m.from)}</div>
+<div>${fmt(m.lufs, 1)} LUFS as the file${m.trim ? `, ${fmt(m.lufs + m.trim, 1)} trimmed` : ''}${buf ? ` · ${fmt(buf.duration)} s` : ''}${m.slices ? ` · ${m.slices.count} slices of ${m.slices.len} s` : ''}${m.loop ? ` · loops ${fmt(m.loop[0])}–${fmt(m.loop[1])} s` : ''}</div>`;
+      }
+      box.innerHTML = `${head}
+${this.slider('trim', 'Trim', -24, 24, 0.1, d.trim, trimText(), d.trim !== o.trim)}
+<div class="row" style="margin-top:4px">${isSynth(id) ? '' : '<button id="abLevel" title="Trim it to −23 LUFS (docs/audio.md)">→ −23 LUFS</button>'}<button id="abTrim0">Trim 0</button></div>
 <div style="margin-top:4px">Played by: ${used.map((e) => `<a data-goto-event="${e}">${esc(e)}</a>`).join(', ') || '<span class="dim">no event yet</span>'}</div>`;
       const trim = box.querySelector<HTMLInputElement>('[data-k=trim]')!;
       trim.addEventListener('input', () => {
-        this.setTrim(s.id, Number(trim.value));
-        this.shown(trim, `${d.trim > 0 ? '+' : ''}${fmt(d.trim, 1)} dB`, d.trim !== o.trim);
+        this.setTrim(id, Number(trim.value));
+        this.shown(trim, trimText(), d.trim !== o.trim);
       });
       trim.addEventListener('change', () => { this.detail(); this.list(); });
-      box.querySelector('#abLevel')!.addEventListener('click', () => { this.setTrim(s.id, -23 - d.lufs); this.detail(); this.list(); });
-      box.querySelector('#abTrim0')!.addEventListener('click', () => { this.setTrim(s.id, 0); this.detail(); this.list(); });
-      if (!buf) void loadSample(s.id).then(() => this.sel === s && this.detail());
+      box.querySelector('#abLevel')?.addEventListener('click', () => { if (!isSynth(id)) this.setTrim(id, -23 - sample(id).lufs); this.detail(); this.list(); });
+      box.querySelector('#abTrim0')!.addEventListener('click', () => { this.setTrim(id, 0); this.detail(); this.list(); });
+      if (!isSynth(id) && !buf) void loadSample(id).then(() => this.sel === s && this.detail());
     } else {
       const e = event(s.id), o = this.original.events[s.id];
-      const placed = e.route === 'placed' || e.route === 'panned';
-      // Each sample's level at its source: its loudness, trim and the event's gain (before distance and the mix).
-      const levels = () => e.samples.map((r) => {
-        const id = sampleId(r), d = sample(id);
-        return `<a data-goto-sample="${id}">${esc(id)}${typeof r === 'string' ? '' : `#${r.slice}`}</a> <span class="dim">≈${fmt(d.lufs + d.trim + db(e.gain), 1)}</span>`;
-      }).join(', ') + ' <span class="dim">LUFS at the source</span>';
+      const placed = e.route === 'placed' || e.route === 'spatial' || e.route === 'panned';
+      // Each sound's level at its source: a sample's loudness, its trim and the event's gain (before distance and the
+      // mix); a synth's trim and gain (its loudness is measured in the full mix, docs/audio.md).
+      const levels = () => e.sounds.map((r) => {
+        const id = soundId(r), d = sound(id), link = `<a data-goto-sound="${id}">${esc(id)}${typeof r === 'string' ? '' : `#${r.slice}`}</a>`;
+        return isSynth(id) ? `${link} <span class="dim">synth ${fmt(d.trim + db(e.gain), 1)} dB</span>`
+          : `${link} <span class="dim">≈${fmt(sample(id).lufs + d.trim + db(e.gain), 1)} LUFS</span>`;
+      }).join(', ') + (e.arg !== undefined ? ` <span class="dim">· arg ${esc(String(e.arg))}</span>` : '') + (e.warning ? ' <span class="dim">· warning bus</span>' : '');
       const show: Record<EventField, () => string> = {
         gain: () => `${fmt(e.gain)} (${fmt(db(e.gain), 1)} dB)`, pitch: () => fmt(e.pitch ?? 1), vary: () => fmt(e.vary ?? 0),
         jitter: () => fmt(e.jitter ?? 0), ref: () => fmt(e.ref, 1), hear: () => fmt(e.hear, 0),
@@ -401,8 +429,8 @@ ${placed ? this.slider('ref', 'Ref m', 0.5, 100, 0.5, e.ref ?? 15, show.ref(), e
         if (f === 'gain') box.querySelector('#abLevels')!.innerHTML = levels();
       });
       box.querySelector('#abLevels')!.addEventListener('click', (ev) => {
-        const id = (ev.target as HTMLElement).closest<HTMLElement>('[data-goto-sample]')?.dataset.gotoSample;
-        if (id) this.goto({ kind: 'sample', id: id as SampleId });
+        const id = (ev.target as HTMLElement).closest<HTMLElement>('[data-goto-sound]')?.dataset.gotoSound;
+        if (id) this.goto({ kind: 'sound', id: id as SoundId });
       });
     }
     for (const a of box.querySelectorAll<HTMLElement>('[data-goto-event]')) a.addEventListener('click', () => this.goto({ kind: 'event', id: a.dataset.gotoEvent as EventId }));
@@ -415,10 +443,10 @@ ${placed ? this.slider('ref', 'Ref m', 0.5, 100, 0.5, e.ref ?? 15, show.ref(), e
     row.querySelector('.v')!.textContent = text;
   }
 
-  /** Open an event or a sample from a link. */
+  /** Open an event or a sound from a link. */
   private goto(sel: NonNullable<AudioBench['sel']>) {
     this.sel = sel;
-    this.tab = sel.kind === 'event' ? 'events' : 'samples';
+    this.tab = sel.kind === 'event' ? 'events' : 'sounds';
     this.filter = '';
     this.q<HTMLInputElement>('#abFilter').value = '';
     this.list();
@@ -427,7 +455,7 @@ ${placed ? this.slider('ref', 'Ref m', 0.5, 100, 0.5, e.ref ?? 15, show.ref(), e
   }
 
   private footer() {
-    const n = Object.keys(this.edits.samples).length + Object.values(this.edits.events).reduce((a, f) => a + Object.keys(f ?? {}).length, 0);
+    const n = Object.keys(this.edits.sounds).length + Object.values(this.edits.events).reduce((a, f) => a + Object.keys(f ?? {}).length, 0);
     this.q<HTMLElement>('#abEdits').textContent = n ? `${n} edit${n > 1 ? 's' : ''}, not in the config yet` : 'No edits';
   }
 

@@ -14,7 +14,7 @@ import { audio } from './audio';
 import { reflect } from './acoustics';
 import { event, sample, sampleId, trimGain, type EventId } from './audioConfig';
 import { atEar } from './echo';
-import { sampleBuffer, spread } from './samples';
+import { sampleBuffer, spread } from './sounds';
 
 export type Surface = 'sand' | 'concrete';
 
@@ -42,7 +42,7 @@ class Footsteps {
 
   /** A foot planted at (x, z) on `surface`, moving at `speed` m/s; `heavy`: carrying a heavy gun. */
   step(x: number, z: number, speed: number, surface: Surface = 'sand', heavy = false) {
-    const e = event(STEPS[surface]), id = sampleId(e.samples[0]), slices = sample(id).slices;
+    const e = event(STEPS[surface]), id = sampleId(e.sounds[0]), slices = sample(id).slices;
     const ctx = audio.ctx, buf = sampleBuffer(id);
     if (!ctx || !buf || !slices || !audio.out || !audio.running) return;
     const near = e.ref ?? 2.5, far = e.hear ?? 30;

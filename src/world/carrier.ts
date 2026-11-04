@@ -28,7 +28,7 @@ import { heightAt } from '../../shared/terrain.ts';
 import { carrierSound } from '../carrierSound';
 import { guardianSound } from '../guardianSound';
 import { rifleSound } from '../rifleSound';
-import { play } from '../samples';
+import { play } from '../sounds';
 import { glowsThroughDust } from '../post.ts';
 import { tyreDust } from '../tyreDust';
 import { BLASTS, blasts } from './blasts';

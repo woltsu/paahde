@@ -14,7 +14,7 @@ import { QueenView } from './world/queen';
 import { WormView } from './world/worm';
 import { zaps } from './world/zaps';
 import { rifleSound } from './rifleSound';
-import { play } from './samples';
+import { play } from './sounds';
 import { claim } from './kills';
 import type { Net } from './net';
 

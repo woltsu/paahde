@@ -14,7 +14,7 @@ import { FILL_MS } from '../shared/water.ts';
 import { audio } from './audio';
 import type { P } from './acoustics';
 import { event, type EventId } from './audioConfig';
-import { playSample, spread, type Voice } from './samples';
+import { playSample, spread, type SampleVoice } from './sounds';
 
 /** Heat (0..HEAT_MAX) above which a finished sip gets the sigh. */
 export const SIGH_ABOVE = 50;
@@ -32,9 +32,9 @@ const FILL_LOOP: [number, number] = [0.35, 1.35];
 
 class DrinkSound {
   /** The gulps playing now, cut short if you stop drinking. */
-  private gulps: Voice | null = null;
+  private gulps: SampleVoice | null = null;
   /** Per other player: what their hands were doing last frame, and the sound they're making. */
-  private others = new Map<number, { act: 0 | 1 | 2; voice: Voice | null }>();
+  private others = new Map<number, { act: 0 | 1 | 2; voice: SampleVoice | null }>();
 
   /** You started a sip. */
   drink() {
@@ -95,7 +95,7 @@ class DrinkSound {
     this.gulps = null;
   }
 
-  private cut(ctx: AudioContext, { src, gain }: Voice) {
+  private cut(ctx: AudioContext, { src, gain }: SampleVoice) {
     gain.gain.setTargetAtTime(0, ctx.currentTime, 0.03);
     src.stop(ctx.currentTime + 0.2);
   }
@@ -109,13 +109,13 @@ class DrinkSound {
   /** Yours: dry and centred. */
   private play(id: EventId) {
     const e = event(id);
-    return playSample(e.samples[0], { route: 'direct', level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
+    return playSample(e.sounds[0], { route: 'direct', level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
   }
 
   /** Another player's sound, at `at`, heard from `ear`; a pour rises like yours. */
   private playAt(id: EventId, at: P, ear: P) {
     const e = event(id), ctx = audio.ctx;
-    const v = playSample(e.samples[0], { route: 'placed', at, ear, ref: e.ref, hear: e.hear, level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
+    const v = playSample(e.sounds[0], { route: 'placed', at, ear, ref: e.ref, hear: e.hear, level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
     if (v && ctx && id === FILL) this.rise(ctx, v.src, v.t);
     return v;
   }

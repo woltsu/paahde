@@ -9,7 +9,7 @@
 // Their levels are the events' (teardown.*) in src/audioConfig.ts.
 import { audio } from './audio';
 import { event } from './audioConfig';
-import { play, playSample, sampleBuffer, spread, type Voice } from './samples';
+import { play, playSample, sampleBuffer, spread, type Voice } from './sounds';
 
 export type Hit = 'tink' | 'clink' | 'soft' | 'clang';
 /** The ring fades out once the pointer has stopped circling for this long (s). */
@@ -36,7 +36,7 @@ class TeardownSound {
     }
     this.stop();
     const e = event('teardown.bolt');
-    const voice = playSample(e.samples[0], { route: e.route, level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
+    const voice = playSample(e.sounds[0], { route: e.route, level: e.gain, rate: (e.pitch ?? 1) * spread(e.vary) });
     if (!voice) return;
     // Fade in (no click).
     const level = voice.gain.gain.value;

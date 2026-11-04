@@ -36,7 +36,7 @@ import { float, length, smoothstep, uv, vec3 } from 'three/tsl';
 import { heightAt, normalAt } from '../../shared/terrain.ts';
 import { colossusSound } from '../colossusSound';
 import { guardianSound } from '../guardianSound';
-import { play } from '../samples';
+import { play } from '../sounds';
 import { tyreDust } from '../tyreDust';
 import { BLASTS, blasts } from './blasts';
 import { weakPoint, type BossCtx, type BossFxMsg, type BossView } from './bossParts';

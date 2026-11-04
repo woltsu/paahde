@@ -8,20 +8,18 @@
 // footfalls); gains ramped. Levels set against the guardians' footfalls (src/guardianSound.ts, measured there):
 // the rumble at its loudest, right over you, sits about level with a footfall at 20 m.
 import { audio } from './audio';
-import { placed } from './acoustics';
+import { defineSynth, play } from './sounds';
 import { guardianSound } from './guardianSound';
 
 /** The rumble: heard within RUMBLE_HEAR m, full level within RUMBLE_REF (1/d past it). */
 const RUMBLE_HEAR = 600;
 const RUMBLE_REF = 25;
 const RUMBLE_GAIN = 0.32;
-const TELL_GAIN = 0.9;
-const HOWL_GAIN = 0.5;
 
 type P = { x: number; y: number; z: number };
 
 let noiseBuf: AudioBuffer | null = null;
-function noise(ctx: AudioContext) {
+function noise(ctx: BaseAudioContext) {
   if (noiseBuf) return noiseBuf;
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
@@ -114,9 +112,28 @@ class WormSound {
 
   /** The sand at (x, y, z) shivers: it's about to burst out there, in `len` s. */
   tell(at: P, ear: P, len: number) {
-    const ctx = audio.ctx, s = placed(at, ear, TELL_GAIN, 20, 700, { warning: true, duration: len + 1.4 });
-    if (!ctx || !s) return;
-    const { input, t } = s;
+    play('worm.tell', at, ear, { arg: len });
+  }
+
+  /** It burst out of the sand at (x, y, z): a blast of sand and a howl of metal falling away. */
+  breach(at: P, ear: P) {
+    guardianSound.boom(at.x, at.y, at.z, ear);
+    play('worm.breach', at, ear);
+  }
+
+  /** It plunged back into the sand at (x, y, z). */
+  plunge(at: P, ear: P) {
+    guardianSound.boom(at.x, at.y, at.z, ear);
+  }
+}
+
+const tellS = (arg: number | string | undefined) => Math.max(0.2, Number(arg) || 1.7);
+
+// The sand shivering before the worm bursts out, arg s from now: a swelling roar of low noise.
+defineSynth('worm-tell', {
+  length: (o) => tellS(o.arg) + 1.4,
+  voice(ctx, input, t, o) {
+    const len = tellS(o.arg);
     const n = ctx.createBufferSource();
     n.buffer = noise(ctx);
     // A random starting offset must not end the warning before its crescendo.
@@ -132,14 +149,13 @@ class WormSound {
     n.connect(lp).connect(g).connect(input);
     n.start(t, Math.random());
     n.stop(t + len + 1.4);
-  }
+  },
+});
 
-  /** It burst out of the sand at (x, y, z): a blast of sand and a howl of metal falling away. */
-  breach(at: P, ear: P) {
-    guardianSound.boom(at.x, at.y, at.z, ear);
-    const ctx = audio.ctx, s = placed(at, ear, HOWL_GAIN, 30, 1500);
-    if (!ctx || !s) return;
-    const { input, t } = s;
+// Bursting out of the sand: a long descending howl of metal (under a boom, src/guardianSound.ts).
+defineSynth('worm-howl', {
+  length: 4.5,
+  voice(ctx, input, t) {
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.setValueAtTime(1400, t);
@@ -159,12 +175,7 @@ class WormSound {
       o.start(t);
       o.stop(t + 4.5);
     }
-  }
-
-  /** It plunged back into the sand at (x, y, z). */
-  plunge(at: P, ear: P) {
-    guardianSound.boom(at.x, at.y, at.z, ear);
-  }
-}
+  },
+});
 
 export const wormSound = new WormSound();

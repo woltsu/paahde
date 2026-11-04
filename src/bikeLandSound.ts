@@ -10,7 +10,7 @@ import { audio } from './audio';
 import { reflect } from './acoustics';
 import { atEar } from './echo';
 import { event, sampleId, trimGain } from './audioConfig';
-import { sampleBuffer, spread } from './samples';
+import { sampleBuffer, spread } from './sounds';
 import { BIKE_HARD_LANDING } from '../shared/sim.ts';
 
 // Its level at full slider volume (for a hard landing under your own wheels), spread and reach (full level within
@@ -40,7 +40,7 @@ class BikeLandSound {
 
   /** A bike landed at (x, z), hitting the sand at `impact` m/s (across the slope, as shared/sim.ts stepBike). */
   play(x: number, z: number, impact: number) {
-    const e = event('bike.land'), id = sampleId(e.samples[0]);
+    const e = event('bike.land'), id = sampleId(e.sounds[0]);
     const ctx = audio.ctx, buf = sampleBuffer(id);
     if (!ctx || !buf || !audio.out || !audio.running) return;
     const near = e.ref ?? 4, far = e.hear ?? 60;

@@ -51,7 +51,7 @@ interface Song {
 
 /** A song from its event in src/audioConfig.ts (its file, level and loop region, read live). */
 function song(id: EventId, o: { resume: boolean; once?: boolean; cut?: number }): Song {
-  const s = sampleId(event(id).samples[0]);
+  const s = sampleId(event(id).sounds[0]);
   return {
     ...o,
     get src() { return sampleUrl(s); },

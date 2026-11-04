@@ -634,7 +634,7 @@ function options() {
 /** The ambient music (music.ambient in src/audioConfig.ts: "Desert ambience", exactly 112 s, looped whole) through the music slider,
  * faded in; it fades out if the page goes away without leaving (the victory screen's Play on, the lobby's Join). */
 export function music(el: HTMLElement) {
-  const id = sampleId(event('music.ambient').samples[0]), LENGTH = sample(id).loop?.[1] ?? 112;
+  const id = sampleId(event('music.ambient').sounds[0]), LENGTH = sample(id).loop?.[1] ?? 112;
   /** Decoder delay (s) when the browser ignores the LAME header, as in src/music.ts. */
   const MP3_DELAY = 1105 / 44100;
   const buffer = fetch(sampleUrl(id)).then((r) => r.arrayBuffer());

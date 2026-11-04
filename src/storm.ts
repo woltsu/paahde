@@ -13,7 +13,7 @@ import { CHOKE_RECOVER, CHOKE_S, STATIC_AT, FRONT_PASS_S, FRONT_RAMP_MS, FRONT_S
 import { WIND } from '../shared/dunes.ts';
 import { ARRIVAL } from '../shared/podSpot.ts';
 import { heightAt } from '../shared/terrain.ts';
-import { audio } from './audio';
+import { defineSynth, play } from './sounds';
 import { choking, DARK_LIFT_S, indoorHutMax, indoorHutMin, indoorSurface, STORM_SLOTS, stormDiscs, stormCalm, stormFront, stormFrontEnv, stormGround, stormHere, stormIndoors } from './world/env';
 import { wind } from './world/wind';
 import { TEXT } from '../shared/text.ts';
@@ -24,9 +24,8 @@ const BEEP_EVERY = 2.5;
 const PIP = 0.09;
 const PIP_GAP = 0.07;
 const PIP_HZ = 1760;
-/** Peak gain of a pip. At the default volume (0.4) a burst peaks at −27.5 LUFS momentary, true peak −14 dBTP
- *  (6 dB under the −21.5 measured at gain 1): a quiet tell under the mix, not an alarm. */
-const PIP_GAIN = 0.5;
+// A pip's peak is the event storm.warning's gain (src/audioConfig.ts): at 0.5 and the default volume (0.4) a burst
+// peaks at −27.5 LUFS momentary, true peak −14 dBTP (6 dB under the −21.5 at gain 1): a quiet tell, not an alarm.
 /** How fast the felt storm follows where you are (s), so walking out of one doesn't pop. */
 const TAU = 0.8;
 /** A front's roar starts this far (m) ahead of it, rising to FRONT_ROAR of a storm's wind at its wall; once its back
@@ -240,24 +239,28 @@ export class StormFx {
   }
 }
 
-/** Three short pips, like a wrist alarm. Through the shared output (src/audio.ts: volume, limiter). */
+/** Three short pips, like a wrist alarm (the event storm.warning, src/audioConfig.ts). */
 function beep() {
-  const ctx = audio.ctx, out = audio.out;
-  if (!ctx || !out || !audio.running) return;
-  const t0 = ctx.currentTime + 0.02;
-  const osc = ctx.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.value = PIP_HZ;
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
-  osc.connect(gain).connect(out);
-  for (let i = 0; i < 3; i++) {
-    const t = t0 + i * (PIP + PIP_GAP);
-    gain.gain.setTargetAtTime(PIP_GAIN, t, 0.004);
-    gain.gain.setTargetAtTime(0, t + PIP, 0.008);
-  }
-  const end = t0 + 3 * (PIP + PIP_GAP) + 0.1;
-  osc.start(t0);
-  osc.stop(end);
-  osc.onended = () => gain.disconnect();
+  play('storm.warning');
 }
+
+defineSynth('storm-pips', {
+  length: 0.02 + 3 * (PIP + PIP_GAP) + 0.1,
+  voice(ctx, out, t) {
+    const t0 = t + 0.02;
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.value = PIP_HZ;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    osc.connect(gain).connect(out);
+    for (let i = 0; i < 3; i++) {
+      const tp = t0 + i * (PIP + PIP_GAP);
+      gain.gain.setTargetAtTime(1, tp, 0.004);
+      gain.gain.setTargetAtTime(0, tp + PIP, 0.008);
+    }
+    osc.start(t0);
+    osc.stop(t0 + 3 * (PIP + PIP_GAP) + 0.1);
+    osc.onended = () => gain.disconnect();
+  },
+});

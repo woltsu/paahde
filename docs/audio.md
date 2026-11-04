@@ -79,12 +79,19 @@ use the command above to regenerate them. The six-source isolation set is
 
 ## Samples, events and the workbench
 
-Every sample file and every sound event that plays one is in `src/audioConfig.ts`: a sample's measured loudness
-(`lufs`) and `trim` (dB, applied wherever it plays), an event's samples, `gain`, pitch and spread, route and reach.
-Swap an event's sound or rebalance a sample there, not in the module that plays it. `npm test`
-(`tools/audio-config.test.mjs`) checks every file in `public/audio/` is listed, every `lufs` against ffmpeg, and that
-no code loads a sample by file name. Synthesised sounds (wind, engines, guardians, the guns' whines) keep their
-levels in their own modules.
+Every sound and every sound event that plays one is in `src/audioConfig.ts`. A sound is a sample (a file: its
+measured loudness, `lufs`) or a synth (code); both have a `trim` (dB, applied wherever it plays). An event lists its
+sounds, `gain`, pitch and spread, route (direct, placed, spatial, panned, music), reach, the warning bus and a synth's
+`arg`. Swap an event's sound or rebalance one there, not in the module that plays it. Both kinds implement one
+interface (`src/sounds.ts`): make the sound into a node from a time, and say how long it lasts; a synth is registered
+by its module with `defineSynth(id, { length, voice })` and built at unity-ish level, its event's gain setting it in
+the mix (the gains are the old calibrated `LEVEL`s and `*_GAIN`s, unchanged). `npm test`
+(`tools/audio-config.test.mjs`) checks every file in `public/audio/` is listed, every `lufs` against ffmpeg, every
+synth defined by the module it names, and that no code loads a sample by file name.
+
+Continuous sounds driven every frame (wind, engines, drones' buzz, missiles' and jets' roar, the worm's rumble, the
+carrier's thrum, the grinder, the tower, the well, the levels' beds, the cart) are not events: their levels are still in
+their own modules (todo-issues.md).
 
 The audio workbench (`?debug`, F3 → Sound → Audio workbench, `src/audioBench.ts`) plays any event or sample through
 the real graph (placement, reverb, echoes, buses, limiter) from a spot round you, and edits trims and event fields

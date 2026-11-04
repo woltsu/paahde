@@ -26,7 +26,7 @@ import { CHARGE_MS, CRAWLER, FIRE_R, FOOT_CRUSH_R, GUARDIAN, KINDS, LUNGE_DASH, 
 import { guardianSound } from './guardianSound';
 import { rifleSound } from './rifleSound';
 import { gunSound } from './gunSound';
-import { play } from './samples';
+import { play } from './sounds';
 import { tyreDust } from './tyreDust';
 import { zaps } from './world/zaps';
 import type { Net } from './net';

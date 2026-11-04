@@ -17,16 +17,12 @@
 // Everything is placed through src/acoustics.ts and the shared output (src/audio.ts), every level ramped. Levels are
 // calibrated in the full browser mix (docs/audio.md, the `blaster`, `graviton` and `piercer` scenarios of
 // tools/audio-bench.ts).
-import { audio } from './audio';
-import { placed, type P } from './acoustics';
+// Each is a synth (src/audioConfig.ts SYNTHS, defined below) played by its event (graviton.*, piercer.*,
+// blaster.charge), which holds its level (calibrated in the full mix, docs/audio.md) and reach.
+import type { P } from './acoustics';
 import { rifleSound } from './rifleSound';
 import { guardianSound } from './guardianSound';
-import { play } from './samples';
-
-/** Each sound's level (into src/acoustics.ts `placed`), calibrated in the full mix (docs/audio.md). */
-const LEVEL = { recharge: 0.012, gravitonShot: 0.2, gravitonImpact: 0.33, piercerShot: 0.37, piercerImpact: 0.5, piercerCharge: 0.005 };
-/** Full level within this many metres. */
-const GRAV_REF = 18, PIERCE_REF = 12;
+import { defineSynth, play, type Voice } from './sounds';
 
 const noiseBufs = new WeakMap<BaseAudioContext, AudioBuffer>();
 function noise(ctx: BaseAudioContext) {
@@ -155,65 +151,99 @@ export function piercerImpactVoice(ctx: BaseAudioContext, o: AudioNode, t: numbe
   }
 }
 
+/** The piercer's capacitors winding up over `s` seconds (from `t`), a thin rising whine with a beat in it, then the next
+ *  slug sliding in and the breech clacking shut. */
+export function piercerChargeVoice(ctx: BaseAudioContext, out: AudioNode, t: number, s: number) {
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.4, t + s * 0.3);
+  gain.gain.linearRampToValueAtTime(1, t + s);
+  gain.gain.setTargetAtTime(0, t + s, 0.03);
+  gain.connect(out);
+  // Two sines a little apart (the beat quickening as they climb) and a faint octave.
+  for (const [mul, a] of [[1, 1], [1.012, 0.8], [2, 0.25]] as const) {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.frequency.setValueAtTime(380 * mul, t);
+    osc.frequency.exponentialRampToValueAtTime(3400 * mul, t + s);
+    g.gain.value = a;
+    osc.connect(g).connect(gain);
+    osc.start(t);
+    osc.stop(t + s + 0.25);
+  }
+  // Ready: the slug slides in and the breech clacks shut.
+  const g = ctx.createGain();
+  g.gain.value = 10;
+  g.connect(out);
+  const slide = hiss(ctx, g, t + s - 0.16, 0.14, 'bandpass', 1300, 2, 0.25, 0.05);
+  slide.frequency.setValueAtTime(1300, t + s - 0.16);
+  slide.frequency.exponentialRampToValueAtTime(2600, t + s - 0.02);
+  tone(ctx, g, t + s, 0.1, 'square', 180, 90, 0.3, 0.001);
+  hiss(ctx, g, t + s, 0.05, 'bandpass', 3200, 5, 0.7, 0.0005);
+}
+
+/** The heavy cell recharging over `s` seconds (from `t`): a grinding whine rising and opening up, then the latch. */
+export function blasterChargeVoice(ctx: BaseAudioContext, out: AudioNode, t: number, s: number) {
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(70, t);
+  osc.frequency.exponentialRampToValueAtTime(520, t + s);
+  // A slow wobble on it, quickening as it fills.
+  const wob = ctx.createOscillator(), wobGain = ctx.createGain();
+  wob.frequency.setValueAtTime(6, t);
+  wob.frequency.linearRampToValueAtTime(22, t + s);
+  wobGain.gain.value = 6;
+  wob.connect(wobGain).connect(osc.frequency);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.Q.value = 6;
+  lp.frequency.setValueAtTime(250, t);
+  lp.frequency.exponentialRampToValueAtTime(2600, t + s);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(1, t + s * 0.5);
+  gain.gain.setTargetAtTime(0, t + s, 0.02);
+  osc.connect(lp).connect(gain).connect(out);
+  osc.start(t);
+  wob.start(t);
+  osc.stop(t + s + 0.2);
+  wob.stop(t + s + 0.2);
+  // Ready: a heavy latch.
+  const g = ctx.createGain();
+  g.gain.value = 6;
+  g.connect(out);
+  tone(ctx, g, t + s, 0.08, 'square', 240, 120, 0.25, 0.001);
+  hiss(ctx, g, t + s, 0.04, 'bandpass', 2600, 4, 0.6, 0.001);
+}
+
+/** A charge's length (s), from its event's or the caller's `arg`. */
+const chargeS = (arg: number | string | undefined) => (typeof arg === 'number' ? Math.max(0.1, arg) : 2);
+const impactOn = (arg: number | string | undefined) => (arg === 'sand' || arg === 'hard' ? arg : 'enemy');
+
+defineSynth('graviton-shot', { length: 1.4, voice: (ctx, out, t) => gravitonShotVoice(ctx, out, t) });
+defineSynth('graviton-impact', { length: 2.1, voice: (ctx, out, t) => gravitonImpactVoice(ctx, out, t) });
+defineSynth('piercer-shot', { length: 3.2, voice: (ctx, out, t) => piercerShotVoice(ctx, out, t) });
+defineSynth('piercer-impact', { length: 1.2, voice: (ctx, out, t, o) => piercerImpactVoice(ctx, out, t, impactOn(o.arg)) });
+defineSynth('piercer-charge', { length: (o) => chargeS(o.arg) + 0.3, voice: (ctx, out, t, o) => piercerChargeVoice(ctx, out, t, chargeS(o.arg)) });
+defineSynth('blaster-charge', { length: (o) => chargeS(o.arg) + 0.25, voice: (ctx, out, t, o) => blasterChargeVoice(ctx, out, t, chargeS(o.arg)) });
+
 class GunSound {
-  private charge: { osc: OscillatorNode; gain: GainNode; more?: OscillatorNode[] } | null = null;
+  /** The recharge going now (one at a time: a new shot, or another gun's, cuts it). */
+  private charge: Voice | null = null;
 
   /** A piercer shot: yours (`at` null) or someone else's at `at`, heard from `ear`. It carries far. */
   piercerShot(at: P | null = null, ear: P | null = null) {
-    const s = placed(at, ear, LEVEL.piercerShot, 20, 1200, { duration: 3.2 });
-    if (audio.ctx && s) piercerShotVoice(audio.ctx, s.input, s.t);
+    play('piercer.shot', at, ear);
   }
 
   /** The piercer's slug stopping at `at` on `on`, heard from `ear`. */
   piercerImpact(at: P, ear: P, on: 'sand' | 'hard' | 'enemy') {
-    const s = placed(at, ear, LEVEL.piercerImpact, PIERCE_REF, 600, { duration: 1.2 });
-    if (audio.ctx && s) piercerImpactVoice(audio.ctx, s.input, s.t, on);
+    play('piercer.impact', at, ear, { arg: on });
   }
 
-  /** The piercer's capacitors winding up over `s` seconds, a thin rising whine with a beat in it, then the next slug
-   *  sliding in and the breech clacking shut. Yours only. */
+  /** The piercer's capacitors winding up over `s` seconds, then the next slug sliding in. Yours only. */
   piercerCharge(s: number) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime + 0.25;
-    this.stopCharge(ctx);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(LEVEL.piercerCharge * 0.4, t + s * 0.3);
-    gain.gain.linearRampToValueAtTime(LEVEL.piercerCharge, t + s);
-    gain.gain.setTargetAtTime(0, t + s, 0.03);
-    gain.connect(out);
-    const oscs: OscillatorNode[] = [];
-    // Two sines a little apart (the beat quickening as they climb) and a faint octave.
-    for (const [mul, a] of [[1, 1], [1.012, 0.8], [2, 0.25]] as const) {
-      const osc = ctx.createOscillator(), g = ctx.createGain();
-      osc.frequency.setValueAtTime(380 * mul, t);
-      osc.frequency.exponentialRampToValueAtTime(3400 * mul, t + s);
-      g.gain.value = a;
-      osc.connect(g).connect(gain);
-      osc.start(t);
-      osc.stop(t + s + 0.25);
-      oscs.push(osc);
-    }
-    this.charge = { osc: oscs[0], gain, more: oscs.slice(1) };
-    // Ready: the slug slides in and the breech clacks shut.
-    const g = ctx.createGain();
-    g.gain.value = LEVEL.piercerCharge * 10;
-    g.connect(out);
-    const slide = hiss(ctx, g, t + s - 0.16, 0.14, 'bandpass', 1300, 2, 0.25, 0.05);
-    slide.frequency.setValueAtTime(1300, t + s - 0.16);
-    slide.frequency.exponentialRampToValueAtTime(2600, t + s - 0.02);
-    tone(ctx, g, t + s, 0.1, 'square', 180, 90, 0.3, 0.001);
-    hiss(ctx, g, t + s, 0.05, 'bandpass', 3200, 5, 0.7, 0.0005);
-  }
-
-  /** Cut a recharge still going (a new shot, or another gun's). */
-  private stopCharge(ctx: AudioContext) {
-    if (!this.charge) return;
-    this.charge.gain.gain.cancelScheduledValues(ctx.currentTime);
-    this.charge.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
-    for (const o of [this.charge.osc, ...(this.charge.more ?? [])]) o.stop(ctx.currentTime + 0.1);
-    this.charge = null;
+    this.charge?.stop(0.015);
+    this.charge = play('piercer.charge', null, null, { arg: s, delay: 0.25 });
   }
 
   /** A blaster shot: yours (`at` null) or someone else's at `at`, heard from `ear`. */
@@ -234,53 +264,18 @@ class GunSound {
 
   /** A graviton shot: yours (`at` null) or someone else's at `at`, heard from `ear`. */
   gravitonShot(at: P | null = null, ear: P | null = null) {
-    const s = placed(at, ear, LEVEL.gravitonShot, 15, 700, { duration: 1.4 });
-    if (audio.ctx && s) gravitonShotVoice(audio.ctx, s.input, s.t);
+    play('graviton.shot', at, ear);
   }
 
   /** The graviton beam's end caving in at `at`, heard from `ear`. */
   gravitonImpact(at: P, ear: P) {
-    const s = placed(at, ear, LEVEL.gravitonImpact, GRAV_REF, 600, { duration: 2.1 });
-    if (audio.ctx && s) gravitonImpactVoice(audio.ctx, s.input, s.t);
+    play('graviton.impact', at, ear);
   }
 
   /** The heavy cell recharging over `s` seconds: a grinding whine rising and opening up, then the latch. Yours only. */
   recharge(s: number) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime + 0.12;
-    this.stopCharge(ctx);
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(70, t);
-    osc.frequency.exponentialRampToValueAtTime(520, t + s);
-    // A slow wobble on it, quickening as it fills.
-    const wob = ctx.createOscillator(), wobGain = ctx.createGain();
-    wob.frequency.setValueAtTime(6, t);
-    wob.frequency.linearRampToValueAtTime(22, t + s);
-    wobGain.gain.value = 6;
-    wob.connect(wobGain).connect(osc.frequency);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.Q.value = 6;
-    lp.frequency.setValueAtTime(250, t);
-    lp.frequency.exponentialRampToValueAtTime(2600, t + s);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(LEVEL.recharge, t + s * 0.5);
-    gain.gain.setTargetAtTime(0, t + s, 0.02);
-    osc.connect(lp).connect(gain).connect(out);
-    osc.start(t);
-    wob.start(t);
-    osc.stop(t + s + 0.2);
-    wob.stop(t + s + 0.2);
-    this.charge = { osc, gain };
-    // Ready: a heavy latch.
-    const g = ctx.createGain();
-    g.gain.value = LEVEL.recharge * 6;
-    g.connect(out);
-    tone(ctx, g, t + s, 0.08, 'square', 240, 120, 0.25, 0.001);
-    hiss(ctx, g, t + s, 0.04, 'bandpass', 2600, 4, 0.6, 0.001);
+    this.charge?.stop(0.015);
+    this.charge = play('blaster.charge', null, null, { arg: s, delay: 0.12 });
   }
 }
 

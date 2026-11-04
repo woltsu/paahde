@@ -12,6 +12,7 @@
 // one-shot over it.
 import { audio } from './audio';
 import { SPEED_OF_SOUND } from './acoustics';
+import { defineSynth, play } from './sounds';
 
 /** Thrum: heard within HEAR m, full level within REF (1/d past it); the whoosh opens up within NEAR. */
 const HEAR = 3200;
@@ -30,12 +31,6 @@ const BUZZ_HEAR = 120;
 const BUZZ_REF = 12;
 const BUZZ_GAIN = 0.11;
 const MAX_BUZZ = 3;
-const AIM_GAIN = 0.035;
-const AIM_REF = 18;
-const CRACK_GAIN = 0.14;
-const CRACK_REF = 20;
-const CLUNK_GAIN = 0.12;
-const CLUNK_REF = 40;
 
 type P = { x: number; y: number; z: number };
 type Buzz = { osc: OscillatorNode; whine: OscillatorNode; trem: OscillatorNode; gain: GainNode; panner: PannerNode };
@@ -52,7 +47,7 @@ function panner(ctx: AudioContext, at: P, ref: number) {
 }
 
 let noiseBuf: AudioBuffer | null = null;
-function noise(ctx: AudioContext) {
+function noise(ctx: BaseAudioContext) {
   if (noiseBuf) return noiseBuf;
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
@@ -160,102 +155,17 @@ export class CarrierSound {
 
   /** A drone out of the bay at `at`: a heavy latch letting go. */
   launch(at: P) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator();
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(CLUNK_GAIN, t + 0.005);
-    g.gain.setTargetAtTime(0, t + 0.02, 0.07);
-    const n = ctx.createBufferSource();
-    n.buffer = noise(ctx);
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'bandpass';
-    hp.frequency.value = 2400;
-    const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0, t);
-    ng.gain.linearRampToValueAtTime(CLUNK_GAIN * 0.8, t + 0.003);
-    ng.gain.setTargetAtTime(0, t + 0.01, 0.02);
-    const p = panner(ctx, at, CLUNK_REF);
-    o.connect(g).connect(p);
-    n.connect(hp).connect(ng).connect(p);
-    p.connect(out);
-    o.start(t);
-    o.stop(t + 0.6);
-    n.start(t, Math.random());
-    n.stop(t + 0.2);
+    play('carrier.launch', at);
   }
 
   /** A drone at `at` aiming for `s` seconds: a whine climbing to the shot, pulsing faster. */
   aim(at: P, s: number) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator();
-    o.type = 'square';
-    o.frequency.setValueAtTime(520, t);
-    o.frequency.exponentialRampToValueAtTime(2200, t + s);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 2600;
-    const pulse = ctx.createGain();
-    pulse.gain.value = 0.5;
-    const lfo = ctx.createOscillator();
-    lfo.type = 'square';
-    lfo.frequency.setValueAtTime(5, t);
-    lfo.frequency.exponentialRampToValueAtTime(24, t + s);
-    const depth = ctx.createGain();
-    depth.gain.value = 0.5;
-    lfo.connect(depth).connect(pulse.gain);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(AIM_GAIN * 0.5, t + 0.04);
-    g.gain.linearRampToValueAtTime(AIM_GAIN, t + s);
-    g.gain.setTargetAtTime(0, t + s, 0.01);
-    const p = panner(ctx, at, AIM_REF);
-    o.connect(lp).connect(pulse).connect(g).connect(p).connect(out);
-    o.start(t);
-    lfo.start(t);
-    o.stop(t + s + 0.15);
-    lfo.stop(t + s + 0.15);
+    play('carrier.aim', at, null, { arg: s });
   }
 
   /** A drone's shot ending at `at`: a sharp crack and a falling zap. */
   shot(at: P) {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
-    const n = ctx.createBufferSource();
-    n.buffer = noise(ctx);
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 1800;
-    const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0, t);
-    ng.gain.linearRampToValueAtTime(CRACK_GAIN, t + 0.002);
-    ng.gain.setTargetAtTime(0, t + 0.01, 0.03);
-    const o = ctx.createOscillator();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(2400, t);
-    o.frequency.exponentialRampToValueAtTime(160, t + 0.18);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 3500;
-    const og = ctx.createGain();
-    og.gain.setValueAtTime(0, t);
-    og.gain.linearRampToValueAtTime(CRACK_GAIN * 0.5, t + 0.004);
-    og.gain.setTargetAtTime(0, t + 0.05, 0.05);
-    const p = panner(ctx, at, CRACK_REF);
-    n.connect(hp).connect(ng).connect(p);
-    o.connect(lp).connect(og).connect(p);
-    p.connect(out);
-    n.start(t, Math.random());
-    n.stop(t + 0.3);
-    o.start(t);
-    o.stop(t + 0.4);
+    play('carrier.droneShot', at);
   }
 
   /** Out of view: fade out and let go. */
@@ -393,3 +303,105 @@ export class CarrierSound {
 }
 
 export const carrierSound = new CarrierSound();
+
+
+// Its gun drones' one-shots, as synths (src/audioConfig.ts SYNTHS), played by the carrier.* events (route 'spatial'),
+// which hold their levels and reach.
+
+// A drone out of the bay: a heavy latch letting go.
+defineSynth('drone-launch', {
+  length: 0.6,
+  voice(ctx, p, t) {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(1, t + 0.005);
+    g.gain.setTargetAtTime(0, t + 0.02, 0.07);
+    const n = ctx.createBufferSource();
+    n.buffer = noise(ctx);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'bandpass';
+    hp.frequency.value = 2400;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0, t);
+    ng.gain.linearRampToValueAtTime(0.8, t + 0.003);
+    ng.gain.setTargetAtTime(0, t + 0.01, 0.02);
+    o.connect(g).connect(p);
+    n.connect(hp).connect(ng).connect(p);
+    o.start(t);
+    o.stop(t + 0.6);
+    n.start(t, Math.random());
+    n.stop(t + 0.2);
+  },
+});
+
+const aimS = (arg: number | string | undefined) => (typeof arg === 'number' && arg > 0 ? arg : 1);
+
+// A drone aiming for arg s: a whine climbing to the shot, pulsing faster.
+defineSynth('drone-aim', {
+  length: (m) => aimS(m.arg) + 0.15,
+  voice(ctx, p, t, m) {
+    const s = aimS(m.arg);
+    const o = ctx.createOscillator();
+    o.type = 'square';
+    o.frequency.setValueAtTime(520, t);
+    o.frequency.exponentialRampToValueAtTime(2200, t + s);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2600;
+    const pulse = ctx.createGain();
+    pulse.gain.value = 0.5;
+    const lfo = ctx.createOscillator();
+    lfo.type = 'square';
+    lfo.frequency.setValueAtTime(5, t);
+    lfo.frequency.exponentialRampToValueAtTime(24, t + s);
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    lfo.connect(depth).connect(pulse.gain);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.04);
+    g.gain.linearRampToValueAtTime(1, t + s);
+    g.gain.setTargetAtTime(0, t + s, 0.01);
+    o.connect(lp).connect(pulse).connect(g).connect(p);
+    o.start(t);
+    lfo.start(t);
+    o.stop(t + s + 0.15);
+    lfo.stop(t + s + 0.15);
+  },
+});
+
+// A drone's shot: a sharp crack and a falling zap.
+defineSynth('drone-shot', {
+  length: 0.4,
+  voice(ctx, p, t) {
+    const n = ctx.createBufferSource();
+    n.buffer = noise(ctx);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0, t);
+    ng.gain.linearRampToValueAtTime(1, t + 0.002);
+    ng.gain.setTargetAtTime(0, t + 0.01, 0.03);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(2400, t);
+    o.frequency.exponentialRampToValueAtTime(160, t + 0.18);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 3500;
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0, t);
+    og.gain.linearRampToValueAtTime(0.5, t + 0.004);
+    og.gain.setTargetAtTime(0, t + 0.05, 0.05);
+    n.connect(hp).connect(ng).connect(p);
+    o.connect(lp).connect(og).connect(p);
+    n.start(t, Math.random());
+    n.stop(t + 0.3);
+    o.start(t);
+    o.stop(t + 0.4);
+  },
+});

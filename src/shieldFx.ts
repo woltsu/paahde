@@ -7,7 +7,7 @@ import * as THREE from 'three/webgpu';
 import { abs, dot, float, normalView, positionLocal, positionViewDirection, pow, sin, uniform, vec3 } from 'three/tsl';
 import type { ServerMsg } from '../shared/protocol.ts';
 import { groundAt } from './ground.ts';
-import { audio } from './audio';
+import { defineSynth, play } from './sounds';
 
 type Msg = Extract<ServerMsg, { t: 'shieldBreak' }>;
 type At = (id: number) => { x: number; y: number; z: number } | null;
@@ -150,15 +150,15 @@ export class ShieldFx {
   }
 }
 
-/** The blow: a crack (noise, high and short; only when it `breaks`), a glassy ring (inharmonic partials, pitched by
- *  tier) and a low thump. */
+/** The blow at `level` (the events shield.hit and shield.break, src/audioConfig.ts; the plate's `tier` its pitch). */
 function sound(level: number, tier: number, breaks: boolean) {
-  const ctx = audio.ctx, out = audio.out;
-  if (!ctx || !out || !audio.running || level < 0.02) return;
-  const t0 = ctx.currentTime + 0.01;
-  const bus = ctx.createGain();
-  bus.gain.value = level;
-  bus.connect(out);
+  if (level >= 0.02) play(breaks ? 'shield.break' : 'shield.hit', null, null, { level, arg: tier });
+}
+
+/** A crack (noise, high and short; only when it `breaks`), a glassy ring (inharmonic partials, pitched by `tier`) and a
+ *  low thump, into `bus` from `t`. */
+function blow(ctx: BaseAudioContext, bus: AudioNode, t: number, tier: number, breaks: boolean) {
+  const t0 = t + 0.01;
   if (breaks) crack(ctx, bus, t0);
   // Ring: higher and cleaner the better the plate.
   const base = 900 + tier * 160;
@@ -184,11 +184,14 @@ function sound(level: number, tier: number, breaks: boolean) {
   th.connect(tg).connect(bus);
   th.start(t0);
   th.stop(t0 + 0.6);
-  setTimeout(() => bus.disconnect(), 2500);
 }
 
+const tierOf = (arg: number | string | undefined) => (typeof arg === 'number' ? arg : 2);
+defineSynth('shield-hit', { length: 1.7, voice: (ctx, out, t, o) => blow(ctx, out, t, tierOf(o.arg), false) });
+defineSynth('shield-break', { length: 1.7, voice: (ctx, out, t, o) => blow(ctx, out, t, tierOf(o.arg), true) });
+
 /** The plate cracking: noise, high and short. */
-function crack(ctx: AudioContext, bus: AudioNode, t0: number) {
+function crack(ctx: BaseAudioContext, bus: AudioNode, t0: number) {
   const n = Math.round(ctx.sampleRate * 0.12);
   const buf = ctx.createBuffer(1, n, ctx.sampleRate);
   const d = buf.getChannelData(0);

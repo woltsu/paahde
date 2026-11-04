@@ -15,6 +15,7 @@ import * as THREE from 'three/webgpu';
 import { inCone, JAM_BLEED, JAM_CONE, JAM_MS, JAM_SEND_MS, JAMMER } from '../shared/jammer.ts';
 import { EYE_HEIGHT } from '../shared/dig.ts';
 import { audio } from './audio';
+import { defineSynth, play } from './sounds';
 import type { FirstPersonCamera } from './camera';
 import { tools, useHeld } from './input';
 import { jamMs, quality } from '../shared/gear.ts';
@@ -30,7 +31,6 @@ const RAISE_S = 0.25;
 const HISS_GAIN = 0.12;
 const LOCK_GAIN = 0.34;
 const LOCK_EASE = 0.4;
-const CHIRP_GAIN = 0.12;
 /** Someone else's jammer: heard at the searching level (−38 LUFS) at REMOTE_REF m, 1/d past it, not past REMOTE_MAX. */
 const REMOTE_REF = 2;
 const REMOTE_MAX = 60;
@@ -216,21 +216,25 @@ export class Jammer {
     }
   }
 
-  /** The target dropped out: a falling chirp. */
+  /** The target dropped out: a falling chirp (the event jammer.lost, src/audioConfig.ts). */
   private chirp() {
-    const ctx = audio.ctx, out = audio.out;
-    if (!ctx || !out || !audio.running) return;
-    const t = ctx.currentTime;
+    play('jammer.lost');
+  }
+}
+
+defineSynth('jam-lost', {
+  length: 0.8,
+  voice(ctx, out, t) {
     const o = ctx.createOscillator();
     o.type = 'triangle';
     o.frequency.setValueAtTime(2200, t);
     o.frequency.exponentialRampToValueAtTime(260, t + 0.45);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(CHIRP_GAIN, t + 0.01);
+    g.gain.linearRampToValueAtTime(1, t + 0.01);
     g.gain.setTargetAtTime(0, t + 0.3, 0.06);
     o.connect(g).connect(out);
     o.start(t);
     o.stop(t + 0.8);
-  }
-}
+  },
+});
