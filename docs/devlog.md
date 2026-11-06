@@ -3281,7 +3281,7 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
 ## The runner: model and gait (work in progress)
 
 - **What:** a new enemy, the runner: a four-legged hunting robot far bigger than a horse (drawn at 2× its built size,
-  `RUNNER.scale`: hips ~2.3 m, ~5.4 m long, its head about a player's height; bigger than a crawler, nothing like a
+  `RUNNER.scale`: hips ~2.3 m, ~5.2 m hull to snout, its head ~2.4 m up, over a player's; bigger than a crawler, nothing like a
   guardian), sprinting
   at 16 m/s (outruns a sliding player; walk 3, trot 7), Spot's layout (long body, a hip at each corner, every knee
   bending back) made menacing: an armoured hull with blade fins down the spine and glowing flank vents, a low scowling

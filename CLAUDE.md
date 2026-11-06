@@ -29,6 +29,7 @@ Every push to `main` deploys to dev (https://dev.paahde.herkku.org/) within a fe
 - `tools/blender/machines/`, `src/teardown/`, jets: `docs/machines.md`
 - First-person hands, held items: `docs/viewmodel-hands.md`; character bodies & look pieces: `docs/character.md`
 - Loot, drops, recipes, gear slots, site layout: `docs/econsim.md`
+- The runner enemy (model, rig, gait, animations; its AI and server side still to build): `docs/runner.md`
 - Player-visible text: `docs/text.md`; character speech lines: `docs/speech.md`
 - Rendering & shadows: `docs/perf.md`; benchmarks: `docs/bench.md`; art direction: `docs/look.md`; item icons: `docs/icons.md`
 - Audio levels & full-mix measurement, samples and sound events (`src/audioConfig.ts`): `docs/audio.md`

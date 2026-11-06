@@ -6,14 +6,14 @@
 // point: borne level over its back as it goes, raised high to track you when it stops to stare, kicking back with a
 // flash at the muzzle now and then (no shots yet).
 //
-// Work in progress: so far it is only drawn. It walks and runs about in the models lab (models-lab.html?runner) and,
+// Work in progress: so far it is only drawn (what exists, for whoever builds its AI and server side: docs/runner.md). It walks and runs about in the models lab (models-lab.html?runner) and,
 // summoned from the debug menu (Spawn -> Runner), prowls round you in the desert, seen by you alone. No server side,
 // hunting, damage or loot yet (and so no shared/enemies.ts entry).
 
 /** Rig lengths (body frame: +Z forward, Y up) in the model's units, which must match tools/blender/runner.py; in the
  *  world everything is `scale` times that. */
 export const RUNNER = {
-  /** The model is drawn this many times its built size (hips ~2.3 m, ~5.4 m long, jaws ~1.5 m). */
+  /** The model is drawn this many times its built size (body centre 2.3 m up, ~5.2 m hull to snout, jaws ~1.5 m; docs/runner.md). */
   scale: 2.0,
   /** Hip sockets at (±sockX, sockY, ±sockZ) from the body's centre: each hip rolls (abduction) about Z through it. */
   sockX: 0.31, sockY: -0.02, sockZ: 0.7,
