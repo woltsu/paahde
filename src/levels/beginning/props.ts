@@ -1,11 +1,10 @@
 // The beginning's set pieces and dressing (docs/levels/tutorial.md "Set pieces"), client-only and read off the player's
 // gates (they never touch the sim, the cart's solid is the sim's: CART): the station's screens, the cleaning cart crossing
-// the hall, the fallen rack, the blast door coming down, the window on the planet, and the things
-// to find (a child's drawing of rain on a locker,
-// the water-drop plaque, the rack rows' city labels). Words on them are TEXT's (shared/text.ts TEXT.tutorial).
+// the deck's lane, the fallen gantry, the blast door coming down, the window in the pod bay's floor on the planet, and the
+// things to find (a child's drawing of rain on a locker, the water-drop plaque, the rack rows' city labels). Words on them are TEXT's (shared/text.ts TEXT.tutorial).
 import * as THREE from 'three/webgpu';
 import { abs, cameraPosition, color, dot, float, mx_fractal_noise_float, mx_noise_float, normalize, positionWorld, smoothstep, uv, vec3 } from 'three/tsl';
-import { BLAST, CART, FALLEN, GAP, SCREENS, WINDOW, cartX } from '../../../shared/levels/beginning.ts';
+import { BLAST, CART, FALLEN, LANE, SCREENS, TERMINAL, WINDOW, cartX } from '../../../shared/levels/beginning.ts';
 import { TEXT } from '../../../shared/text.ts';
 import { boxGeometry } from '../boxLevel.ts';
 import { spaceDome } from './planet.ts';
@@ -62,12 +61,12 @@ export class Props {
       this.group.add(mesh);
       this.screens.push(set);
     }
-    // The rack rows' labels in the collapsed aisle: city names, on the row ends facing the walk.
+    // The rack rows' labels on the deck: city names, on the rows' ends along the lane, facing it.
     TEXT.tutorial.cities.forEach((city, i) => {
       const { mesh } = sign(city, 0.55, 0.12, '#1b1d21', '#e8e4d8', 1);
-      const side = i % 2 ? 1 : -1, z = i < 4 ? 44.6 : GAP.z1 + 0.6;
-      mesh.position.set(side * 2.2, 1.75 - Math.floor((i % 4) / 2) * 0.3, z - 0.01);
-      mesh.rotation.y = Math.PI; // facing -z, towards you walking in
+      const side = i % 2 ? 1 : -1, z = 30 + 4.5 * (2 + 3 * (i >> 1)) + 0.6;
+      mesh.position.set(side * (LANE - 0.01), 1.75, z);
+      mesh.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; // facing the lane
       this.group.add(mesh);
     });
     // Things to find: the drawing of rain taped to a locker, the water-drop plaque in the control room.
@@ -75,7 +74,7 @@ export class Props {
     drawing.position.set(-1.35, 1.35, 0.46);
     this.group.add(drawing);
     const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshStandardNodeMaterial({ map: dropPlaque(), roughness: 0.4, metalness: 0.6 }));
-    plaque.position.set(1.8, 1.7, 71.99);
+    plaque.position.set(1.8, 1.7, TERMINAL.z0 - 0.01);
     plaque.rotation.y = Math.PI;
     this.group.add(plaque);
 
@@ -88,19 +87,24 @@ export class Props {
     this.cart.position.set(CART.x0, 0, CART.z);
     this.group.add(this.cart);
 
-    // The rack fallen across the collapsed aisle (its solid: shared/levels/beginning.ts FALLEN): a rack on its side, its
-    // door towards you, stretched to the box you climb over. The rack material reads the rack's own frame, so the
-    // geometry stays the racks' and the mesh's matrix lays it down: scaled, on its side (its height along x), turned.
-    const rack = new THREE.BoxGeometry(0.6, 2.0, 1.2).translate(0, 1, 0);
-    const fallen = new THREE.Mesh(rack, mats.rack);
-    const w = 2 * FALLEN.x, d = FALLEN.z1 - FALLEN.z0;
-    fallen.matrixAutoUpdate = false;
-    fallen.matrix.makeTranslation(w / 2, FALLEN.h / 2, (FALLEN.z0 + FALLEN.z1) / 2)
-      .multiply(new THREE.Matrix4().makeRotationY(Math.PI))
-      .multiply(new THREE.Matrix4().makeRotationZ(-Math.PI / 2))
-      .multiply(new THREE.Matrix4().makeScale(FALLEN.h / 0.6, w / 2.0, d / 1.2));
-    fallen.castShadow = fallen.receiveShadow = true;
-    this.group.add(fallen);
+    // The cable gantry fallen across the hall, wall to wall (its solid: shared/levels/beginning.ts FALLEN): two chords top
+    // and bottom along each side, posts between them, a tray deck on top with its cables. No face of one part in another's
+    // plane where they overlap (docs/levels.md "Z-fighting").
+    {
+      const F = FALLEN, c = 0.15, zone = 'aisle', steel: { b: number[]; zone: string }[] = [], tray: { b: number[]; zone: string }[] = [];
+      for (const [z0, z1] of [[F.z0, F.z0 + c], [F.z1 - c, F.z1]]) {
+        steel.push({ b: [-F.x, F.x, 0, c, z0, z1], zone }, { b: [-F.x, F.x, F.h - c, F.h, z0, z1], zone });
+        for (let x = -F.x + 0.75; x < F.x - 0.5; x += 1.5) steel.push({ b: [x - 0.05, x + 0.05, c, F.h - c, z0 + 0.02, z1 - 0.02], zone });
+      }
+      tray.push({ b: [-F.x, F.x, F.h - 0.1, F.h - 0.02, F.z0 + c, F.z1 - c], zone });
+      const truss = new THREE.Mesh(boxGeometry(steel, { aisle: 60 }), mats.steel);
+      const deck = new THREE.Mesh(boxGeometry(tray, { aisle: 60 }), mats.tray);
+      const cables = new THREE.Mesh(boxGeometry([{ b: [-F.x + 0.3, F.x - 0.3, F.h - 0.02, F.h + 0.06, F.z0 + 0.4, F.z0 + 0.7], zone }], { aisle: 60 }), mats.cable);
+      for (const m of [truss, deck, cables]) {
+        m.castShadow = m.receiveShadow = true;
+        this.group.add(m);
+      }
+    }
 
     // The blast door: a slab in a slot over the corridor's end, its edge coming down to BLAST.y0, then to the floor.
     this.blast = new THREE.Mesh(boxGeometry([{ b: [-1.2, 1.2, 0, 2.6, BLAST.z0, BLAST.z1], zone: 'bay' }], { bay: 2.6 }), mats.door);
@@ -111,28 +115,28 @@ export class Props {
     const stripes = new THREE.Mesh(boxGeometry([{ b: [-1.195, 1.195, -0.005, 0.12, BLAST.z0 - 0.005, BLAST.z1 + 0.005], zone: 'bay' }], { bay: 2.6 }), mats.hazard);
     this.blast.add(stripes);
 
-    // The window: a dark steel frame lining the hole, a deep sill, two mullions, two panes of glass (a dirty inner one,
-    // a clean outer one), and space all round behind it (planet.ts: never through the walls).
-    const W = WINDOW, T = 0.3, f = 0.12, zone = 'pod';
-    const frame = [
-      [W.x - 0.06, W.x, W.y0 - f, W.y0, W.z0 - f, W.z1 + f], // the trim round it on the wall's face
-      [W.x - 0.06, W.x, W.y1, W.y1 + f, W.z0 - f, W.z1 + f],
-      [W.x - 0.06, W.x, W.y0, W.y1, W.z0 - f, W.z0],
-      [W.x - 0.06, W.x, W.y0, W.y1, W.z1, W.z1 + f],
-      [W.x, W.x + T, W.y1 - 0.05, W.y1, W.z0, W.z1], // the reveal's lining
-      [W.x, W.x + T, W.y0, W.y1, W.z0, W.z0 + 0.05],
-      [W.x, W.x + T, W.y0, W.y1, W.z1 - 0.05, W.z1],
-      ...[1, 2].map((i) => [W.x + 0.08, W.x + 0.24, W.y0, W.y1, W.z0 + (i * (W.z1 - W.z0)) / 3 - 0.06, W.z0 + (i * (W.z1 - W.z0)) / 3 + 0.06]), // mullions
-    ].map((b) => ({ b, zone }));
-    this.group.add(new THREE.Mesh(boxGeometry(frame, { pod: 5 }), mats.door));
-    // (Its top a little over the wall's under the window, never level with it: no z-fighting.)
-    const sill = [{ b: [W.x - 0.24, W.x + T, W.y0 - 0.1, W.y0 + 0.02, W.z0 - f - 0.06, W.z1 + f + 0.06], zone }];
-    this.group.add(new THREE.Mesh(boxGeometry(sill, { pod: 5 }), mats.steel));
-    for (const [x, dirt] of [[W.x + 0.1, 1], [W.x + 0.22, 0.25]] as const) {
-      const pane = new THREE.Mesh(new THREE.PlaneGeometry(W.z1 - W.z0, W.y1 - W.y0), glass(dirt));
-      pane.position.set(x, (W.y0 + W.y1) / 2, (W.z0 + W.z1) / 2);
-      pane.rotation.y = -Math.PI / 2;
-      this.group.add(pane);
+    // The window in the floor: a dark steel rim lining the hole, two mullions under the glass, two panes (a scuffed inner
+    // one you stand on, a clean outer one under it), and space all round below it (planet.ts: never through the walls).
+    {
+      const W = WINDOW, f = 0.1, zone = 'pod', d = 0.3;
+      const frame = [
+        [W.x0 - f, W.x0, -0.02, 0.012, W.z0 - f, W.z1 + f], // the rim, a little proud of the floor
+        [W.x1, W.x1 + f, -0.02, 0.012, W.z0 - f, W.z1 + f],
+        [W.x0, W.x1, -0.02, 0.012, W.z0 - f, W.z0],
+        [W.x0, W.x1, -0.02, 0.012, W.z1, W.z1 + f],
+        [W.x0, W.x0 + 0.05, -d, -0.02, W.z0, W.z1], // the reveal's lining
+        [W.x1 - 0.05, W.x1, -d, -0.02, W.z0, W.z1],
+        [W.x0 + 0.05, W.x1 - 0.05, -d, -0.02, W.z0, W.z0 + 0.05],
+        [W.x0 + 0.05, W.x1 - 0.05, -d, -0.02, W.z1 - 0.05, W.z1],
+        ...[1, 2].map((i) => [W.x0 + 0.05, W.x1 - 0.05, -0.26, -0.06, W.z0 + (i * (W.z1 - W.z0)) / 3 - 0.06, W.z0 + (i * (W.z1 - W.z0)) / 3 + 0.06]), // mullions
+      ].map((b) => ({ b, zone }));
+      this.group.add(new THREE.Mesh(boxGeometry(frame, { pod: 5 }), mats.door));
+      for (const [y, dirt] of [[-0.03, 1], [-0.28, 0.25]] as const) {
+        const pane = new THREE.Mesh(new THREE.PlaneGeometry(W.x1 - W.x0, W.z1 - W.z0), glass(dirt, new THREE.Vector3(0, 1, 0)));
+        pane.position.set((W.x0 + W.x1) / 2, y, (W.z0 + W.z1) / 2);
+        pane.rotation.x = -Math.PI / 2;
+        this.group.add(pane);
+      }
     }
     this.group.add(spaceDome());
   }
@@ -215,12 +219,12 @@ function dropPlaque(): THREE.CanvasTexture {
 
 /** A pane of the window's glass: nearly clear, a faint cool tint, the room's dim reflection growing at grazing angles,
  *  and (by `dirt`) smudges thicker towards its corners and fine scratches catching the light. */
-function glass(dirt: number): THREE.MeshBasicNodeMaterial {
+function glass(dirt: number, normal: THREE.Vector3): THREE.MeshBasicNodeMaterial {
   const m = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide });
   m.fog = false;
   const p = uv();
   const view = normalize(positionWorld.sub(cameraPosition));
-  const grazing = float(1).sub(abs(dot(view, vec3(1, 0, 0)))).pow(4);
+  const grazing = float(1).sub(abs(dot(view, vec3(normal.x, normal.y, normal.z)))).pow(4);
   const edge = smoothstep(0.25, 0.5, p.sub(0.5).abs().length());
   const smudge = smoothstep(0.1, 0.7, mx_fractal_noise_float(vec3(p.x.mul(7), p.y.mul(3.5), 1.3), 4, 2, 0.6).add(edge.mul(0.5)));
   // Scratches: thin near-vertical lines (ridged noise near zero, stretched), only in patches.

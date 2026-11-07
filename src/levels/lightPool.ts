@@ -49,9 +49,12 @@ export class LightPool {
   private score: Float32Array;
   private target: Float32Array;
   private fixtures: readonly PoolFixture[];
+  /** Where a fixture's light goes in the root (its layout position, or that mapped onto a ring: src/levels/boxLevel.ts). */
+  private at: (p: Vec3, out: THREE.Vector3) => THREE.Vector3;
 
-  constructor(fixtures: readonly PoolFixture[], root: THREE.Object3D, shadowMap = 1024) {
+  constructor(fixtures: readonly PoolFixture[], root: THREE.Object3D, shadowMap = 1024, at?: (p: Vec3, out: THREE.Vector3) => THREE.Vector3) {
     this.fixtures = fixtures;
+    this.at = at ?? ((p, out) => out.set(p[0], p[1], p[2]));
     fixtures.forEach((f, i) => (f.kind === 'point' ? this.pointFixtures : this.spotFixtures).push(i));
     this.score = new Float32Array(fixtures.length);
     this.target = new Float32Array(fixtures.length);
@@ -126,14 +129,14 @@ export class LightPool {
   /** Move a drained slot's light to its new fixture (it is at zero: nothing pops). */
   private place(s: Slot) {
     const f = this.fixtures[s.fixture], l = s.light;
-    l.position.set(f.pos[0], f.pos[1], f.pos[2]);
+    this.at(f.pos, l.position);
     l.color.setHex(f.color);
     l.distance = f.range;
     l.decay = f.decay;
     if (l instanceof PooledSpotLight) {
       l.angle = f.angle ?? 0.95;
       l.penumbra = f.penumbra ?? 0.5;
-      l.target.position.set(f.pos[0], 0, f.pos[2]);
+      this.at([f.pos[0], 0, f.pos[2]], l.target.position);
       l.target.updateMatrixWorld();
     }
     l.updateMatrixWorld();

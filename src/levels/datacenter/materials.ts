@@ -1,11 +1,11 @@
 // The datacenter's materials (docs/levels/datacenter.md "Materials"): one node material per kind, procedural from the
-// level frame (merged boxes are not transformed, so positionLocal is the level's) and, on the instanced racks, from the
-// rack's own frame (positionGeometry / normalGeometry). No downloaded textures: the bake maps (bake.ts) carry contact AO
+// level frame (the box geometry's `lpos`/`lnor` attributes: its flat position and normal, even where it is bent onto the
+// beginning's ring, src/levels/boxLevel.ts) and, on the instanced racks, from the rack's own frame (positionGeometry / normalGeometry). No downloaded textures: the bake maps (bake.ts) carry contact AO
 // and the far light. Every fine pattern fades to its average with its screen-space size (fwidth), or it shimmers.
 import * as THREE from 'three/webgpu';
 import {
   abs, attribute, cameraPosition, color, distance, float, floor, fract, fwidth, hash, instanceIndex, length, max, min, mix,
-  mx_fractal_noise_float, mx_noise_float, normalGeometry, normalLocal, positionGeometry, positionLocal, positionWorld, select, smoothstep,
+  mx_fractal_noise_float, mx_noise_float, normalGeometry, positionGeometry, positionWorld, select, smoothstep,
   step, texture, time, uniform, vec2, vec3,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
@@ -55,14 +55,17 @@ const lines = (c: F, pitch: number, width: number): F => {
 
 /** `stripsOff`: the light strips over z from `z0` up to the uniform `cut` are dark (the beginning's hall going out row by
  *  row, src/levels/beginning: a uniform, so no shader rebuild), the downlight discs there too. */
-export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
+export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }, opts: { fog?: boolean } = {}): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
+  // The level's own frame: the box geometry's flat position and normal (src/levels/boxLevel.ts boxGeometry: the same as
+  // the local ones, but for boxes bent onto a ring).
+  const LP = attribute('lpos', 'vec3') as unknown as V3, LN = attribute('lnor', 'vec3') as unknown as V3;
   const bakeUV = (p: V2) => p.sub(vec2(maps.min.x, maps.min.y)).div(vec2(maps.size.x, maps.size.y));
   const bakeAt = (p: V2) => texture(maps.bake, bakeUV(p));
   // The far field: lit by the bake beyond the pool's reach, cross-faded by the surface's own distance from the camera.
   const farLight = smoothstep(5, 9, distance(positionWorld, cameraPosition)).mul(dcLook.bakeScale);
   const std = (hex: number, rough: number, metal = 0) => {
     const m = new THREE.MeshStandardNodeMaterial({ color: hex, roughness: rough, metalness: metal });
-    m.fog = false;
+    m.fog = !!opts.fog;
     return m;
   };
   const concrete = (p: V2, base: number, alt: number) => {
@@ -73,7 +76,7 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
   // --- Floor: sealed slab, stains, grit, 0.6 m tile seams, perforated tiles in the cold aisles.
   const floorM = std(0x6a6a67, 0.45);
   {
-    const p = positionLocal.xz;
+    const p = LP.xz;
     const { stain, albedo: slab } = concrete(p, 0x5e5f5d, 0x74746f);
     const grit = mx_noise_float(vec3(p.mul(9), 1)).mul(0.5).add(0.5);
     const f = fract(p.div(0.6));
@@ -91,7 +94,7 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
   // --- Walls: painted block, mortar joints, a darker dado band, contact shade at the floor and the ceiling.
   const wallM = std(0xa7a9a8, 0.85);
   {
-    const q = faceUV(positionLocal, normalLocal).div(vec2(0.4, 0.2));
+    const q = faceUV(LP, LN).div(vec2(0.4, 0.2));
     const course = floor(q.y);
     const bx = q.x.add(course.mod(2).mul(0.5));
     const b = vec2(fract(bx), fract(q.y));
@@ -99,59 +102,59 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
     const jy = smoothstep(0.04, float(0.04).add(fw(b.y)), min(b.y, b.y.oneMinus()));
     const joint = float(1).sub(jx.mul(jy)).mul(float(1).sub(smoothstep(0.02, 0.05, fwidth(q.y))));
     const tint = mx_noise_float(vec3(floor(bx), course, 3)).mul(0.04);
-    const y = positionLocal.y;
+    const y = LP.y;
     const ceilH = attribute('ceilH', 'float') as unknown as F;
     const dado = step(y, 1.2);
     const ao = smoothstep(0, 0.5, y).mul(0.45).add(0.55).mul(smoothstep(ceilH, ceilH.sub(0.6), y).mul(0.3).add(0.7));
     const albedo = (mix(color(0xa7a9a8), color(0x5d6266), dado) as V3).add(tint).mul(joint.mul(0.25).oneMinus()).mul(ao);
     wallM.colorNode = albedo;
     // The far light up the wall from the floor in front of it, fading by a few metres up.
-    const far = bakeAt(positionLocal.xz.add(normalLocal.xz.mul(0.3))).b.mul(smoothstep(4, 0, y).mul(0.6).add(0.2));
+    const far = bakeAt(LP.xz.add(LN.xz.mul(0.3))).b.mul(smoothstep(4, 0, y).mul(0.6).add(0.2));
     wallM.emissiveNode = albedo.mul(far).mul(farLight);
   }
 
   // --- Pillars: cast concrete, the floor's noise.
   const pillarM = std(0x8f918f, 0.8);
   {
-    const p = faceUV(positionLocal, normalLocal);
+    const p = faceUV(LP, LN);
     const { albedo } = concrete(p, 0x868886, 0x9a9c99);
-    const ao = smoothstep(0, 0.5, positionLocal.y).mul(0.4).add(0.6);
+    const ao = smoothstep(0, 0.5, LP.y).mul(0.4).add(0.6);
     pillarM.colorNode = albedo.mul(ao);
-    pillarM.emissiveNode = albedo.mul(bakeAt(positionLocal.xz).b).mul(farLight).mul(0.5);
+    pillarM.emissiveNode = albedo.mul(bakeAt(LP.xz).b).mul(farLight).mul(0.5);
   }
 
   // --- Ceiling and beams: dark, board-form streaks along x, darker where the walls and beams meet it.
   const ceilingM = std(0x26282b, 0.95);
   {
-    const p = positionLocal;
+    const p = LP;
     const streak = mx_noise_float(vec3(p.x.mul(0.15), p.z.mul(3), 5)).mul(0.08);
     ceilingM.colorNode = color(0x26282b).add(streak).mul(bakeAt(p.xz).g);
   }
 
   // --- Galvanised steel (frames, rods), trays with ladder rungs, cable bundles.
   const steelM = std(0x9a9fa3, 0.45, 0.8);
-  steelM.colorNode = color(0x9a9fa3).mul(mx_noise_float(vec3(positionLocal.mul(1.7))).mul(0.08).add(0.95));
+  steelM.colorNode = color(0x9a9fa3).mul(mx_noise_float(vec3(LP.mul(1.7))).mul(0.08).add(0.95));
   const trayM = std(0x9a9fa3, 0.5, 0.8);
-  trayM.colorNode = color(0x9a9fa3).mul(lines(positionLocal.x, 0.3, 0.02).mul(0.55).oneMinus())
-    .mul(select(normalLocal.y.lessThan(-0.5), float(0.45), float(1)));
+  trayM.colorNode = color(0x9a9fa3).mul(lines(LP.x, 0.3, 0.02).mul(0.55).oneMinus())
+    .mul(select(LN.y.lessThan(-0.5), float(0.45), float(1)));
   const cableM = std(0x15171a, 0.7);
-  cableM.colorNode = col(0x15171a).add(col(0xe8c020).mul(step(0.55, mx_noise_float(vec3(positionLocal.x.mul(0.1), positionLocal.z.mul(5), 2)))).mul(0.5));
+  cableM.colorNode = col(0x15171a).add(col(0xe8c020).mul(step(0.55, mx_noise_float(vec3(LP.x.mul(0.1), LP.z.mul(5), 2)))).mul(0.5));
 
   // --- Equipment (cooling units, UPS, batteries): off-white with louvres, a dark panel with two LEDs.
   const equipM = std(0xd6d8d4, 0.6);
   {
-    const p = positionLocal;
+    const p = LP;
     const louvre = lines(p.y, 0.025, 0.003).mul(step(0.3, p.y)).mul(step(p.y, 1.6));
     const ao = smoothstep(0, 0.3, p.y).mul(0.4).add(0.6);
     equipM.colorNode = color(0xd6d8d4).mul(louvre.mul(0.6).oneMinus()).mul(ao);
     const blink = step(fract(time.mul(0.7)), 0.85);
-    const led = select(abs(normalLocal.y).lessThan(0.5), smoothstep(0.015, 0.008, length(fract(faceUV(p, normalLocal).mul(2.1)).sub(vec2(0.5, 0.86)))), float(0));
+    const led = select(abs(LN.y).lessThan(0.5), smoothstep(0.015, 0.008, length(fract(faceUV(p, LN).mul(2.1)).sub(vec2(0.5, 0.86)))), float(0));
     equipM.emissiveNode = color(0x39ff6a).mul(led).mul(blink).mul(dcLook.ledPower).mul(4);
   }
 
   // --- The exit door, floor paint, hazard bands.
   const doorM = std(0x4a5258, 0.5, 0.3);
-  doorM.colorNode = color(0x4a5258).mul(lines(positionLocal.y, 0.55, 0.004).mul(0.4).oneMinus());
+  doorM.colorNode = color(0x4a5258).mul(lines(LP.y, 0.55, 0.004).mul(0.4).oneMinus());
   const paintM = std(0xe8c020, 0.5);
   paintM.polygonOffset = true;
   paintM.polygonOffsetFactor = -1;
@@ -160,21 +163,21 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
   hazardM.polygonOffset = true;
   hazardM.polygonOffsetFactor = -1;
   hazardM.polygonOffsetUnits = -4;
-  hazardM.colorNode = mix(color(0x1a1a1a), color(0xe8c020), step(0.5, fract(positionLocal.x.add(positionLocal.z).div(0.2))));
+  hazardM.colorNode = mix(color(0x1a1a1a), color(0xe8c020), step(0.5, fract(LP.x.add(LP.z).div(0.2))));
 
   // --- Light: strips (emissive underside, one in eight tired and flickering), downlight discs, emergency lamps.
   const stripM = std(0x3a3d41, 0.6, 0.3);
-  const lit = stripsOff ? float(1).sub(step(stripsOff.z0, positionLocal.z).mul(step(positionLocal.z, stripsOff.cut))) : float(1);
+  const lit = stripsOff ? float(1).sub(step(stripsOff.z0, LP.z).mul(step(LP.z, stripsOff.cut))) : float(1);
   {
-    const seed = hash(floor(positionLocal.z.mul(4)).add(select(positionLocal.x.greaterThan(0), float(37), float(0))));
+    const seed = hash(floor(LP.z.mul(4)).add(select(LP.x.greaterThan(0), float(37), float(0))));
     const tired = step(0.875, seed);
     const flicker = mix(float(1), float(0.2), step(0.97, hash(floor(time.mul(7)).add(seed.mul(100)))));
     const bright = mix(float(1), float(0.6).mul(flicker), tired);
-    const under = step(normalLocal.y, -0.5);
+    const under = step(LN.y, -0.5);
     stripM.emissiveNode = color(0xeef3ff).mul(under).mul(bright).mul(lit).mul(dcLook.strip);
   }
   const downM = std(0x3a3d41, 0.6, 0.3);
-  downM.emissiveNode = color(0xeef3ff).mul(step(normalLocal.y, -0.5)).mul(lit).mul(4);
+  downM.emissiveNode = color(0xeef3ff).mul(step(LN.y, -0.5)).mul(lit).mul(4);
   const emergM = std(0x553322, 0.6);
   emergM.emissiveNode = color(0xff7a1a).mul(3);
 
@@ -202,7 +205,7 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
     const inside = col(0x0b0c0e).add(col(0x1a1c20).mul(bezel));
     const coat = mix(color(0x1b1d21), color(0x24272c), hash(inst.add(3.5))) as V3;
     const contact = smoothstep(0, 0.3, pg.y).mul(0.4).add(0.6);
-    const orange = mx_noise_float(vec3(positionLocal.mul(300))).mul(0.08);
+    const orange = mx_noise_float(vec3(positionGeometry.mul(300))).mul(0.08);
     const doorColor = mix(coat, inside, see).add(color(0x5a5f66).mul(handle));
     rackM.colorNode = select(front, doorColor, select(back, mix(coat.mul(0.7), inside, holes.mul(inner)), coat)).mul(contact);
     rackM.roughnessNode = select(front.and(glass), float(0.1), float(0.45).add(orange));
@@ -235,5 +238,6 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
   return {
     floor: floorM, wall: wallM, pillar: pillarM, ceiling: ceilingM, steel: steelM, tray: trayM, cable: cableM,
     equipment: equipM, door: doorM, strip: stripM, downlight: downM, emergency: emergM, paint: paintM, hazard: hazardM, rack: rackM,
+    shell: floorM, // (never drawn: collision only)
   };
 }

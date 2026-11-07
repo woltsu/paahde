@@ -67,20 +67,26 @@ when you find it stale.
   `src/world/pooledLight.ts`) handed to the fixtures nearest the camera, never moved while lit; per-fixture `weight`
   (lights out without a shader rebuild). `src/levels/boxLevel.ts` — any box-built layout into a stage's root (boxes
   merged per material, gated boxes as their own meshes, instanced racks, the pool, a hemisphere fill)
-- The beginning (docs/levels/tutorial.md): `shared/levels/beginning.ts` — its layout (eight rooms along +z, gated doors,
+- The beginning (docs/levels/tutorial.md, aboard a ring station: docs/levels/ring.md): `shared/ring.ts` — the ring's
+  frame (`RING` radius/width/height, `toRing`, `dirToRing`, `ringMatrix`/`ringMatrixInverse`, the spin `SPIN` (Coriolis:
+  `Level.spin` in `shared/sim.ts`), the ribs). `shared/levels/beginning.ts` — its layout (the crew block and the pod
+  terminal across the ring's hall, the open deck between with rack fields, gantry and trench, gated doors,
   triggers, `GATE` bits, `BEAT_STARTS`, `beatAt`, the cleaning cart's moving solid `CART`/`cartX`) and its `Level` (private, immortal, crouch-under, skippable, no doors);
   `shared/levels/beginningCabinet.ts` — the dead control cabinet (fixed seed, only its relay left: `tut_relay`,
   `shared/items.ts` `levelOnly`); `server/tutorial.ts` — trigger bits, each player's cabinet session (never saved), the
   pod's panel and the ride down (`RIDE_MS`), `BEGINNING_DONE`; `server/world.ts` starts new players there, `finishBeginning`
   (the ride, the Esc menu's skip), strips level items on any move out, refuses hurt/die where `!mortal`, hides private
   levels' players. `src/levels/beginning/` — its stage (`index.ts`: doors, lights out, rumble, the cabinet's work site, the
-  hatch's F), `props.ts` (screens, cart, fallen rack, blast door, window frame and glass, drawing, plaque, city
-  labels), `pod.ts` (the pod: the relay's ghost in its junction box, the cover shutting, the hatch cut out of pod.glb
+  hatch's F; the root turned round the camera onto the ring), `ring.ts` (the ring's shell: deck, walls, ceiling, ribs and
+  their material, all the way round), `props.ts` (screens, cart, fallen gantry, blast door, the floor window's frame and
+  glass, drawing, plaque, city labels), `pod.ts` (the pod: the relay's ghost in its junction box, the cover shutting, the hatch cut out of pod.glb
   and swung open), `cabin.ts` (the pod's cabin seen through the hatch, lit by the pool's `CABIN_LIGHT`), `podHull.ts`
   (pod.py's hull profile and hatch, in three's frame), `planet.ts` (space: a camera-centred TSL dome with the stars, Milky Way, sun and the analytic planet),
   `sound.ts` (the fall's roar, groan, jolt, chime; the pod's click, clunk, chirp, hiss, thud), `ride.ts` (the dust card
   on the way down), `stuck.ts` (key hints after
-  8 s stuck, once per world). Tests: `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and
+  8 s stuck, once per world). `src/levels/boxLevel.ts` bends a box layout onto the ring (`buildBoxLevel(..., ring)`,
+  `boxGeometry(..., bend)`, `ringAnchor`); box geometry carries its flat `lpos`/`lnor`, which the datacenter's materials
+  read. Tests: `tools/ring.test.mjs` (the frame, the rigid motions, Coriolis), `tools/beginning.test.mjs` (the walk with `step()`, the obstacles, the cabinet and
   hatch rules), `tools/server-beginning.test.mjs` (new players start there alone and unhurt, the ride, skip, the grant), `tools/level-zfight.test.mjs` (no
   coplanar same-facing drawn boxes in any box-built layout: docs/levels.md "Building with boxes")
 

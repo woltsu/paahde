@@ -10,7 +10,9 @@ import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes, solidNear } from './b
 export type Vec3 = [number, number, number];
 export type ZoneId = 'hall' | 'vestibule' | 'ups';
 export type LevelMat = 'floor' | 'wall' | 'pillar' | 'ceiling' | 'steel' | 'tray' | 'cable' | 'equipment'
-  | 'door' | 'strip' | 'downlight' | 'emergency' | 'paint' | 'hazard' | 'rack';
+  | 'door' | 'strip' | 'downlight' | 'emergency' | 'paint' | 'hazard' | 'rack'
+  /** Collision only, drawn by the level's own shell (the beginning's ring: src/levels/beginning/ring.ts). */
+  | 'shell';
 /** 'both': collides and is drawn; 'collide': collision only (the rack runs: the instanced racks draw them); 'draw': visual only. */
 export type BoxUse = 'both' | 'collide' | 'draw';
 /** `gate`: a gated solid (shared/levels/boxes.ts BoxGrid.gate): its mask of PlayerState.gates bits, < 0 for one that shuts. */
@@ -45,6 +47,8 @@ export type LevelLayout<Z extends string = ZoneId> = {
   spawns: LevelPoint[];
   /** Trigger volumes in front of the exit door: F in one leaves (server/world.ts). */
   exits: Box[];
+  /** The far-light bake's texel (m; src/levels/datacenter/bake.ts TEXEL when absent). */
+  bakeTexel?: number;
 };
 
 export const DC = {

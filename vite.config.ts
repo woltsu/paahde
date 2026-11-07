@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
 const BUILD_SHA = process.env.BUILD_SHA ?? 'dev';
+/** The game server's port in dev (a second pair beside another checkout's: DEV_SERVER_PORT=8797 with the server's PORT). */
+const SERVER_PORT = process.env.DEV_SERVER_PORT ?? '8787';
 
 export default defineConfig({
   // Relative asset URLs so the build works under any path (served at herkku.org/dadajam/ as well as at the root of paahde.herkku.org).
@@ -29,7 +31,7 @@ export default defineConfig({
   server: {
     // Docker dev (docker-compose.yml): listen on all interfaces and poll for changes on the bind mount.
     host: process.env.DEV_DOCKER ? true : undefined,
-    proxy: { '/ws': { target: 'ws://localhost:8787', ws: true }, '/api': 'http://localhost:8787' },
+    proxy: { '/ws': { target: `ws://localhost:${SERVER_PORT}`, ws: true }, '/api': `http://localhost:${SERVER_PORT}` },
     // Agent worktrees live under .claude/; their builds shouldn't reload this dev server.
     watch: { ignored: ['**/.claude/**'], usePolling: !!process.env.DEV_DOCKER },
   },

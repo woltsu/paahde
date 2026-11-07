@@ -89,6 +89,9 @@ export type Level = {
   /** A player's gates after a tick here (shared/sim.ts step): what moves on its own once the server has set it going (the
    *  beginning's cleaning cart counts its ticks in them), so it is a function of state and predicted like the rest. */
   tick?: (gates: number) => number;
+  /** A spinning station's spin (rad/s, signed: < 0 turns the deck towards -z), whose gravity is the level's -y (shared/ring.ts,
+   *  docs/levels/ring.md): step() adds Coriolis in the air. Absent: none. */
+  spin?: number;
 };
 
 /** The sand's height as ground for feet that were at `prevY`: none inside a shelter's entrance and rooms. */

@@ -130,3 +130,26 @@ round. Bounds stay a box round the walkable stretch.
 - Coriolis in a first level: it's authentic and small, but a jump that drifts may read as a bug before it reads as
   physics. Phase 1 keeps it on at full strength; turn `RING.coriolis` down after playing.
 - The far ring: dressing beyond the fences is instanced racks and the shell; nothing there is reachable.
+
+## As built (phases 1 and 2, November 2026)
+
+- **Physics**: `shared/ring.ts` and `Level.spin` (`SPIN × RING.coriolis`, −0.224 rad/s); Coriolis in `step()` only
+  while airborne. Measured, a walking single jump carries 5.6 m without it, 6.5 m against the spin, 5.1 m with it; the
+  air jump 9.1 / 10.4 / 9.0 m. So the trench is **8 m** (6.5 before). `tools/ring.test.mjs`.
+- **Layout** (`shared/levels/beginning.ts`): the crew block (z −2.6..24.3) and the pod terminal (190..222.6) are
+  buildings 8 m tall wall to wall across the hall, so no fences were needed: you see the deck go on over their roofs.
+  The deck between: 27 rows of racks in four islands a side of the 12 m lane, lamp posts on the lane's edges (every
+  third a shadowing spot), the cart's lane between the first two rows, the fallen gantry at 158, the trench 166..174
+  with three tray ladders, the dead cabinet in front of the terminal's door. The quarters, corridor, bay corridor and pod
+  bay are the old rooms. The hull (side walls, ceiling, deck plates, the ribs' columns) is `'shell'` collision drawn by
+  the stage. The pod bay's window is **in its floor** (only the hull's outside is space: a wall window looked into the
+  terminal); the planet is down there (`planet.ts` `PLANET_DIR`).
+- **Rendering**: as planned. Box geometry is cut into ≤ 2 m strips along z and bent; the materials read `lpos`/`lnor`;
+  racks, gated doors, props (each child at its own z), the pod and the cabinet hang from `ringAnchor`s; the light pool
+  places lights by a mapping (`LightPool` `at`). The shell is one mesh round the whole ring (deck cut under the
+  buildings and over the trench) plus the ribs every 30 m, with a density haze (`HAZE` in the stage). The bake takes a
+  coarser texel here (`LevelLayout.bakeTexel` 0.25 m). Seen in the browser: the deck rises into the haze ahead, the
+  terminal stands on the far curve with the deck going on over its roof, the ceiling's bands converge.
+- **Not yet** (phase 3): space doesn't wheel with the spin (the dome is still fixed: a turn every 28 s would show the
+  planet a fifth of the time); the far ring has no racks beyond the buildings; no reveal speech line; the hall's
+  reverb; the hall's lights going out only darken the lamp posts and the ceiling bands over the walk's stretch.

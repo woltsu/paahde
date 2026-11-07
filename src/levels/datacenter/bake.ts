@@ -1,6 +1,6 @@
 // Baked maps for a box-built level (docs/levels/datacenter.md "Baked AO and light map"), computed on the client when the
 // stage is built, deterministic, no downloads:
-// - bake (RGBA half float, linear, 0.1 m over the bounds): r floor contact AO (the footprints of the boxes standing on the
+// - bake (RGBA half float, linear, 0.1 m over the bounds, or the layout's bakeTexel): r floor contact AO (the footprints of the boxes standing on the
 //   floor, blurred), g ceiling contact AO (the boxes touching the ceiling), b far light (diffuse light on the floor from
 //   every point fixture inside its range, blocked by what stands between: what the light pool doesn't light any more;
 //   under something standing, the light on its top, so the walls' reading 0.3 m out never drops to 0 by a low box)
@@ -8,10 +8,12 @@
 import * as THREE from 'three/webgpu';
 import type { LevelLayout as Layout } from '../../../shared/levels/datacenter.ts';
 
+/** The bake's texel (m) unless the layout gives its own (LevelLayout.bakeTexel). */
 export const TEXEL = 0.1;
+const TEXEL_DEFAULT = TEXEL;
 export const TILE = 0.6;
 
-export type BakeData = { nx: number; nz: number; x0: number; z0: number; ao: Float32Array; ceil: Float32Array; far: Float32Array; tiles: Uint8Array; tnx: number; tnz: number };
+export type BakeData = { nx: number; nz: number; x0: number; z0: number; texel: number; ao: Float32Array; ceil: Float32Array; far: Float32Array; tiles: Uint8Array; tnx: number; tnz: number };
 
 /** The maps as numbers (pure: tools can check them in Node). */
 export function bakeData(L: Layout<string>): BakeData {
@@ -39,6 +41,7 @@ export async function bakeDataSliced(L: Layout<string>, budgetMs = 4): Promise<B
 /** The work, in steps (each yield is a place to pause). */
 function* bakeSteps(L: Layout<string>): Generator<void, BakeData> {
   const [x0, x1, , , z0, z1] = L.bounds;
+  const TEXEL = L.bakeTexel ?? TEXEL_DEFAULT;
   const nx = Math.ceil((x1 - x0) / TEXEL), nz = Math.ceil((z1 - z0) / TEXEL);
   const solid = L.boxes.filter((b) => b.use !== 'draw');
   const raster = (pick: (b: (typeof solid)[number]) => boolean) => {
@@ -128,7 +131,7 @@ function* bakeSteps(L: Layout<string>): Generator<void, BakeData> {
       if (south && north) tiles[j * tnx + i] = 255; // (normalised: the shader reads 1)
     }
   }
-  return { nx, nz, x0, z0, ao, ceil, far, tiles, tnx, tnz };
+  return { nx, nz, x0, z0, texel: TEXEL, ao, ceil, far, tiles, tnx, tnz };
 }
 
 /** Separable box blur of radius r texels, in place. */
@@ -171,7 +174,7 @@ export function bakeMaps(L: Layout<string>, d: BakeData = bakeData(L)): BakeMaps
   return {
     bake, tiles,
     min: new THREE.Vector2(d.x0, d.z0),
-    size: new THREE.Vector2(d.nx * TEXEL, d.nz * TEXEL),
+    size: new THREE.Vector2(d.nx * d.texel, d.nz * d.texel),
     tileSize: new THREE.Vector2(d.tnx * TILE, d.tnz * TILE),
   };
 }

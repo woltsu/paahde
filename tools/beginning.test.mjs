@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { level, LEVELS } from '../shared/levels.ts';
-import { BEGINNING, BLAST, CABINET, CART, CART_CROSSED, FALLEN, GAP, GATE, POD, POD_OPEN_MS, TRAY, WINDOW, beatAt, beginningLevel, cartTicks, cartX, triggersAt } from '../shared/levels/beginning.ts';
+import { BEGINNING, BLAST, CABINET, CART, CART_CROSSED, FALLEN, GAP, GATE, LANE, POD, POD_OPEN_MS, TERMINAL, TRAY, WINDOW, beatAt, beginningLevel, cartTicks, cartX, triggersAt } from '../shared/levels/beginning.ts';
 import { CROUCH, FORWARD, JUMP, PLAYER_RADIUS, SLIDE, levelSpawn, quantizeYaw, step } from '../shared/sim.ts';
 import { ITEMS, levelOnlyItems } from '../shared/items.ts';
 import * as tables from '../shared/tables.ts';
@@ -35,13 +35,13 @@ function settle(s, ticks = 40) {
 /** Jump at the first tick, the air jump at the top (`air`), else nothing. */
 const jumps = (air) => (s, t) => (t < 2 ? JUMP : air && t > 22 && t < 25 ? JUMP : 0);
 
-/** From the spawn up to just before the fallen rack, gates as the server opens them. */
+/** From the spawn along the deck up to a few metres short of the fallen gantry, gates as the server opens them. */
 function toAisle() {
   let s = settle(levelSpawn(L.id));
   s = walk(s, 0, 6);
   s = walk(s, 0, 13);
   s = walk(s, 0, 18, { keys: () => CROUCH });
-  s = walk(s, 0, 45.5);
+  s = walk(s, 0, FALLEN.z0 - 5, { max: 40 });
   return s;
 }
 
@@ -55,42 +55,42 @@ test('the registry: the beginning is a private, immortal, crouch-under level wit
 
 test('the walk: bunk to pod with every gate opened in order', () => {
   let s = toAisle();
-  assert.ok(s.z > 45 && s.y === 0, `stuck at ${s.z.toFixed(2)}`);
-  // Over the fallen rack: a jump from just before it.
+  assert.ok(s.z > FALLEN.z0 - 5.5 && s.y === 0, `stuck at ${s.z.toFixed(2)}`);
+  // Over the fallen gantry: a jump from just before it.
   s = walk(s, 0, FALLEN.z0 - 0.9);
-  s = walk(s, 0, 52, { keys: jumps(false) });
+  s = walk(s, 0, FALLEN.z1 + 3, { keys: jumps(false) });
   s = settle(s);
   assert.ok(s.z > FALLEN.z1 && Math.abs(s.y) < 1e-6, `not over the rack: ${s.z.toFixed(2)}, ${s.y.toFixed(2)}`);
-  // Over the gap: a run-up, the jump at its edge, the air jump at the top.
-  s = walk(s, 0, 49.5);
+  // Over the trench: a run-up, the jump at its edge, the air jump at the top.
+  s = walk(s, 0, GAP.z0 - 4.5);
   s = settle(s);
   s = walk(s, 0, GAP.z0 - 0.4);
-  s = walk(s, 0, 63, { keys: jumps(true) });
+  s = walk(s, 0, GAP.z1 + 2.5, { keys: jumps(true) });
   s = settle(s);
   assert.ok(s.z > GAP.z1 && Math.abs(s.y) < 1e-6, `fell in the gap: ${s.z.toFixed(2)}, ${s.y.toFixed(2)}`);
-  // The control room: its door shut until the relay is out (the server's GATE.control).
-  s = walk(s, 0, 66);
-  let shut = walk(s, 0, 74, { max: 6 });
-  assert.ok(shut.z < 72, `through the shut control door: ${shut.z}`);
+  // The terminal: its door shut until the relay is out (the server's GATE.control).
+  s = walk(s, 0, CABINET.z - 2);
+  let shut = walk(s, 0, TERMINAL.z0 + 4, { max: 6 });
+  assert.ok(shut.z < TERMINAL.z0, `through the shut terminal door: ${shut.z}`);
   const relayOut = (st) => st.gates | GATE.control | triggersAt(st.x, st.y, st.z);
-  s = walk(s, 0, 80, { open: relayOut });
+  s = walk(s, 0, TERMINAL.z0 + 8, { open: relayOut });
   assert.ok(s.gates & GATE.blast, 'the blast door never started');
   // The blast door: standing, it stops you; a slide (or a crouch) gets under it.
-  const stood = walk(s, 0, 90.5, { open: relayOut, max: 6 });
+  const stood = walk(s, 0, BLAST.z1 + 1.5, { open: relayOut, max: 6 });
   assert.ok(stood.z < BLAST.z0, `walked through the blast door standing: ${stood.z}`);
-  s = walk(s, 0, 84, { open: relayOut });
-  s = walk(s, 0, 91, { open: relayOut, keys: (_s, t) => (t < 20 ? SLIDE : 0) });
+  s = walk(s, 0, BLAST.z0 - 4.6, { open: relayOut });
+  s = walk(s, 0, BLAST.z1 + 2, { open: relayOut, keys: (_s, t) => (t < 20 ? SLIDE : 0) });
   assert.ok(s.z > BLAST.z1, `didn't get under the blast door: ${s.z.toFixed(2)}`);
-  s = walk(s, 0, 92.5, { open: relayOut });
+  s = walk(s, 0, POD.hatch[4] - 4.3, { open: relayOut });
   assert.ok(s.gates & GATE.shut);
   // Shut behind you.
-  const back = walk({ ...s }, 0, 85, { open: relayOut, keys: () => CROUCH, max: 8 });
+  const back = walk({ ...s }, 0, BLAST.z0 - 3.6, { open: relayOut, keys: () => CROUCH, max: 8 });
   assert.ok(back.z > BLAST.z1, `back under the shut blast door: ${back.z}`);
   // The hatch.
-  s = walk(s, 0, 97.6, { open: relayOut });
+  s = walk(s, 0, (POD.hatch[4] + POD.hatch[5]) / 2, { open: relayOut });
   assert.ok(inBoxFeet(POD.hatch, s), `not at the hatch: ${s.x.toFixed(2)}, ${s.z.toFixed(2)}`);
   // The pod's hull stops you short of it, still at the hatch.
-  const bumped = walk({ ...s }, 0, 100.2, { open: relayOut, max: 3 });
+  const bumped = walk({ ...s }, 0, POD.z, { open: relayOut, max: 3 });
   assert.ok(bumped.z < POD.hull[4] && inBoxFeet(POD.hatch, bumped), `into the pod or past its hatch: ${bumped.z.toFixed(2)}`);
   assert.equal(L.doors().length, 0, 'an F that just takes you out');
 });
@@ -118,23 +118,23 @@ test('crouching under the fallen tray', () => {
 
 test('the fallen rack needs a jump, the gap the air jump, and the sub-floor has a way back up', () => {
   let s = toAisle();
-  const walked = walk(s, 0, 52, { max: 6 });
-  assert.ok(walked.z < FALLEN.z0, `walked through the fallen rack: ${walked.z}`);
+  const walked = walk(s, 0, FALLEN.z1 + 3, { max: 6 });
+  assert.ok(walked.z < FALLEN.z0, `walked through the fallen gantry: ${walked.z}`);
   s = walk(s, 0, FALLEN.z0 - 0.9);
-  s = settle(walk(s, 0, 52, { keys: jumps(false) }));
-  s = settle(walk(s, 0, 49.5));
+  s = settle(walk(s, 0, FALLEN.z1 + 3, { keys: jumps(false) }));
+  s = settle(walk(s, 0, GAP.z0 - 4.5));
   s = walk(s, 0, GAP.z0 - 0.4);
-  // One jump only: down into the sub-floor.
-  let fell = settle(walk(s, 0, 63, { keys: jumps(false), max: 4 }), 120);
+  // One jump only: down into the trench.
+  let fell = settle(walk(s, 0, GAP.z1 + 2.5, { keys: jumps(false), max: 4 }), 120);
   assert.ok(fell.y < -2 && fell.grounded, `one jump crossed the gap: ${fell.z.toFixed(2)}, ${fell.y.toFixed(2)}`);
   assert.equal(beatAt(fell.x, fell.y, fell.z), 5);
   // Back up: onto the ladder of trays, a jump each, then up onto the aisle's floor.
-  fell = walk(fell, 1.9, 55.6);
-  fell = settle(walk(fell, 1.9, 54.4, { keys: jumps(false), max: 3 }));
+  fell = walk(fell, 1.9, GAP.z0 + 1.6);
+  fell = settle(walk(fell, 1.9, GAP.z0 + 0.4, { keys: jumps(false), max: 3 }));
   assert.ok(Math.abs(fell.y + 1.6) < 1e-6, `not on the first tray: ${fell.y}`);
-  fell = settle(walk(fell, 0.7, 54.4, { keys: jumps(false), max: 3 }));
+  fell = settle(walk(fell, 0.7, GAP.z0 + 0.4, { keys: jumps(false), max: 3 }));
   assert.ok(Math.abs(fell.y + 0.8) < 1e-6, `not on the second tray: ${fell.y}`);
-  fell = settle(walk(fell, 0.7, 52.5, { keys: jumps(false), max: 3 }));
+  fell = settle(walk(fell, 0.7, GAP.z0 - 1.5, { keys: jumps(false), max: 3 }));
   assert.ok(Math.abs(fell.y) < 1e-6 && fell.z < GAP.z0, `not back up: ${fell.z.toFixed(2)}, ${fell.y.toFixed(2)}`);
 });
 
@@ -216,9 +216,9 @@ test('the cabinet and the pod on the server: the relay out opens the door, into 
   // Another player's cabinet is whole.
   assert.ok(!t.site(2, s, { t: 'siteJoin' }, give).answers[0].taken.includes(RELAY_INDEX));
   // The hatch: away from it nothing; without the relay nothing; with it, powered (it is used up); then in and down.
-  const hatch = at(0, 98, took.gates);
+  const hatch = at(0, (POD.hatch[4] + POD.hatch[5]) / 2, took.gates);
   assert.ok(atHatch(hatch));
-  assert.equal(t.hatch(1, at(0, 90, took.gates), () => true, 0), null);
+  assert.equal(t.hatch(1, at(0, BLAST.z0 - 2, took.gates), () => true, 0), null);
   assert.equal(t.hatch(1, hatch, () => false, 0), null);
   let used = 0;
   const powered = t.hatch(1, hatch, () => (used++, true), 0);
@@ -237,17 +237,17 @@ test('the cabinet and the pod on the server: the relay out opens the door, into 
 test('every solid is drawn: nothing invisible in your way', () => {
   // A collide-only box is drawn by the instanced racks standing in it, or by the stage (src/levels/beginning): these.
   const byStage = [
-    [-FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1], // the fallen rack (props.ts)
+    [-FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1], // the fallen gantry (props.ts)
     [CABINET.x - 0.7, CABINET.x + 0.7, 0, 0.5, CABINET.z - 0.65, CABINET.z + 0.65], // the cabinet (the disassembly)
     POD.hull, // the pod (pod.glb: src/levels/beginning/pod.ts)
-    [WINDOW.x, WINDOW.x + 0.3, WINDOW.y0, WINDOW.y1, WINDOW.z0, WINDOW.z1], // the window's pane (props.ts)
+    [WINDOW.x0, WINDOW.x1, -0.3, 0, WINDOW.z0, WINDOW.z1], // the window's glass in the floor (props.ts)
     [-1.2, 1.2, BLAST.y0, 2.6, BLAST.z0, BLAST.z1], // the blast door over its edge, and shut (props.ts)
     [-1.2, 1.2, 0, BLAST.y0, BLAST.z0, BLAST.z1],
   ];
   const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
   const inRack = (x, z) => BEGINNING.racks.some((r) => Math.abs(x - r.x) <= 0.3 + 1e-6 && Math.abs(z - r.z) <= 0.6 + 1e-6);
   for (const b of BEGINNING.boxes) {
-    if (b.use !== 'collide') continue;
+    if (b.use !== 'collide' || b.mat === 'shell') continue; // (the hull: the ring's shell, src/levels/beginning/ring.ts)
     if (byStage.some((k) => same(k, b.b))) continue;
     assert.equal(b.mat, 'rack', `an invisible solid ${b.mat} ${b.b}`);
     // Every point of its footprint under a rack drawn there.
@@ -257,15 +257,15 @@ test('every solid is drawn: nothing invisible in your way', () => {
   }
 });
 
-test('walking the hall and the aisle, nothing stops you but the fallen rack and the gap', () => {
+test('walking the deck, nothing stops you but the fallen gantry and the trench', () => {
   let s = toAisle();
-  // No jump: up to the fallen rack, and stopped right at it.
-  const walked = walk(s, 0, 52, { max: 4 });
-  assert.ok(walked.z > FALLEN.z0 - PLAYER_RADIUS - 0.05 && walked.z < FALLEN.z0, `stopped short of the fallen rack: ${walked.z.toFixed(2)}`);
-  // Over it, then along the aisle's floor to the gap's edge, by either side.
-  s = settle(walk(walk(s, 0, FALLEN.z0 - 0.9), 0, 50, { keys: jumps(false) }));
-  for (const x of [-1.45, 0, 1.45]) {
-    const edge = walk(walk(s, x, 50), x, GAP.z0 - 0.1, { max: 4 });
+  // No jump: up to the fallen gantry, and stopped right at it.
+  const walked = walk(s, 0, FALLEN.z1 + 3, { max: 4 });
+  assert.ok(walked.z > FALLEN.z0 - PLAYER_RADIUS - 0.05 && walked.z < FALLEN.z0, `stopped short of the fallen gantry: ${walked.z.toFixed(2)}`);
+  // Over it, then along the deck to the trench's edge, anywhere across the hall.
+  s = settle(walk(walk(s, 0, FALLEN.z0 - 0.9), 0, FALLEN.z1 + 1, { keys: jumps(false) }));
+  for (const x of [-30, -1.45, 0, 1.45, 30]) {
+    const edge = walk(walk(s, x, FALLEN.z1 + 1, { max: 8 }), x, GAP.z0 - 0.1, { max: 4 });
     assert.ok(edge.z > GAP.z0 - 0.4 && Math.abs(edge.y) < 1e-6, `stopped short of the gap at x ${x}: ${edge.z.toFixed(2)}`);
   }
 });
@@ -285,7 +285,7 @@ test('the cleaning cart: solid, parked until you come in, across the hall in its
     const hit = b.b[0] < lane[1] && b.b[1] > lane[0] && b.b[2] < lane[3] && b.b[3] > lane[2] && b.b[4] < lane[5] && b.b[5] > lane[4];
     assert.ok(!hit, `the cart's run goes through ${b.mat} ${b.b}`);
   }
-  assert.ok(6 - lane[1] >= 2 * PLAYER_RADIUS && lane[0] + 6 >= 2 * PLAYER_RADIUS, 'it can pin you to the wall');
+  assert.ok(LANE - lane[1] >= 2 * PLAYER_RADIUS && lane[0] + LANE >= 2 * PLAYER_RADIUS, 'it can pin you to the racks');
   // You walk into it, parked: it stops you.
   const from = { ...levelSpawn(L.id), x: CART.x0, z: CART.z - 1.5, gates: GATE.quarters };
   const parked = walk(from, CART.x0, CART.z + 1.5, { open: () => GATE.quarters, max: 3 });

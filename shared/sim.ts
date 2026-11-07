@@ -424,6 +424,13 @@ export function step(s: PlayerState, input: number, yawQ: number, storm = 0, leg
   } else {
     vy = Math.max(s.vy + GRAVITY * DT, MAX_FALL);
   }
+  // Coriolis in a spinning station (Level.spin, docs/levels/ring.md), in the air: a = -2 ω × v with the axis along x.
+  // Rising drifts you along the spin, falling against it; going against the spin you're lighter, with it heavier.
+  if (L.spin && !s.grounded) {
+    const k = 2 * L.spin * DT, wy = vy, wz = vz;
+    vz += k * wy;
+    vy -= k * wz;
+  }
 
   let y = s.y + vy * DT;
   // Scrap and crash-site wrecks: tall pieces push you out (and absorb the velocity into them), low ones become the ground.

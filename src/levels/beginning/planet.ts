@@ -1,5 +1,5 @@
-// Space through the pod bay's window (docs/levels/tutorial.md "The window"): one camera-centred dome, its shader the
-// whole of it (TSL, no textures), so space never ends at any angle and nothing in it can come through the walls. Drawn
+// Space through the window in the pod bay's floor (docs/levels/tutorial.md "The window", docs/levels/ring.md): one
+// camera-centred dome, its shader the whole of it (TSL, no textures), so space never ends at any angle and nothing in it can come through the walls. Drawn
 // after every opaque thing (depth-tested, never writing depth), so only the pixels the window shows are shaded, and the
 // depth buffer stays at 1 there, as under the desert's sky (post tells sky from ground by it).
 // In it, by view direction only (everything is infinitely far): round stars of many brightnesses and colours, the
@@ -20,13 +20,13 @@ type V3 = Node<'vec3'>;
 
 const v3 = (v: THREE.Vector3) => vec3(v.x, v.y, v.z);
 
-/** Where the planet is (its centre's direction from the bay) and how big it looks (angular radius): low out of the
- *  window (east, +x) and a little to the left, its limb a gentle curve across the lower half of the view. */
-const PLANET_DIR = new THREE.Vector3(1, -0.6, -0.2).normalize();
+/** Where the planet is (its centre's direction from the bay) and how big it looks (angular radius): under the station,
+ *  seen down through the window in the pod bay's floor (under the deck is the hull, and outside it, below, the planet). */
+const PLANET_DIR = new THREE.Vector3(0.35, -1, 0.2).normalize();
 const PLANET_ANGLE = THREE.MathUtils.degToRad(34);
 /** The sun: off to the right of the planet, lighting it from the side (the night on its left), seen slantwise through
  *  the glass from the window's left end. */
-const SUN_DIR = new THREE.Vector3(0.3, 0.3, 0.9).normalize();
+const SUN_DIR = new THREE.Vector3(0.75, -0.35, 0.55).normalize();
 const SUN_ANGLE = THREE.MathUtils.degToRad(0.7);
 /** The planet's spin axis (tilted) and how fast it turns (rad/s: a slow drift you see if you stay). */
 const AXIS = new THREE.Vector3(0.25, 1, 0.3).normalize();
@@ -245,9 +245,12 @@ export function spaceDome(): THREE.Mesh {
   mesh.frustumCulled = false;
   mesh.renderOrder = 1000; // after the opaque rooms: their depth leaves only the window's pixels to shade
   mesh.onBeforeRender = (_r, _s, camera) => {
+    // Round the camera in the world, whatever frame it hangs in (the beginning's root is turned onto its ring).
     mesh.position.copy(camera.position);
+    if (mesh.parent) mesh.parent.worldToLocal(mesh.position);
     mesh.updateMatrixWorld();
   };
   mesh.name = 'space';
+  mesh.userData.camera = true; // (not placed on the ring with the props: src/levels/beginning/index.ts)
   return mesh;
 }

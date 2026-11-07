@@ -3364,3 +3364,17 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   progression ~5% slower (won 254 → 267 min, quality rifle 88 → 108 min) from time spent fighting them.
 - **Tests:** `tools/runner.test.mjs`. **Seen in game:** a summoned runner stalked, charged and bit a standing player
   (death hint shown), no console errors.
+
+## The beginning aboard a ring station
+
+The beginning's rooms were moved into one vast hall inside a spinning ring station, 500 m radius (docs/levels/ring.md).
+The sim was not given vector gravity: the level's flat frame is read as the ring's cylindrical coordinates (z round the
+ring, x along the axis, y towards it), where spin gravity is −y and every wall, deck and bulkhead is a box, so `step()`,
+prediction and the netcode are unchanged. What that frame leaves out, Coriolis, went into `step()` as `Level.spin`
+(airborne only); it makes a jump against the spin 15 % longer, so the trench grew to 8 m. The client draws the ring
+round the camera: the stage root holds true ring geometry (boxes bent in ≤ 2 m strips, small things placed whole by the
+ring's rigid motion at their own z, the light pool's lights mapped onto it, a shell all round the ring) and is turned
+each frame so the ring under the camera lands on the camera's flat spot with its up on +y. Near the camera the two
+frames agree to d²/2R (10 cm at 10 m), so the body, hands and everything common need nothing. Box geometry now carries
+its flat position and normal (`lpos`, `lnor`) for the materials. The pod bay's window moved into its floor: only the
+hull's outside is space.

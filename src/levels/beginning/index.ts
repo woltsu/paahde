@@ -1,11 +1,13 @@
 // The beginning as a stage (src/levels/stage.ts, docs/levels/tutorial.md): the last datacenter in orbit, built from its
 // layout (shared/levels/beginning.ts) with the datacenter's materials, racks, light pool and environment
-// (src/levels/boxLevel.ts, src/levels/datacenter/). What moves is read off the player's gates (PlayerState.gates, set by the
+// (src/levels/boxLevel.ts, src/levels/datacenter/), aboard a spinning ring (docs/levels/ring.md): the root holds the ring
+// (the layout bent onto it, the shell all round: ring.ts) and is turned each frame so the ring under the camera sits at
+// the camera's flat place, its up (towards the axis) on +y. The player and everything common stay in the flat frame. What moves is read off the player's gates (PlayerState.gates, set by the
 // server): the doors slide open, the hall's lights go out row by row behind you after its jolt, the cart crosses, the blast
 // door comes down; the fall rumbles harder the further you get (the beat, never a clock); the station's screens say how
 // it is going; the pod rides down. All client-only: nothing here is in the sim. Built on the first visit and kept.
 import * as THREE from 'three/webgpu';
-import { uniform } from 'three/tsl';
+import { color, densityFogFactor, float, fog, uniform } from 'three/tsl';
 import { BEGINNING, CABIN_LIGHT, CABINET, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
 import { CABINET_DONE, CABINET_GONE, CABINET_ID, CABINET_LEVEL, CABINET_SEED, RELAY, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
 import { CRASH_REACH } from '../../../shared/crash.ts';
@@ -21,7 +23,9 @@ import type { SiteMsg } from '../../net.ts';
 import { zoneAt } from '../../../shared/levels/datacenter.ts';
 import type { Post } from '../../post.ts';
 import { setLevelShade } from '../../world/materialLighting.ts';
-import { buildBoxLevel, type BoxLevel } from '../boxLevel.ts';
+import { buildBoxLevel, ringAnchor, type BoxLevel } from '../boxLevel.ts';
+import { ringMatrixInverse } from '../../../shared/ring.ts';
+import { RingShell } from './ring.ts';
 import type { Stage, StageFrame } from '../stage.ts';
 import { bakeDataSliced, bakeMaps } from '../datacenter/bake.ts';
 import { makeMaterials } from '../datacenter/materials.ts';
@@ -38,6 +42,9 @@ const RUMBLE = [0.04, 0.1, 0.16, 0.26, 0.3, 0.3, 0.45, 0.55];
 /** The hall's lights go out behind you this fast (m/s), this far behind you (m). */
 const OUT_SPEED = 7;
 const OUT_BEHIND = 3;
+
+/** The hall's haze: what makes it read as huge (the deck is out of sight in it before the ceiling hides it). */
+const HAZE = fog(color(0x2c333d), densityFogFactor(float(0.0042)));
 
 /** A door's panel slides up into its lintel this fast (s): collision is gone at once (docs/levels/tutorial.md). */
 const DOOR_S = 0.4;
@@ -88,17 +95,27 @@ export class BeginningStage implements Stage {
     const L = BEGINNING;
     this.root.name = 'beginning';
     this.root.visible = false;
+    this.root.matrixAutoUpdate = false;
     const maps = bakeMaps(L, bake);
     const hall = L.zones.hall;
-    const mats = makeMaterials(maps, { z0: hall[4], cut: this.stripCut });
-    this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient);
+    const mats = makeMaterials(maps, { z0: hall[4], cut: this.stripCut }, { fog: true });
+    this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient, true);
+    this.root.add(new RingShell({ z0: hall[4], cut: this.stripCut }).group);
     this.props = new Props(mats);
+    // Each prop onto the ring whole, at its own z (the space dome stays round the camera).
+    this.props.group.updateMatrixWorld(true);
+    const box3 = new THREE.Box3(), c = new THREE.Vector3();
+    for (const child of [...this.props.group.children]) {
+      if (child.userData.camera) continue;
+      box3.setFromObject(child).getCenter(c);
+      this.props.group.add(ringAnchor(c.z, child));
+    }
     this.root.add(this.props.group);
     this.pod = new Pod({
       click: () => this.fall.pod('click'), clunk: () => this.fall.pod('clunk'), wake: () => this.fall.pod('wake'),
       hiss: () => this.fall.pod('hiss'), thud: () => this.fall.pod('thud'),
     });
-    this.root.add(this.pod.group);
+    this.root.add(ringAnchor(POD.z, this.pod.group));
     // The pod cabin's light: dark till its hatch is down.
     this.cabinLight = L.fixtures.findIndex((f) => f.pos[0] === CABIN_LIGHT.x && f.pos[1] === CABIN_LIGHT.y && f.pos[2] === CABIN_LIGHT.z);
     this.box.pool.weight[this.cabinLight] = 0;
@@ -113,6 +130,7 @@ export class BeginningStage implements Stage {
     const off = this.cabinet.fixed ? null : lowestOffset(this.cabinet.root);
     if (off !== null) this.cabinet.root.position.y += off;
     settle(this.cabinet.root);
+    this.root.add(ringAnchor(CABINET.z, this.cabinet.root));
     for (const [i, mesh] of this.box.gated) {
       const b = L.boxes[i];
       if (b.gate! > 0) this.doors.push({ mesh, bit: b.gate!, open: 0, h: b.b[3] - b.b[2] });
@@ -123,7 +141,7 @@ export class BeginningStage implements Stage {
   enter(scene: THREE.Scene, post: Post) {
     this.root.visible = true;
     scene.background = this.background;
-    scene.fogNode = null;
+    scene.fogNode = HAZE;
     scene.environmentNode = datacenterEnvironment;
     post.setProfile(DATACENTER_POST);
     setLevelShade(DATACENTER_ENV.handShade);
@@ -180,6 +198,9 @@ export class BeginningStage implements Stage {
 
   update(f: StageFrame) {
     const cam = f.camera.position, gates = f.me.gates ?? 0;
+    // The ring turned round the camera: the ring under it at its flat place, up towards the axis.
+    this.root.matrix.fromArray(ringMatrixInverse(cam.z));
+    this.root.matrixWorldNeedsUpdate = true;
     // Back after a reconnect with the relay already out: it's gone from the cabinet too.
     const relay = this.cabinet.slots.find((s) => s.index === RELAY_INDEX);
     if (gates & GATE.control && relay && !relay.taken) fastForward(this.cabinet, [], [RELAY_INDEX]);
