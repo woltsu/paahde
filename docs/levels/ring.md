@@ -153,3 +153,10 @@ round. Bounds stay a box round the walkable stretch.
 - **Not yet** (phase 3): space doesn't wheel with the spin (the dome is still fixed: a turn every 28 s would show the
   planet a fifth of the time); the far ring has no racks beyond the buildings; no reveal speech line; the hall's
   reverb; the hall's lights going out only darken the lamp posts and the ceiling bands over the walk's stretch.
+
+**Longer deck, softer lights-out (November 2026):** the rack fields run 600 m (133 rows; `FALLEN`, `GAP`, the terminal
+and everything after moved `FAR` = 480 m on), so the walk spans ~80° of the ring and the curve shows over it; ~80 s on
+foot. The deck's lights going out after the jolt trailed 3 m behind you with a hard step, which read as a bug: the cut
+now trails 30 m back (`OUT_BEHIND`), the ceiling's bands go out a whole 6 m fixture at a time, and what they threw on
+the deck and walls fades over 40 m behind the cut (`FADE` in `src/levels/beginning/ring.ts`).
+

@@ -3378,3 +3378,5 @@ each frame so the ring under the camera lands on the camera's flat spot with its
 frames agree to d²/2R (10 cm at 10 m), so the body, hands and everything common need nothing. Box geometry now carries
 its flat position and normal (`lpos`, `lnor`) for the materials. The pod bay's window moved into its floor: only the
 hull's outside is space.
+The rack fields were then made 600 m long (everything after them 480 m further round), and the deck's lights going out
+behind you trail 30 m back and fade instead of switching off at your heels.

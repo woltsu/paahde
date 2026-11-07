@@ -47,7 +47,10 @@ const X = RING.width / 2, H = RING.height;
 /** The two buildings standing across the hall wall to wall, `top` high: the crew block you wake in (the quarters and the
  *  corridor) and the pod terminal at the deck's far end (the bay corridor and the pod bay). */
 export const CREW_BLOCK = { z0: -2.6, z1: 24.3, top: 8 };
-export const TERMINAL = { z0: 190, z1: 222.6, top: 8 };
+/** How much further round the ring than the rack fields' first 120 m everything past them lies: they run 600 m (the
+ *  hall's size and its curve show over a long walk). */
+const FAR = 480;
+export const TERMINAL = { z0: FAR + 190, z1: FAR + 222.6, top: 8 };
 
 /** The rooms' interiors (x0, x1, z0, z1, ceiling) along the walk; walls 0.3 m, slabs 0.3 m. The hall, the aisle and the
  *  control area are the open deck between the buildings (no walls but the hull's). */
@@ -55,11 +58,11 @@ const T = 0.3;
 const R = {
   quarters: { x: 3, z0: 0, z1: 8, h: 2.6 },
   corridor: { x: 1.2, z0: 8.3, z1: 24, h: 2.6 },
-  hall: { x: X, z0: CREW_BLOCK.z1, z1: 155, h: H },
-  aisle: { x: X, z0: 155, z1: 180, h: H },
-  control: { x: X, z0: 180, z1: TERMINAL.z0, h: H },
-  bay: { x: 1.2, z0: TERMINAL.z0 + T, z1: 210, h: 2.6 },
-  pod: { x: 5, z0: 210.3, z1: 222, h: 5.0 },
+  hall: { x: X, z0: CREW_BLOCK.z1, z1: FAR + 155, h: H },
+  aisle: { x: X, z0: FAR + 155, z1: FAR + 180, h: H },
+  control: { x: X, z0: FAR + 180, z1: TERMINAL.z0, h: H },
+  bay: { x: 1.2, z0: TERMINAL.z0 + T, z1: FAR + 210, h: 2.6 },
+  pod: { x: 5, z0: FAR + 210.3, z1: FAR + 222, h: 5.0 },
 } as const;
 
 /** The deck's central lane (|x| < LANE): the rack fields stand either side of it. */
@@ -67,24 +70,24 @@ export const LANE = 6;
 /** The fallen tray across the corridor: crouch under it (its underside over CROUCH_HEIGHT, under a standing head). */
 export const TRAY = { z0: 15, z1: 15.6, y0: 1.15, y1: 1.4 };
 /** The cable gantry fallen across the hall, wall to wall (|x| < `x`): jump onto it, over. */
-export const FALLEN = { x: X, z0: 158, z1: 159.2, h: 0.9 };
+export const FALLEN = { x: X, z0: FAR + 158, z1: FAR + 159.2, h: 0.9 };
 /** The trench where the deck's plates dropped into the service level, wall to wall: too far for one jump, not for the
  *  air jump (8 m: going against the spin you are lighter, and a walking jump carries 6.5 m; the air jump 10.4). */
-export const GAP = { z0: 166, z1: 174, floor: -2.4 };
+export const GAP = { z0: FAR + 166, z1: FAR + 174, floor: -2.4 };
 /** The ladders of fallen trays up out of the trench, at these x (each: a tray to jump onto, a higher one, the deck). */
 export const LADDERS = [-22, 0, 22];
 /** The blast door at the end of the bay corridor: its edge stops at `y0`, over a crouch or a slide, under a head. */
-export const BLAST = { z0: 206.6, z1: 207.0, y0: 1.1 };
+export const BLAST = { z0: FAR + 206.6, z1: FAR + 207.0, y0: 1.1 };
 /** The window in the pod bay's floor, the only one: under the deck is the hull, and under the hull, space. */
-export const WINDOW = { x0: 2.6, x1: 4.6, z0: 211, z1: 221 };
+export const WINDOW = { x0: 2.6, x1: 4.6, z0: FAR + 211, z1: FAR + 221 };
 /** The dead control cabinet lying on its back on the deck by the terminal's door, taken apart in place (server/tutorial.ts). */
-export const CABINET = { x: 1.4, z: 186.2, yaw: 0, kind: 'control_cabinet' as const };
+export const CABINET = { x: 1.4, z: FAR + 186.2, yaw: 0, kind: 'control_cabinet' as const };
 /** The last pod, lying across the bay, its hatch towards you (pod.glb's Pod at full size, its axis along x, its nose to
  *  -x: `yaw` turns the model's hatch side, -x, to -z). `hatch`: where F reaches it; `hull`: what you bump into. */
 export const POD = {
-  x: 0, z: 218.2, yaw: -Math.PI / 2,
-  hatch: [-1.0, 1.0, 0, 2.6, 214.8, 216.7] as Box,
-  hull: [-1.8, 2.0, 0, 2.5, 217.0, 219.5] as Box,
+  x: 0, z: FAR + 218.2, yaw: -Math.PI / 2,
+  hatch: [-1.0, 1.0, 0, 2.6, FAR + 214.8, FAR + 216.7] as Box,
+  hull: [-1.8, 2.0, 0, 2.5, FAR + 217.0, FAR + 219.5] as Box,
 };
 /** From the relay going into the pod's panel to its hatch lying open (ms): the panel's cover shuts, the pod wakes, the
  *  hatch swings down (src/levels/beginning/pod.ts plays it). F gets in only after (server/tutorial.ts). */
@@ -143,22 +146,22 @@ export const BEAT_STARTS: readonly (LevelPoint & { gates: number })[] = [
   { x: 1.6, y: 0, z: 1.6, facing: Math.PI, gates: 0 },
   { x: 0, y: 0, z: 9.5, facing: Math.PI, gates: GATE.quarters },
   { x: 0, y: 0, z: 25.5, facing: Math.PI, gates: GATE.quarters },
-  { x: 0, y: 0, z: 152, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights },
-  { x: 0, y: 0, z: 181, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights },
-  { x: 0, y: GAP.floor, z: 169.5, facing: 0, gates: GATE.quarters | CART_CROSSED | GATE.lights },
-  { x: 0, y: 0, z: 193.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights | GATE.control | GATE.blast },
-  { x: 0, y: 0, z: 211.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights | GATE.control | GATE.blast | GATE.shut },
+  { x: 0, y: 0, z: FAR + 152, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights },
+  { x: 0, y: 0, z: FAR + 181, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights },
+  { x: 0, y: GAP.floor, z: FAR + 169.5, facing: 0, gates: GATE.quarters | CART_CROSSED | GATE.lights },
+  { x: 0, y: 0, z: FAR + 193.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights | GATE.control | GATE.blast },
+  { x: 0, y: 0, z: FAR + 211.5, facing: Math.PI, gates: GATE.quarters | CART_CROSSED | GATE.lights | GATE.control | GATE.blast | GATE.shut },
 ];
 
 /** The station's screens: where they hang (facing the walk, -z), the words by how far you are (TEXT.tutorial.screens). */
 export const SCREENS: readonly { x: number; y: number; z: number; face: 1 | -1 }[] = [
   { x: -1.19, y: 1.7, z: 11, face: 1 }, { x: 1.19, y: 1.7, z: 19, face: -1 },
-  { x: -1.19, y: 1.7, z: 198, face: 1 }, { x: 1.19, y: 1.7, z: 204, face: -1 },
+  { x: -1.19, y: 1.7, z: FAR + 198, face: 1 }, { x: 1.19, y: 1.7, z: FAR + 204, face: -1 },
 ];
 
 /** The deck's rows of racks: either side of the lane, in islands of `per` racks with gaps between, a row every `pitch` m
  *  from `z0` to `z1`, the lamp posts on the lane's edges between them. */
-const FIELD = { z0: 30, z1: 150, pitch: 4.5, per: 8, gap: 2, islands: 4 };
+const FIELD = { z0: 30, z1: FAR + 150, pitch: 4.5, per: 8, gap: 2, islands: 4 };
 
 const MAIN = 0xeef3ff, AMBER = 0xff7a1a, RED = 0xff2a1a, PLANET = 0xff9a50;
 
@@ -293,7 +296,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   // --- 4. The fallen gantry across the hall (drawn: src/levels/beginning/props.ts), then the trench wall to wall. Its
   // floor is the service level; trays fallen in it make ladders back up.
   add('tray', 'aisle', 'collide', -FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1);
-  for (const z of [156, 163]) for (const side of [-1, 1]) post('aisle', side * (LANE - 0.4), z, 4.2, -side * 1.2, 'point', 3.5);
+  for (const z of [FAR + 156, FAR + 163]) for (const side of [-1, 1]) post('aisle', side * (LANE - 0.4), z, 4.2, -side * 1.2, 'point', 3.5);
   point('emergency', 'aisle', 0, 1.0, (GAP.z0 + GAP.z1) / 2, AMBER, 1.6, 8); // a work lamp fallen in, lighting it from below
   // The trench's lips: the deck plates' cut edges (their tops a hair under the deck: the shell draws the deck).
   add('floor', 'aisle', 'draw', -X, X, -T, -0.004, GAP.z0 - 0.3, GAP.z0);
@@ -307,18 +310,18 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
     add('tray', 'sub', 'both', lx + 1.3, lx + 2.5, GAP.floor, -1.6, GAP.z0, GAP.z0 + 0.8);
     add('tray', 'sub', 'both', lx - 1.5, lx + 1.3, GAP.floor, -0.8, GAP.z0, GAP.z0 + 0.8);
   }
-  add('cable', 'sub', 'draw', -12.2, 9.8, GAP.floor, GAP.floor + 0.08, 168, 168.3);
-  add('cable', 'sub', 'draw', -2.3, -1.9, GAP.floor, GAP.floor + 0.3, 170.4, 171.4); // the custodian's bag
+  add('cable', 'sub', 'draw', -12.2, 9.8, GAP.floor, GAP.floor + 0.08, FAR + 168, FAR + 168.3);
+  add('cable', 'sub', 'draw', -2.3, -1.9, GAP.floor, GAP.floor + 0.3, FAR + 170.4, FAR + 171.4); // the custodian's bag
   point('main', 'sub', -2.0, GAP.floor + 0.4, 170.9, 0xffd9a0, 1.4, 6); // its torch, lying on, lighting the dust
 
   // --- 5. The terminal's door, shut, and the dead cabinet on its back on the deck in front of it; the station's console
   // against the terminal's face, printing for nobody.
   roof('control', TERMINAL);
   add('wall', 'control', 'both', -X, X, -T, TERMINAL.top, TERMINAL.z1 - T, TERMINAL.z1);
-  add('equipment', 'control', 'both', -4.2, -3.4, 0, 1.0, 185, TERMINAL.z0 - 0.01); // the console
+  add('equipment', 'control', 'both', -4.2, -3.4, 0, 1.0, FAR + 185, TERMINAL.z0 - 0.01); // the console
   add('equipment', 'control', 'collide', CABINET.x - 0.7, CABINET.x + 0.7, 0, 0.5, CABINET.z - 0.65, CABINET.z + 0.65); // the cabinet (drawn by the disassembly)
-  post('control', -2.4, 183.5, 4.2, 1.2, 'point', 3);
-  post('control', 3.6, 185, 4.2, -1.2, 'spot', 4);
+  post('control', -2.4, FAR + 183.5, 4.2, 1.2, 'point', 3);
+  post('control', 3.6, FAR + 185, 4.2, -1.2, 'spot', 4);
   point('emergency', 'control', 0, 2.5, TERMINAL.z0 - 0.4, RED, 1.2, 5);
   divider('control', TERMINAL.z0, X - T, TERMINAL.top, 0.6, 2.1, GATE.control);
 
@@ -329,8 +332,8 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('door', 'bay', 'collide', -B.x, B.x, BLAST.y0, B.h, BLAST.z0, BLAST.z1);
   add('door', 'bay', 'collide', -B.x, B.x, 0, BLAST.y0, BLAST.z0, BLAST.z1, -GATE.shut);
   add('hazard', 'bay', 'draw', -B.x, B.x, 0, 0.003, BLAST.z0 - 0.6, BLAST.z1 + 0.6);
-  for (const z of [194, 201, 208.5]) point('emergency', 'bay', 0, B.h - 0.2, z, AMBER, 1.4, 7);
-  for (const z of [192, 197, 202]) strip('bay', -0.5, 0.5, B.h, z);
+  for (const z of [FAR + 194, FAR + 201, FAR + 208.5]) point('emergency', 'bay', 0, B.h - 0.2, z, AMBER, 1.4, 7);
+  for (const z of [FAR + 192, FAR + 197, FAR + 202]) strip('bay', -0.5, 0.5, B.h, z);
   divider('bay', B.z1, R.pod.x, top, 0.9, 2.4);
 
   // --- 8. The pod bay: six empty cradles, one pod, the window in the floor (space under it: the hull's outside).
@@ -344,14 +347,14 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('wall', 'pod', 'both', -P.x - T, -P.x, -T, P.h + T, P.z0, P.z1);
   add('wall', 'pod', 'both', P.x, P.x + T, -T, P.h + T, P.z0, P.z1);
   divider('pod', P.z1, P.x, top, 0, 0);
-  for (let i = 0; i < 6; i++) add('steel', 'pod', 'both', -P.x + 0.2, -P.x + 1.6, 0, 0.3, 211 + i * 1.8, 212.2 + i * 1.8);
+  for (let i = 0; i < 6; i++) add('steel', 'pod', 'both', -P.x + 0.2, -P.x + 1.6, 0, 0.3, FAR + 211 + i * 1.8, FAR + 212.2 + i * 1.8);
   add('equipment', 'pod', 'collide', ...POD.hull); // the pod (drawn: pod.glb)
-  for (const [x, z] of [[-3, 213.5], [3, 213.5], [-3, 219.5]]) point('main', 'pod', x, P.h - 0.5, z, MAIN, 3, 9);
-  point('main', 'pod', W.x0 + 1, 0.6, 216, PLANET, 1.2, 6); // the planet's weak orange up through the window
+  for (const [x, z] of [[-3, FAR + 213.5], [3, FAR + 213.5], [-3, FAR + 219.5]]) point('main', 'pod', x, P.h - 0.5, z, MAIN, 3, 9);
+  point('main', 'pod', W.x0 + 1, 0.6, FAR + 216, PLANET, 1.2, 6); // the planet's weak orange up through the window
   point('emergency', 'pod', 0, 2.7, P.z0 + 0.4, AMBER, 0.8, 4);
   point('emergency', 'pod', CABIN_LIGHT.x, CABIN_LIGHT.y, CABIN_LIGHT.z, CABIN_LIGHT.color, CABIN_LIGHT.intensity, CABIN_LIGHT.range);
-  spot('pod', 0, P.h, 215.5);
-  for (const z of [212, 216, 220]) strip('pod', -3, 3, P.h, z);
+  spot('pod', 0, P.h, FAR + 215.5);
+  for (const z of [FAR + 212, FAR + 216, FAR + 220]) strip('pod', -3, 3, P.h, z);
 
   const zones = Object.fromEntries((Object.keys(R) as (keyof typeof R)[]).map((k) => {
     const r = R[k];

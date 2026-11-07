@@ -21,8 +21,10 @@ type V3 = Node<'vec3'>;
 const X = RING.width / 2, H = RING.height, R = RING.radius;
 /** How far a strip of the shell runs round the ring (m). */
 const STEP = 2;
-/** The ceiling's light bands: their centres across the hall (x) and half width. */
-const BANDS = [-26, -10, 10, 26], BAND_HALF = 1.2;
+/** The ceiling's light bands: their centres across the hall (x) and half width, and the fixtures they're made of (m). */
+const BANDS = [-26, -10, 10, 26], BAND_HALF = 1.2, FIXTURE = 6;
+/** Behind the lights' cut, what the bands threw on the deck and walls fades out over this far (m): no hard edge. */
+const FADE = 40;
 
 /** A sheet of the shell: `at(u, s)` the flat point of (u across it, s round the ring), `n` its flat normal; u over
  *  [u0, u1] in `nu` steps, s over [s0, s1]. Positions and normals bent onto the ring, the flat ones kept. */
@@ -119,8 +121,11 @@ function shellMaterial(lights: { z0: number; cut: F }): THREE.MeshStandardNodeMa
   const LP = attribute('lpos', 'vec3') as unknown as V3, LN = attribute('lnor', 'vec3') as unknown as V3;
   const x = LP.x, y = LP.y, s = LP.z;
   const deck = step(0.5, LN.y), ceil = step(0.5, LN.y.negate()), wall = float(1).sub(deck).sub(ceil);
-  // The bands are out from z0 round to the cut (the deck's lights going out behind you).
-  const lit = float(1).sub(step(lights.z0, s).mul(step(s, lights.cut)));
+  // The bands are out from z0 round to the cut (the deck's lights going out behind you), a whole fixture at a time; the
+  // light they threw on the deck and walls fades out over FADE behind it, never a hard line.
+  const fixture = floor(s.div(FIXTURE)).add(0.5).mul(FIXTURE);
+  const bandLit = float(1).sub(step(lights.z0, fixture).mul(step(fixture, lights.cut)));
+  const lit = float(1).sub(step(lights.z0, s).mul(smoothstep(lights.cut, lights.cut.sub(FADE), s)));
 
   // Deck: 2.4 × 1.2 m plates, each its own shade, seams; the lane's edges painted.
   const plate = vec2(floor(x.div(2.4)), floor(s.div(1.2)));
@@ -139,7 +144,7 @@ function shellMaterial(lights: { z0: number; cut: F }): THREE.MeshStandardNodeMa
   // Ceiling: dark panels, the light bands round the ring (split into 6 m fixtures).
   let band: F = float(0);
   for (const b of BANDS) band = max(band, float(1).sub(smoothstep(BAND_HALF - 0.1, BAND_HALF, abs(x.sub(b)))));
-  band = band.mul(seams(s, 6, 0.15).oneMinus());
+  band = band.mul(seams(s, FIXTURE, 0.15).oneMinus());
   const ceilAlbedo = color(0x1c1f23).mul(max(seams(x, 5, 0.03), seams(s, 6, 0.03)).mul(0.5).oneMinus()) as V3;
 
   m.colorNode = deckAlbedo.mul(deck).add(wallAlbedo.mul(wall)).add(ceilAlbedo.mul(ceil));
@@ -147,7 +152,7 @@ function shellMaterial(lights: { z0: number; cut: F }): THREE.MeshStandardNodeMa
   m.metalnessNode = select(deck.greaterThan(0.5), float(0.35), float(0.15));
   // What the bands throw on the deck and the walls (brighter up towards them), the bands and beacons themselves.
   const fill = deck.mul(0.16).add(wall.mul(smoothstep(0, H, y).mul(0.1).add(0.03))).mul(lit);
-  const own = band.mul(ceil).mul(lit).mul(5);
+  const own = band.mul(ceil).mul(bandLit).mul(5);
   m.emissiveNode = (m.colorNode as V3).mul(fill).add(color(0xe4ecff).mul(own)).add(color(0xff8a3a).mul(beacon.mul(wall).mul(6)));
   return m;
 }

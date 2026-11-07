@@ -39,9 +39,10 @@ import { StuckHints } from './stuck.ts';
 
 /** How hard it shakes at each beat (0..1, × the comfort motion setting in src/camera.ts): it grows as you go. */
 const RUMBLE = [0.04, 0.1, 0.16, 0.26, 0.3, 0.3, 0.45, 0.55];
-/** The hall's lights go out behind you this fast (m/s), this far behind you (m). */
+/** The deck's lights go out behind you this fast (m/s), this far behind you (m): far enough back that the lamps going
+ *  dark are seen over your shoulder, never right at your heels (the ceiling's light fades out over the shell's FADE). */
 const OUT_SPEED = 7;
-const OUT_BEHIND = 3;
+const OUT_BEHIND = 30;
 
 /** The hall's haze: what makes it read as huge (the deck is out of sight in it before the ceiling hides it). */
 const HAZE = fog(color(0x2c333d), densityFogFactor(float(0.0042)));

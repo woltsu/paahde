@@ -41,7 +41,7 @@ function toAisle() {
   s = walk(s, 0, 6);
   s = walk(s, 0, 13);
   s = walk(s, 0, 18, { keys: () => CROUCH });
-  s = walk(s, 0, FALLEN.z0 - 5, { max: 40 });
+  s = walk(s, 0, FALLEN.z0 - 5, { max: 120 });
   return s;
 }
 
