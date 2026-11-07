@@ -1,5 +1,7 @@
 # Level: the beginning (the last datacenter)
 
+> **Being redesigned (November 2026):** the same walk inside a vast spinning ring station: `docs/levels/ring.md`.
+
 A short first level, played once per player per world, before the desert: you wake aboard the last datacenter still in
 orbit as it starts to fall, find your way through it to an escape pod, and come down in the pod that lies crashed at
 the spawn. It is the game's tutorial, made under the game's rule against tutorials (CLAUDE.md "Game design & text"):
