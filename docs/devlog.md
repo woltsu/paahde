@@ -3380,3 +3380,5 @@ its flat position and normal (`lpos`, `lnor`) for the materials. The pod bay's w
 hull's outside is space.
 The rack fields were then made 600 m long (everything after them 480 m further round), and the deck's lights going out
 behind you trail 30 m back and fade instead of switching off at your heels.
+Then the lights-out and the lamp posts went; the ceiling came down to 36 m; trays over the rows, spines along the
+islands and gantries at half height on pillars every 90 m (docs/levels/ring.md) give the hall its industrial structure.

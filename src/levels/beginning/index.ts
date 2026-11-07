@@ -2,12 +2,12 @@
 // layout (shared/levels/beginning.ts) with the datacenter's materials, racks, light pool and environment
 // (src/levels/boxLevel.ts, src/levels/datacenter/), aboard a spinning ring (docs/levels/ring.md): the root holds the ring
 // (the layout bent onto it, the shell all round: ring.ts) and is turned each frame so the ring under the camera sits at
-// the camera's flat place, its up (towards the axis) on +y. The player and everything common stay in the flat frame. What moves is read off the player's gates (PlayerState.gates, set by the
-// server): the doors slide open, the hall's lights go out row by row behind you after its jolt, the cart crosses, the blast
-// door comes down; the fall rumbles harder the further you get (the beat, never a clock); the station's screens say how
+// the camera's flat place, its up (towards the axis) on +y. The player and everything common stay in the flat frame.
+// What moves is read off the player's gates (PlayerState.gates, set by the server): the doors slide open, the deck
+// jolts, the cart crosses, the blast door comes down; the fall rumbles harder the further you get (the beat, never a clock); the station's screens say how
 // it is going; the pod rides down. All client-only: nothing here is in the sim. Built on the first visit and kept.
 import * as THREE from 'three/webgpu';
-import { color, densityFogFactor, float, fog, uniform } from 'three/tsl';
+import { color, densityFogFactor, float, fog } from 'three/tsl';
 import { BEGINNING, CABIN_LIGHT, CABINET, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
 import { CABINET_DONE, CABINET_GONE, CABINET_ID, CABINET_LEVEL, CABINET_SEED, RELAY, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
 import { CRASH_REACH } from '../../../shared/crash.ts';
@@ -39,10 +39,6 @@ import { StuckHints } from './stuck.ts';
 
 /** How hard it shakes at each beat (0..1, × the comfort motion setting in src/camera.ts): it grows as you go. */
 const RUMBLE = [0.04, 0.1, 0.16, 0.26, 0.3, 0.3, 0.45, 0.55];
-/** The deck's lights go out behind you this fast (m/s), this far behind you (m): far enough back that the lamps going
- *  dark are seen over your shoulder, never right at your heels (the ceiling's light fades out over the shell's FADE). */
-const OUT_SPEED = 7;
-const OUT_BEHIND = 30;
 
 /** The hall's haze: what makes it read as huge (the deck is out of sight in it before the ceiling hides it). */
 const HAZE = fog(color(0x2c333d), densityFogFactor(float(0.0042)));
@@ -72,13 +68,8 @@ export class BeginningStage implements Stage {
   private was: number | null = null;
   /** The hall's jolt, fading (s left). */
   private jolt = 0;
-  /** The hall's fixtures (indices into the layout's) and where the dark has come to. */
-  private hallLights: number[] = [];
-  private cut = -1000;
   private box: BoxLevel;
   private background = new THREE.Color(DATACENTER_ENV.background);
-  /** Where the hall's strips are dark up to (z): the strip shader's cut. */
-  private stripCut = uniform(-1000);
   /** The dead cabinet (shared/levels/beginningCabinet.ts), taken apart in the real disassembly mode. */
   private cabinet: Junk;
   /** Each gated door: its mesh, its bit and how far open (0..1). */
@@ -98,10 +89,9 @@ export class BeginningStage implements Stage {
     this.root.visible = false;
     this.root.matrixAutoUpdate = false;
     const maps = bakeMaps(L, bake);
-    const hall = L.zones.hall;
-    const mats = makeMaterials(maps, { z0: hall[4], cut: this.stripCut }, { fog: true });
+    const mats = makeMaterials(maps, undefined, { fog: true });
     this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient, true);
-    this.root.add(new RingShell({ z0: hall[4], cut: this.stripCut }).group);
+    this.root.add(new RingShell().group);
     this.props = new Props(mats);
     // Each prop onto the ring whole, at its own z (the space dome stays round the camera).
     this.props.group.updateMatrixWorld(true);
@@ -120,7 +110,6 @@ export class BeginningStage implements Stage {
     // The pod cabin's light: dark till its hatch is down.
     this.cabinLight = L.fixtures.findIndex((f) => f.pos[0] === CABIN_LIGHT.x && f.pos[1] === CABIN_LIGHT.y && f.pos[2] === CABIN_LIGHT.z);
     this.box.pool.weight[this.cabinLight] = 0;
-    L.fixtures.forEach((f, i) => { if (f.zone === 'hall' && f.role === 'main') this.hallLights.push(i); });
     // The cabinet lies on its back on the floor, everything but its relay long gone (and what held only that).
     this.cabinet = buildJunk(CABINET.kind, CABINET_SEED, CABINET_LEVEL);
     this.cabinet.root.rotation.y = CABINET.yaw;
@@ -217,21 +206,13 @@ export class BeginningStage implements Stage {
       d.mesh.position.y = Math.max(ajar, d.open * (d.h - 0.05));
       d.mesh.updateMatrixWorld();
     }
-    const me = f.me, beat = beatAt(me.x, me.y, me.z), hall = BEGINNING.zones.hall;
-    // The jolt in the hall: a boom, the view thrown about, the lights behind you going out row by row.
+    const me = f.me, beat = beatAt(me.x, me.y, me.z);
+    // The jolt on the deck: a boom, the view thrown about.
     if (fresh && now & GATE.lights) {
       this.jolt = 1.6;
       this.fall.jolt(1);
-      this.cut = hall[4];
     }
     this.jolt = Math.max(0, this.jolt - f.dt);
-    if (gates & GATE.lights) {
-      const to = Math.min(hall[5], Math.max(hall[4], me.z - OUT_BEHIND));
-      this.cut = fresh && this.cut > -1000 ? Math.min(to, this.cut + OUT_SPEED * f.dt) : to;
-      if (this.cut < hall[4]) this.cut = hall[4];
-    }
-    this.stripCut.value = gates & GATE.lights ? this.cut : -1000;
-    for (const i of this.hallLights) this.box.pool.weight[i] = BEGINNING.fixtures[i].pos[2] < this.stripCut.value ? 0 : 1;
     // The pod: in it, down.
     if (now & GATE.launch || (gates & GATE.launch && this.ride.t < 0)) this.ride.start();
     const riding = this.ride.update(f.dt);

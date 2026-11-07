@@ -14,7 +14,7 @@ Read `docs/levels.md` (the level contract), `docs/levels/tutorial.md` (the beats
 | | |
 |---|---|
 | Radius (axis to deck) | **500 m** (`RING.radius`, one constant: "see how it feels") |
-| Hall | 70 m wide (along the axis), 60 m from deck to ceiling; it runs all the way round (3.14 km) |
+| Hall | 70 m wide (along the axis), 36 m from deck to ceiling (60 at first); it runs all the way round (3.14 km) |
 | Spin | ω = √(g/R) for the game's own gravity (25 m/s²): 0.224 rad/s, a turn every 28 s |
 | Sight line | the ceiling hides the deck beyond √(2RH) ≈ 245 m: the floor rises ~60 m into the haze there |
 
@@ -159,4 +159,14 @@ and everything after moved `FAR` = 480 m on), so the walk spans ~80° of the rin
 foot. The deck's lights going out after the jolt trailed 3 m behind you with a hard step, which read as a bug: the cut
 now trails 30 m back (`OUT_BEHIND`), the ceiling's bands go out a whole 6 m fixture at a time, and what they threw on
 the deck and walls fades over 40 m behind the cut (`FADE` in `src/levels/beginning/ring.ts`).
+
+**Structure instead of lamp posts (November 2026):** the lights-out is gone for now (the jolt keeps its boom and
+shake; `GATE.lights` still marks it), and so are the lamp posts. The ceiling is 36 m (`RING.height`; the deck now
+leaves sight ~190 m ahead). Over the racks: a tray on struts over every row with its cables, a spine tray along every
+island tying its rows together, a light strip under each spine over every aisle (the lane-side islands' are the pool's
+lights, every sixth a shadowing spot). Every 90 m from 60 (`GANTRIES`, at ribs that fall in an aisle) a gantry crosses
+the hall at 17 m (`GANTRY.y`): a grated deck between the rib's columns and out to the hull past them, rails, a truss
+under it, lamps hung beneath; eight pillars (at the lane's edges and in the gaps between islands, solid, hazard-banded)
+carry it, tied at 9 m (across the lane too), with a cable riser up each from a cross tray over the spines. The fallen
+gantry's work lamps and two floods on the terminal's face light the far end.
 

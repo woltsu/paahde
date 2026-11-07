@@ -6,7 +6,7 @@
 // One material, procedural in the flat frame (`lpos`, `lnor`: x along the axis, y towards it, z round the ring): deck
 // plates with seams and the lane's paint; wall panels, a dark dado and a row of amber beacons; ceiling panels with long
 // light bands round the ring. The bands light the hall: the pool's few lights can't, so what they would throw on the
-// deck and walls is emissive here, and it goes out with them (the lights going out row by row: `cut`).
+// deck and walls is emissive here.
 import * as THREE from 'three/webgpu';
 import { abs, attribute, color, float, floor, fract, fwidth, hash, length, max, min, mix, mx_noise_float, select, smoothstep, step, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
@@ -23,8 +23,6 @@ const X = RING.width / 2, H = RING.height, R = RING.radius;
 const STEP = 2;
 /** The ceiling's light bands: their centres across the hall (x) and half width, and the fixtures they're made of (m). */
 const BANDS = [-26, -10, 10, 26], BAND_HALF = 1.2, FIXTURE = 6;
-/** Behind the lights' cut, what the bands threw on the deck and walls fades out over this far (m): no hard edge. */
-const FADE = 40;
 
 /** A sheet of the shell: `at(u, s)` the flat point of (u across it, s round the ring), `n` its flat normal; u over
  *  [u0, u1] in `nu` steps, s over [s0, s1]. Positions and normals bent onto the ring, the flat ones kept. */
@@ -83,8 +81,7 @@ function seams(c: F, pitch: number, width: number): F {
 export class RingShell {
   readonly group = new THREE.Group();
 
-  /** `lights`: the deck's lights from `z0` round to `cut` are out (a uniform: the stage moves it, no shader rebuild). */
-  constructor(lights: { z0: number; cut: F }) {
+  constructor() {
     this.group.name = 'ring-shell';
     // The whole ring, its seam opposite the level.
     const mid = (CREW_BLOCK.z0 + TERMINAL.z1) / 2, S0 = mid - Math.PI * R, S1 = mid + Math.PI * R;
@@ -101,7 +98,7 @@ export class RingShell {
     sheet(parts, (u, s) => [u, H, s], [0, -1, 0], -X, X, 4, S0, S1);
     sheet(parts, (u, s) => [-X, u, s], [1, 0, 0], 0, H, 3, S0, S1);
     sheet(parts, (u, s) => [X, u, s], [-1, 0, 0], 0, H, 3, S0, S1);
-    const shell = new THREE.Mesh(geometry(parts), shellMaterial(lights));
+    const shell = new THREE.Mesh(geometry(parts), shellMaterial());
     shell.name = 'ring-hull';
     shell.receiveShadow = true;
     shell.frustumCulled = false;
@@ -116,16 +113,11 @@ export class RingShell {
   }
 }
 
-function shellMaterial(lights: { z0: number; cut: F }): THREE.MeshStandardNodeMaterial {
+function shellMaterial(): THREE.MeshStandardNodeMaterial {
   const m = new THREE.MeshStandardNodeMaterial({ color: 0x4a4f55, roughness: 0.6, metalness: 0.2 });
   const LP = attribute('lpos', 'vec3') as unknown as V3, LN = attribute('lnor', 'vec3') as unknown as V3;
   const x = LP.x, y = LP.y, s = LP.z;
   const deck = step(0.5, LN.y), ceil = step(0.5, LN.y.negate()), wall = float(1).sub(deck).sub(ceil);
-  // The bands are out from z0 round to the cut (the deck's lights going out behind you), a whole fixture at a time; the
-  // light they threw on the deck and walls fades out over FADE behind it, never a hard line.
-  const fixture = floor(s.div(FIXTURE)).add(0.5).mul(FIXTURE);
-  const bandLit = float(1).sub(step(lights.z0, fixture).mul(step(fixture, lights.cut)));
-  const lit = float(1).sub(step(lights.z0, s).mul(smoothstep(lights.cut, lights.cut.sub(FADE), s)));
 
   // Deck: 2.4 × 1.2 m plates, each its own shade, seams; the lane's edges painted.
   const plate = vec2(floor(x.div(2.4)), floor(s.div(1.2)));
@@ -151,8 +143,8 @@ function shellMaterial(lights: { z0: number; cut: F }): THREE.MeshStandardNodeMa
   m.roughnessNode = select(deck.greaterThan(0.5), float(0.45).add(grime.mul(2)), float(0.7));
   m.metalnessNode = select(deck.greaterThan(0.5), float(0.35), float(0.15));
   // What the bands throw on the deck and the walls (brighter up towards them), the bands and beacons themselves.
-  const fill = deck.mul(0.16).add(wall.mul(smoothstep(0, H, y).mul(0.1).add(0.03))).mul(lit);
-  const own = band.mul(ceil).mul(bandLit).mul(5);
+  const fill = deck.mul(0.16).add(wall.mul(smoothstep(0, H, y).mul(0.1).add(0.03)));
+  const own = band.mul(ceil).mul(5);
   m.emissiveNode = (m.colorNode as V3).mul(fill).add(color(0xe4ecff).mul(own)).add(color(0xff8a3a).mul(beacon.mul(wall).mul(6)));
   return m;
 }

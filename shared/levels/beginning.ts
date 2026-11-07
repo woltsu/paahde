@@ -12,11 +12,11 @@
 // like the datacenter (shared/levels/datacenter.ts: its types, materials and racks), with gated solids: the doors are boxes
 // that collide while their bit in PlayerState.gates is clear, set only by the server (server/tutorial.ts) when you reach a
 // trigger or do the thing. Some bits move nothing and only tell the client how far you are (the blast door coming down,
-// the deck's lights going out). Pure data, no three.js, Node type stripping rules.
+// the deck's jolt). Pure data, no three.js, Node type stripping rules.
 import { STEP_UP, inBox, type Box, type Level, type LevelDoor, type LevelPoint } from '../levels.ts';
 import { boxGrid, ceilingBoxes, collideBoxes, groundBoxes, solidNear, type BoxGrid } from './boxes.ts';
 import { mulberry32 } from '../noise.ts';
-import { RING, SPIN, ribBoxes, ribsIn } from '../ring.ts';
+import { RIB, RING, SPIN, ribBoxes, ribsIn } from '../ring.ts';
 import type { BoxUse, Fixture, LevelBox, LevelLayout, LevelMat, Rack } from './datacenter.ts';
 
 export type BeginningZone = 'quarters' | 'corridor' | 'hall' | 'aisle' | 'sub' | 'control' | 'bay' | 'pod';
@@ -36,7 +36,7 @@ export const GATE = {
   powered: 16,
   /** In the pod, going down. */
   launch: 32,
-  /** The big jolt on the deck: its lights go out behind you, row by row. */
+  /** The big jolt on the deck (a boom, the view thrown about). */
   lights: 64,
   /** Out onto the deck: the cleaning cart crosses in front of you (its progress: CART_TICKS, counted by the sim). */
   cart: 128,
@@ -162,6 +162,14 @@ export const SCREENS: readonly { x: number; y: number; z: number; face: 1 | -1 }
 /** The deck's rows of racks: either side of the lane, in islands of `per` racks with gaps between, a row every `pitch` m
  *  from `z0` to `z1`, the lamp posts on the lane's edges between them. */
 const FIELD = { z0: 30, z1: FAR + 150, pitch: 4.5, per: 8, gap: 2, islands: 4 };
+/** The cable trays' undersides over the racks: each row's, and the spines along the islands over them. */
+const TRAYS = { row: 2.45, spine: 2.9 };
+/** The gantries across the hall: their deck's underside (about half the hall's height), the tie beams between their
+ *  pillars. */
+export const GANTRY = { y: 17, tie: 9 };
+/** Where the gantries cross: at the ribs every 90 m from 60 (each falls in an aisle between rows, its pillars clear of
+ *  the racks). */
+export const GANTRIES = ribsIn(FIELD.z0, FIELD.z1).filter((z) => (z - 60) % 90 === 0);
 
 const MAIN = 0xeef3ff, AMBER = 0xff7a1a, RED = 0xff2a1a, PLANET = 0xff9a50;
 
@@ -204,18 +212,6 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   /** A light strip across x at z, flush with the ceiling at `ceil`. */
   const strip = (zone: BeginningZone, x0: number, x1: number, ceil: number, z: number) =>
     add('strip', zone, 'draw', x0, x1, ceil - 0.06, ceil, z - 0.06, z + 0.06);
-  /** A lamp post on the deck at (x, z), `h` high, its arm reaching `reach` m along x to a lamp head (lit underneath) with
-   *  its light just below: a point light, or the shadowing spot. */
-  const post = (zone: BeginningZone, x: number, z: number, h: number, reach: number, light: 'point' | 'spot', intensity = 4) => {
-    add('steel', zone, 'both', x - 0.07, x + 0.07, 0, h, z - 0.07, z + 0.07);
-    const x0 = Math.min(x, x + reach) - 0.05, x1 = Math.max(x, x + reach) + 0.05;
-    add('steel', zone, 'draw', x0, x1, h, h + 0.08, z - 0.05, z + 0.05);
-    const lx = x + reach;
-    add('downlight', zone, 'draw', lx - 0.25, lx + 0.25, h - 0.1, h, z - 0.15, z + 0.15);
-    if (light === 'spot') {
-      fixtures.push({ kind: 'spot', role: 'main', pos: [lx, h - 0.15, z], angle: 0.95, penumbra: 0.5, color: MAIN, intensity: intensity * 1.6, range: 12, decay: 1.5, castsShadow: true, zone });
-    } else point('main', zone, lx, h - 0.2, z, MAIN, intensity, 11);
-  };
   const top = 5.3; // the dividers inside a building rise to its tallest room's ceiling slab
 
   // --- The hull round the deck: its side walls, ceiling and deck plates (drawn by the ring's shell, src/levels/beginning/
@@ -270,15 +266,22 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   point('emergency', 'hall', 0, 2.75, C.z1 + 0.45, AMBER, 1.2, 6); // the lamp over the door, on the deck side
   add('emergency', 'hall', 'draw', -0.15, 0.15, 2.6, 2.7, C.z1 + T, C.z1 + T + 0.12);
 
-  // --- 3. The deck: rows of racks in islands either side of the lane, the lamp posts along its edges going out row by
-  // row behind you (src/levels/beginning: the pool's weights).
+  // --- 3. The deck: rows of racks in islands either side of the lane. Over every row a cable tray on struts off the
+  // racks' tops; along every island a spine tray on struts off the rows' trays, tying them together, with a light strip
+  // under it over each aisle (the lane-side islands' are the pool's lights). Every 90 m a gantry crosses the hall at
+  // half height between two rib columns, on pillars standing in the aisle: at the lane's edges and in the gaps between
+  // islands, tied together, the risers up them fed by a cross tray over the spines.
   const rowStep = FIELD.per * 0.6 + FIELD.gap;
+  const islandX = (side: number, j: number) => side * (LANE + j * rowStep + FIELD.per * 0.3);
+  let lastRow = FIELD.z0;
   for (let k = 0, z0 = FIELD.z0; z0 + 1.2 <= FIELD.z1; k++, z0 += FIELD.pitch) {
-    const face: 1 | -1 = k % 2 === 0 ? 1 : -1, z1 = z0 + 1.2, zc = z0 + 0.6;
+    const face: 1 | -1 = k % 2 === 0 ? 1 : -1, z1 = z0 + 1.2, zc = z0 + 0.6, za = z0 + 2.85;
+    lastRow = z1;
     for (const side of [-1, 1]) {
       for (let j = 0; j < FIELD.islands; j++) {
         const a = LANE + j * rowStep, b = a + FIELD.per * 0.6;
         const [xa, xb] = side < 0 ? [-b, -a] : [a, b];
+        const xc = islandX(side, j);
         add('rack', 'hall', 'collide', xa, xb, 0, 2.0, z0, z1);
         for (let i = 0; i < FIELD.per; i++) {
           const v = rand();
@@ -286,17 +289,75 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
         }
         add('paint', 'hall', 'draw', xa - 0.38, xb + 0.38, 0, 0.003, z0 - 0.38, z0 - 0.3);
         add('paint', 'hall', 'draw', xa - 0.38, xb + 0.38, 0, 0.003, z1 + 0.3, z1 + 0.38);
+        // The row's tray on its struts, its cables; the strut up to the spine.
+        add('tray', 'hall', 'draw', xa + 0.1, xb - 0.1, TRAYS.row, TRAYS.row + 0.12, zc - 0.25, zc + 0.25);
+        for (const x of [xa + 0.6, xc, xb - 0.6]) add('steel', 'hall', 'draw', x - 0.03, x + 0.03, 2.0, TRAYS.row, zc - 0.03, zc + 0.03);
+        add('cable', 'hall', 'draw', xa + 0.2, xb - 0.2, TRAYS.row + 0.12, TRAYS.row + 0.18, zc - 0.15, zc + 0.05);
+        add('steel', 'hall', 'draw', xc - 0.03, xc + 0.03, TRAYS.row + 0.12, TRAYS.spine, zc + 0.12, zc + 0.18);
+        // The strip under the spine over the aisle after this row; the lane-side islands' light the deck.
+        if (za + 1.5 < FIELD.z1) {
+          add('strip', 'hall', 'draw', xc - 0.5, xc + 0.5, TRAYS.spine - 0.06, TRAYS.spine, za - 0.06, za + 0.06);
+          if (j === 0 && k % 2 === 0) {
+            if (side > 0 && k % 6 === 0) fixtures.push({ kind: 'spot', role: 'main', pos: [xc, TRAYS.spine - 0.15, za], angle: 0.95, penumbra: 0.5, color: MAIN, intensity: 6, range: 11, decay: 1.5, castsShadow: true, zone: 'hall' });
+            else point('main', 'hall', xc, TRAYS.spine - 0.2, za, MAIN, 3.5, 10);
+          }
+        }
       }
     }
-    // The lamp posts between this row and the next, one each side of the lane (every third a shadowing spot).
-    const zl = z0 + 2.85;
-    if (zl < FIELD.z1) for (const side of [-1, 1]) post('hall', side * (LANE - 0.4), zl, 4.2, -side * 1.2, k % 3 === 1 && side > 0 ? 'spot' : 'point');
+  }
+  // The spines and their cables, the length of the field.
+  for (const side of [-1, 1]) {
+    for (let j = 0; j < FIELD.islands; j++) {
+      const xc = islandX(side, j);
+      add('tray', 'hall', 'draw', xc - 0.3, xc + 0.3, TRAYS.spine, TRAYS.spine + 0.1, FIELD.z0 - 0.3, lastRow + 0.3);
+      add('cable', 'hall', 'draw', xc - 0.2, xc + 0.1, TRAYS.spine + 0.1, TRAYS.spine + 0.16, FIELD.z0 - 0.2, lastRow + 0.2);
+    }
+  }
+  // The gantries.
+  const D = RIB.depth, gaps = [LANE - 0.7, ...[0, 1, 2].map((j) => LANE + j * rowStep + FIELD.per * 0.6 + FIELD.gap / 2)];
+  for (const gz of GANTRIES) {
+    const G = GANTRY.y, w = RIB.width / 2;
+    // Its deck between the rib's columns, out to the hull past them; rails and a truss under it, lamps hung under it.
+    add('tray', 'hall', 'draw', -X + D, X - D, G, G + 0.2, gz - w, gz + w);
+    for (const sz of [-1, 1]) {
+      const [z0, z1] = sz < 0 ? [gz - 1.5, gz - w] : [gz + w, gz + 1.5];
+      add('tray', 'hall', 'draw', -X, X, G, G + 0.2, z0, z1);
+      const zr = gz + sz * 1.43, zb = gz + sz * 1.3;
+      add('steel', 'hall', 'draw', -X, X, G + 1.0, G + 1.08, zr - 0.03, zr + 0.03); // the rail
+      add('steel', 'hall', 'draw', -X, X, G - 1.6, G - 1.4, zb - 0.1, zb + 0.1); // the bottom chord
+      for (let x = -X + 1.5; x < X - 1; x += 3) {
+        add('steel', 'hall', 'draw', x - 0.025, x + 0.025, G + 0.2, G + 1.0, zr - 0.025, zr + 0.025);
+        add('steel', 'hall', 'draw', x - 0.04, x + 0.04, G - 1.4, G, zb - 0.04, zb + 0.04);
+      }
+    }
+    for (let x = -X + 3.5; x < X - 3; x += 7) add('downlight', 'hall', 'draw', x - 0.25, x + 0.25, G - 0.12, G, gz - 0.3, gz + 0.3);
+    for (const side of [-1, 1]) {
+      // Its pillars, base plates and hazard bands, tie beams between them (across the lane too), the risers.
+      for (const c of gaps) {
+        const x = side * c;
+        add('steel', 'hall', 'both', x - 0.4, x + 0.4, 0, G, gz - 0.4, gz + 0.4);
+        add('steel', 'hall', 'draw', x - 0.6, x + 0.6, 0, 0.04, gz - 0.6, gz + 0.6);
+        add('hazard', 'hall', 'draw', x - 0.405, x + 0.405, 0.3, 1.3, gz - 0.405, gz + 0.405);
+        add('cable', 'hall', 'draw', x - 0.15, x + 0.15, TRAYS.spine + 0.2, G, gz + 0.4, gz + 0.6);
+      }
+      for (let i = 0; i + 1 < gaps.length; i++) {
+        const [x0, x1] = side < 0 ? [-gaps[i + 1] + 0.4, -gaps[i] - 0.4] : [gaps[i] + 0.4, gaps[i + 1] - 0.4];
+        add('steel', 'hall', 'draw', x0, x1, GANTRY.tie, GANTRY.tie + 0.3, gz - 0.15, gz + 0.15);
+      }
+      const far = islandX(1, FIELD.islands - 1) + 0.3;
+      add('tray', 'hall', 'draw', side < 0 ? -far : gaps[0] - 0.4, side < 0 ? -gaps[0] + 0.4 : far, TRAYS.spine + 0.1, TRAYS.spine + 0.2, gz + 0.4, gz + 0.9);
+    }
+    add('steel', 'hall', 'draw', -gaps[0] + 0.4, gaps[0] - 0.4, GANTRY.tie, GANTRY.tie + 0.3, gz - 0.15, gz + 0.15);
   }
 
   // --- 4. The fallen gantry across the hall (drawn: src/levels/beginning/props.ts), then the trench wall to wall. Its
   // floor is the service level; trays fallen in it make ladders back up.
   add('tray', 'aisle', 'collide', -FALLEN.x, FALLEN.x, 0, FALLEN.h, FALLEN.z0, FALLEN.z1);
-  for (const z of [FAR + 156, FAR + 163]) for (const side of [-1, 1]) post('aisle', side * (LANE - 0.4), z, 4.2, -side * 1.2, 'point', 3.5);
+  // Its work lamps, still burning where it came down.
+  for (const x of [-12, 0, 12]) {
+    add('emergency', 'aisle', 'draw', x - 0.2, x + 0.2, FALLEN.h - 0.02, FALLEN.h + 0.13, FALLEN.z1 - 0.5, FALLEN.z1 - 0.3);
+    point('main', 'aisle', x, FALLEN.h + 0.5, FALLEN.z1 - 0.4, 0xffe2b0, 3, 11);
+  }
   point('emergency', 'aisle', 0, 1.0, (GAP.z0 + GAP.z1) / 2, AMBER, 1.6, 8); // a work lamp fallen in, lighting it from below
   // The trench's lips: the deck plates' cut edges (their tops a hair under the deck: the shell draws the deck).
   add('floor', 'aisle', 'draw', -X, X, -T, -0.004, GAP.z0 - 0.3, GAP.z0);
@@ -320,8 +381,13 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
   add('wall', 'control', 'both', -X, X, -T, TERMINAL.top, TERMINAL.z1 - T, TERMINAL.z1);
   add('equipment', 'control', 'both', -4.2, -3.4, 0, 1.0, FAR + 185, TERMINAL.z0 - 0.01); // the console
   add('equipment', 'control', 'collide', CABINET.x - 0.7, CABINET.x + 0.7, 0, 0.5, CABINET.z - 0.65, CABINET.z + 0.65); // the cabinet (drawn by the disassembly)
-  post('control', -2.4, FAR + 183.5, 4.2, 1.2, 'point', 3);
-  post('control', 3.6, FAR + 185, 4.2, -1.2, 'spot', 4);
+  // Floodlights on the terminal's face over its door.
+  for (const x of [-3, 3]) {
+    add('steel', 'control', 'draw', x - 0.04, x + 0.04, 4.1, 4.5, TERMINAL.z0 - 0.4, TERMINAL.z0);
+    add('downlight', 'control', 'draw', x - 0.3, x + 0.3, 4.0, 4.1, TERMINAL.z0 - 0.6, TERMINAL.z0);
+  }
+  point('main', 'control', -3, 3.8, TERMINAL.z0 - 0.5, MAIN, 3.5, 11);
+  fixtures.push({ kind: 'spot', role: 'main', pos: [3, 3.85, TERMINAL.z0 - 0.5], angle: 0.95, penumbra: 0.5, color: MAIN, intensity: 7, range: 12, decay: 1.5, castsShadow: true, zone: 'control' });
   point('emergency', 'control', 0, 2.5, TERMINAL.z0 - 0.4, RED, 1.2, 5);
   divider('control', TERMINAL.z0, X - T, TERMINAL.top, 0.6, 2.1, GATE.control);
 

@@ -241,7 +241,7 @@ export class FallSound {
     if (ctx && this.fall && ctx.state === 'running') this.fall.pod(cue, ctx.currentTime + 0.01);
   }
 
-  /** A jolt (the hall's lights going out). */
+  /** A jolt (the deck's, as you go out among the racks). */
   jolt(size = 1) {
     const ctx = audio.ctx;
     if (ctx && this.fall && ctx.state === 'running') this.fall.boom(ctx.currentTime + 0.02, size);

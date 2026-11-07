@@ -8,7 +8,7 @@
 
 /** The station: radius axis to deck, the hall's width (along the axis) and height (deck to ceiling), all in metres;
  *  `coriolis` scales the Coriolis term in the sim (1: the real thing, 0: none). */
-export const RING = { radius: 500, width: 70, height: 60, coriolis: 1 } as const;
+export const RING = { radius: 500, width: 70, height: 36, coriolis: 1 } as const;
 
 /** The sim's gravity (shared/sim.ts GRAVITY), as the spin's: ω² R = g. */
 const G = 25;
