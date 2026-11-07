@@ -1,8 +1,9 @@
-// Guardians and drones between server updates ('bots', ~10 Hz, shared/guardians.ts): drawn BOT_DELAY_MS in the
+// Guardians, drones and runners between server updates ('bots', ~10 Hz, shared/guardians.ts): drawn BOT_DELAY_MS in the
 // past and interpolated between the two messages around that time, like remote players (src/net.ts). Past the latest
 // one (a network stall) they carry on as they were going for up to EXTRAP_MS, then stop and wait.
 import type { ServerMsg } from '../../shared/protocol.ts';
 import { BOT_DELAY_MS, CRAWLER, F_STRIDE, GUARDIAN, type Kind } from '../../shared/guardians.ts';
+import { RUNNER_STRIDE } from '../../shared/runner.ts';
 
 type BotsMsg = Extract<ServerMsg, { t: 'bots' }>;
 
@@ -95,6 +96,34 @@ export function dronesAt(msgs: readonly BotsMsg[], time: number): DroneFrame[] {
     const l = (n: number) => p[k + n] + (d[j + n] - p[k + n]) * t;
     const dx = l(5), dy = l(6), dz = l(7), len = Math.hypot(dx, dy, dz) || 1;
     out.push({ id: d[j], x: l(1), y: l(2), z: l(3), yaw: lerpAngle(p[k + 4], d[j + 4], t), dx: dx / len, dy: dy / len, dz: dz / len, lock: d[j + 8], hurt: d[j + 9], down: d[j + 10], jammed: d[j + 11] === 1 });
+  }
+  return out;
+}
+
+/** A runner as drawn (shared/runner.ts RUNNER_STRIDE): where, its heading, what it's doing (R_*), whether it hunts you
+ *  (2) or someone else (1), what it looks at (look: null none), its gun (-1 carried, 0 raised, 1 charging), weak
+ *  points broken, seconds dead (0 alive), its last bite (server ms). */
+export type RunnerFrame = {
+  id: number; armed: boolean; x: number; z: number; yaw: number; st: number; hunt: number;
+  look: { x: number; y: number; z: number } | null; gun: number; broken: number; dead: number; snap: number;
+};
+
+export function runnersAt(msgs: readonly BotsMsg[], time: number): RunnerFrame[] {
+  const ab = around(msgs, time);
+  if (!ab) return [];
+  const [a, b, t] = ab, rb = b.r ?? [], ra = a.r ?? [];
+  const ia = index(ra, RUNNER_STRIDE), out: RunnerFrame[] = [];
+  for (let j = 0; j < rb.length; j += RUNNER_STRIDE) {
+    const i = ia.get(rb[j]);
+    const p = i === undefined ? rb : ra, k = i === undefined ? j : i;
+    const l = (n: number) => p[k + n] + (rb[j + n] - p[k + n]) * t;
+    // The look point only blends while it looks in both.
+    const both = p[k + 7] === 1 && rb[j + 7] === 1;
+    out.push({
+      id: rb[j], armed: rb[j + 1] === 1, x: l(2), z: l(3), yaw: lerpAngle(p[k + 4], rb[j + 4], t), st: rb[j + 5], hunt: rb[j + 6],
+      look: rb[j + 7] === 1 ? (both ? { x: l(8), y: l(9), z: l(10) } : { x: rb[j + 8], y: rb[j + 9], z: rb[j + 10] }) : null,
+      gun: rb[j + 11], broken: rb[j + 12], dead: rb[j + 13], snap: rb[j + 14],
+    });
   }
   return out;
 }

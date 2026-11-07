@@ -7,7 +7,7 @@
 import type { BossKind } from './bosses.ts';
 import type { LootLevel } from './crashsites.ts';
 import type { JetKind } from './jetbreak.ts';
-import { bossDrops, harvesterDrops, jetDrops, killDrops, spiderlingDrops, type Drop, type Rand } from './lootRoll.ts';
+import { bossDrops, harvesterDrops, jetDrops, killDrops, runnerDrops, spiderlingDrops, type Drop, type Rand } from './lootRoll.ts';
 
 /** The best gun you carry, else the scrap mace (shared/mace.ts). */
 export type Weapon = 'none' | 'mace' | 'pistol' | 'rifle' | 'blaster' | 'piercer';
@@ -40,8 +40,8 @@ export type Meet =
   | { at: 'roam'; where: 'open' | 'guardianGround' | 'mudflat' | 'overhead'; perMin: number; night?: boolean; hunt?: boolean }
   | { at: 'call' };
 
-/** What a kill happened at: the jet's kind and whether it was jammed down whole (soft). */
-export type KillCtx = { jet?: JetKind; soft?: boolean };
+/** What a kill happened at: the jet's kind and whether it was jammed down whole (soft); a runner carrying its gun (armed). */
+export type KillCtx = { jet?: JetKind; soft?: boolean; armed?: boolean };
 
 export type Enemy = {
   /** How many come at once. */
@@ -64,7 +64,7 @@ export type Enemy = {
  *  must find the weak points. */
 export const ARMOR = { thin: 0, plate: 10, heavy: 30 } as const;
 
-export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | 'spiderling' | BossKind;
+export type EnemyKind = 'crawler' | 'guardian' | 'drone' | 'jet' | 'harvester' | 'spiderling' | 'runner' | BossKind;
 
 /** The mace is no better than bare hands but against crawlers, the one thing it can reach; the blaster (shared/rifle.ts
  *  BLASTER: a burst that breaks a weak point in one, a slow recharge, no scope) is the rifle unless said, and so is the
@@ -149,6 +149,19 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     drops: (rand) => spiderlingDrops(rand),
     mass: 8,
     armor: ARMOR.thin,
+  },
+  // Runners (shared/runner.ts): one comes for someone out in the open desert every 5–11 min, day or night
+  // (server/runners.ts GAP_MIN_MS..GAP_MAX_MS, past KEEP_OUT from the start), a third of them armed (ARMED_ODDS). It
+  // stalks, then charges and bites (one bite kills; step aside as it comes), or (armed) shoots from afar; the eyes from
+  // the front or both flank vents from the side kill it (3 and 2 + 2 rifle hits). Bare-handed you can only hide: in a
+  // shelter it loses you. Outrunning it isn't on (16 m/s).
+  runner: {
+    n: [1, 1],
+    meet: [{ at: 'roam', where: 'open', perMin: 1 / 8 }],
+    fight: { seconds: odds(40, 90, 60, 40, 40, 50), win: odds(0, 0.45, 0.8, 0, 0.85, 0.85), death: odds(0.45, 0.3, 0.15, 0.45, 0.12, 0.15), quality: 0.2 },
+    drops: (rand, ctx) => runnerDrops(!!ctx?.armed, rand),
+    mass: 1500,
+    armor: ARMOR.plate,
   },
   worm: boss('worm'),
   carrier: boss('carrier'),

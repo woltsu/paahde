@@ -1,13 +1,57 @@
-# The runner: handoff for its AI and server side
+# The runner
 
-The runner is a new enemy, so far **only drawn on the client**. It has a model, rig, gait and animations, and a
-client-side "prowl" driver for show. It has no server simulation, sync, hunting, attacks, damage, death, sounds or
-loot. This page is what someone building those needs to know about what exists. Numbers are in **world metres**
+The runner is an enemy that hunts players out in the open desert. The server (`server/runners.ts`) owns where each one
+is and what it does; clients draw it from the 'bots' message (its model, rig, gait and animations are client-side).
+This page covers both: how it hunts and fights (first), and what the view needs and does. Numbers are in **world metres**
 unless marked *model units*: the model is built at half size and drawn at `RUNNER.scale` = 2.
 
 See it: `models-lab.html?runner` (four at once), `?runner=prowl`, `?runner=armed`, `?runner=16` (follow one at
-16 m/s), `?runner=stab` (gun stabilisation side by side). In game (`?debug`, F3): Spawn → **Runner** /
-**Runner (rifle)**. These are local only, seen by you alone, and do nothing.
+16 m/s), `?runner=stab` (gun stabilisation side by side); those are drawn only, driven by the show's `Prowl`. In game
+(`?debug`, F3): Spawn → **Runner** / **Runner (rifle)**: one 45 m from you, hunting you (the server's, everyone sees it).
+
+## How it hunts (server/runners.ts)
+
+- **Meeting one:** every 5–11 min (`GAP_MIN_MS..GAP_MAX_MS`; the first 2–5 min in) one is sent for someone out in the
+  open desert past `KEEP_OUT` (250 m) from the start, day or night, a third of them armed (`ARMED_ODDS`); at most two
+  out. It comes from 220–300 m off at a trot (a gallop when far), and once it sees them (`SIGHT` 110 m, line of sight
+  from its eyes to their chest) it hunts them.
+- **Stalking:** legs like the show's driver: a sprint a third to two thirds of a lap round them (via a point halfway
+  round, so it never cuts across them), a prowl to a spot a little in or out, a stop to stare (jaws snapping), on a
+  ring 24–38 m out.
+- **Charging (plain):** after `STALK_MS` (6–11 s) it charges flat out (16 m/s) at where they'll be (led by their way,
+  up to 0.5 s). Within `COMMIT_R` (14 m) it **commits**: no more turning. Its jaws bite whoever they pass within
+  `BITE_R` (1.4 m) of **where clients draw them** (`BOT_DELAY_MS` behind), so a step aside as you see it come (the
+  jaws ~6 m off on your screen) makes it miss by ~2 m. One bite kills (`hurt(.., 'runner', KILL)`). A bite or a miss
+  and it pulls up (`R_RECOVER`, ~1 s), turns and comes again, three charges, then stalks a while.
+- **Shooting (armed):** it keeps 45–75 m off (`KEEP_MIN..KEEP_MAX`). It goes to a spot on its ring, stops, raises the
+  gun (`GUN_RAISE_MS`), charges it (`GUN_CHARGE_MS`, clients whine) and fires a guardian's bolt at your chest every
+  `GUN_FIRE_MS` while it sees you within `FIRE_R` (110 m), 2–3 shots, then sprints round to another spot. The bolts
+  are the guardians' (`server/guardians.ts` bolts, 'shot' with `r`): sidestep them; a hit or a blast kills ('laser').
+- **Close in:** anyone within `CLOSE_R` (9 m) of either kind is charged at once.
+- **Giving up:** lost from sight for 8 s, further than 260 m, after 150 s, or once you're indoors or dead: it trots off
+  (`R_LEAVE`). Gone with nobody within 700 m. A storm front's static seizes it where it stands.
+- **Weak points** (`RUNNER_POINTS`, the 'fire' `ri`): the **eye cluster** (3 rifle hits, from the front, as it charges
+  you), the **flank vents** (2 each, side on, as it circles you), and the armed one's **gun core** at the back of its
+  gun (2: the gun goes quiet and it charges instead). Eyes out, or both vents, and it dies. Its hull is a walker's plate
+  (`ARMOR.plate`): the rifle and pistol only ring off it (and anger it), the piercer takes 3 slugs, the graviton pistol
+  one. The blaster's burst hurts weak points within its radius. Any hit turns it on the shooter.
+- **Hits are checked** against where it was over the last second (its history: as clients drew it): a weak point within
+  1.6 m (the gun core 2.6 m, it swings about on the arm), the hull within its box.
+- **Death and loot:** it slumps where it fell (lying `WRECK_MS`, 90 s) and leaves its spoils (`shared/enemies.ts`
+  runner, `shared/lootRoll.ts` `runnerDrops`, `shared/tables.ts` `RUNNER_SPOILS`, `RUNNER_GUN_SPOILS`): drive parts,
+  the armed one's gun parts maybe, a servo heart now and then, a broken receiver rarely, two wiring.
+- **Tests:** `tools/runner.test.mjs` (bite, dodge, weak points vs plate, the armed one shooting and giving up, spawning).
+
+## Sync and the view
+
+'bots' `r` (`RUNNER_STRIDE`, shared/runner.ts): id, kind, x, z, yaw, state, hunt (2: you), look and its point, gun
+(-1 carried, 0 raised, 1 charging), broken, dead (s), snap (its last bite). `runnersAt` (src/world/botFrames.ts)
+interpolates it `BOT_DELAY_MS` behind like the walkers; `Runners` (src/world/runner.ts) drives a `Runner` per one:
+`alert` while charging, `look` while it stares, aims or charges, `charging` for the coils, `fire()` on the 'shot',
+`snap()` on a new bite, `dead` for the slump (body down onto its belly, rolled, eyes out, jaws slack). The rifle tests
+shots against `Runner.raycast` (boxes: hull, head, eyes, vents, gun housing and core; a weak point counts reached no
+more than 0.25 m past the armour round it). `GuardianFx.updateRunners` (src/guardians.ts) does the rest: aggro
+('runner' speech), combat, kills, the gun's whine and shot, bites, deaths, footfalls and dust.
 
 ## What it is
 
@@ -106,48 +150,32 @@ its loop it sprints a third to two thirds of a lap round the player (22–38 m o
   - **Carry** (no `look`): the gun borne level over its back, pointing along its heading.
   - **Aim** (`look`): the arm raises it high (~1 s), the turret turns to the target (2.5 rad/s), the gun pitches onto
     it (3 rad/s, limits −34°..+23°).
-  - **Fire:** once raised and within ~3.5° in heading and pitch, it fires **every 2.4 s**. The coils charge up through
-    the last second, then the gun slams back 0.34 m along its rails in 0.04 s, holds, and buffers ease it home by
-    0.7 s. The muzzle flares for 0.15 s. There is no projectile, sound or damage: this is a placeholder cadence the
-    view runs by itself.
+  - **Fire:** in game, on the server's 'shot' (`fire()`), the coils charging while `charging` (the server's gun state
+    1); the show's drivers (`auto`, the default) fire once raised and within ~3.5° in heading and pitch, every 2.4 s,
+    the coils charging through the last second. The gun slams back 0.34 m along its rails in 0.04 s, holds, and
+    buffers ease it home by 0.7 s; the muzzle flares for 0.15 s.
   - **Stabilisation:** while running, the arm keeps the gun level and still in the world: gun pitch level in 100% of
     frames galloping, roll 0°, height bounce 0.03 m against the body's ~0.1 m. It's two-bone IK to a steady frame,
     with the wrist taking up the remaining rotation. The arm is planar, so in hard turns the gun leans aside a little
     with the body.
   - `Runner.muzzle(out)` gives the muzzle's world position (for spawning a bolt or a flash); `gunObject` the moving gun.
-- **Not animated yet:** death or breaking apart (guardians have a leg-by-leg collapse to borrow from), hit reactions,
-  attacks with the jaws (a lunge or bite), and footfall events for dust, shake and sound (guardians fire `onFootfall`;
-  the runner's gait knows exactly when each foot lands but doesn't report it).
-
-## What the server side will need to add
-
-Today nothing about runners exists on the server. The project's patterns for this (see docs/netcode.md,
-shared/guardians.ts, server/guardians.ts):
-
-- **Brain and sync:** the server owns where each runner is and what it does. Send clients a path to draw from (like
-  the walkers' 'bots' frames, drawn `BOT_DELAY_MS` behind): position, heading, the `look` target (or the player id it
-  stares at), `alert`, kind, and dead/alive. The gait, head, jaws and gun animation need nothing more.
-- **The gun's shots** should be server events: the view should fire on a server event (replace its own 2.4 s cadence
-  with a `fire()` call), take the muzzle from `muzzle()`, and spawn the bolt. Bolts exist for guardians
-  (src/world/bolts.ts, shared/guardians.ts `BOLT_SPEED`, blasts in `BLASTS`).
-- **Melee:** the jaws suggest a bite or lunge (the crawler's crouch-and-lunge is a pattern to reuse); the jaws'
-  snapping while staring already reads as a warning.
-- **Damage and weak points:** none are modelled. The game's convention is red glowing weak points (shared/rifle.ts,
-  src/world/guardians.ts). Natural candidates: the eye cluster, the flank vents, the armed one's coils or rear core.
-- **Registry and loot:** an entry in `shared/enemies.ts` (how many, where they're met, drops, fight odds, read by the
-  economy simulator, `npm run econ`); drops via `shared/lootRoll.ts` and `shared/tables.ts`.
-- **Sound:** none yet. Footfalls, the jaws' clack, the gun's charge and shot go through `src/audioConfig.ts` events
-  (docs/audio.md).
-- **Levels:** desert only today; anything else reads the ground through `level(...)` (docs/levels.md).
+- **Bite:** `snap()` shuts the jaws hard and holds them 0.3 s (charging, they gape and chatter: `alert`).
+- **Death:** `dead` (seconds) slumps it: the feet stay put, the body sinks onto its belly, nose down, rolled a little,
+  the eyes go out and the jaws hang slack. No breaking apart.
+- **Footfalls:** `onFootfall(x, y, z, speed)` as each foot lands (thud and dust in `GuardianFx`).
+- **Not done yet:** hit reactions, a broken weak point dimming (todo-issues.md), its own sounds (it borrows the
+  guardian's and crawler's), steering round wrecks and rocks.
 
 ## Where it all is
 
 | | |
 |---|---|
-| shared/runner.ts | rig numbers (`RUNNER`, model units), speeds, `RunnerKind` |
-| src/world/runner.ts | `Runner` (rig, IK, gait, head, jaws, gun arm), `Prowl` (the show's driver), `Runners` + `summonRunner` (the debug menu's) |
+| shared/runner.ts | rig numbers (`RUNNER`, model units), speeds, turn rates, weak points, states, the 'bots' layout, `RunnerKind` |
+| server/runners.ts | `RunnerServer`: sending them out, the brain, moving, bites, shots, hits (ticked by server/guardians.ts) |
+| src/world/runner.ts | `Runner` (rig, IK, gait, head, jaws, gun arm, death, hit boxes), `Prowl` (the show's driver), `Runners` (the server's, drawn) |
+| tools/runner.test.mjs | its behaviour |
 | src/models/runnerLab.ts | the models lab's runners |
 | tools/blender/runner.py | the model → public/models/runner.glb (one node per part, the pivots documented at its top; `--preview <dir>` renders PNGs) |
-| src/guardians.ts | hosts `Runners` (`GuardianFx.runners`) |
+| src/guardians.ts | hosts `Runners` (`GuardianFx.runners`, `updateRunners`): sound, shake, aggro, kills |
 
 Cost: ~5.7k triangles plain, ~7.7k armed, 16 rigid parts (no skinning), all casting shadows; no LOD yet.

@@ -337,6 +337,7 @@ const en = {
     bomb: 'bombed by the carrier',
     queen: 'killed by the queen',
     harvester: 'ground into the sand by a harvester',
+    runner: 'torn apart by a runner',
     storm: 'choked in the storm front',
     gas: 'choked on the poison gas',
     vortex: 'torn up by the sand vortex',
@@ -709,6 +710,7 @@ const en = {
     stomp: ['Keep clear of the colossus’s feet.'],
     crawler: ['The spiders are faster than you. Don’t let them get close.'],
     harvester: ['When a harvester charges, get out of its way sideways.'],
+    runner: ['A runner can’t turn at full tilt. Step aside as it comes.', 'Its eyes, or the vents on its flanks.'],
     laser: ['Get out of a drone’s light, and it loses you.'],
     vortex: ['Keep well clear of a sand vortex.'],
   } as { any: string[] } & Record<string, string[]>,
@@ -813,6 +815,7 @@ const en = {
       crawler: ['Shit, spiders! Get away from them!', "They're faster than me. I have to get clear of this place."],
       drone: ["Shit, I'm in the light! Get out of it!", "It's got me in its beam. Out of the light, now!"],
       harvester: ["It's coming straight at me! Get out of its way!", "Oh shit, it's charging. Sideways, sideways!"],
+      runner: ["Something's circling me. I can't outrun that.", "Oh hell, it's hunting me. Watch it, don't let it get close."],
     },
     /** Something we shot or jammed going down, by kind (every boss alike). */
     killed: {
@@ -821,6 +824,7 @@ const en = {
       drone: ['Got it. Lights out.', "That one's done spotting for anyone."],
       jet: ['Got it! There might be something good in that wreck.', "Down it goes. Whatever's left is mine."],
       harvester: ["It's dead. I think. Let's see what it ate.", "That's it stopped. Time to see what's inside."],
+      runner: ["Stay down. Please stay down.", "That's one less thing hunting me out here."],
       boss: ["Is it dead? It's dead. I can't believe that worked.", "That's one monster I won't see again."],
     },
     night: "Finally, it's cooling down.",

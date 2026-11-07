@@ -3341,3 +3341,26 @@ The piercer (shared/rifle.ts PIERCER) as fired and carried, for the shooter and 
   holds, and hydraulic buffers ease it home by 0.7 s (`RECOIL_*`, `RUNNER.arm.recoil`). The model splits for it:
   `Runner_GunMount` (knuckle, pylon, the rail cradle, stops and buffers) stays on the wrist, `Runner_Rifle` (now with
   slide shoes under its belly) slides on it. Measured live: full travel each shot, pitch unchanged through it.
+
+## The runner hunts: server side, AI and fight
+
+- **What:** the runner (shared/runner.ts) is now a real enemy, simulated on the server (`server/runners.ts`, owned by
+  `GuardianServer` like the nests) and drawn from 'bots' `r`. One is sent for someone out in the open desert every
+  5–11 min, day or night, a third of them armed. It stalks (sprinting arcs round you, stares with snapping jaws), then
+  the plain one charges at 16 m/s and bites (one bite kills); the armed one keeps 45–75 m off and shoots the guardians'
+  bolts from its rail gun, 2–3 shots from a spot, then sprints round to another. Weak points: the eye cluster (from the
+  front, as it charges) and the flank vents (side on, as it circles); eyes or both vents kill it; the armed one's gun
+  core silences its gun. Hull is walker plate. Loot: drive parts (`RUNNER_SPOILS`), gun parts for the armed one,
+  servo heart sometimes, wiring. New death cause 'runner', speech lines, death hints. Debug menu's Runner buttons now
+  summon the server's (for everyone).
+- **The dodge needed a commit:** the first cut steered at the prey's true position every tick; with clients drawing it
+  250 ms behind, it tracked late sidesteps and a dodge almost never worked (1 in 6 in the test). Now a charge commits
+  within `COMMIT_R` (14 m): it runs straight on at where it aimed (led by your movement). Sidestepping as the jaws are
+  ~6 m off on screen makes them pass ~2 m wide; standing still gets you bitten. Bites are judged against where its
+  jaws are drawn (its position history `BOT_DELAY_MS` back), like the crawlers' lunge.
+- **The armed one cut across its prey:** a 3.6 rad arc's chord passes ~10 m from the centre, inside `CLOSE_R`, so it
+  charged people who stood still. Arcs now go by a point halfway round the ring.
+- **Economy sim** (200 worlds vs base): first runner killed at ~72 min in 99% of worlds; worlds with a death 20% → 42%;
+  progression ~5% slower (won 254 → 267 min, quality rifle 88 → 108 min) from time spent fighting them.
+- **Tests:** `tools/runner.test.mjs`. **Seen in game:** a summoned runner stalked, charged and bit a standing player
+  (death hint shown), no console errors.

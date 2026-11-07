@@ -69,6 +69,7 @@ import { BREAK_S, breakup, type Breakup, type JetKind } from '../shared/jetbreak
 import { jetImpact, type Jet } from '../shared/jets.ts';
 import { jetCrashList } from '../shared/jetcrash.ts';
 import { HarvesterServer, type Furrow, type HarvesterKill } from './harvesters.ts';
+import type { RunnerKill } from './runners.ts';
 import { BossServer, type BossKill, type BossOut } from './bosses.ts';
 import { type BotPlayer, GuardianServer, SEND_R as BOT_SEND_R, TICK_HZ as BOT_HZ, type Kill } from './guardians.ts';
 import { CrashServer } from './crash.ts';
@@ -987,6 +988,7 @@ function tickBots(elapsed: number, now: number, tod: number) {
       const hit = boltPush(p, r.events, 'boom', BLAST_R);
       hurt(p, 'laser', KILL, hit.push, hit.id);
     } else if (r.blasted.includes(p.id)) hurt(p, 'missile', KILL, boltPush(p, r.events, 'blast', MISSILE_BLAST_R).push);
+    else if (r.mauled.includes(p.id)) hurt(p, 'runner', KILL, runnerPush(p));
     else if (r.bitten.has(p.id)) hurt(p, 'crawler', r.bitten.get(p.id)!);
   }
   for (const e of r.events) if ((e.msg.t === 'boom' && e.msg.ground) || e.msg.t === 'blast') terrain.crater(e.msg.x, e.msg.z, CRATER_R, CRATER_MM);
@@ -1111,6 +1113,10 @@ function onFire(p: Player, m: Extract<ClientMsg, { t: 'fire' }>) {
     if (r.boss?.called) db.setSetting(calledKey(r.boss.kind), r.kill ? 0 : BOSSES[r.boss.kind].hp - r.boss.hp + 1);
     if (r.kill) dropBossSpoils(r.kill);
     (hit = r.hit), (seen = !!r.seen);
+  } else if (m.r !== undefined) {
+    const r = guardians.runners.shoot(by, m.ex, m.ey, m.ez, m.r, m.ri ?? -1, now, gun);
+    if (r.kill) dropRunnerSpoils(r.kill);
+    (hit = r.hit), (seen = !!r.seen);
   } else if (m.n !== undefined) {
     const r = guardians.nests.shoot(m.ex, m.ey, m.ez, m.n, now, gun);
     if (r.kill) dropNestSpoils(r.kill);
@@ -1158,7 +1164,9 @@ function burst(by: BotPlayer, gun: Gun, m: Extract<ClientMsg, { t: 'fire' }>): b
   for (const k of lings.kills) dropNestSpoils(k);
   const cores = harvesters.burst(ex, ey, ez, r, dmg, now, m.h ?? -1, m.hi ?? -1);
   for (const k of cores.kills) dropHarvesterSpoils(k);
-  return walkers.hit || drones > 0 || jetsHurt > 0 || lings.n > 0 || cores.hit;
+  const runs = guardians.runners.burst(by, ex, ey, ez, r, dmg, now, m.r ?? -1, m.ri ?? -1);
+  for (const k of runs.kills) dropRunnerSpoils(k);
+  return walkers.hit || drones > 0 || jetsHurt > 0 || lings.n > 0 || cores.hit || runs.hit;
 }
 
 /** The jammer held on a jet or drone (shared/jammer.ts): with the jammer in hand and the target in the cone from the
@@ -1301,6 +1309,21 @@ const lay = (x: number, z: number, d: Drop, spread?: number) => {
 /** What a killed walker or downed drone leaves on the sand (shared/enemies.ts). */
 function dropSpoils(k: Kill) {
   for (const d of ENEMIES[k.kind === GUARDIAN ? 'guardian' : k.kind === 'drone' ? 'drone' : 'crawler'].drops(Math.random)) lay(k.x, k.z, d);
+}
+
+/** What a runner leaves where it fell (shared/enemies.ts runner). */
+function dropRunnerSpoils(k: RunnerKill) {
+  for (const d of ENEMIES.runner.drops(Math.random, { armed: k.kind === 'armed' })) lay(k.x, k.z, d);
+}
+
+/** A runner's bite throws its victim along the way it was going (the nearest one charging them). */
+function runnerPush(p: Player): [number, number, number] {
+  let best: { yaw: number } | null = null, near = Infinity;
+  for (const r of guardians.runners.runners) {
+    const d = Math.hypot(r.x - p.state.x, r.z - p.state.z);
+    if (r.deadAt < 0 && d < near) (near = d), (best = r);
+  }
+  return best ? [Math.sin(best.yaw) * 7, 3, Math.cos(best.yaw) * 7] : [0, 3, 0];
 }
 
 /** What a nest's spiderling leaves (shared/enemies.ts spiderling). */

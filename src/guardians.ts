@@ -6,7 +6,7 @@
 // drones (src/world/jets.ts) and their roar, and the harvesters (src/world/harvesters.ts): their rumble (a roar when
 // one charges), the ground trembling near one, the shots that land in their maws, their death.
 import * as THREE from 'three/webgpu';
-import { BOT_DELAY_MS, dronesAt, guardiansAt } from './world/botFrames';
+import { BOT_DELAY_MS, dronesAt, guardiansAt, runnersAt } from './world/botFrames';
 import { Drones } from './world/drones';
 import { Guardians, type Footfall } from './world/guardians';
 import { BLASTS, blasts } from './world/blasts';
@@ -32,6 +32,7 @@ import { zaps } from './world/zaps';
 import type { Net } from './net';
 import { claim } from './kills';
 import { Runners } from './world/runner';
+import { GUN_CHARGE_MS as RUNNER_CHARGE_MS } from '../shared/runner.ts';
 import { heightAt } from '../shared/terrain.ts';
 
 /** Footfalls shake the camera within this distance (m), up to SHAKE metres at the foot. */
@@ -58,7 +59,7 @@ function perchAt(n: number[], o: number): Perch | null {
 
 
 /** What can turn on us, and what we can kill (the character's remarks: src/speechLines.ts). */
-export type Aggro = 'guardian' | 'crawler' | 'drone' | 'harvester';
+export type Aggro = 'guardian' | 'crawler' | 'drone' | 'harvester' | 'runner';
 export type Kill = Aggro | 'jet';
 
 export class GuardianFx {
@@ -70,8 +71,11 @@ export class GuardianFx {
   readonly harvesters: Harvesters;
   /** The solar farms' nests' spiderlings (shared/nest.ts). */
   readonly nest: Brood;
-  /** Runners summoned from the debug menu, prowling round us (src/world/runner.ts; drawn only, ours alone). */
+  /** The runners (shared/runner.ts, src/world/runner.ts). */
   readonly runners: Runners;
+  /** Runners hunting us, and ones charging their guns (as of the latest message). */
+  private stalked = new Set<number>();
+  private gunCharging = new Set<number>();
   /** Nest spiderlings awake within NEST_NEAR m of us. */
   private nested = false;
   private scene: THREE.Object3D;
@@ -117,6 +121,23 @@ export class GuardianFx {
     this.scene = scene;
     this.nest = new Brood(scene, NEST_N * 2);
     this.runners = new Runners(scene, heightAt);
+    // A runner's feet: a heavy thud, louder at a gallop, and sand kicked up; its jaws snapping shut on someone; dying,
+    // its vents blow and it slumps down onto the sand.
+    this.runners.onFootfall = (x, y, z, speed) => {
+      guardianSound.footfall(x, y, z, 0.12 + 0.02 * Math.min(10, speed), this.ear);
+      if (speed > 6 && Math.hypot(x - this.ear.x, z - this.ear.z) < 80) tyreDust.emit(x, y + 0.1, z, (Math.random() - 0.5) * 1.5, 0.6, (Math.random() - 0.5) * 1.5, 0.6);
+    };
+    this.runners.onSnap = (x, y, z) => {
+      guardianSound.chitter(x, y, z, true);
+      if (Math.hypot(x - this.ear.x, z - this.ear.z) < 12) this.jolt(BITE_SHAKE * 2);
+    };
+    this.runners.onDeath = (x, y, z) => {
+      zaps.burst(x, y, z, 0, 1, 0, 50, 6);
+      for (let i = 0; i < 8; i++) zaps.puff(x + (Math.random() - 0.5) * 4, y + Math.random() * 2, z + (Math.random() - 0.5) * 4, 3 + Math.random() * 3, 3);
+      play('weakPoint.break', { x, y, z }, this.ear);
+      rifleSound.slam({ x, y, z }, this.ear, false);
+      this.thump(x, y - 2, z, 0.8, 10, 3, 1.4);
+    };
     // A shot into a core: a heavy clang; one shot out: a burst of fire and sparks out of its maw.
     this.harvesters.onHit = (x, y, z) => guardianSound.footfall(x, y, z, 0.8, this.ear);
     this.harvesters.onCoreOut = (x, y, z, dx, dz) => {
@@ -280,10 +301,30 @@ export class GuardianFx {
     if (this.nested && !was) this.onAggro('crawler');
   }
 
+  /** The runners: drawn; the horn-less dread of one starting to hunt us, its gun's whine as it charges (heard as soon as
+   *  we hear of it: drawn BOT_DELAY_MS late, it would be half over). */
+  private updateRunners(net: Net, dt: number, t: number, focus: { x: number; z: number }) {
+    const rs = runnersAt(net.bots, t);
+    this.runners.update(rs, dt, performance.now(), focus);
+    const was = this.stalked.size > 0;
+    this.stalked.clear();
+    for (const r of rs) {
+      if (!r.dead && r.hunt === 2) this.stalked.add(r.id);
+      this.seen(`r${r.id}`, r.dead > 0, 'runner');
+    }
+    if (this.stalked.size && !was) this.onAggro('runner');
+    for (const r of runnersAt(net.bots, net.serverTime())) {
+      if (r.gun === 1 && !this.gunCharging.has(r.id) && Math.hypot(r.x - focus.x, r.z - focus.z) < 250) {
+        guardianSound.charge(r.x, heightAt(r.x, r.z) + 5, r.z, (RUNNER_CHARGE_MS - BOT_DELAY_MS) / 1000);
+      }
+      if (r.gun === 1) this.gunCharging.add(r.id);
+      else this.gunCharging.delete(r.id);
+    }
+  }
+
   /** Every frame, after the camera has been placed: draws them and shakes the camera. */
   update(net: Net, dt: number, camera: THREE.Camera, focus: { x: number; y: number; z: number }) {
     this.net = net;
-    this.runners.update(dt, focus, camera);
     this.ear.copy(camera.position);
     if (!this.bound) {
       this.bound = true;
@@ -296,7 +337,7 @@ export class GuardianFx {
       };
       net.onBolt = (m) => {
         if (m.t === 'shot') {
-          const muzzle = this.guardians.fire(m.g, this.muzzle);
+          const muzzle = m.r !== undefined ? this.runners.fire(m.r, performance.now(), this.muzzle) : this.guardians.fire(m.g, this.muzzle);
           this.bolts.fire(m, muzzle);
           const at = muzzle ?? this.muzzle.set(m.x, m.y, m.z);
           rifleSound.cannon(at, this.ear);
@@ -376,6 +417,7 @@ export class GuardianFx {
     for (const id of this.lunging) if (!gs.some((g) => g.id === id)) this.lunging.delete(id);
     for (const id of this.hunted) if (!gs.some((g) => g.id === id)) this.hunted.delete(id);
     this.updateNest(net, dt, t, focus);
+    this.updateRunners(net, dt, t, focus);
     const spotted = ds.some((d) => d.lock === 2);
     if (spotted && !this.locked) {
       guardianSound.chirp();
@@ -387,7 +429,7 @@ export class GuardianFx {
     this.alive.clear();
     this.locked = spotted;
     const incoming = this.missiles.incoming(focus.x, focus.z, 30, net.serverTime()).length > 0;
-    this.combat = incoming || spotted || this.hunted.size > 0 || this.crawled.size > 0 || this.charged || this.nested;
+    this.combat = incoming || spotted || this.hunted.size > 0 || this.crawled.size > 0 || this.charged || this.nested || this.stalked.size > 0;
     if (this.shake > 0.001) {
       const s = this.shake;
       camera.position.x += (Math.random() - 0.5) * s;

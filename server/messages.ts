@@ -44,10 +44,10 @@ export function clientMessage(v: unknown): v is ClientMsg {
     case 'fit': return box(m.from) && int(m.fi, 0, 4095) && int(m.slot, 0, 255) && optional(m.at, box);
     case 'unfit': return box(m.to) && int(m.ti, -1, 4095) && int(m.slot, 0, 255) && optional(m.at, box);
     case 'drop': return box(m.box) && int(m.slot, 0, 4095);
-    case 'summon': return ['guardian', 'drone', 'jet', 'crawlers', 'harvester', 'worm', 'carrier', 'queen', 'colossus'].includes(m.what as string);
+    case 'summon': return ['guardian', 'drone', 'jet', 'crawlers', 'harvester', 'runner', 'runnerArmed', 'worm', 'carrier', 'queen', 'colossus'].includes(m.what as string);
     case 'jam': return (m.kind === 'jet' || m.kind === 'drone') && int(m.id) && pos('x', 'y', 'z', 'dx', 'dy', 'dz');
     case 'stomped': return int(m.g);
-    case 'fire': return pos('x', 'y', 'z', 'ex', 'ey', 'ez') && ['g', 'i', 'd', 'j', 'h', 'hi', 'b', 'bi', 'n'].every((k) => optional(m[k], (x) => int(x, -1)));
+    case 'fire': return pos('x', 'y', 'z', 'ex', 'ey', 'ez') && ['g', 'i', 'd', 'j', 'h', 'hi', 'b', 'bi', 'n', 'r', 'ri'].every((k) => optional(m[k], (x) => int(x, -1)));
     case 'throw': return int(m.slot, 0, 4095) && int(m.n) && pos('x', 'y', 'z', 'dx', 'dy', 'dz');
     case 'swing': return pos('x', 'y', 'z') && ['g', 'i', 'n'].every((k) => optional(m[k], (x) => int(x, -1)));
     case 'debugGear': return optional(m.tier, (x) => int(x, 0, 3));

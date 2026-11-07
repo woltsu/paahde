@@ -236,6 +236,7 @@ export const LINES: Line[] = [
   aggro('crawler'),
   aggro('drone'),
   aggro('harvester'),
+  aggro('runner'),
 
   // Things that wanted us dead, and don't any more.
   killed('guardian', 10 * MIN),
@@ -243,6 +244,7 @@ export const LINES: Line[] = [
   killed('drone', 10 * MIN),
   killed('jet', 10 * MIN),
   killed('harvester', 10 * MIN),
+  killed('runner', 10 * MIN),
   killed('boss', MIN),
 
   // The first night out.

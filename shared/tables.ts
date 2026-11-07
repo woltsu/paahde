@@ -386,6 +386,12 @@ export const KILL_SPOILS: Record<'guardian' | 'crawler' | 'drone', Spoils> = {
   drone: { odds: 1, min: 1, max: 1, parts: SPOILS, tierWeights: { basic: 1, quality: 1 } },
 };
 
+/** A killed runner (shared/runner.ts; server/world.ts dropRunnerSpoils): its drive parts, better than a crawler's; the
+ *  armed one's gun gives up a coil or a battery more (RUNNER_GUN_SPOILS). Its relic, receiver and wiring odds are with
+ *  the others' (RELIC_DROPS, RECEIVER_DROPS, WIRING_DROPS). */
+export const RUNNER_SPOILS: Spoils = { odds: 1, min: 1, max: 2, parts: ['motor', 'bearing', 'battery', 'compute', 'relay', 'heatsink'], tierWeights: { basic: 2, quality: 2, space: 0.3 } };
+export const RUNNER_GUN_SPOILS: Spoils = { odds: 0.6, min: 1, max: 1, parts: ['coil', 'battery'], tierWeights: { basic: 1, quality: 2, space: 0.5 } };
+
 /** A solar farm nest's spiderling (shared/nest.ts), of which there are dozens: now and then a small part or a bit of
  *  scrap off it, no wiring (server/world.ts dropNestSpoils). */
 export const SPIDERLING_SPOILS: Spoils = { odds: 0.12, min: 1, max: 1, parts: SPOILS, tierWeights: { scrap: 2, basic: 1 } };
@@ -404,21 +410,22 @@ export const HARVESTER_SPOILS: Spoils = { odds: 1, min: 4, max: 6, parts: ['uran
 export const HARVESTER_SCRAP = { min: 8, max: 14 };
 
 /** Besides its spoils, a killed enemy leaves its own part with these odds: what its boss's receiver takes (shared/gear.ts). */
-export const RELIC_DROPS: Record<'guardian' | 'crawler' | 'drone', { kind: string; odds: number }> = {
+export const RELIC_DROPS: Record<'guardian' | 'crawler' | 'drone' | 'runner', { kind: string; odds: number }> = {
   guardian: { kind: 'servo_heart', odds: 0.5 },
+  runner: { kind: 'servo_heart', odds: 0.15 },
   crawler: { kind: 'brood_gland', odds: 0.1 },
   drone: { kind: 'drone_transponder', odds: 0.1 },
 };
 
 /** Odds a killed enemy (or a downed jet) also leaves a broken boss receiver, any of shared/bosses.ts RECEIVERS. */
-export const RECEIVER_DROPS: Record<'guardian' | 'crawler' | 'drone' | 'jet', number> = {
-  guardian: 0.1, crawler: 0.03, drone: 0, jet: 0.05,
+export const RECEIVER_DROPS: Record<'guardian' | 'crawler' | 'drone' | 'jet' | 'runner', number> = {
+  guardian: 0.1, crawler: 0.03, drone: 0, jet: 0.05, runner: 0.05,
 };
 
 /** Wiring every killed enemy always leaves besides the rest (torn out of it: what the buildings and power lines take,
  *  BUILD_TABLE), more the bigger it is; a downed jet of either kind. Rolls no dice, so it can't reshuffle the others. */
-export const WIRING_DROPS: Record<'crawler' | 'drone' | 'guardian' | 'jet' | 'harvester' | 'worm' | 'carrier' | 'colossus' | 'queen', number> = {
-  crawler: 1, drone: 1, guardian: 2, jet: 2, harvester: 3, worm: 4, carrier: 3, colossus: 4, queen: 3,
+export const WIRING_DROPS: Record<'crawler' | 'drone' | 'guardian' | 'jet' | 'harvester' | 'runner' | 'worm' | 'carrier' | 'colossus' | 'queen', number> = {
+  crawler: 1, drone: 1, guardian: 2, jet: 2, harvester: 3, runner: 2, worm: 4, carrier: 3, colossus: 4, queen: 3,
 };
 
 /** A killed boss (shared/bosses.ts): min..max parts scattered over its wreck (`odds` unused: always), a uranium cell

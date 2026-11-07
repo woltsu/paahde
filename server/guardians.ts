@@ -9,6 +9,7 @@
 // also roam the open desert (nightPacks): a made-up home walking across the sand, its crawlers patrolling round it. The
 // solar farms (shared/solarfarms.ts) have no crawlers: their nests of spiderlings cling to the mirrors (server/nests.ts,
 // ticked from here, sent in 'bots' `n`).
+import { RunnerServer } from './runners.ts';
 import { NestServer } from './nests.ts';
 import { ORIGIN } from '../shared/origin.ts';
 import type { Vortex } from '../shared/vortex.ts';
@@ -168,6 +169,8 @@ export class GuardianServer {
   private left = new Map<number, { at: number; crawlers: number }>();
   /** The solar farms' nests of spiderlings. */
   readonly nests = new NestServer();
+  /** The runners (server/runners.ts): their bites are this tick's `mauled`, their shots our bolts. */
+  readonly runners = new RunnerServer();
   /** Debug menu packs: their made-up home (where they were summoned), gone like a site's once everyone has left it. */
   private summoned: CrashSite[] = [];
   private nextSummon = 1;
@@ -372,10 +375,10 @@ export class GuardianServer {
    * → damage), shot by a bolt or blown up by a missile, and the bolts and missiles fired and burst.
    */
   tick(dt: number, now: number, tod: number, players: BotPlayer[]): {
-    bitten: Map<number, number>; shot: number[]; blasted: number[]; events: BoltEvent[];
+    bitten: Map<number, number>; mauled: number[]; shot: number[]; blasted: number[]; events: BoltEvent[];
   } {
     const bitten = new Map<number, number>();
-    const shot: number[] = [], blasted: number[] = [], events: BoltEvent[] = [];
+    const shot: number[] = [], blasted: number[] = [], events: BoltEvent[] = [], mauled: number[] = [];
     const byId = new Map(players.map((p) => [p.id, p]));
     const exposed = players.filter(open);
     this.vel.update(now, dt, players);
@@ -399,9 +402,14 @@ export class GuardianServer {
       if (KINDS[g.kind].gun && !stuck) this.tickGun(g, now, byId, events);
     }
     this.nests.tick(dt, now, players, exposed, bitten, this.vel);
+    this.runners.tick(dt, now, players, this.storms, this.vel, mauled, (r, x, y, z, dx, dy, dz) => {
+      const b: Bolt = { id: this.nextBolt++, x, y, z, dx, dy, dz, flown: 0, by: -r.id };
+      this.bolts.push(b);
+      events.push({ x, z, msg: { t: 'shot', id: b.id, g: -1, r: r.id, time: now, x: r2(x), y: r2(y), z: r2(z), dx: r3(dx), dy: r3(dy), dz: r3(dz) } });
+    });
     this.tickBolts(dt, exposed, shot, events);
     this.updatePosts();
-    return { bitten, shot, blasted, events };
+    return { bitten, mauled, shot, blasted, events };
   }
 
 
@@ -784,6 +792,7 @@ export class GuardianServer {
    *  up 30 m off and comes for you (they keep to where they were summoned, like a site's). */
   summon(what: unknown, p: BotPlayer, now: number) {
     if (what === 'drone') return this.drones.summon(p, now);
+    if (what === 'runner' || what === 'runnerArmed') return this.runners.summon(what === 'runner' ? 'plain' : 'armed', p, now);
     if (what === 'crawlers') {
       const home: CrashSite = { ...this.sites[0], id: -this.nextSummon++, x: p.x, z: p.z };
       this.summoned.push(home);
@@ -1065,8 +1074,8 @@ export class GuardianServer {
         o.kind === CRAWLER ? o.lunge : o.chargeAt >= 0 ? 1 : o.aiming ? 0 : -1,
         o.broken, o.deadAt < 0 ? 0 : Math.round((time - o.deadAt) / 100) / 10 + 0.01, cracked(o));
     }
-    const n = this.nests.msg(x, z);
-    return { t: 'bots', time, g, d: this.drones.msg(time, id, x, z), f, ...(n.length ? { n } : {}) };
+    const n = this.nests.msg(x, z), r = this.runners.msg(time, id, x, z);
+    return { t: 'bots', time, g, d: this.drones.msg(time, id, x, z), f, ...(n.length ? { n } : {}), ...(r.length ? { r } : {}) };
   }
 
   // The drones, for server/world.ts.

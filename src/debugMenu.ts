@@ -30,7 +30,6 @@ import { isGear } from '../shared/gear.ts';
 import { CLOTH, ITEMS, RETIRED, SCRAP, stackOf, WIRING } from '../shared/items.ts';
 import { TONE_CURVES, toneControl, type ToneCurve } from './post';
 import { summonLocalStorm } from './storm';
-import { summonRunner } from './world/runner';
 import { clockText, timeControl } from './world/dayNight';
 import type { Net } from './net';
 import { labAllowed, SNAPSHOT_ID_RE, TEST, TEST_WORLD } from '../shared/world.ts';
@@ -42,7 +41,7 @@ export class DebugMenu {
   private panel = document.createElement('div');
 
   /** `currentTod` reads the sky's present time of day (0..1) so the slider starts from it. */
-  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind) => void,
+  constructor(currentTod: () => number, shareTod: (tod: number) => void, resetShared: () => void, summonStorm: (front?: boolean | 'gas' | 'vortex' | 'vortexVisit' | 'solarVisit' | 'towerVisit' | 'towerFix') => void, giveGear: (tier: number) => void, hit: () => void, summonBot: (what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | 'runner' | 'runnerArmed' | BossKind) => void,
     resetYard: (all: boolean) => void = () => {}, noHeat: (off: boolean) => void = () => {}, noWeather: (off: boolean) => void = () => {},
     fly: FlyCam, startFly: () => void, giveItem: (kind: string, n: number, tier: number) => void = () => {}, spawnBike: (working: boolean, quad: boolean) => void = () => {},
     goLevel: (key: string) => void = () => {}, net?: Net, audioBench?: { toggle(open?: boolean): void; onToggle?: (open: boolean) => void }) {
@@ -122,8 +121,8 @@ ${scenarios}<div id="dbgMain">
 <button id="dbgJet" title="A jet flying over you in about 15 s (for everyone; the drone and the flying wing take turns)">Jet</button>
 <button id="dbgHarvester" title="A harvester crawling past 50 m away in about a minute (for everyone)">Harvester</button>
 <button id="dbgCrawlers" title="A pack of six crawlers 30 m off, coming for you (for everyone)">Crawlers</button>
-<button id="dbgRunner" title="A runner prowling round you, 22 m ahead (only you see it; looks only: it doesn't hunt yet; at most four)">Runner</button>
-<button id="dbgRunnerArmed" title="A runner with a long rifle on an arm on its back, prowling round you; it aims at you when it stops (only you see it; looks only: no shots yet)">Runner (rifle)</button></div>
+<button id="dbgRunner" title="A runner 45 m from you, hunting you (for everyone): it stalks, then charges and bites">Runner</button>
+<button id="dbgRunnerArmed" title="A runner with a rail gun on its back, 45 m from you, hunting you (for everyone): it keeps off and shoots">Runner (rifle)</button></div>
 <div class="sub">Bosses</div>
 <div class="grid">${BOSS_KINDS.map((k) => `<button data-boss="${k}" title="The ${k} boss near you for ten minutes (for everyone)">${BOSSES[k].label}</button>`).join('')}</div></details>
 <details data-sec="weather"><summary>Weather</summary>
@@ -226,8 +225,8 @@ ${scenarios}<div id="dbgMain">
     p.querySelector('#dbgTowerVisit')!.addEventListener('click', () => summonStorm('towerVisit'));
     p.querySelector('#dbgTowerFix')!.addEventListener('click', () => summonStorm('towerFix'));
     p.querySelector('#dbgLocalStorm')!.addEventListener('click', summonLocalStorm);
-    p.querySelector('#dbgRunner')!.addEventListener('click', () => summonRunner('plain'));
-    p.querySelector('#dbgRunnerArmed')!.addEventListener('click', () => summonRunner('armed'));
+    p.querySelector('#dbgRunner')!.addEventListener('click', () => summonBot('runner'));
+    p.querySelector('#dbgRunnerArmed')!.addEventListener('click', () => summonBot('runnerArmed'));
     for (const b of p.querySelectorAll<HTMLElement>('[data-gear]')) b.addEventListener('click', () => giveGear(Number(b.dataset.gear)));
     p.querySelector('#dbgHit')!.addEventListener('click', hit);
     p.querySelector('#dbgBikeBroken')!.addEventListener('click', () => spawnBike(false, false));

@@ -402,10 +402,14 @@ Everything built is shared, and anyone can take a building down.
   the drones (`server/drones.ts`; their beams call the guardians, `alert`), what both share in `server/bots.ts`; legs
   are client IK in `src/world/guardians.ts`, bolts `src/world/bolts.ts`, drones `src/world/drones.ts`, glue/sound/shake
   in `src/guardians.ts`, `src/guardianSound.ts`
-- `shared/runner.ts` — the runner (work in progress, drawn only): a four-legged robot after Spot, far bigger than a horse, with great hinged insect jaws, and an armed variant (a heavy rail gun on a robotic arm on its back, `RunnerKind`, held steady in the world by the arm's IK as it runs); rig numbers
-  shared with its model `tools/blender/runner.py` (-> `runner.glb`); rig, IK and trot/gallop gait in
-  `src/world/runner.ts` (`Runner`; `Prowl` moves one about for show; `Runners`, in `GuardianFx`, keeps the debug menu's,
-  `summonRunner`); seen in the models lab (`models-lab.html?runner`, `src/models/runnerLab.ts`); handoff for its AI and server side: docs/runner.md
+- `shared/runner.ts` — the runner: a four-legged hunting robot after Spot, far bigger than a horse, with great hinged insect jaws, and an armed variant (a heavy rail gun on a robotic arm on its back, `RunnerKind`, held steady in the world by the arm's IK as it runs); rig numbers
+  shared with its model `tools/blender/runner.py` (-> `runner.glb`), its speeds, turn rates, weak points (`RUNNER_POINTS`, `RP_*`), states (`R_*`)
+  and its 'bots' `r` layout (`RUNNER_STRIDE`). Its AI is `server/runners.ts` (`RunnerServer`, owned and ticked by
+  `server/guardians.ts`: sent for someone out in the open, stalks, charges and bites (committed within `COMMIT_R`: a late
+  sidestep dodges) or, armed, shoots the guardians' bolts from afar; hits checked against where it was drawn); drawn
+  from `runnersAt` (`src/world/botFrames.ts`) by `Runners` in `src/world/runner.ts` (`Runner`: rig, IK, trot/gallop gait,
+  `fire`, `snap`, the death slump, `raycast` hit boxes; `Prowl` moves one about for show), glue/sound in `src/guardians.ts`
+  `updateRunners`; seen in the models lab (`models-lab.html?runner`, `src/models/runnerLab.ts`); docs/runner.md
 - `shared/jets.ts` — fixed-wing drones: high fast flyovers (straight or big circles), day and night; 3 rifle hits and
   it glides down; scheduled by `server/jets.ts`, drawn by `src/world/jets.ts`, roar in `src/guardianSound.ts`
   (`jets`). Two kinds (`JetKind`, shared/jetbreak.ts): the fixed-wing drone (MQ-9-like, 18 m span, no engine: its

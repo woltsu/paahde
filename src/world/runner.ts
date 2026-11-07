@@ -15,11 +15,13 @@
 // (twice a stride trotting; galloping, a rocking pitch), crouching lower the faster it goes, leaning into turns and
 // forward as it speeds up. The head looks at what it's given (`look`) or about, its eyes pulsing.
 //
-// `Prowl` moves one about (client-side, for show: the debug menu's and the models lab's), `Runners` keeps the debug
-// menu's in the desert (summonRunner).
+// `Prowl` moves one about (client-side, for show: the models lab's), `Runners` draws the server's (server/runners.ts).
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK, type RunnerKind } from '../../shared/runner.ts';
+import {
+  R_CHARGE, RP_CORE, RP_EYES, RP_VENT_L, RP_VENT_R, RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK, type RunnerKind,
+} from '../../shared/runner.ts';
+import type { RunnerFrame } from './botFrames';
 
 const PARTS = ['Runner_Body', 'Runner_BodyArmed', 'Runner_ArmBase', 'Runner_ArmUpper', 'Runner_ArmFore', 'Runner_GunMount', 'Runner_Rifle', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
 type PartName = (typeof PARTS)[number];
@@ -108,6 +110,48 @@ const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THRE
 
 export type Ground = (x: number, z: number) => number;
 
+/** A hit box in a part's frame (model units): min, max, and the weak point it is (RP_*, shared/runner.ts), -1 armour. */
+type HitBox = { min: readonly [number, number, number]; max: readonly [number, number, number]; i: number };
+/** The hull, and the glowing vents on its flanks (tools/blender/runner.py skirts). */
+const BODY_BOXES: readonly HitBox[] = [
+  { min: [-0.33, -0.23, -1.05], max: [0.33, 0.25, 1.05], i: -1 },
+  { min: [0.24, -0.1, -0.3], max: [0.4, 0.1, 0.3], i: RP_VENT_L },
+  { min: [-0.4, -0.1, -0.3], max: [-0.24, 0.1, 0.3], i: RP_VENT_R },
+];
+/** The head (neck frame) and the eye cluster on its brow. */
+const HEAD_BOXES: readonly HitBox[] = [
+  { min: [-0.2, -0.13, -0.05], max: [0.2, 0.14, 0.6], i: -1 },
+  { min: [-0.17, -0.04, 0.3], max: [0.17, 0.11, 0.56], i: RP_EYES },
+];
+/** The armed one's gun (slide frame): its housing and the power core at its back. */
+const GUN_BOXES: readonly HitBox[] = [
+  { min: [-0.27, 0.05, -0.86], max: [0.27, 0.33, 1.25], i: -1 },
+  { min: [-0.09, 0.12, -0.9], max: [0.09, 0.26, -0.78], i: RP_CORE },
+];
+/** A weak point counts if the shot gets to it no more than this (world m) past the armour round it. */
+const WEAK_FIRST = 0.25;
+const _inv = new THREE.Matrix4(), _ro = new THREE.Vector3(), _rd = new THREE.Vector3(), _hn = new THREE.Vector3();
+
+/** Where the ray o + t·d (local frame; t in world metres) enters box b, before `max`: t, its face's normal into `n`;
+ *  -1 if it doesn't (from inside: 0). */
+function slab(b: HitBox, o: THREE.Vector3, d: THREE.Vector3, max: number, n: THREE.Vector3): number {
+  let t0 = 0, t1 = max, axis = -1, sign = 0;
+  for (let k = 0; k < 3; k++) {
+    const ok = k === 0 ? o.x : k === 1 ? o.y : o.z, dk = k === 0 ? d.x : k === 1 ? d.y : d.z;
+    if (Math.abs(dk) < 1e-12) {
+      if (ok < b.min[k] || ok > b.max[k]) return -1;
+      continue;
+    }
+    let a = (b.min[k] - ok) / dk, c = (b.max[k] - ok) / dk, s = -1;
+    if (a > c) ([a, c] = [c, a]), (s = 1);
+    if (a > t0) (t0 = a), (axis = k), (sign = s);
+    t1 = Math.min(t1, c);
+    if (t0 > t1) return -1;
+  }
+  n.set(axis === 0 ? sign : 0, axis === 1 ? sign : 0, axis === 2 ? sign : 0);
+  return t0;
+}
+
 export class Runner {
   readonly root = new THREE.Group();
   private body = new THREE.Group();
@@ -137,6 +181,17 @@ export class Runner {
   private seed = Math.random() * 100;
   /** 0..1: how hot its eyes burn (hunting). */
   alert = 0;
+  /** The gun fires by itself every FIRE_S on target (the show's); off, only on `fire()` (the server's), its coils
+   *  charging while `charging`. */
+  auto = true;
+  charging = false;
+  private chargeLevel = 0;
+  /** Its last bite (s, `now` / 1000): the jaws snap shut. */
+  private snapAt = -1e9;
+  /** Seconds since it died (0 alive): it slumps down on its legs, its eyes going out. */
+  dead = 0;
+  /** A foot came down at (x, y, z), the body going `speed` m/s. */
+  onFootfall: ((x: number, y: number, z: number, speed: number) => void) | null = null;
 
   private ground: Ground;
 
@@ -262,8 +317,9 @@ export class Runner {
     this.x = x; this.z = z; this.yaw = yaw;
     const speed = Math.hypot(this.vx, this.vz);
     this.accel = ease(this.accel, (speed - speed0) / dt, 6, dt);
-    this.step(dt, speed);
-    this.pose(dt, speed, look, now);
+    // Dead, its feet stay where they stood.
+    if (this.dead <= 0) this.step(dt, speed);
+    this.pose(dt, speed, this.dead > 0 ? null : look, now);
   }
 
   private step(dt: number, speed: number) {
@@ -302,6 +358,7 @@ export class Runner {
       if (leg.s >= 1) {
         leg.s = -1;
         leg.foot.copy(_v);
+        this.onFootfall?.(_v.x, _v.y, _v.z, speed);
       }
     });
   }
@@ -321,13 +378,15 @@ export class Runner {
     const bob = S * (-0.035 * Math.cos(2 * ph) * moving * (1 - g) + 0.06 * Math.sin(ph) * g);
     const rock = 0.07 * Math.sin(ph + 1.3) * g;
     const crouch = S * (0.06 * moving + 0.08 * g);
-    this.y = ease(this.y, under + R.standY * S - crouch, 12, dt);
+    // Dead: down on its belly, rolled a little onto its side, its nose in the sand.
+    const fall = smooth(0, 0.9, this.dead);
+    this.y = ease(this.y, lerp(under + R.standY * S - crouch, under + 0.75, fall), this.dead > 0 ? 6 : 12, dt);
     const slope = Math.atan2(front - back, 2 * R.sockZ * S);
     const tilt = Math.atan2(left - right, 2 * (R.sockX + R.hipOut) * S);
     const lean = Math.max(-0.12, Math.min(0.12, this.accel * 0.02));
     const bank = Math.max(-0.22, Math.min(0.22, -this.yawRate * speed * 0.025));
-    this.pitch = ease(this.pitch, -slope + lean + 0.04 * g, 8, dt);
-    this.roll = ease(this.roll, tilt + bank, 8, dt);
+    this.pitch = ease(this.pitch, -slope + lean + 0.04 * g + 0.12 * fall, 8, dt);
+    this.roll = ease(this.roll, tilt + bank + 0.3 * fall * (this.seed > 50 ? 1 : -1), 8, dt);
     this.body.position.set(this.x, this.y + bob, this.z);
     this.body.rotation.set(this.pitch + rock, this.yaw, this.roll);
     this.body.updateWorldMatrix(true, false);
@@ -352,7 +411,10 @@ export class Runner {
     // The jaws: flexing idly; staring at you, slowly opening wide and snapping shut; running hot, agape and chattering.
     const k = now / 1000 + this.seed;
     const snap = frac(k / 2.6), wide = snap < 0.85 ? 0.85 * smooth(0, 0.85, snap) : 0;
-    const gape = this.alert > 0 ? 0.55 + 0.12 * Math.sin(k * 40) : look ? 0.04 + wide : 0.08 + 0.07 * Math.sin(k * 1.3) * Math.sin(k * 0.45);
+    let gape = this.alert > 0 ? 0.55 + 0.12 * Math.sin(k * 40) : look ? 0.04 + wide : 0.08 + 0.07 * Math.sin(k * 1.3) * Math.sin(k * 0.45);
+    // A bite: shut, held a moment. Dead: slack.
+    if (now / 1000 - this.snapAt < 0.3) gape = 0;
+    if (this.dead > 0) gape = 0.3 * fall;
     // Shutting is a snap, opening a slow spread.
     this.gape = ease(this.gape, gape, gape < this.gape ? 30 : 6, dt);
     this.jaws[0].rotation.y = this.gape;
@@ -360,7 +422,7 @@ export class Runner {
 
     if (this.arm) this.gun(dt, look, now);
 
-    const pulse = 0.75 + 0.25 * Math.sin(now / 170 + this.seed);
+    const pulse = (0.75 + 0.25 * Math.sin(now / 170 + this.seed)) * (1 - smooth(0, 1.5, this.dead));
     for (const e of this.eyes) e.emissiveIntensity = (e.userData.base as number) * pulse * (1 + 1.5 * this.alert);
   }
 
@@ -401,7 +463,7 @@ export class Runner {
     this.aimPitch += Math.max(-3 * dt, Math.min(3 * dt, pitch - this.aimPitch));
     // Firing: on target and raised, every FIRE_S.
     const t = now / 1000, on = look && this.raise > 0.9 && Math.abs(wrap(yaw - this.gunYaw)) < 0.06 && Math.abs(pitch - this.aimPitch) < 0.06;
-    if (on && t - this.firedAt > FIRE_S) this.firedAt = t;
+    if (this.auto && on && t - this.firedAt > FIRE_S) this.firedAt = t;
     // The recoil: back along the rails in RECOIL_BACK, held a moment, eased home by the buffers by RECOIL_HOME (s).
     const since = t - this.firedAt;
     const back = since < RECOIL_BACK ? since / RECOIL_BACK : 1 - smooth(RECOIL_HOLD, RECOIL_HOME, since);
@@ -411,7 +473,8 @@ export class Runner {
     else this.locked(wy, wz, elev);
     this.arm!.slide.position.z = -A.recoil * back;
     // The coils: a low glow, building through the last second before a shot, a flare as it fires.
-    const charge = on ? smooth(FIRE_S - 1, FIRE_S, t - this.firedAt) : 0;
+    this.chargeLevel = this.charging && this.dead <= 0 ? Math.min(1, this.chargeLevel + dt) : 0;
+    const charge = this.auto ? (on ? smooth(FIRE_S - 1, FIRE_S, t - this.firedAt) : 0) : smooth(0, 1, this.chargeLevel);
     for (const m of this.coils) m.emissiveIntensity = (m.userData.base as number) * (0.5 + 2.5 * charge + 10 * flash);
   }
 
@@ -450,6 +513,49 @@ export class Runner {
     arm.fore.rotation.set(-(fore - up), 0, 0);
     // three.js Rx: + turns +Z down, so an elevation is a negative angle. Never pitched up past the forearm.
     arm.rifle.rotation.set(-(Math.min(fore - FOREARM_CLEAR, elev) - fore), 0, 0);
+  }
+
+  /** Fires the gun now (`now` ms, as given to update): the recoil and the flash. */
+  fire(now: number) {
+    this.firedAt = now / 1000;
+    this.chargeLevel = 0;
+  }
+
+  /** Bites now (`now` ms, as given to update): its jaws snap shut. */
+  snap(now: number) {
+    this.snapAt = now / 1000;
+  }
+
+  /**
+   * What a shot from `o` along unit `d` meets of it within `max` m, as drawn: a weak point (index RP_*, shared/runner.ts)
+   * or its armour (-1): the hull, the head, the armed one's gun. A weak point the shot reaches before (or within
+   * WEAK_FIRST m behind) the armour round it takes the hit. Not the legs.
+   */
+  raycast(o: THREE.Vector3, d: THREE.Vector3, max: number, broken: number): { index: number; dist: number; normal: THREE.Vector3 } | null {
+    let best: { index: number; dist: number; normal: THREE.Vector3 } | null = null;
+    const test = (obj: THREE.Object3D, boxes: readonly HitBox[]) => {
+      obj.updateWorldMatrix(true, false);
+      _inv.copy(obj.matrixWorld).invert();
+      _ro.copy(o).applyMatrix4(_inv);
+      _rd.copy(o).add(d).applyMatrix4(_inv).sub(_ro);
+      let weak = -1, weakAt = Infinity, armour = Infinity;
+      const wn = new THREE.Vector3(), an = new THREE.Vector3();
+      for (const b of boxes) {
+        if (b.i >= 0 && broken & (1 << b.i)) continue;
+        const t = slab(b, _ro, _rd, best ? best.dist : max, _hn);
+        if (t < 0) continue;
+        if (b.i >= 0 && t < weakAt) (weakAt = t), (weak = b.i), wn.copy(_hn);
+        if (b.i < 0 && t < armour) (armour = t), an.copy(_hn);
+      }
+      const t = weak >= 0 && weakAt < armour + WEAK_FIRST ? weakAt : armour;
+      if (t === Infinity || (best && t >= best.dist)) return;
+      const n = (t === weakAt && weak >= 0 ? wn : an).transformDirection(obj.matrixWorld);
+      best = { index: t === weakAt && weak >= 0 ? weak : -1, dist: t, normal: n };
+    };
+    test(this.body, BODY_BOXES);
+    test(this.neck, HEAD_BOXES);
+    if (this.arm) test(this.arm.slide, GUN_BOXES);
+    return best;
   }
 
   /** The gun (the part that slides back as it fires), for looking at; null on a plain one. */
@@ -561,49 +667,90 @@ export class Prowl {
   }
 }
 
-const pending: RunnerKind[] = [];
-/** The debug menu's Runner: one more prowling round you, seen by you alone (src/debugMenu.ts). */
-export function summonRunner(kind: RunnerKind = 'plain') {
-  pending.push(kind);
-}
+/** Drawn and heard within this far (m). */
+const SHOW_R = 500;
 
-/** At most this many summoned at once; the oldest goes. */
-const MAX_RUNNERS = 4;
-
-/** The debug menu's runners in the desert, prowling round the player. */
+/**
+ * The runners as the server has them (server/runners.ts, 'bots' `r`: src/world/botFrames.ts runnersAt), each drawn by
+ * a `Runner`: its path, what it stares at, hot (alert) while it charges, its gun raised, charged and fired on the
+ * server's word (fire), its jaws snapping on a bite, slumping when it dies. The rifle tests shots against them
+ * (raycast).
+ */
 export class Runners {
-  private list: { view: Runner; prowl: Prowl }[] = [];
-  private eye = new THREE.Vector3();
-
+  private views = new Map<number, { view: Runner; frame: RunnerFrame; dead: boolean; snap: number }>();
+  private look = new THREE.Vector3();
   private scene: THREE.Object3D;
   private ground: Ground;
+  /** A foot came down (x, y, z), the body going `speed` m/s. */
+  onFootfall: (x: number, y: number, z: number, speed: number) => void = () => {};
+  /** It bit someone (its jaws' tips at x, y, z). */
+  onSnap: (x: number, y: number, z: number) => void = () => {};
+  /** It died, its body at (x, y, z). */
+  onDeath: (x: number, y: number, z: number) => void = () => {};
 
   constructor(scene: THREE.Object3D, ground: Ground) {
     this.scene = scene;
     this.ground = ground;
   }
 
-  update(dt: number, focus: { x: number; y: number; z: number }, camera: THREE.Camera) {
-    if (pending.length && !parts) void loadRunner();
-    while (pending.length && parts) {
-      const kind = pending.shift()!;
-      // In view, 22 m ahead, side on.
-      camera.getWorldDirection(_v).setY(0).normalize();
-      const x = focus.x + _v.x * 22, z = focus.z + _v.z * 22, yaw = Math.atan2(_v.x, _v.z) + Math.PI / 2;
-      const view = new Runner(this.ground, kind);
-      view.place(x, z, yaw);
-      this.scene.add(view.root);
-      this.list.push({ view, prowl: new Prowl(x, z, yaw) });
-      if (this.list.length > MAX_RUNNERS) this.list.shift()!.view.dispose();
+  /** Every frame: the runners as drawn now (`frames`), `now` ms (performance.now), seen from `focus`. */
+  update(frames: readonly RunnerFrame[], dt: number, now: number, focus: { x: number; z: number }) {
+    if (frames.length && !parts) void loadRunner();
+    if (!parts) return;
+    const seen = new Set<number>();
+    for (const f of frames) {
+      if (Math.hypot(f.x - focus.x, f.z - focus.z) > SHOW_R) continue;
+      seen.add(f.id);
+      let v = this.views.get(f.id);
+      if (!v) {
+        const view = new Runner(this.ground, f.armed ? 'armed' : 'plain');
+        view.auto = false;
+        view.place(f.x, f.z, f.yaw);
+        view.onFootfall = (x, y, z, speed) => this.onFootfall(x, y, z, speed);
+        this.scene.add(view.root);
+        // One already dead (we just came by): no death throes.
+        v = { view, frame: f, dead: f.dead > 0, snap: f.snap };
+        this.views.set(f.id, v);
+      }
+      v.frame = f;
+      const view = v.view;
+      view.alert = f.st === R_CHARGE ? 1 : 0;
+      view.charging = f.gun === 1;
+      view.dead = f.dead;
+      if (f.snap && f.snap !== v.snap) {
+        v.snap = f.snap;
+        view.snap(now);
+        this.onSnap(f.x + Math.sin(f.yaw) * 4, this.ground(f.x, f.z) + 1.6, f.z + Math.cos(f.yaw) * 4);
+      }
+      if (f.dead > 0 && !v.dead) {
+        v.dead = true;
+        this.onDeath(f.x, this.ground(f.x, f.z) + 2, f.z);
+      }
+      view.update(dt, f.x, f.z, f.yaw, f.look ? this.look.set(f.look.x, f.look.y, f.look.z) : null, now);
     }
-    if (!this.list.length) return;
-    const now = performance.now();
-    this.eye.set(focus.x, focus.y + 1.5, focus.z);
-    for (const { view, prowl } of this.list) {
-      prowl.update(dt, focus.x, focus.z, now);
-      const near = Math.hypot(prowl.x - focus.x, prowl.z - focus.z) < 40;
-      view.alert = prowl.speed > RUNNER_TROT ? 1 : 0;
-      view.update(dt, prowl.x, prowl.z, prowl.yaw, near && prowl.speed < RUNNER_TROT ? this.eye : null, now);
+    for (const [id, v] of this.views) {
+      if (seen.has(id)) continue;
+      v.view.dispose();
+      this.views.delete(id);
     }
+  }
+
+  /** Runner `id` fires its gun now: where its muzzle is (into `out`), or null if it isn't drawn. */
+  fire(id: number, now: number, out: THREE.Vector3): THREE.Vector3 | null {
+    const v = this.views.get(id);
+    if (!v) return null;
+    v.view.fire(now);
+    return v.view.muzzle(out);
+  }
+
+  /** The nearest live runner a shot from `o` along unit `d` meets within `max` m (src/rifle.ts). */
+  raycast(o: THREE.Vector3, d: THREE.Vector3, max: number): { runner: number; index: number; dist: number; normal: THREE.Vector3 } | null {
+    let best: { runner: number; index: number; dist: number; normal: THREE.Vector3 } | null = null;
+    for (const [id, v] of this.views) {
+      if (v.frame.dead > 0) continue;
+      const h = v.view.raycast(o, d, best ? best.dist : max, v.frame.broken);
+      if (h && (!best || h.dist < best.dist)) best = { runner: id, ...h };
+    }
+    return best;
   }
 }

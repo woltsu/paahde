@@ -37,6 +37,7 @@ import type { Guardians } from './world/guardians';
 import type { Drones } from './world/drones';
 import type { Jets } from './world/jets';
 import type { Harvesters } from './world/harvesters';
+import type { Runners } from './world/runner';
 import type { Brood } from './world/brood';
 import { bossFx } from './bosses';
 import { MINION } from '../shared/bosses.ts';
@@ -203,6 +204,8 @@ export class Rifle {
   remoteMuzzle: (id: number, out: THREE.Vector3) => THREE.Vector3 | null = () => null;
   /** The solar farms' nests' spiderlings (src/guardians.ts), to shoot at. */
   nest: Brood | null = null;
+  /** The runners (src/guardians.ts), to shoot at. */
+  runners: Runners | null = null;
   /** Plasma bolts in flight (the blaster's: shared/rifle.ts PLASMA_SPEED). Ours fly the bolt's path (plasmaAt) from the
    *  eye `o` along `d` and strike whatever they meet as drawn that frame; drawn from the muzzle (`off`: muzzle - eye,
    *  closing in over BOLT_MERGE s). Others' (`remote`) fly straight to where theirs landed ('zap'), then burst. */
@@ -509,11 +512,17 @@ export class Rifle {
     if (nest) dist = nest.dist;
     const boss = bossFx?.raycast(o, d, dist) ?? null;
     if (boss) dist = boss.dist;
-    const enemy = !!(boss || nest || crawler || drone || jet || hit);
+    const runner = this.runners?.raycast(o, d, dist) ?? null;
+    if (runner) dist = runner.dist;
+    const enemy = !!(runner || boss || nest || crawler || drone || jet || hit);
     if (!ground && !enemy && !last) return false;
     _e.copy(o).addScaledVector(d, dist);
     const ear = this.view.camera.position;
-    if (boss) {
+    if (runner) {
+      // Its plate throws sparks; a weak point (eyes, vents, the gun's core) bursts like glass.
+      zaps.burst(_e.x, _e.y, _e.z, runner.normal.x, runner.normal.y, runner.normal.z, runner.index >= 0 ? 14 : 10, runner.index >= 0 ? 1.2 : 1);
+      rifleSound.impact(runner.index >= 0 ? 'glass' : 'metal', _e, ear);
+    } else if (boss) {
       const lens = boss.index >= 0 && boss.index < MINION;
       zaps.burst(_e.x, _e.y, _e.z, boss.normal.x, boss.normal.y, boss.normal.z, lens ? 6 : 16, 1.4);
       if (lens) bossFx!.breakLocal(boss.boss, boss.index);
@@ -549,12 +558,12 @@ export class Rifle {
       const on = enemy ? 'enemy' : !ground ? 'air' : onFlat() || shelterSolid(_e.x, _e.y, _e.z) === true ? 'hard' : 'sand';
       this.heavyImpact(heavy, on, d, ear);
     }
-    const key = boss ? `b${boss.boss}`: nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
+    const key = runner ? `r${runner.runner}` : boss ? `b${boss.boss}`: nest ? `n${nest.index}` : crawler ? `h${crawler.harvester}` : jet ? `j${jet.jet}` : drone ? `d${drone.drone}` : hit ? `g${hit.walker}` : null;
     if (key) {
       kills.hit(key);
       this.reticle.hit();
     }
-    this.net.fire(from.x, from.y, from.z, _e.x, _e.y, _e.z, boss ? { b: boss.boss, bi: boss.index } : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
+    this.net.fire(from.x, from.y, from.z, _e.x, _e.y, _e.z, runner ? { r: runner.runner, ri: runner.index } : boss ? { b: boss.boss, bi: boss.index } : nest ? { n: nest.index } : crawler ? { h: crawler.harvester, hi: crawler.index } : jet ? { j: jet.jet } : drone ? { d: drone.drone } : hit ? { g: hit.walker, i: hit.index } : undefined);
     return true;
   }
 

@@ -122,12 +122,12 @@ export type ClientMsg =
   // Debug menu: bring the nearest guardian 90 m from you, a searchlight drone over you for a minute (by day too), or
   // a fixed-wing drone past you in about 15 s, a harvester crawling past (shared/harvester.ts), or a boss
   // (shared/bosses.ts) near you.
-  | { t: 'summon'; what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | BossKind }
+  | { t: 'summon'; what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | 'runner' | 'runnerArmed' | BossKind }
   // A shot of the gun in hand (shared/rifle.ts GUNS) from (x, y, z) to where it stopped, (ex, ey, ez). `g`/`i`: the client
   // found it hit weak point i of walker g (i -1: just its body); `d`: it hit drone d; `j`: fixed-wing
   // drone j (shared/jets.ts); `h`/`hi`: intake core hi of harvester h (shared/harvester.ts; hi -1: its hull);
   // `b`/`bi`: weak point bi of boss b (shared/bosses.ts; bi -1: its hull); `n`: a solar farm nest's spiderling n
-  // (shared/nest.ts). A hull's plate turns every gun but the graviton pistol (shared/rifle.ts bites): a hull hit only
+  // (shared/nest.ts); `r`/`ri`: weak point ri of runner r (shared/runner.ts RP_*; ri -1: its hull). A hull's plate turns every gun but the graviton pistol (shared/rifle.ts bites): a hull hit only
   // angers, or with that gun kills. The server checks the gun is in hand, its reach, the rate and that the shot ended at
   // what it claims, deals the gun's damage (the blaster's burst too, round the end point), and shows the shot to everyone
   // near ('zap').
@@ -140,7 +140,7 @@ export type ClientMsg =
   // A guardian's foot (client IK) came down on you (shared/guardians.ts FOOT_CRUSH_R); the server checks guardian `g`
   // is alive and near enough, and kills you ('died', cause 'guardian').
   | { t: 'stomped'; g: number }
-  | { t: 'fire'; x: number; y: number; z: number; ex: number; ey: number; ez: number; g?: number; i?: number; d?: number; j?: number; h?: number; hi?: number; b?: number; bi?: number; n?: number }
+  | { t: 'fire'; x: number; y: number; z: number; ex: number; ey: number; ez: number; g?: number; i?: number; d?: number; j?: number; h?: number; hi?: number; b?: number; bi?: number; n?: number; r?: number; ri?: number }
   // Throw the scrap item in hotbar slot `slot` (shared/throw.ts) from the eye (x, y, z) along unit (dx, dy, dz). `n`:
   // the client's count of its throws, echoed in the 'toss' so it can tie its own flying junk to the server's.
   | { t: 'throw'; slot: number; n: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }
@@ -386,10 +386,11 @@ export type ServerMsg =
   // f: [id, leg, x, y, z, left] per foot of each living guardian (shared/guardians.ts F_STRIDE): where the server has
   // planted it (y its sole), or is swinging it to with `left` s to go (0 planted). Planted feet block players.
   // n: the solar farms' nests' spiderlings near you (shared/nest.ts NEST_STRIDE: id, x, z, yaw, state, since, perch).
-  | { t: 'bots'; time: number; g: number[]; d: number[]; f?: number[]; n?: number[] }
-  // Guardian `g` fired laser bolt `id` from (x, y, z) along unit (dx, dy, dz) at server time `time`; it flies at
+  // r: the runners near you (shared/runner.ts RUNNER_STRIDE).
+  | { t: 'bots'; time: number; g: number[]; d: number[]; f?: number[]; n?: number[]; r?: number[] }
+  // Guardian `g` (or, with `r`, runner r's rail gun; g -1) fired laser bolt `id` from (x, y, z) along unit (dx, dy, dz) at server time `time`; it flies at
   // BOLT_SPEED (shared/guardians.ts) until it bursts ('boom': on the ground, a player, or out of range).
-  | { t: 'shot'; id: number; g: number; time: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }
+  | { t: 'shot'; id: number; g: number; r?: number; time: number; x: number; y: number; z: number; dx: number; dy: number; dz: number }
   | { t: 'boom'; id: number; x: number; y: number; z: number; ground: boolean }
   // Guardian `g` launched missile `id` at server time `time` on the arc from (x0, y0, z0) to the impact (x1, y1, z1),
   // landing `flight` seconds later (shared/missiles.ts missileAt); 'blast' when it does. Sent to everyone near the
@@ -432,4 +433,4 @@ export type ServerMsg =
   // `a`: any numbers it goes with), to everyone within BOSS_SEND_R.
   | { t: 'bossFx'; id: number; e: string; time: number; x: number; y: number; z: number; a?: number[] };
 
-export type DeathCause = 'heat' | 'guardian' | 'laser' | 'missile' | 'crawler' | 'worm' | 'stomp' | 'bomb' | 'queen' | 'harvester' | 'storm' | 'gas' | 'vortex';
+export type DeathCause = 'heat' | 'guardian' | 'laser' | 'missile' | 'crawler' | 'worm' | 'stomp' | 'bomb' | 'queen' | 'harvester' | 'runner' | 'storm' | 'gas' | 'vortex';
