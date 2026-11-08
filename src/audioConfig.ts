@@ -36,8 +36,8 @@
 //     delay, air or reverb, for small or close sounds (a crawler's feet, a guardian's horn). Played with no spot: direct;
 //   - 'panned': left/right panning and a 1/d fall-off from `ref` m out to `hear` m, by the module's own code;
 //   - 'music': the music bus, under the music slider and never muffled.
-// Continuous sounds driven every frame (wind, engines, drones' buzz, the grinder) are not events yet: their levels are
-// still in their own modules.
+// Continuous sounds driven every frame (wind, engines, drones' buzz, the grinder) are not events yet: the levels' beds
+// are in BEDS (below); the rest still keep their levels in their own modules.
 
 export type Route = 'direct' | 'placed' | 'spatial' | 'panned' | 'music';
 
@@ -324,6 +324,28 @@ export const EVENTS = {
   // Props' loops, at the nearest one in earshot.
   'terminal.hum': { sounds: ['terminal'], gain: 0.25, route: 'spatial', ref: 1.5, hear: 12, by: 'src/world/terminalSound.ts (the nearest net terminal, quiet: full within 1.5 m, gone by 12 m)' },
 } satisfies Record<string, EventDef>;
+
+// BEDS: the continuous synthesised beds of the levels, each part's level (linear, at volume 1, × the master slider; 1
+// is the part as built). Read every frame by the modules in `by`, so a change here (or live, `dbg.beds` with ?debug) is
+// heard at once. Measured offline: docs/audio.md "The datacenter's bed", "The beginning's fall".
+// - a datacenter bed (src/levels/datacenter/ambience.ts): `level` the whole bed; `fans` the air (filtered pink noise),
+//   `hum` the mains hum, `units` the cooling units' slow-beating rumble (in the datacenter: louder by the north wall),
+//   `ups` the UPS room's transformer (only in there), `chatter` the disk-seek ticks' peak (all × `level`).
+// - the fall (src/levels/beginning/sound.ts): `roar` and `groan` at full rumble (they grow with the beat, all the way
+//   in the ride), `boom` a jolt's peak, `chime` the station's two notes' peak, `pod` the pod opening's sounds' peaks.
+export interface DcBedDef { level: number; fans: number; hum: number; units: number; ups: number; chatter: number; by: string }
+export interface FallDef { roar: number; groan: number; boom: number; chime: number; pod: Record<'click' | 'clunk' | 'wake' | 'hiss' | 'servo' | 'thud', number>; by: string }
+
+export const BEDS: { datacenter: DcBedDef; beginning: DcBedDef; fall: FallDef } = {
+  datacenter: { level: 0.34, fans: 1, hum: 0.05, units: 1.1, ups: 1.3, chatter: 0.25, by: 'src/levels/datacenter/index.ts; at its door, low-passed: src/world/entrance.ts' },
+  // Aboard the ring the fans sit under the hall's recording ('beginning.hall'): quieter, the units an even rumble.
+  beginning: { level: 0.17, fans: 0.4, hum: 0.05, units: 0.3, ups: 0, chatter: 0.25, by: 'src/levels/beginning/index.ts' },
+  fall: {
+    roar: 0.55, groan: 0.33, boom: 0.9, chime: 0.05,
+    pod: { click: 0.55, clunk: 1.2, wake: 0.1, hiss: 0.22, servo: 0.12, thud: 1.1 },
+    by: 'src/levels/beginning/sound.ts',
+  },
+};
 
 export type EventId = keyof typeof EVENTS;
 

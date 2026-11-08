@@ -6,7 +6,8 @@ import * as THREE from 'three/webgpu';
 import { color, float, mix, mx_fractal_noise_float, mx_noise_float, positionWorld, smoothstep, step, vec3 } from 'three/tsl';
 import { BLOCK, DOOR, entrance } from '../../shared/levels/entrance.ts';
 import { audio } from '../audio.ts';
-import { BED, buildBed, type DcBed } from '../levels/datacenter/ambience.ts';
+import { buildBed, type DcBed } from '../levels/datacenter/ambience.ts';
+import { BEDS } from '../audioConfig.ts';
 
 /** The hum is heard from this far (m), and how loud it is at the door (× the bed inside). */
 const HEAR_R = 45;
@@ -87,7 +88,7 @@ export class EntranceView {
       this.quietSince = ctx.currentTime;
     }
     const k = on ? Math.max(0, 1 - d / HEAR_R) : 0;
-    this.bed.out.gain.setTargetAtTime(BED * AT_DOOR * k * k, ctx.currentTime, 0.3);
+    this.bed.out.gain.setTargetAtTime(BEDS.datacenter.level * AT_DOOR * k * k, ctx.currentTime, 0.3);
     this.lp!.frequency.setTargetAtTime(300 + 900 * k * k, ctx.currentTime, 0.3);
     // Out of earshot a while (faded out): its sources stop; coming near again builds it anew.
     if (k > 0) this.quietSince = ctx.currentTime;

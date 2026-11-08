@@ -30,7 +30,7 @@ import type { Stage, StageFrame } from '../stage.ts';
 import { bakeDataSliced, bakeMaps } from '../datacenter/bake.ts';
 import { makeMaterials } from '../datacenter/materials.ts';
 import { DATACENTER_ENV, DATACENTER_POST, datacenterEnvironment } from '../datacenter/environment.ts';
-import { BED, DatacenterAmbience } from '../datacenter/ambience.ts';
+import { DatacenterAmbience } from '../datacenter/ambience.ts';
 import { Pod } from './pod.ts';
 import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
@@ -51,8 +51,9 @@ export class BeginningStage implements Stage {
   readonly level = beginningLevel.id;
   readonly root = new THREE.Group();
   readonly ready = Promise.resolve();
-  /** The datacenter's bed, 6 dB down: aboard it sits under the fall (docs/audio.md "The beginning's fall"). */
-  readonly ambience = new DatacenterAmbience(BED * 0.5);
+  /** The datacenter's bed at the beginning's own levels (BEDS.beginning in src/audioConfig.ts): under the hall's
+   *  recording and the fall, its cooling units an even rumble all along the ring. */
+  readonly ambience = new DatacenterAmbience('beginning', () => 1);
   readonly fall = new FallSound();
   /** The ring hall's own bed (a recording, looped quietly). */
   readonly hall = new HallSound();

@@ -124,7 +124,8 @@ import { DesertStage } from './levels/desert';
 import { StageSwitch, type Stage } from './levels/stage';
 import { doorAt, level } from '../shared/levels.ts';
 import { setGround } from './ground.ts';
-import { BED, buildBed } from './levels/datacenter/ambience';
+import { buildBed } from './levels/datacenter/ambience';
+import { BEDS } from './audioConfig';
 import { datacenterLevel } from '../shared/levels/datacenter.ts';
 import { beginningLevel } from '../shared/levels/beginning.ts';
 import type { Storm } from '../shared/storm.ts';
@@ -503,7 +504,7 @@ net.onFace = (facing) => {
   orbit.pitch = 0;
 };
 levels.onBroken = () => { audio.suspendForRecovery(); showReload(TEXT.recovery.update); };
-if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed, BED }, fall: () => import('./levels/beginning/sound.ts') });
+if (location.search.includes('debug')) Object.assign((window as unknown as { dbg: object }).dbg, { levels, dcBed: { buildBed }, beds: BEDS, fall: () => import('./levels/beginning/sound.ts') });
 terrain.loading = true;
 let joined = false; // until the first welcome, net.me is the default spawn, not our saved position
 // ?spawn=crash / field: once joined, turn to face the machine or the scrap field we were put next to.

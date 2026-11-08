@@ -5,19 +5,18 @@
 // measures −29.9 LUFS integrated mid-hall, −28.4 by the cooling units, −29.2 in the UPS room, sample peak −9.3 dBFS at
 // volume 1 (rendered offline, BS.1770 K-weighting and gating: docs/audio.md "The datacenter's bed"): well under the −23
 // mix target, it is the level's whole soundscape. Through the shared ambience bed (src/audio.ts: master gain and
-// limiter); every gain ramps.
+// limiter); every gain ramps. Its levels, each part's, are BEDS in src/audioConfig.ts (the datacenter's, and the
+// beginning's copy of it aboard the ring), read every frame.
 import { audio } from '../../audio.ts';
+import { BEDS, type DcBedDef } from '../../audioConfig.ts';
 import type { ZoneId } from '../../../shared/levels/datacenter.ts';
 
-/** Bed level at volume 1 (the master slider scales it: 0.4 by default). */
-export const BED = 0.34;
-/** The cooling units' rumble at the north wall, and the UPS room's hum inside it (× BED's level). */
-const CRAC = 1.1;
-const UPS = 1.3;
+/** Which BEDS entry a bed plays by. */
+export type BedKey = 'datacenter' | 'beginning';
 /** Fade in and out on entering and leaving (s, a time constant). */
 const FADE = 0.4;
 
-export type DcBed = { out: GainNode; fans: GainNode; hum: GainNode; crac: GainNode; ups: GainNode; chatter: (when: number) => void; drift: GainNode; stop: () => void };
+export type DcBed = { out: GainNode; fans: GainNode; hum: GainNode; crac: GainNode; ups: GainNode; chatter: (when: number, peak: number) => void; drift: GainNode; stop: () => void };
 
 /** Pink noise (Kellet's filter), `seconds` long, looping cleanly enough under a lowpass. */
 function pinkBuffer(ctx: BaseAudioContext, seconds: number, brown = false): AudioBuffer {
@@ -42,8 +41,9 @@ function pinkBuffer(ctx: BaseAudioContext, seconds: number, brown = false): Audi
   return buf;
 }
 
-/** The graph, on any context (the game's, or an OfflineAudioContext to measure it), into `dest`. Starts silent. */
-export function buildBed(ctx: BaseAudioContext, dest: AudioNode): DcBed {
+/** The graph, on any context (the game's, or an OfflineAudioContext to measure it), into `dest`, its parts at `def`'s
+ *  levels (the whole bed starts silent: `out`). */
+export function buildBed(ctx: BaseAudioContext, dest: AudioNode, def: DcBedDef = BEDS.datacenter): DcBed {
   const out = ctx.createGain();
   out.gain.value = 0;
   out.connect(dest);
@@ -58,7 +58,7 @@ export function buildBed(ctx: BaseAudioContext, dest: AudioNode): DcBed {
   };
   // Fans: the air.
   const fans = ctx.createGain();
-  fans.gain.value = 1;
+  fans.gain.value = def.fans;
   const lp = ctx.createBiquadFilter();
   lp.type = 'lowpass';
   lp.frequency.value = 4000;
@@ -69,7 +69,7 @@ export function buildBed(ctx: BaseAudioContext, dest: AudioNode): DcBed {
   air.connect(hp).connect(lp).connect(fans).connect(drift);
   // Mains hum, quiet.
   const hum = ctx.createGain();
-  hum.gain.value = 0.05;
+  hum.gain.value = def.hum;
   hum.connect(drift);
   const oscs: OscillatorNode[] = [];
   for (const [f, g] of [[100, 1], [200, 0.45], [300, 0.12]] as const) {
@@ -114,7 +114,7 @@ export function buildBed(ctx: BaseAudioContext, dest: AudioNode): DcBed {
   }
   // Disk chatter: a few short ticks of band-passed noise.
   const tick = pinkBuffer(ctx, 0.05);
-  const chatter = (when: number) => {
+  const chatter = (when: number, peak: number) => {
     const n = 3 + Math.floor(Math.random() * 6);
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
@@ -130,7 +130,7 @@ export function buildBed(ctx: BaseAudioContext, dest: AudioNode): DcBed {
       s.connect(bp);
       s.start(t, Math.random() * 0.04, 0.008);
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(0.25, t + 0.001);
+      g.gain.linearRampToValueAtTime(peak, t + 0.001);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.008);
     }
   };
@@ -152,11 +152,21 @@ export class DatacenterAmbience {
   private chatterIn = 3;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
 
-  private readonly level: number;
+  private readonly key: BedKey;
+  /** How much of the units' rumble reaches the camera (0..1); by default the datacenter's, by its north wall. */
+  private readonly unitsAt: (cam: { x: number; z: number }) => number;
 
-  /** `level`: the bed's level at volume 1 (the beginning plays it quieter). */
-  constructor(level = BED) {
-    this.level = level;
+  /** `key`: its levels (BEDS in src/audioConfig.ts); `unitsAt`: where the cooling units are heard. */
+  constructor(key: BedKey = 'datacenter', unitsAt?: (cam: { x: number; z: number }) => number) {
+    this.key = key;
+    this.unitsAt = unitsAt ?? ((cam) => {
+      const north = Math.max(0, 1 - Math.max(0, 27.5 - cam.z) / 14);
+      return 0.25 + 0.75 * north * north;
+    });
+  }
+
+  private get def(): DcBedDef {
+    return BEDS[this.key];
   }
 
   start() {
@@ -164,8 +174,8 @@ export class DatacenterAmbience {
     clearTimeout(this.stopTimer);
     audio.onStart((ctx) => {
       if (!audio.ambience) return;
-      this.bed ??= buildBed(ctx, audio.ambience);
-      this.bed.out.gain.setTargetAtTime(this.on ? this.level : 0, ctx.currentTime, FADE);
+      this.bed ??= buildBed(ctx, audio.ambience, this.def);
+      this.bed.out.gain.setTargetAtTime(this.on ? this.def.level : 0, ctx.currentTime, FADE);
     });
   }
 
@@ -187,15 +197,19 @@ export class DatacenterAmbience {
     const ctx = audio.ctx, bed = this.bed;
     if (!ctx || !bed || !this.on || ctx.state !== 'running') return;
     this.t += dt;
-    const now = ctx.currentTime;
-    const north = Math.max(0, 1 - Math.max(0, 27.5 - cam.z) / 14);
-    bed.crac.gain.setTargetAtTime(zone === 'ups' ? 0.1 : CRAC * (0.25 + 0.75 * north * north), now, 0.3);
-    bed.ups.gain.setTargetAtTime(zone === 'ups' ? UPS : 0, now, 0.3);
+    const now = ctx.currentTime, d = this.def;
+    // Every part at its level now (an edit to BEDS is heard at once).
+    bed.out.gain.setTargetAtTime(d.level, now, FADE);
+    bed.fans.gain.setTargetAtTime(d.fans, now, 0.3);
+    bed.hum.gain.setTargetAtTime(d.hum, now, 0.3);
+    bed.crac.gain.setTargetAtTime(zone === 'ups' ? 0.1 : d.units * this.unitsAt(cam), now, 0.3);
+    bed.ups.gain.setTargetAtTime(zone === 'ups' ? d.ups : 0, now, 0.3);
     // ±1 dB, slowly.
     bed.drift.gain.setTargetAtTime(10 ** ((Math.sin(this.t * 0.21) * 0.6 + Math.sin(this.t * 0.083) * 0.4) / 20), now, 0.5);
-    if (zone === 'hall' && (this.chatterIn -= dt) <= 0) {
+    // Disk chatter among the racks (aboard the ring they are everywhere).
+    if ((zone === 'hall' || this.key === 'beginning') && (this.chatterIn -= dt) <= 0) {
       this.chatterIn = 4 + Math.random() * 9;
-      bed.chatter(now + 0.05);
+      bed.chatter(now + 0.05, d.chatter);
     }
   }
 }

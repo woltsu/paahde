@@ -5,11 +5,10 @@
 // samples; through the shared ambience bed (src/audio.ts: master gain and limiter), every gain ramped. Levelled offline
 // like the datacenter's (docs/audio.md "The beginning's fall"): `?debug` exposes `dbg.fall` (buildFall) to repeat it.
 import { audio } from '../../audio.ts';
+import { BEDS } from '../../audioConfig.ts';
 
-/** The roar at full (the ride) at volume 1 (× the master slider, 0.4 by default). */
-export const ROAR = 0.55;
-/** The chime's two notes' peak. */
-const CHIME = 0.05;
+/** Its levels: BEDS.fall in src/audioConfig.ts (roar, groan, boom, chime, the pod's), read as each sound plays. */
+const L = () => BEDS.fall;
 /** A time constant for every level change (s). */
 const EASE = 0.5;
 
@@ -17,8 +16,6 @@ const EASE = 0.5;
 export type PodCue = 'click' | 'clunk' | 'wake' | 'hiss' | 'thud';
 export type Fall = { roar: GainNode; groan: GainNode; boom: (when: number, size: number) => void; chime: (when: number) => void;
   pod: (cue: PodCue, when: number) => void; stop: () => void };
-/** The pod's sounds' peaks (docs/audio.md "The beginning's fall"). */
-const POD_LEVEL = { click: 0.55, clunk: 1.2, wake: 0.1, hiss: 0.22, servo: 0.12, thud: 1.1 };
 
 /** Brown noise, `seconds` long (it loops under a lowpass). */
 function brown(ctx: BaseAudioContext, seconds: number): AudioBuffer {
@@ -84,7 +81,7 @@ export function buildFall(ctx: BaseAudioContext, dest: AudioNode): Fall {
     f.frequency.value = 110;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, when);
-    g.gain.linearRampToValueAtTime(0.9 * size, when + 0.03);
+    g.gain.linearRampToValueAtTime(L().boom * size, when + 0.03);
     g.gain.exponentialRampToValueAtTime(0.0001, when + 1.8);
     s.connect(f).connect(g).connect(dest);
     s.start(when);
@@ -97,7 +94,7 @@ export function buildFall(ctx: BaseAudioContext, dest: AudioNode): Fall {
       o.frequency.value = f;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, when + at);
-      g.gain.linearRampToValueAtTime(CHIME, when + at + 0.01);
+      g.gain.linearRampToValueAtTime(L().chime, when + at + 0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, when + at + 1.1);
       o.connect(g).connect(dest);
       o.start(when + at);
@@ -144,19 +141,19 @@ export function buildFall(ctx: BaseAudioContext, dest: AudioNode): Fall {
   /** The pod opening: the relay clicking home, the cover shutting, the pod waking (a chirp up), the seal's hiss with the
    *  hatch's motor under it, the hatch coming down on its stops. */
   const pod = (cue: PodCue, when: number) => {
-    const L = POD_LEVEL;
+    const P = L().pod;
     if (cue === 'click') {
-      burst(white, when, 'highpass', 2500, 0.7, L.click, 0.002, 0.04);
-      tone(when, 'triangle', 1900, 1500, L.click * 0.3, 0.002, 0.06);
+      burst(white, when, 'highpass', 2500, 0.7, P.click, 0.002, 0.04);
+      tone(when, 'triangle', 1900, 1500, P.click * 0.3, 0.002, 0.06);
     } else if (cue === 'clunk') {
-      burst(hit, when, 'lowpass', 420, 0.8, L.clunk, 0.004, 0.22);
-      tone(when, 'sine', 150, 80, L.clunk * 0.5, 0.004, 0.18);
-      burst(white, when + 0.01, 'bandpass', 1800, 2, L.click * 0.5, 0.002, 0.05);
+      burst(hit, when, 'lowpass', 420, 0.8, P.clunk, 0.004, 0.22);
+      tone(when, 'sine', 150, 80, P.clunk * 0.5, 0.004, 0.18);
+      burst(white, when + 0.01, 'bandpass', 1800, 2, P.click * 0.5, 0.002, 0.05);
     } else if (cue === 'wake') {
-      tone(when, 'sine', 420, 880, L.wake, 0.03, 0.3);
-      tone(when + 0.16, 'sine', 660, 1320, L.wake * 0.8, 0.03, 0.4);
+      tone(when, 'sine', 420, 880, P.wake, 0.03, 0.3);
+      tone(when + 0.16, 'sine', 660, 1320, P.wake * 0.8, 0.03, 0.4);
     } else if (cue === 'hiss') {
-      const f = burst(white, when, 'bandpass', 4200, 0.9, L.hiss, 0.03, 1.3);
+      const f = burst(white, when, 'bandpass', 4200, 0.9, P.hiss, 0.03, 1.3);
       f.frequency.setValueAtTime(5200, when);
       f.frequency.exponentialRampToValueAtTime(2400, when + 1.3);
       // The hatch's motor, all the way down (pod.ts HATCH).
@@ -170,15 +167,15 @@ export function buildFall(ctx: BaseAudioContext, dest: AudioNode): Fall {
       lp.frequency.value = 380;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, when + 0.08);
-      g.gain.linearRampToValueAtTime(L.servo, when + 0.35);
-      g.gain.setValueAtTime(L.servo, when + 1.3);
+      g.gain.linearRampToValueAtTime(P.servo, when + 0.35);
+      g.gain.setValueAtTime(P.servo, when + 1.3);
       g.gain.linearRampToValueAtTime(0.0001, when + 1.6);
       o.connect(lp).connect(g).connect(dest);
       o.start(when + 0.08);
       o.stop(when + 1.7);
     } else {
-      burst(hit, when, 'lowpass', 260, 0.7, L.thud, 0.005, 0.5);
-      burst(white, when, 'bandpass', 900, 1.5, L.click * 0.4, 0.003, 0.12);
+      burst(hit, when, 'lowpass', 260, 0.7, P.thud, 0.005, 0.5);
+      burst(white, when, 'bandpass', 900, 1.5, P.click * 0.4, 0.003, 0.12);
     }
   };
   const stop = () => {
@@ -227,8 +224,8 @@ export class FallSound {
     const ctx = audio.ctx, f = this.fall;
     if (!ctx || !f || !this.on || ctx.state !== 'running') return;
     const now = ctx.currentTime;
-    f.roar.gain.setTargetAtTime(ROAR * rumble * rumble, now, EASE);
-    f.groan.gain.setTargetAtTime(ROAR * 0.6 * rumble, now, EASE);
+    f.roar.gain.setTargetAtTime(L().roar * rumble * rumble, now, EASE);
+    f.groan.gain.setTargetAtTime(L().groan * rumble, now, EASE);
     if (chiming && (this.chimeIn -= dt) <= 0) {
       this.chimeIn = 5;
       f.chime(now + 0.05);

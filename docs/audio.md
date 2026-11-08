@@ -125,19 +125,19 @@ The datacenter (docs/levels/datacenter.md) is a synthesised bed, `src/levels/dat
 any `BaseAudioContext`. It was levelled by rendering 20 s of it offline in Chrome (`OfflineAudioContext`, 48 kHz, mono
 into the BS.1770 K-weighting as two `IIRFilterNode`s, 400 ms blocks, absolute and relative gating, +3 dB for the two
 equal channels it plays on), at master volume 0.4, chatter every 4 s. With `?debug` the page exposes `dbg.dcBed`
-(`buildBed`, `BED`) to repeat it. Results with `BED` 0.34: −29.9 LUFS mid-hall, −28.4 by the cooling units, −29.2 in
+(`buildBed`; its levels are `BEDS.datacenter` in src/audioConfig.ts, `dbg.beds`) to repeat it. Results with the bed's level 0.34: −29.9 LUFS mid-hall, −28.4 by the cooling units, −29.2 in
 the UPS room; sample peak −9.3 dBFS at volume 1. This is the bed alone, not the captured post-limiter mix; footsteps and
 music add to it. Near the desert door the same bed plays low-passed, at most 0.45 of that level.
 
 ## The beginning's fall (28 October 2026)
 
 The beginning (docs/levels/tutorial.md) plays the datacenter's bed and over it `src/levels/beginning/sound.ts`
-`buildFall`: a low roar and a groan set by how far you are (`rumble`, the beat; `ROAR × rumble²` and `ROAR × 0.6 ×
-rumble`), a boom at the hall's jolt, a two-note chime every 5 s in the bay corridor. Measured as the datacenter's bed was
+`buildFall`: a low roar and a groan set by how far you are (`rumble`, the beat; `roar × rumble²` and `groan ×
+rumble`, `BEDS.fall` in src/audioConfig.ts), a boom at the hall's jolt, a two-note chime every 5 s in the bay corridor. Measured as the datacenter's bed was
 (offline, 48 kHz, K-weighted, gated, +3 dB for the two channels; `?debug` `dbg.fall()` loads it), at master volume 0.4,
 the fall alone: −48.6 LUFS at rumble 0.3 (the control room), −38.9 at 0.55 with the chime (the bay corridor), −29.5 at
 1 (the ride down); sample peak −8.2 dBFS at volume 1 with the boom and a chime. Aboard, the datacenter's bed plays
-6 dB down (`BED × 0.5`, about −36: at full level it drowned the station; 1 November 2026), so the ride sums to about
+6 dB down (`BEDS.beginning.level` 0.17, about −36: at full level it drowned the station; 1 November 2026), so the ride sums to about
 −28.6: under the −23 target, a bed and not a scene.
 
 The pod opening (`pod(cue)`: the relay's click, the cover's clunk, the wake chirp, the seal's hiss over the hatch's
@@ -160,6 +160,15 @@ an iTunSMPB tag that ffmpeg does not apply, so they were trimmed by hand to the 
 decodes back to exactly that, so the whole buffer loops without a seam. Event `terminal.hum` (gain 0.25, 'spatial': full
 within 1.5 m, 1/d out, faded to nothing over the last quarter of its 12 m), played by `src/world/terminalSound.ts` at the
 nearest net terminal only (its panner following the terminal), crossfading when another becomes the nearest.
+
+## Bed levels in the config (8 November 2026)
+
+The levels' synthesised beds keep every part's level in `BEDS` (src/audioConfig.ts), read every frame, so a change is
+heard at once (with `?debug`, `dbg.beds` edits them live): the datacenter's bed and the beginning's copy of it
+(`level`, `fans`, `hum`, `units`, `ups`, `chatter`), and the fall (`roar`, `groan`, `boom`, `chime`, the pod's cues).
+Aboard the ring the fans were turned down (fans 1 → 0.4, about −8 dB) and the cooling units' rumble, which the
+datacenter places by its north wall and so ran at full all along the ring, is an even 0.3 (−11 dB): the hall's recording
+is the bed there now. Not in the audio workbench yet (it edits events and trims).
 
 ## The heavy guns (2 November 2026)
 
