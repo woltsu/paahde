@@ -145,6 +145,13 @@ motor, the hatch's thud; src/levels/beginning/pod.ts times them over 3.2 s), the
 −31.1 LUFS integrated over 4.5 s at master volume 0.4, momentary at most −28.0 (the clunk and the hiss), true peak
 −11.2 dBTP (−3.3 at volume 1). One-shots a little over the bay's bed, as foley should be.
 
+## The ring hall's bed (8 November 2026)
+
+"Space hall ambience" (`space-hall-ambience.mp3`, by Veikko Suhonen): 28.5 s, levelled from −18.7 to −23.5 LUFS
+integrated (−4.3 dB, true peak −4.9 dBTP), re-encoded gapless so its whole buffer loops without a seam. Event
+`beginning.hall` (gain 0.3: ~−34 LUFS at volume 1, well under the mix), looped by `src/levels/beginning/hallSound.ts`
+while you're in the beginning, faded in and out over ~1 s, on top of the datacenter's bed and the fall.
+
 ## The heavy guns (2 November 2026)
 
 `src/gunSound.ts` (the blaster's shot, burst and recharge; the graviton pistol's shot and impact) was levelled with the

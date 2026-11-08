@@ -93,6 +93,8 @@ export const SAMPLES = {
   'bike-crash': { file: 'bike-crash.mp3', lufs: -23.5, trim: 0, from: 'mixed for the game from CC0 sounds' },
   // Music (src/music.ts): 44.1 kHz, loop ends are exact sample counts.
   'desert-ambience': { file: 'desert-ambience.mp3', lufs: -23.4, trim: 0, loop: [0, 112], from: 'Veikko Suhonen, for dadajam' },
+  // The beginning's ring hall (src/levels/beginning/hallSound.ts): a bed, its whole length looped (gapless encode).
+  'space-hall-ambience': { file: 'space-hall-ambience.mp3', lufs: -23.5, trim: 0, from: 'Veikko Suhonen, for dadajam' },
   'combat-drums': { file: 'combat-drums.mp3', lufs: -23.4, trim: 0, loop: [0, 1333418 / 44100], from: 'harrisonlace, Cinematic drum loop Ares 127 (CC0)' },
   // Levelled hotter, to stand out over the guns. Bars of 1.6 s: the intro and part A, then part B loops.
   'epic-battle': { file: 'epic-battle.mp3', lufs: -20.0, trim: 0, loop: [9 * 1.6, 1764000 / 44100], from: 'Veikko Suhonen, for dadajam' },
@@ -315,6 +317,8 @@ export const EVENTS = {
   'music.combat': { sounds: ['combat-drums'], gain: 0.55, route: 'music', by: 'src/music.ts (something is after you)' },
   'music.epic': { sounds: ['epic-battle'], gain: 0.7, route: 'music', by: 'src/music.ts (a boss, a guardian close by)' },
   'music.death': { sounds: ['death'], gain: 0.55, route: 'music', by: 'src/music.ts (you died)' },
+  // Level beds, looped while you're in the level.
+  'beginning.hall': { sounds: ['space-hall-ambience'], gain: 0.3, route: 'direct', by: 'src/levels/beginning/hallSound.ts (the ring hall, quiet under everything)' },
 } satisfies Record<string, EventDef>;
 
 export type EventId = keyof typeof EVENTS;

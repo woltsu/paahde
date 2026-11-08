@@ -34,6 +34,7 @@ import { BED, DatacenterAmbience } from '../datacenter/ambience.ts';
 import { Pod } from './pod.ts';
 import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
+import { HallSound } from './hallSound.ts';
 import { Ride } from './ride.ts';
 import { StuckHints } from './stuck.ts';
 
@@ -53,6 +54,8 @@ export class BeginningStage implements Stage {
   /** The datacenter's bed, 6 dB down: aboard it sits under the fall (docs/audio.md "The beginning's fall"). */
   readonly ambience = new DatacenterAmbience(BED * 0.5);
   readonly fall = new FallSound();
+  /** The ring hall's own bed (a recording, looped quietly). */
+  readonly hall = new HallSound();
   /** How hard it shakes now (src/camera.ts rumble). */
   rumble = 0;
   private props: Props;
@@ -137,6 +140,7 @@ export class BeginningStage implements Stage {
     setLevelShade(DATACENTER_ENV.handShade);
     this.ambience.start();
     this.fall.start();
+    this.hall.start();
     this.was = null;
   }
 
@@ -144,6 +148,7 @@ export class BeginningStage implements Stage {
     this.root.visible = false;
     this.ambience.stop();
     this.fall.stop();
+    this.hall.stop();
     this.stuck.clear();
     this.rumble = 0;
   }
@@ -228,6 +233,7 @@ export class BeginningStage implements Stage {
     const zone = zoneAt(BEGINNING, cam.x, cam.z);
     this.box.pool.update(f.dt, cam, zone);
     this.ambience.update(f.dt, cam, null);
+    this.hall.update();
     this.fall.update(f.dt, this.rumble, beat === 6);
   }
 }
