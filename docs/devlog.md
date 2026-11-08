@@ -3404,3 +3404,8 @@ The screens then went white and took "VT100 Regular" (Karl Stange, CC BY 3.0; `p
 readme). The face is proportional and a pixel font (16 of its pixels to the em), so each glyph is drawn alone, centred in
 its cell, at 32 px: 2 canvas pixels to each of its own and its widest glyph exactly a 16 px cell; the canvas is sized
 from the grid (cells as tall as the screen's shape asks) so nothing smears between pixels.
+
+Then the glass became glossy (a black, lit standard material with the tube as its emission: the sun's highlight and the
+sky's reflection on its bulge, and a faint fixed glare up on its left), and the default face became "Glass TTY VT220"
+(Viacheslav Slavinsky, public domain; 20 of its pixels to the em, monospaced, drawn at 40 px in 20 px cells); the faces
+are a table (`FACES`), `face: 'vt100'` keeps the previous one.

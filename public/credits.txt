@@ -16,6 +16,11 @@ VT100 Regular (font)
   (https://fontstruct.com). Unchanged, with its archive's license and readme. The net terminals' screens.
   Files: fonts/vt100/vt100-regular.otf.woff2, fonts/vt100/license.txt, fonts/vt100/readme.txt
 
+Glass TTY VT220 (font)
+  By Viacheslav Slavinsky (https://github.com/svofski/glasstty), released into the public domain under the
+  Unlicense (https://unlicense.org). Converted from TTF to WOFF2. The net terminals' screens (their default face).
+  File: fonts/glasstty/glass-tty-vt220.woff2
+
 Junkyard Props (3D model)
   This work is based on "Junkyard Props"
   (https://sketchfab.com/3d-models/junkyard-props-37343a1b386f4d75879be93319dbb717)
