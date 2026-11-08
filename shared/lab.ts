@@ -9,6 +9,7 @@
 //   parts      x 24..33, z 8..38: 11 parts (rows, a name plate left of each) x 4 tiers (columns, tier plates at z 5)
 //   tools+gear x -24 down to -39, z 8 on: the grinder, then every gear kind, broken with every slot empty, 4 a row
 //   machines   z 50 / 70 / 90: the jet engine in six seeds, then the other kinds, each with its name plate in front
+//   terminal   (-4, 17): a net terminal on a stand (src/world/netTerminal.ts), its screen toward the spawn
 // The pickups come back at once when taken (server/loot.ts), so a table never runs out.
 import type { CrashSite } from './crash.ts';
 import { GEAR, GEAR_KINDS } from './gear.ts';
@@ -38,6 +39,8 @@ const at = (lx: number, lz: number) => ({ x: LAB_AT.x + lx, z: LAB_AT.z + lz });
 /** Where a new player appears, and the point they face. */
 export const LAB_SPAWN = at(0, 12);
 export const LAB_LOOK = at(0, FIRST_ROW);
+/** The net terminal (src/world/netTerminal.ts) on its stand, turned to face the spawn. */
+export const LAB_TERMINAL = { ...at(-4, 17), facing: Math.atan2(0 - -4, 12 - 17) };
 
 let cache: CrashSite[] | null = null;
 
@@ -105,6 +108,7 @@ export function labPlates(): LabPlate[] {
   }
   PART_IDS.forEach((part, r) => out.push({ text: TEXT.parts[part], ...at(20.5, 8 + r * 3), w: 2.6 }));
   TIERS.forEach((tier, c) => out.push({ text: TEXT.tiers[tier], ...at(24 + c * 3, 5), w: 2.6 }));
+  out.push({ text: 'net terminal', x: LAB_TERMINAL.x, z: LAB_TERMINAL.z - 1.1, w: 2.2 });
   labItems().filter((it) => it.plate).forEach((it) => {
     out.push({ text: ITEMS[it.kind]?.label ?? it.kind, x: it.x, z: it.z + 1.3, w: 2.6 });
   });

@@ -2,7 +2,8 @@
 // on the floor, readable from the spawn side. Dev-only, so their words are composed here (docs/text.md).
 import * as THREE from 'three/webgpu';
 import { heightAt } from '../../shared/terrain.ts';
-import { labPlates } from '../../shared/lab.ts';
+import { LAB_TERMINAL, labPlates } from '../../shared/lab.ts';
+import { NetTerminal } from './netTerminal.ts';
 
 function plate(text: string, w: number): THREE.Mesh {
   const c = document.createElement('canvas');
@@ -35,4 +36,19 @@ export function addLabPlates(scene: THREE.Object3D) {
     m.position.set(p.x, heightAt(p.x, p.z) + 0.06, p.z);
     scene.add(m);
   }
+}
+
+/** The lab's net terminal on a dark stand (shared/lab.ts LAB_TERMINAL); the caller updates it every frame. */
+export function addLabTerminal(scene: THREE.Object3D): NetTerminal {
+  const { x, z, facing } = LAB_TERMINAL;
+  const y = heightAt(x, z);
+  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.74, 0.9), new THREE.MeshStandardNodeMaterial({ color: 0x3a3d42, roughness: 0.7 }));
+  stand.position.set(x, y + 0.37, z);
+  stand.rotation.y = facing;
+  stand.castShadow = stand.receiveShadow = true;
+  const t = new NetTerminal({ seed: 1 });
+  t.object.position.set(x, y + 0.74, z);
+  t.object.rotation.y = facing;
+  scene.add(stand, t.object);
+  return t;
 }

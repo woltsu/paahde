@@ -3382,3 +3382,14 @@ The rack fields were then made 600 m long (everything after them 480 m further r
 behind you trail 30 m back and fade instead of switching off at your heels.
 Then the lights-out and the lamp posts went; the ceiling came down to 36 m; trays over the rows, spines along the
 islands and gantries at half height on pillars every 90 m (docs/levels/ring.md) give the hall its industrial structure.
+
+## The net terminal: a screen that streams the game's own code
+
+A reusable prop for consoles anywhere (`src/world/netTerminal.ts`): an old beige mainframe terminal in the spirit of the
+late-70s machines, a deep CRT with a raised bezel on a plinth and a wedge keyboard (`tools/blender/terminal.py`,
+`public/models/terminal.glb`, 3.5k tris). Its glass is the game's, not the model's: a bulged plane in the bezel whose
+canvas types out code in bursts, pauses and slow hand-typed lines, coloured as phosphor in TSL. The code is whatever
+script the page itself loaded (from resource timing, re-fetched from the HTTP cache), so in a build it is our own
+minified bundle and in dev Vite's transformed modules; it falls back to its own functions' source. `CodeScreen` alone
+fits any other model's screen. One stands in the lab facing the spawn.
+
