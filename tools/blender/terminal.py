@@ -10,9 +10,9 @@ Writes public/models/terminal_console.glb (object `terminal_console`, the consol
 
 The console: a 1970s video terminal in shiny dark metal, monitor and keyboard one body: its side profile runs from the
 keyboard deck's front edge up the monitor's face, over the flat top and down the sloping back. A glossy black hood round
-the big screen (a flat lip, then sloping in to the tube), brow, cheeks and chin round the hood, an orange stripe and a
-plate of lamps on the chin, vents on the back's slope, a groove and an orange line along each side; on the deck a black
-key well (main block, numpad, space bar, a few orange keys, a row of status lamps).
+the big screen (a flat lip, then sloping in to the tube), brow, cheeks and chin round the hood, a plate of lamps and a
+knob on the chin, vents on the back's slope, a groove along each side; on the deck a black key well (main block, numpad,
+space bar, all grey, a row of status lamps).
 
 The compact: a deep CRT housing on a plinth: the front block with a raised bezel round the tube's dark recess (a badge, two knobs and
 a power lamp on its deep bottom bar, vent slots on top), the tube's tapered back with its rear plate; in front a wedge
@@ -43,8 +43,6 @@ MATERIALS = {
     'key_brown': (0x6e5c48, 0.0, 0.5, 0),
     'EmitLamp': (0x7dff8a, 0.0, 0.4, 3),
     'EmitLampRed': (0xff5a3c, 0.0, 0.4, 3),
-    'key_accent': (0xd9772e, 0.0, 0.45, 0),
-    'accent': (0xc8692a, 0.1, 0.45, 0),
     # the console's shiny dark metal
     'metal_dark': (0x3b3f45, 0.85, 0.28, 0),
     'metal_black': (0x15171a, 0.7, 0.18, 0),
@@ -118,7 +116,7 @@ def build_console(mb, rng):
     prof = [(y0, 0.0), (0.44, 0.0), (0.47, 0.27), (0.33, C_TOP), (C_FRONT, C_TOP), (C_FRONT, h1 + 0.03), (y1, h1),
             (y0, h0)]
     rounded_loft(mb, [[(x, y, z) for y, z in prof] for x in (-C_HW, C_HW)], 'metal_dark', 0.014)
-    # Vents on the back's slope; a groove and an accent line along each side.
+    # Vents on the back's slope; a groove along each side.
     tilt = math.atan2(0.14, C_TOP - 0.27)
     for k in range(8):
         t = 0.25 + k * 0.07
@@ -126,7 +124,6 @@ def build_console(mb, rng):
         mb.box((0.4, 0.012, 0.004), (0, y + 0.0016, z + 0.0006), 'metal_groove', rot=(tilt, 0, 0))
     for sx in (-1, 1):
         mb.box((0.004, 0.42, 0.012), (sx * (C_HW + 0.0005), 0.15, 0.42), 'metal_groove')
-        mb.box((0.004, 0.8, 0.006), (sx * (C_HW + 0.0005), -0.02, 0.025), 'accent')
 
     # The frame round the hood: brow, chin, cheeks, from the body's face (sunk 2 mm) out to the lip; the chin's foot
     # sinks into the deck.
@@ -145,9 +142,8 @@ def build_console(mb, rng):
                     rounded(0, C_SCREEN_Z, C_SCREEN_W / 2 + 0.008, C_SCREEN_H / 2 + 0.008, 0.03, C_TUBE),
                     rounded(0, cz, hw + 0.004, hh + 0.004, 0.05, C_TUBE)], 'metal_black')
     mb.box((2 * hw - 0.02, 0.012, 2 * hh - 0.02), (0, C_TUBE + 0.005, cz), 'tube_black')
-    # The chin: an accent stripe across, a black plate on the right with its lamps, a knob on the left.
+    # The chin: a black plate on the right with its lamps, a knob on the left.
     yf = C_LIP - 0.001
-    mb.box((2 * C_HW - 0.06, 0.003, 0.006), (0, yf, hb - 0.014), 'accent')
     mb.box((0.14, 0.004, 0.026), (0.19, yf, hb - 0.04), 'metal_black', bevel=0.003)
     for k, m in enumerate(('EmitLamp', 'EmitLamp', 'EmitLampRed')):
         mb.box((0.016, 0.004, 0.007), (0.16 + k * 0.03, yf - 0.002, hb - 0.04), m)
@@ -163,10 +159,9 @@ def build_console(mb, rng):
         mb.box((w, dd, 0.014), (x, y, top(y) + 0.006), mat, rot=(slope, 0, 0), bevel=0.0025)
 
     step, row0 = 0.034, y0 + 0.072
-    accents = ((0, 0), (2, 11), (3, 11))
     for r in range(4):  # the main block, each row offset a little
         for c in range(12):
-            key(-0.255 + 0.008 * r + c * step, row0 + r * 0.036, 0.03, 'key_accent' if (r, c) in accents else 'key_grey')
+            key(-0.255 + 0.008 * r + c * step, row0 + r * 0.036, 0.03, 'key_grey')
     for r in range(4):  # the numpad
         for c in range(3):
             key(0.185 + c * step, row0 + r * 0.036, 0.03, 'key_grey')

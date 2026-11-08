@@ -3409,3 +3409,6 @@ Then the glass became glossy (a black, lit standard material with the tube as it
 sky's reflection on its bulge, and a faint fixed glare up on its left), and the default face became "Glass TTY VT220"
 (Viacheslav Slavinsky, public domain; 20 of its pixels to the em, monospaced, drawn at 40 px in 20 px cells); the faces
 are a table (`FACES`), `face: 'vt100'` keeps the previous one.
+
+Later the console's orange went (the chin's stripe, the side lines, the three keys): plain dark metal, grey keys, only
+the status lamps lit.
