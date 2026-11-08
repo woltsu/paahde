@@ -16,7 +16,7 @@ import { BossFx } from '../bosses.ts';
 import { TeardownView } from '../teardown/teardown.ts';
 import { Sky } from '../world/sky.ts';
 import { Terrain } from '../world/terrain.ts';
-import { addLabPlates, addLabTerminal } from '../world/labPlates.ts';
+import { addLabPlates, addLabTerminals } from '../world/labPlates.ts';
 import type { NetTerminal } from '../world/netTerminal.ts';
 import { labFloor } from '../world/sandMaterial.ts';
 import { PodsView } from '../world/pods.ts';
@@ -84,8 +84,8 @@ export class DesertStage implements Stage {
   /** Its post profile: DESERT_POST, then as it was when it last left (the art bench's tuning survives a visit inside). */
   private profile = DESERT_POST;
   private post: Post | null = null;
-  /** The lab's net terminal (only in the lab). */
-  private labTerminal: NetTerminal | null = null;
+  /** The lab's net terminals (only in the lab). */
+  private labTerminals: NetTerminal[] = [];
   /** Arriving (behind the switch's cover): the terrain's layout round us isn't in yet (`terrain`), then the dune
    *  shadows aren't drawn round us; `done` shows the desert. */
   private arriving: { terrain: boolean; done: () => void } | null = null;
@@ -105,7 +105,7 @@ export class DesertStage implements Stage {
     if (LAB) {
       labFloor(); // the dev test lab (shared/lab.ts): a plain floor with name plates
       addLabPlates(root);
-      d.labTerminal = addLabTerminal(root);
+      d.labTerminals = addLabTerminals(root);
     }
     await slice();
     await slice();
@@ -193,7 +193,7 @@ export class DesertStage implements Stage {
     this.scrap.update(focus);
     this.crashSites.update(focus);
     this.pods.update(f.time);
-    this.labTerminal?.update(f.dt, camera.position);
+    for (const t of this.labTerminals) t.update(f.dt, camera.position);
     this.machines.update(focus);
     this.wrecks.update(focus);
     // The terrain casts into the shadow maps only near the underground places it roofs (src/world/heightShadow.ts does the dunes).

@@ -259,12 +259,14 @@ Everything built is shared, and anyone can take a building down.
   by the sky or a shelter's fill, by where it stands; materials `src/world/glbMaterial.ts`), models
   `tools/blender/placeables.py`
 - `src/world/netTerminal.ts` — the net terminal, reusable dressing (client-only): `NetTerminal` (an old beige CRT
-  terminal and keyboard, `public/models/terminal.glb` from `tools/blender/terminal.py`; `.object` where it stands, screen
-  toward +Z, `.update(dt, eye)` each frame; `lit` for indoor lights) and `CodeScreen` (only the bulged glass, for any
-  other model's screen: `TERMINAL_SCREEN` is the terminal's opening). The screen streams the game's own code: a script
-  this page loaded (the build's minified chunks, Vite's modules in dev) re-fetched from cache, chosen by `seed`; bursts,
-  pauses, slow typed lines; canvas text through a TSL CRT (phosphor `tint`, halo, scanlines, barrel). Idle beyond 24 m.
-  One stands in the lab (`shared/lab.ts` `LAB_TERMINAL`, `src/world/labPlates.ts` `addLabTerminal`)
+  terminal and keyboard in two kinds, `TERMINALS`: `console` (default), a wide 1970s video terminal with a dark hood round
+  a big screen, `public/models/terminal_console.glb`; `compact`, a small deep CRT on a plinth, `public/models/terminal.glb`;
+  both from `tools/blender/terminal.py`; `.object` where it stands, screen toward +Z, `.update(dt, eye)` each frame; `lit`
+  for indoor lights) and `CodeScreen` (only the bulged glass, for any other model's screen; `cols`/`rows` set the text
+  size). The screen streams the game's own code: a script this page loaded (the build's minified chunks, Vite's modules
+  in dev) re-fetched from cache, chosen by `seed`; bursts, pauses, slow typed lines; canvas text through a TSL CRT
+  (phosphor `tint`, halo, scanlines, barrel). Idle beyond 24 m. One of each kind stands in the lab (`shared/lab.ts`
+  `LAB_TERMINALS`, `src/world/labPlates.ts` `addLabTerminals`)
 - Work stations — `shared/stations.ts` `stations()`: the two sides of every unfolded level-2 cart (`shared/cart.ts`
   `cartWorkshops`, the workbench x < 0, the table x > 0) and the placed ones still standing from before the cart
   (shared/placed.ts `WORKBENCH`, `TABLE`, `CHEST`; models `tools/blender/stations.py` with the builders in

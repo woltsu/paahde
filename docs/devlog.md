@@ -3393,3 +3393,6 @@ script the page itself loaded (from resource timing, re-fetched from the HTTP ca
 minified bundle and in dev Vite's transformed modules; it falls back to its own functions' source. `CodeScreen` alone
 fits any other model's screen. One stands in the lab facing the spawn.
 
+The default kind is now the console: a wide 1970s video terminal (0.66 m across) with a dark sloping hood round a
+0.42 x 0.315 m screen showing a coarser 44 x 16 grid, so its text reads from a step or two back; a low keyboard slab with
+dark keys, orange accents and status lamps. The first model stays as the compact kind (`NetTerminal({ kind })`).

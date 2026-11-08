@@ -2,8 +2,8 @@
 // on the floor, readable from the spawn side. Dev-only, so their words are composed here (docs/text.md).
 import * as THREE from 'three/webgpu';
 import { heightAt } from '../../shared/terrain.ts';
-import { LAB_TERMINAL, labPlates } from '../../shared/lab.ts';
-import { NetTerminal } from './netTerminal.ts';
+import { LAB_TERMINALS, labPlates } from '../../shared/lab.ts';
+import { NetTerminal, TERMINALS } from './netTerminal.ts';
 
 function plate(text: string, w: number): THREE.Mesh {
   const c = document.createElement('canvas');
@@ -38,17 +38,20 @@ export function addLabPlates(scene: THREE.Object3D) {
   }
 }
 
-/** The lab's net terminal on a dark stand (shared/lab.ts LAB_TERMINAL); the caller updates it every frame. */
-export function addLabTerminal(scene: THREE.Object3D): NetTerminal {
-  const { x, z, facing } = LAB_TERMINAL;
-  const y = heightAt(x, z);
-  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.74, 0.9), new THREE.MeshStandardNodeMaterial({ color: 0x3a3d42, roughness: 0.7 }));
-  stand.position.set(x, y + 0.37, z);
-  stand.rotation.y = facing;
-  stand.castShadow = stand.receiveShadow = true;
-  const t = new NetTerminal({ seed: 1 });
-  t.object.position.set(x, y + 0.74, z);
-  t.object.rotation.y = facing;
-  scene.add(stand, t.object);
-  return t;
+/** The lab's net terminals, each on a dark stand (shared/lab.ts LAB_TERMINALS); the caller updates them every frame. */
+export function addLabTerminals(scene: THREE.Object3D): NetTerminal[] {
+  const standMat = new THREE.MeshStandardNodeMaterial({ color: 0x3a3d42, roughness: 0.7 });
+  return LAB_TERMINALS.map(({ kind, x, z, facing }, i) => {
+    const y = heightAt(x, z);
+    const [w, d] = TERMINALS[kind].footprint;
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, 0.74, d + 0.1), standMat);
+    stand.position.set(x, y + 0.37, z);
+    stand.rotation.y = facing;
+    stand.castShadow = stand.receiveShadow = true;
+    const t = new NetTerminal({ kind, seed: i + 1 });
+    t.object.position.set(x, y + 0.74, z);
+    t.object.rotation.y = facing;
+    scene.add(stand, t.object);
+    return t;
+  });
 }

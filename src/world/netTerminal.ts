@@ -1,8 +1,8 @@
-// The net terminal (public/models/terminal.glb, tools/blender/terminal.py): an old beige mainframe terminal, CRT and
-// keyboard, whose screen streams code. The code is the game's own, as this page loaded it: one of the scripts in the
+// The net terminal (tools/blender/terminal.py; public/models/terminal_console.glb, terminal.glb): an old beige terminal,
+// CRT and keyboard, in two kinds (TERMINALS), whose screen streams code. The code is the game's own, as this page loaded it: one of the scripts in the
 // browser's resource timing (the build's minified chunks; in dev, Vite's transformed modules), fetched again from the
 // HTTP cache, or this module's own functions if that fails. Reusable two ways:
-//   new NetTerminal({ seed, tint, lit }) — the whole terminal: add `.object` where it stands (origin on the floor at the
+//   new NetTerminal({ kind, seed, tint, lit }) — the whole terminal: add `.object` where it stands (origin on the floor at the
 //     footprint's centre, screen facing +Z), call `.update(dt, eye)` every frame;
 //   new CodeScreen({ w, h, seed, tint }) — only the glass (a bulged plane facing +Z), for any other model's screen.
 // Client-only dressing: it never touches the sim. Nothing streams or uploads beyond RANGE of the eye.
@@ -12,8 +12,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { abs, color, float, fwidth, max, sin, smoothstep, texture, time, uv, vec2 } from 'three/tsl';
 import { glbMaterial } from './glbMaterial.ts';
 
-/** The bezel's opening in terminal.glb (tools/blender/terminal.py SCREEN_*): centre height, the tube's face, size. */
-export const TERMINAL_SCREEN = { y: 0.27, z: 0.073, w: 0.3, h: 0.225 };
+/** The kinds of terminal (tools/blender/terminal.py): the model, its object, the screen's opening (centre height, the
+ *  tube's face, size: the script's C_SCREEN_* / SCREEN_*), the text grid on it, and the footprint (m, x by z). */
+export const TERMINALS = {
+  /** A 1970s video terminal: wide beige housing, a dark hood round a big screen, a low keyboard slab. */
+  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.32, z: 0.07, w: 0.42, h: 0.315 }, cols: 44, rows: 16, footprint: [0.66, 0.91] },
+  /** A small deep CRT on a plinth with a cream keyboard. */
+  compact: { url: './models/terminal.glb', node: 'terminal', screen: { y: 0.27, z: 0.073, w: 0.3, h: 0.225 }, cols: 56, rows: 21, footprint: [0.46, 0.68] },
+} as const;
+export type TerminalKind = keyof typeof TERMINALS;
 
 /** Phosphors. */
 export const TINTS = { green: 0x6dff9c, amber: 0xffb347, white: 0xd8e8ff } as const;
@@ -21,8 +28,6 @@ export type Tint = keyof typeof TINTS;
 
 /** Beyond this (m) a screen holds its last frame. */
 const RANGE = 24;
-const COLS = 56;
-const ROWS = 21;
 const PX_W = 640;
 const PX_H = 480;
 const MARGIN = 16;
@@ -71,7 +76,17 @@ function lcg(seed: number): () => number {
 
 // ------------------------------------------------------------------------------------------------ the screen
 
-export type CodeScreenOptions = { w: number; h: number; seed?: number; tint?: Tint; /** forward bulge at the centre (m) */ bulge?: number };
+export type CodeScreenOptions = {
+  w: number;
+  h: number;
+  seed?: number;
+  tint?: Tint;
+  /** forward bulge at the centre (m) */
+  bulge?: number;
+  /** the text grid (default 56 x 21): fewer is bigger and easier to read */
+  cols?: number;
+  rows?: number;
+};
 
 /** A CRT's glass streaming code: bursts of output at a few hundred characters a second, pauses with the cursor
  *  blinking, now and then a line typed slowly as if by hand. Text in a canvas, phosphor, scanlines, barrel and glow in TSL. */
@@ -81,8 +96,10 @@ export class CodeScreen {
   private readonly g: CanvasRenderingContext2D;
   private readonly tex: THREE.CanvasTexture;
   private readonly rand: () => number;
-  private readonly cellW = (PX_W - 2 * MARGIN) / COLS;
-  private readonly cellH = (PX_H - 2 * MARGIN) / ROWS;
+  private readonly cols: number;
+  private readonly rows: number;
+  private readonly cellW: number;
+  private readonly cellH: number;
   private code = '';
   private at = 0;
   private lines: string[] = [''];
@@ -100,6 +117,10 @@ export class CodeScreen {
   constructor(o: CodeScreenOptions) {
     const seed = o.seed ?? 0;
     this.rand = lcg(seed + 1);
+    this.cols = o.cols ?? 56;
+    this.rows = o.rows ?? 21;
+    this.cellW = (PX_W - 2 * MARGIN) / this.cols;
+    this.cellH = (PX_H - 2 * MARGIN) / this.rows;
     this.canvas.width = PX_W;
     this.canvas.height = PX_H;
     this.g = this.canvas.getContext('2d')!;
@@ -167,9 +188,9 @@ export class CodeScreen {
   private put(ch: string) {
     const last = this.lines.length - 1;
     if (ch === '\n') this.lines.push('');
-    else if (this.lines[last].length >= COLS) this.lines.push(ch);
+    else if (this.lines[last].length >= this.cols) this.lines.push(ch);
     else this.lines[last] += ch;
-    if (this.lines.length > ROWS) this.lines.splice(0, this.lines.length - ROWS);
+    if (this.lines.length > this.rows) this.lines.splice(0, this.lines.length - this.rows);
   }
 
   private draw() {
@@ -218,17 +239,30 @@ function crtMaterial(tex: THREE.Texture, tint: number): THREE.MeshBasicNodeMater
 
 // ------------------------------------------------------------------------------------------------ the terminal
 
-let model: Promise<THREE.Object3D | null> | null = null;
+const models = new Map<TerminalKind, Promise<THREE.Object3D | null>>();
 const converted = new Map<LightsNode | null, Map<string, THREE.Material>>();
 
-function terminalModel(): Promise<THREE.Object3D | null> {
-  return (model ??= new GLTFLoader().loadAsync('./models/terminal.glb').then(
-    (gltf) => gltf.scene.getObjectByName('terminal') ?? null,
-    (err) => (console.warn('netTerminal: failed to load terminal.glb', err), null),
-  ));
+function terminalModel(kind: TerminalKind): Promise<THREE.Object3D | null> {
+  let p = models.get(kind);
+  if (!p) {
+    const { url, node } = TERMINALS[kind];
+    p = new GLTFLoader().loadAsync(url).then(
+      (gltf) => gltf.scene.getObjectByName(node) ?? null,
+      (err) => (console.warn(`netTerminal: failed to load ${url}`, err), null),
+    );
+    models.set(kind, p);
+  }
+  return p;
 }
 
-export type NetTerminalOptions = { seed?: number; tint?: Tint; /** indoor lights (src/world/glbMaterial.ts); none: the scene's */ lit?: LightsNode | null };
+export type NetTerminalOptions = {
+  /** which terminal (default the console) */
+  kind?: TerminalKind;
+  seed?: number;
+  tint?: Tint;
+  /** indoor lights (src/world/glbMaterial.ts); none: the scene's */
+  lit?: LightsNode | null;
+};
 
 /** An old terminal streaming code on its screen; see the top of this file. */
 export class NetTerminal {
@@ -237,12 +271,13 @@ export class NetTerminal {
 
   constructor(o: NetTerminalOptions = {}) {
     this.object.name = 'netTerminal';
-    const S = TERMINAL_SCREEN;
-    this.screen = new CodeScreen({ w: S.w, h: S.h, seed: o.seed, tint: o.tint });
+    const kind = o.kind ?? 'console';
+    const { screen: S, cols, rows } = TERMINALS[kind];
+    this.screen = new CodeScreen({ w: S.w, h: S.h, seed: o.seed, tint: o.tint, cols, rows });
     this.screen.mesh.position.set(0, S.y, S.z);
     this.object.add(this.screen.mesh);
     const lit = o.lit ?? null;
-    terminalModel().then((src) => {
+    terminalModel(kind).then((src) => {
       if (!src) return;
       const body = src.clone();
       let mats = converted.get(lit);
