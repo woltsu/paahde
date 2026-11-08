@@ -1,4 +1,4 @@
-// The net terminal (tools/blender/terminal.py; public/models/terminal_console.glb, terminal.glb): an old beige terminal,
+// The net terminal (tools/blender/terminal.py; public/models/terminal_console.glb, terminal.glb): an old terminal,
 // CRT and keyboard, in two kinds (TERMINALS), whose screen streams code. The code is the game's own, as this page loaded it: one of the scripts in the
 // browser's resource timing (the build's minified chunks; in dev, Vite's transformed modules), fetched again from the
 // HTTP cache, or this module's own functions if that fails. Reusable two ways:
@@ -15,9 +15,9 @@ import { glbMaterial } from './glbMaterial.ts';
 /** The kinds of terminal (tools/blender/terminal.py): the model, its object, the screen's opening (centre height, the
  *  tube's face, size: the script's C_SCREEN_* / SCREEN_*), the text grid on it, and the footprint (m, x by z). */
 export const TERMINALS = {
-  /** A 1970s video terminal: wide beige housing, a dark hood round a big screen, a low keyboard slab. */
-  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.32, z: 0.07, w: 0.42, h: 0.315 }, cols: 44, rows: 16, footprint: [0.66, 0.91] },
-  /** A small deep CRT on a plinth with a cream keyboard. */
+  /** A 1970s video terminal in shiny dark metal, keyboard deck and monitor one body, a black hood round a big screen. */
+  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.37, z: 0.07, w: 0.42, h: 0.315 }, cols: 44, rows: 16, footprint: [0.63, 0.94] },
+  /** A small beige deep CRT on a plinth with a cream keyboard. */
   compact: { url: './models/terminal.glb', node: 'terminal', screen: { y: 0.27, z: 0.073, w: 0.3, h: 0.225 }, cols: 56, rows: 21, footprint: [0.46, 0.68] },
 } as const;
 export type TerminalKind = keyof typeof TERMINALS;

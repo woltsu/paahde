@@ -259,7 +259,7 @@ Everything built is shared, and anyone can take a building down.
   by the sky or a shelter's fill, by where it stands; materials `src/world/glbMaterial.ts`), models
   `tools/blender/placeables.py`
 - `src/world/netTerminal.ts` — the net terminal, reusable dressing (client-only): `NetTerminal` (an old beige CRT
-  terminal and keyboard in two kinds, `TERMINALS`: `console` (default), a wide 1970s video terminal with a dark hood round
+  terminal and keyboard in two kinds, `TERMINALS`: `console` (default), a 1970s video terminal in shiny dark metal, keyboard deck and monitor one body, a black hood round
   a big screen, `public/models/terminal_console.glb`; `compact`, a small deep CRT on a plinth, `public/models/terminal.glb`;
   both from `tools/blender/terminal.py`; `.object` where it stands, screen toward +Z, `.update(dt, eye)` each frame; `lit`
   for indoor lights) and `CodeScreen` (only the bulged glass, for any other model's screen; `cols`/`rows` set the text

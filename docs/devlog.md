@@ -3396,3 +3396,6 @@ fits any other model's screen. One stands in the lab facing the spawn.
 The default kind is now the console: a wide 1970s video terminal (0.66 m across) with a dark sloping hood round a
 0.42 x 0.315 m screen showing a coarser 44 x 16 grid, so its text reads from a step or two back; a low keyboard slab with
 dark keys, orange accents and status lamps. The first model stays as the compact kind (`NetTerminal({ kind })`).
+Then the console became one body in shiny dark metal: its side profile runs from the keyboard deck's front edge up the
+monitor's face and over, the hood and screen 5 cm higher so a chin shows above the deck; gunmetal body, glossy black hood
+and key well, grey keys, the orange kept.
