@@ -3412,3 +3412,6 @@ are a table (`FACES`), `face: 'vt100'` keeps the previous one.
 
 Later the console's orange went (the chin's stripe, the side lines, the three keys): plain dark metal, grey keys, only
 the status lamps lit.
+
+Then the console's text went smaller: 56 x 21 (as the compact), still 2 canvas px to the face's pixel (a 1152 x 872
+canvas); the cursor holds in the last column of a full line instead of running off the edge.

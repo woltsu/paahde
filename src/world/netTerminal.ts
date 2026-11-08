@@ -18,7 +18,7 @@ import { dropTerminalSound, offerTerminalSound } from './terminalSound.ts';
  *  tube's face, size: the script's C_SCREEN_* / SCREEN_*), the text grid on it, and the footprint (m, x by z). */
 export const TERMINALS = {
   /** A 1970s video terminal in shiny dark metal, keyboard deck and monitor one body, a black hood round a big screen. */
-  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.37, z: 0.07, w: 0.42, h: 0.315 }, cols: 44, rows: 16, footprint: [0.63, 0.94] },
+  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.37, z: 0.07, w: 0.42, h: 0.315 }, cols: 56, rows: 21, footprint: [0.63, 0.94] },
   /** A small beige deep CRT on a plinth with a cream keyboard. */
   compact: { url: './models/terminal.glb', node: 'terminal', screen: { y: 0.27, z: 0.073, w: 0.3, h: 0.225 }, cols: 56, rows: 21, footprint: [0.46, 0.68] },
 } as const;
@@ -276,7 +276,8 @@ export class CodeScreen {
     if (!this.blink) {
       const r = this.lines.length - 1;
       const y = Math.round((top + r * this.cellH + above) / 2) * 2;
-      g.fillRect(MARGIN + this.lines[r].length * this.cellW + 2, y - above, this.cellW - 4, above + 2);
+      const c = Math.min(this.lines[r].length, this.cols - 1); // a full line holds it in the last column
+      g.fillRect(MARGIN + c * this.cellW + 2, y - above, this.cellW - 4, above + 2);
     }
     this.tex.needsUpdate = true;
     this.drawnAt = this.clock;
