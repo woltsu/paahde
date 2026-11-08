@@ -154,8 +154,8 @@ while you're in the beginning, faded in and out over ~1 s, on top of the datacen
 
 ## The net terminals' loop (8 November 2026)
 
-"Terminal" (`terminal.mp3`, by Veikko Suhonen): 32.0 s, levelled from -12.9 to -23.5 LUFS integrated (-10.1 dB, true
-peak -10.2 dBTP, from -0.5), re-encoded gapless: Logic's export carries its priming and padding (528 + 1776 samples) in
+"Terminal" (`terminal.mp3`, by Veikko Suhonen; its second version, 8 November): 32.0 s, levelled from -12.7 to -23.5 LUFS integrated (-10.3 dB, true
+peak -10.9 dBTP, from -0.1), re-encoded gapless: Logic's export carries its priming and padding (528 + 1776 samples) in
 an iTunSMPB tag that ffmpeg does not apply, so they were trimmed by hand to the tag's 1411200 samples, and the LAME encode
 decodes back to exactly that, so the whole buffer loops without a seam. Event `terminal.hum` (gain 0.25, 'spatial': full
 within 1.5 m, 1/d out, faded to nothing over the last quarter of its 12 m), played by `src/world/terminalSound.ts` at the
