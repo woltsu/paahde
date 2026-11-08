@@ -265,7 +265,8 @@ Everything built is shared, and anyone can take a building down.
   for indoor lights) and `CodeScreen` (only the bulged glass, for any other model's screen; `cols`/`rows` set the text
   size). The screen streams the game's own code: a script this page loaded (the build's minified chunks, Vite's modules
   in dev) re-fetched from cache, chosen by `seed`; bursts, pauses, slow typed lines; canvas text through a TSL CRT
-  (phosphor `tint`, halo, scanlines, barrel). Idle beyond 24 m. Its quiet loop: `src/world/terminalSound.ts` (event
+  (phosphor `tint`, white by default; halo, scanlines, barrel), the text in "VT100 Regular" (`public/fonts/vt100/`, CC BY 3.0),
+  a glyph to a cell on its own 2 px pixel grid. Idle beyond 24 m. Its quiet loop: `src/world/terminalSound.ts` (event
   `terminal.hum` at the nearest terminal in 12 m, fed by each `update`). One of each kind stands in the lab (`shared/lab.ts`
   `LAB_TERMINALS`, `src/world/labPlates.ts` `addLabTerminals`)
 - Work stations — `shared/stations.ts` `stations()`: the two sides of every unfolded level-2 cart (`shared/cart.ts`

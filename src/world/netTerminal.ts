@@ -24,14 +24,35 @@ export const TERMINALS = {
 } as const;
 export type TerminalKind = keyof typeof TERMINALS;
 
-/** Phosphors. */
-export const TINTS = { green: 0x6dff9c, amber: 0xffb347, white: 0xd8e8ff } as const;
+/** Phosphors (white the default). */
+export const TINTS = { white: 0xf0f3f8, green: 0x6dff9c, amber: 0xffb347 } as const;
 export type Tint = keyof typeof TINTS;
+
+/** The screen's face: "VT100 Regular" by Karl Stange (public/fonts/vt100/, CC BY 3.0: public/credits.txt), loaded once;
+ *  until it is in (or if it fails) a system monospace. */
+const FONT_URL = './fonts/vt100/vt100-regular.otf.woff2';
+const FONT = 'NetTerminalVT100';
+const FALLBACK = 'ui-monospace, Menlo, Consolas, monospace';
+let fontLoad: Promise<boolean> | null = null;
+
+function loadFont(): Promise<boolean> {
+  return (fontLoad ??= typeof FontFace === 'undefined'
+    ? Promise.resolve(false)
+    : new FontFace(FONT, `url(${FONT_URL})`).load().then(
+        (f) => (document.fonts.add(f), true),
+        (err) => (console.warn('netTerminal: failed to load the VT100 font', err), false),
+      ));
+}
 
 /** Beyond this (m) a screen holds its last frame. */
 const RANGE = 24;
-const PX_W = 640;
-const PX_H = 480;
+/** A text cell's width (canvas px); its height follows from the screen's shape. The VT100 face is drawn on its own pixel
+ *  grid: 16 of its pixels to the em, its widest glyph half an em, so at FONT_PX each of its pixels is 2 of the canvas's
+ *  and its widest glyph exactly a cell: crisp, nothing smeared between pixels. */
+const CELL_W = 16;
+const FONT_PX = 32;
+/** Where the baseline sits in a cell (px from its top): capitals 18 px tall above it, descenders 6 below. */
+const BASELINE = 24;
 const MARGIN = 16;
 /** Texture uploads per second, at most. */
 const FPS = 20;
@@ -100,8 +121,10 @@ export class CodeScreen {
   private readonly rand: () => number;
   private readonly cols: number;
   private readonly rows: number;
-  private readonly cellW: number;
+  private readonly cellW = CELL_W;
   private readonly cellH: number;
+  /** Laying out in the VT100 face (its pixel grid), not yet: a system monospace fitted to the cell. */
+  private pixelFont = false;
   private code = '';
   private at = 0;
   private lines: string[] = [''];
@@ -121,16 +144,20 @@ export class CodeScreen {
     this.rand = lcg(seed + 1);
     this.cols = o.cols ?? 56;
     this.rows = o.rows ?? 21;
-    this.cellW = (PX_W - 2 * MARGIN) / this.cols;
-    this.cellH = (PX_H - 2 * MARGIN) / this.rows;
-    this.canvas.width = PX_W;
-    this.canvas.height = PX_H;
+    // Cells as tall as the screen's shape asks (a cell's on-glass aspect kept), the canvas the grid plus its margin.
+    this.cellH = Math.round((CELL_W * (o.h / this.rows)) / (o.w / this.cols));
+    this.canvas.width = this.cols * CELL_W + 2 * MARGIN;
+    this.canvas.height = this.rows * this.cellH + 2 * MARGIN;
     this.g = this.canvas.getContext('2d')!;
-    const g = this.g;
-    g.font = '18px ui-monospace, Menlo, Consolas, monospace';
-    const size = Math.floor((18 * this.cellW) / Math.max(1, g.measureText('M').width));
-    g.font = `${Math.min(size, Math.floor(this.cellH * 0.9))}px ui-monospace, Menlo, Consolas, monospace`;
-    g.textBaseline = 'top';
+    this.g.textBaseline = 'alphabetic';
+    this.g.textAlign = 'left';
+    this.fitFont(FALLBACK);
+    void loadFont().then((ok) => {
+      if (!ok) return;
+      this.g.font = `${FONT_PX}px ${FONT}, ${FALLBACK}`;
+      this.pixelFont = true;
+      this.dirty = true;
+    });
     this.tex = new THREE.CanvasTexture(this.canvas);
     this.tex.colorSpace = THREE.NoColorSpace; // a mask: the phosphor colours it
     this.tex.generateMipmaps = false;
@@ -146,12 +173,21 @@ export class CodeScreen {
       pos.setZ(i, bulge * (1 - 0.6 * u * u) * (1 - 0.6 * v * v));
     }
     geo.computeVertexNormals();
-    this.mesh = new THREE.Mesh(geo, crtMaterial(this.tex, TINTS[o.tint ?? 'green']));
+    this.mesh = new THREE.Mesh(geo, crtMaterial(this.tex, TINTS[o.tint ?? 'white'], this.canvas.width, this.canvas.height));
     this.mesh.name = 'codeScreen';
     codeFor(seed).then((c) => {
       this.code = c;
       this.at = Math.floor(lcg(seed + 7)() * c.length);
     });
+  }
+
+  /** The fallback: the largest size of `family` whose widest glyphs fit a cell (and its height, from BASELINE). */
+  private fitFont(family: string) {
+    const g = this.g;
+    g.font = `100px ${family}`;
+    const wide = Math.max(1, g.measureText('M').width, g.measureText('W').width, g.measureText('@').width);
+    const size = Math.floor((100 * this.cellW) / wide);
+    g.font = `${Math.min(size, Math.floor(BASELINE * 1.25))}px ${family}`;
   }
 
   /** Every frame; `eye` the camera's world position (nothing happens beyond RANGE of it). */
@@ -170,6 +206,16 @@ export class CodeScreen {
       this.blink = blink;
       this.draw();
     }
+  }
+
+  private readonly advances = new Map<string, number>();
+
+  /** A glyph's width in the current face (measured once each). */
+  private advance(ch: string): number {
+    const key = this.pixelFont ? ch : `~${ch}`;
+    let w = this.advances.get(key);
+    if (w === undefined) this.advances.set(key, (w = this.g.measureText(ch).width));
+    return w;
   }
 
   /** Pick what the screen does next: a burst of output, a pause, or a slow typed line. */
@@ -198,12 +244,25 @@ export class CodeScreen {
   private draw() {
     const g = this.g;
     g.fillStyle = '#000';
-    g.fillRect(0, 0, PX_W, PX_H);
+    g.fillRect(0, 0, this.canvas.width, this.canvas.height);
     g.fillStyle = '#fff';
-    this.lines.forEach((line, r) => g.fillText(line, MARGIN, MARGIN + r * this.cellH));
+    // A glyph to a cell, centred in it (the VT100 face is proportional; a terminal's grid is not), on whole pixels of
+    // its own grid (2 canvas px) so it stays crisp.
+    const top = MARGIN + (this.cellH - (BASELINE + 6)) / 2;
+    this.lines.forEach((line, r) => {
+      const y = Math.round((top + r * this.cellH + BASELINE) / 2) * 2;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === ' ') continue;
+        const w = this.advance(ch);
+        const x = MARGIN + i * this.cellW + (this.cellW - w) / 2;
+        g.fillText(ch, this.pixelFont ? Math.round(x / 2) * 2 : x, y);
+      }
+    });
     if (!this.blink) {
       const r = this.lines.length - 1;
-      g.fillRect(MARGIN + this.lines[r].length * this.cellW, MARGIN + r * this.cellH + 2, this.cellW - 2, this.cellH - 4);
+      const y = Math.round((top + r * this.cellH + BASELINE) / 2) * 2;
+      g.fillRect(MARGIN + this.lines[r].length * this.cellW + 2, y - 20, this.cellW - 4, 22);
     }
     this.tex.needsUpdate = true;
     this.drawnAt = this.clock;
@@ -218,23 +277,23 @@ export class CodeScreen {
 }
 
 /** The tube: the canvas as a mask lit in the phosphor's colour, a soft halo round the glyphs, scanlines (faded out
- *  where they would shimmer, far off), a slight barrel, dark rounded corners, a faint flicker; the glass's own dim green. */
-function crtMaterial(tex: THREE.Texture, tint: number): THREE.MeshBasicNodeMaterial {
+ *  where they would shimmer, far off), a slight barrel, dark rounded corners, a faint flicker; the glass's own dim glow in the phosphor's colour. */
+function crtMaterial(tex: THREE.Texture, tint: number, pxW: number, pxH: number): THREE.MeshBasicNodeMaterial {
   const p = uv().sub(0.5);
   const q = p.mul(float(1).add(p.dot(p).mul(0.18)));
   const st = q.add(0.5);
   const inside = float(1).sub(smoothstep(0.44, 0.5, abs(q.x))).mul(float(1).sub(smoothstep(0.42, 0.5, abs(q.y))));
-  const px = vec2(1.6 / PX_W, 1.6 / PX_H);
+  const px = vec2(1.6 / pxW, 1.6 / pxH);
   const tap = (dx: number, dy: number) => texture(tex, st.add(px.mul(vec2(dx, dy)))).r;
   const glyph = tap(0, 0);
   const halo = tap(1, 1).add(tap(-1, -1)).add(tap(1, -1)).add(tap(-1, 1)).mul(0.25);
-  const lines = st.y.mul(PX_H / 2);
+  const lines = st.y.mul(pxH / 2);
   const fade = float(1).sub(smoothstep(0.35, 0.7, fwidth(lines)));
   const scan = float(1).sub(sin(lines.mul(Math.PI)).mul(sin(lines.mul(Math.PI))).mul(0.35).mul(fade));
   const flicker = float(0.96).add(sin(time.mul(53)).mul(0.02)).add(sin(time.mul(7.3)).mul(0.02));
   const light = max(glyph, halo.mul(0.45)).mul(scan).mul(flicker).mul(inside).mul(2.2);
   const m = new THREE.MeshBasicNodeMaterial();
-  m.colorNode = color(tint).mul(light).add(color(0x0b1a12).mul(inside.mul(0.6).add(0.15)));
+  m.colorNode = color(tint).mul(light.add(inside.mul(0.6).add(0.15).mul(0.045)));
   m.name = 'codeScreen';
   return m;
 }

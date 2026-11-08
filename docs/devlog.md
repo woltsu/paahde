@@ -3399,3 +3399,8 @@ dark keys, orange accents and status lamps. The first model stays as the compact
 Then the console became one body in shiny dark metal: its side profile runs from the keyboard deck's front edge up the
 monitor's face and over, the hood and screen 5 cm higher so a chin shows above the deck; gunmetal body, glossy black hood
 and key well, grey keys, the orange kept.
+
+The screens then went white and took "VT100 Regular" (Karl Stange, CC BY 3.0; `public/fonts/vt100/` with its licence and
+readme). The face is proportional and a pixel font (16 of its pixels to the em), so each glyph is drawn alone, centred in
+its cell, at 32 px: 2 canvas pixels to each of its own and its widest glyph exactly a 16 px cell; the canvas is sized
+from the grid (cells as tall as the screen's shape asks) so nothing smears between pixels.

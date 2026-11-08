@@ -10,6 +10,12 @@ Neuropol (font)
   Converted from OTF to WOFF2. The titles, the prologue and the death screen.
   Files: fonts/neuropol.woff2
 
+VT100 Regular (font)
+  The FontStruction "VT100 Regular" (https://fontstruct.com/fontstructions/show/232678) by Karl Stange,
+  licensed under CC-BY-3.0 (http://creativecommons.org/licenses/by/3.0/). Made with FontStruct
+  (https://fontstruct.com). Unchanged, with its archive's license and readme. The net terminals' screens.
+  Files: fonts/vt100/vt100-regular.otf.woff2, fonts/vt100/license.txt, fonts/vt100/readme.txt
+
 Junkyard Props (3D model)
   This work is based on "Junkyard Props"
   (https://sketchfab.com/3d-models/junkyard-props-37343a1b386f4d75879be93319dbb717)
