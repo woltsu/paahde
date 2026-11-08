@@ -118,6 +118,7 @@ Made for this game
 
 "Desert ambience" (audio/desert-ambience.mp3), the music outdoors, is by Veikko Suhonen, made for dadajam.
 "Space hall ambience" (audio/space-hall-ambience.mp3), the beginning's ring hall, is by Veikko Suhonen, made for dadajam (levelled to -23.5 LUFS).
+"Terminal" (audio/terminal.mp3), the net terminals' loop, is by Veikko Suhonen, made for dadajam (levelled to -23.5 LUFS).
 "Death" (audio/death.mp3), the music when you die, is by Veikko Suhonen, made for dadajam.
 "Epic battle" (audio/epic-battle.mp3), the music in a fight with a boss or a guardian up close, is by Veikko Suhonen, made for dadajam.
 

@@ -5,12 +5,14 @@
 //   new NetTerminal({ kind, seed, tint, lit }) — the whole terminal: add `.object` where it stands (origin on the floor at the
 //     footprint's centre, screen facing +Z), call `.update(dt, eye)` every frame;
 //   new CodeScreen({ w, h, seed, tint }) — only the glass (a bulged plane facing +Z), for any other model's screen.
-// Client-only dressing: it never touches the sim. Nothing streams or uploads beyond RANGE of the eye.
+// Client-only dressing: it never touches the sim. Nothing streams or uploads beyond RANGE of the eye. Each terminal's
+// update offers it as the source of the terminals' quiet loop (src/world/terminalSound.ts: the nearest one plays).
 import * as THREE from 'three/webgpu';
 import type { LightsNode } from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { abs, color, float, fwidth, max, sin, smoothstep, texture, time, uv, vec2 } from 'three/tsl';
 import { glbMaterial } from './glbMaterial.ts';
+import { dropTerminalSound, offerTerminalSound } from './terminalSound.ts';
 
 /** The kinds of terminal (tools/blender/terminal.py): the model, its object, the screen's opening (centre height, the
  *  tube's face, size: the script's C_SCREEN_* / SCREEN_*), the text grid on it, and the footprint (m, x by z). */
@@ -297,11 +299,16 @@ export class NetTerminal {
     });
   }
 
+  private readonly here = new THREE.Vector3();
+
+  /** Every frame; `eye` the camera's (the audio listener's) world position. */
   update(dt: number, eye: THREE.Vector3) {
     this.screen.update(dt, eye);
+    offerTerminalSound(this, this.screen.mesh.getWorldPosition(this.here), eye);
   }
 
   dispose() {
+    dropTerminalSound(this);
     this.object.removeFromParent();
     this.screen.dispose();
   }

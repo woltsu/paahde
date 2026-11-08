@@ -158,6 +158,8 @@ export interface Voice {
   end: number;
   /** A sample's source node (its rate and loop can still be changed); none for a synth. */
   src?: AudioBufferSourceNode;
+  /** A 'spatial' sound's panner (move a looping one with what makes it). */
+  panner?: PannerNode;
   /** Fade it out over about `tau` × 5 s. */
   stop(tau?: number): void;
 }
@@ -192,6 +194,7 @@ export function playSound(r: SoundRef, o: SoundOptions): Voice | null {
   const s = source(r, rate, o);
   if (!s) return null;
   let level = o.level * trimGain(id), out: AudioNode | null, t = ctx.currentTime + (o.delay ?? 0);
+  let panner: PannerNode | undefined;
   const at = o.at ?? null, ear = o.ear ?? null;
   const pan = o.route === 'panned' && at && ear ? ctx.createStereoPanner() : null;
   if (o.route === 'placed') {
@@ -215,7 +218,7 @@ export function playSound(r: SoundRef, o: SoundOptions): Voice | null {
     p.positionY.value = at.y;
     p.positionZ.value = at.z;
     p.connect(o.warning ? audio.warning! : audio.out!);
-    out = p;
+    out = panner = p;
   } else {
     out = o.warning ? audio.warning : audio.out;
     if (o.warning) audio.protectWarning(Math.min(4, s.length));
@@ -237,7 +240,7 @@ export function playSound(r: SoundRef, o: SoundOptions): Voice | null {
   if (src) src.onended = () => gain.disconnect();
   else setTimeout(() => gain.disconnect(), (end - ctx.currentTime + 0.5) * 1000);
   return {
-    gain, t, end, src,
+    gain, t, end, src, panner,
     stop(tau = 0.03) {
       const now = ctx.currentTime;
       gain.gain.cancelScheduledValues(now);
