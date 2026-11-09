@@ -267,7 +267,8 @@ Everything built is shared, and anyone can take a building down.
   in dev) re-fetched from cache, chosen by `seed`; bursts, pauses, slow typed lines; canvas text through a TSL CRT
   (phosphor `tint`, white by default; halo, scanlines, barrel) under black glossy glass (lit: sun highlight, sky reflection, a
   faint glare), the text in a pixel `face` (`FACES`: `vt220` "Glass TTY VT220", public domain, the default; `vt100`),
-  a glyph to a cell on its own 2 px pixel grid. Idle beyond 24 m. Its quiet loop: `src/world/terminalSound.ts` (event
+  a glyph to a cell on its own pixel grid at a whole `scale` (console 80 x 24 at 1, compact 56 x 21 at 2); the phosphor
+  blooms (`src/post.ts` `glowsHot`). Idle beyond 16 m. Its quiet loop: `src/world/terminalSound.ts` (event
   `terminal.hum` at the nearest terminal in 12 m, fed by each `update`). One of each kind stands in the lab (`shared/lab.ts`
   `LAB_TERMINALS`, `src/world/labPlates.ts` `addLabTerminals`)
 - Work stations — `shared/stations.ts` `stations()`: the two sides of every unfolded level-2 cart (`shared/cart.ts`

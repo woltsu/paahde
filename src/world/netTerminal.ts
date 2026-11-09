@@ -11,6 +11,7 @@ import * as THREE from 'three/webgpu';
 import type { LightsNode } from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { abs, color, exp, float, fwidth, max, sin, smoothstep, texture, time, uv, vec2 } from 'three/tsl';
+import { glowsHot } from '../post.ts';
 import { glbMaterial } from './glbMaterial.ts';
 import { dropTerminalSound, offerTerminalSound } from './terminalSound.ts';
 
@@ -18,9 +19,9 @@ import { dropTerminalSound, offerTerminalSound } from './terminalSound.ts';
  *  tube's face, size: the script's C_SCREEN_* / SCREEN_*), the text grid on it, and the footprint (m, x by z). */
 export const TERMINALS = {
   /** A 1970s video terminal in shiny dark metal, keyboard deck and monitor one body, a black hood round a big screen. */
-  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.37, z: 0.07, w: 0.42, h: 0.315 }, cols: 56, rows: 21, footprint: [0.63, 0.94] },
+  console: { url: './models/terminal_console.glb', node: 'terminal_console', screen: { y: 0.37, z: 0.07, w: 0.42, h: 0.315 }, cols: 80, rows: 24, scale: 1, footprint: [0.63, 0.94] },
   /** A small beige deep CRT on a plinth with a cream keyboard. */
-  compact: { url: './models/terminal.glb', node: 'terminal', screen: { y: 0.27, z: 0.073, w: 0.3, h: 0.225 }, cols: 56, rows: 21, footprint: [0.46, 0.68] },
+  compact: { url: './models/terminal.glb', node: 'terminal', screen: { y: 0.27, z: 0.073, w: 0.3, h: 0.225 }, cols: 56, rows: 21, scale: 2, footprint: [0.46, 0.68] },
 } as const;
 export type TerminalKind = keyof typeof TERMINALS;
 
@@ -29,16 +30,17 @@ export const TINTS = { white: 0xf0f3f8, green: 0x6dff9c, amber: 0xffb347 } as co
 export type Tint = keyof typeof TINTS;
 
 /** The screens' faces (credits: public/credits.txt), each loaded once; until it is in (or if it fails), a system
- *  monospace fitted to the cell. Both are pixel fonts, drawn at 2 canvas px to each of their pixels, a glyph to a cell
- *  and centred in it (vt100's face is proportional; a terminal's grid is not), on whole pixels: nothing smears.
+ *  monospace fitted to the cell. Both are pixel fonts, drawn at a whole number of canvas px to each of their pixels (a
+ *  screen's `scale`), a glyph to a cell and centred in it (vt100's face is proportional; a terminal's grid is not), on
+ *  whole pixels: nothing smears.
  *  - vt220 (the default): "Glass TTY VT220" by Viacheslav Slavinsky (public/fonts/glasstty/, public domain): 20 of its
  *    pixels to the em, every glyph half an em, its dots rounded like a glowing tube's;
  *  - vt100: "VT100 Regular" by Karl Stange (public/fonts/vt100/, CC BY 3.0): 16 to the em, its widest glyph half an em.
- *  `px` its size, `cell` a cell's width (its widest glyph), `above`/`below` its ink round the baseline (canvas px); a
- *  cell's height follows from the screen's shape. */
+ *  `px` its size, `cell` a cell's width (its widest glyph), `above`/`below` its ink round the baseline: in its own
+ *  pixels (canvas px at scale 1). A cell's height follows from the screen's shape. */
 export const FACES = {
-  vt220: { url: './fonts/glasstty/glass-tty-vt220.woff2', family: 'NetTerminalVT220', px: 40, cell: 20, above: 28, below: 6 },
-  vt100: { url: './fonts/vt100/vt100-regular.otf.woff2', family: 'NetTerminalVT100', px: 32, cell: 16, above: 18, below: 6 },
+  vt220: { url: './fonts/glasstty/glass-tty-vt220.woff2', family: 'NetTerminalVT220', px: 20, cell: 10, above: 14, below: 3 },
+  vt100: { url: './fonts/vt100/vt100-regular.otf.woff2', family: 'NetTerminalVT100', px: 16, cell: 8, above: 9, below: 3 },
 } as const;
 export type Face = keyof typeof FACES;
 const FALLBACK = 'ui-monospace, Menlo, Consolas, monospace';
@@ -60,7 +62,9 @@ function loadFont(face: Face): Promise<boolean> {
 }
 
 /** Beyond this (m) a screen holds its last frame. */
-const RANGE = 24;
+const RANGE = 16;
+/** How much of the phosphor's light goes to the bloom (src/post.ts glowsHot): a soft halo round the text and the glass. */
+const SCREEN_BLOOM = 0.35;
 const MARGIN = 16;
 /** Texture uploads per second, at most. */
 const FPS = 15;
@@ -119,6 +123,8 @@ export type CodeScreenOptions = {
   /** the text grid (default 56 x 21): fewer is bigger and easier to read */
   cols?: number;
   rows?: number;
+  /** canvas px to each of the face's pixels (default 2): crisper close up, a bigger canvas to upload */
+  scale?: number;
 };
 
 /** A CRT's glass streaming code: bursts of output at a few hundred characters a second, pauses with the cursor
@@ -132,6 +138,7 @@ export class CodeScreen {
   private readonly cols: number;
   private readonly rows: number;
   private readonly face: (typeof FACES)[Face];
+  private readonly scale: number;
   private readonly cellW: number;
   private readonly cellH: number;
   /** Laying out in the face (its pixel grid), not yet: a system monospace fitted to the cell. */
@@ -157,7 +164,8 @@ export class CodeScreen {
     this.rows = o.rows ?? 21;
     const face = o.face ?? 'vt220';
     this.face = FACES[face];
-    this.cellW = this.face.cell;
+    this.scale = Math.max(1, Math.round(o.scale ?? 2));
+    this.cellW = this.face.cell * this.scale;
     // Cells as tall as the screen's shape asks (a cell's on-glass aspect kept), the canvas the grid plus its margin.
     this.cellH = Math.round((this.cellW * (o.h / this.rows)) / (o.w / this.cols));
     this.canvas.width = this.cols * this.cellW + 2 * MARGIN;
@@ -168,14 +176,15 @@ export class CodeScreen {
     this.fitFont(FALLBACK);
     void loadFont(face).then((ok) => {
       if (!ok) return;
-      this.g.font = `${this.face.px}px ${this.face.family}, ${FALLBACK}`;
+      this.g.font = `${this.face.px * this.scale}px ${this.face.family}, ${FALLBACK}`;
       this.pixelFont = true;
       this.dirty = true;
     });
     this.tex = new THREE.CanvasTexture(this.canvas);
     this.tex.colorSpace = THREE.NoColorSpace; // a mask: the phosphor colours it
-    this.tex.generateMipmaps = false;
-    this.tex.minFilter = THREE.LinearFilter;
+    // Mipmapped: a fine grid seen from across the room doesn't sparkle.
+    this.tex.generateMipmaps = true;
+    this.tex.minFilter = THREE.LinearMipmapLinearFilter;
     this.draw();
 
     const geo = new THREE.PlaneGeometry(o.w, o.h, 12, 9);
@@ -201,7 +210,7 @@ export class CodeScreen {
     g.font = `100px ${family}`;
     const wide = Math.max(1, g.measureText('M').width, g.measureText('W').width, g.measureText('@').width);
     const size = Math.floor((100 * this.cellW) / wide);
-    g.font = `${Math.min(size, Math.floor(this.face.above * 1.25))}px ${family}`;
+    g.font = `${Math.min(size, Math.floor(this.face.above * this.scale * 1.25))}px ${family}`;
   }
 
   /** Every frame; `eye` the camera's world position (nothing happens beyond RANGE of it). */
@@ -261,23 +270,24 @@ export class CodeScreen {
     g.fillRect(0, 0, this.canvas.width, this.canvas.height);
     g.fillStyle = '#fff';
     // A glyph to a cell, centred in it (a proportional face's too), on whole pixels of its own grid (2 canvas px).
-    const { above, below } = this.face;
+    const k = this.scale;
+    const above = this.face.above * k, below = this.face.below * k;
     const top = MARGIN + (this.cellH - (above + below)) / 2;
     this.lines.forEach((line, r) => {
-      const y = Math.round((top + r * this.cellH + above) / 2) * 2;
+      const y = Math.round((top + r * this.cellH + above) / k) * k;
       for (let i = 0; i < line.length; i++) {
         const ch = line[i];
         if (ch === ' ') continue;
         const w = this.advance(ch);
         const x = MARGIN + i * this.cellW + (this.cellW - w) / 2;
-        g.fillText(ch, this.pixelFont ? Math.round(x / 2) * 2 : x, y);
+        g.fillText(ch, this.pixelFont ? Math.round(x / k) * k : x, y);
       }
     });
     if (!this.blink) {
       const r = this.lines.length - 1;
-      const y = Math.round((top + r * this.cellH + above) / 2) * 2;
+      const y = Math.round((top + r * this.cellH + above) / k) * k;
       const c = Math.min(this.lines[r].length, this.cols - 1); // a full line holds it in the last column
-      g.fillRect(MARGIN + c * this.cellW + 2, y - above, this.cellW - 4, above + 2);
+      g.fillRect(MARGIN + c * this.cellW + k, y - above, this.cellW - 2 * k, above + k);
     }
     this.tex.needsUpdate = true;
     this.drawnAt = this.clock;
@@ -319,6 +329,7 @@ function crtMaterial(tex: THREE.Texture, tint: number, pxW: number, pxH: number)
   const glare = exp(gx.mul(gx).div(0.045).add(gy.mul(gy).div(0.008)).negate()).mul(0.045).add(smoothstep(0.0, 0.5, p.y).mul(0.01));
   const m = new THREE.MeshStandardNodeMaterial({ color: 0x000000, roughness: 0.08, metalness: 0 });
   m.emissiveNode = glow.add(glare);
+  glowsHot(m, glow.mul(SCREEN_BLOOM)); // the phosphor blooms, whatever the threshold
   m.name = 'codeScreen';
   return m;
 }
@@ -360,8 +371,8 @@ export class NetTerminal {
   constructor(o: NetTerminalOptions = {}) {
     this.object.name = 'netTerminal';
     const kind = o.kind ?? 'console';
-    const { screen: S, cols, rows } = TERMINALS[kind];
-    this.screen = new CodeScreen({ w: S.w, h: S.h, seed: o.seed, tint: o.tint, face: o.face, cols, rows });
+    const { screen: S, cols, rows, scale } = TERMINALS[kind];
+    this.screen = new CodeScreen({ w: S.w, h: S.h, seed: o.seed, tint: o.tint, face: o.face, cols, rows, scale });
     this.screen.mesh.position.set(0, S.y, S.z);
     this.object.add(this.screen.mesh);
     const lit = o.lit ?? null;

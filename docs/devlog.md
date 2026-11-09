@@ -3415,3 +3415,7 @@ the status lamps lit.
 
 Then the console's text went smaller: 56 x 21 (as the compact), still 2 canvas px to the face's pixel (a 1152 x 872
 canvas); the cursor holds in the last column of a full line instead of running off the edge.
+
+Then the console went to 80 x 24 like the real thing, at 1 canvas px to the face's pixel (an 832 x 632 canvas, mipmapped;
+a screen's `scale`, the compact keeps 2); the phosphor blooms through `glowsHot` (0.35 of its light: a soft halo round
+the text and the glass), and screens wake within 16 m (was 24).
