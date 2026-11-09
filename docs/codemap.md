@@ -258,19 +258,22 @@ Everything built is shared, and anyone can take a building down.
   `bld<id>`, whose parts are swapped in place (F, `src/inventory.ts` `part:<box>`); drawn by `src/world/placed.ts` (lit
   by the sky or a shelter's fill, by where it stands; materials `src/world/glbMaterial.ts`), models
   `tools/blender/placeables.py`
-- `src/world/netTerminal.ts` — the net terminal, reusable dressing (client-only): `NetTerminal` (an old beige CRT
-  terminal and keyboard in two kinds, `TERMINALS`: `console` (default), a 1970s video terminal in shiny dark metal, keyboard deck and monitor one body, a black hood round
-  a big screen, `public/models/terminal_console.glb`; `compact`, a small deep CRT on a plinth, `public/models/terminal.glb`;
-  both from `tools/blender/terminal.py`; `.object` where it stands, screen toward +Z, `.update(dt, eye)` each frame; `lit`
-  for indoor lights) and `CodeScreen` (only the bulged glass, for any other model's screen; `cols`/`rows` set the text
-  size). The screen streams the game's own code: a script this page loaded (the build's minified chunks, Vite's modules
-  in dev) re-fetched from cache, chosen by `seed`; bursts, pauses, slow typed lines; canvas text through a TSL CRT
-  (phosphor `tint`, white by default; halo, scanlines, barrel) under black glossy glass (lit: sun highlight, sky reflection, a
-  faint glare), the text in a pixel `face` (`FACES`: `vt220` "Glass TTY VT220", public domain, the default; `vt100`),
-  a glyph to a cell on its own pixel grid at a whole `scale` (console 80 x 24 at 1, compact 56 x 21 at 2); the phosphor
-  blooms (`src/post.ts` `glowsHot`). Idle beyond 16 m. Its quiet loop: `src/world/terminalSound.ts` (event
-  `terminal.hum` at the nearest terminal in 12 m, fed by each `update`). One of each kind stands in the lab (`shared/lab.ts`
-  `LAB_TERMINALS`, `src/world/labPlates.ts` `addLabTerminals`)
+- Net terminals (docs/terminals.md), reusable client-only dressing. `src/world/netTerminal.ts`: `NetTerminal` (an old
+  CRT terminal and keyboard in two kinds, `TERMINALS`: `console` (default), a 1970s video terminal in shiny dark metal,
+  keyboard deck and monitor one body, a black hood round a big screen, `public/models/terminal_console.glb`; `compact`, a
+  small beige CRT on a plinth, `public/models/terminal.glb`; both from `tools/blender/terminal.py`; `.object` where it
+  stands, screen toward +Z, `.update(dt, eye)` each frame; `lit` for indoor lights; `.program` / `.text`) and
+  `TerminalScreen` (only the bulged glass, for any other model's screen). The screen draws a `TerminalText` grid
+  (`src/world/terminalText.ts`: teletype `write` and screen-style `print`/`setLines`, a cursor, `version`; helpers `fit`,
+  `bar`, `wrap`, `typewriter`; tested by `tools/terminal-text.test.mjs`) that a `TerminalProgram` writes each awake frame;
+  the default, `src/world/codeStream.ts`, streams the game's own code (a script this page loaded, re-fetched from cache,
+  chosen by `seed`; bursts, pauses, slow typed lines). Drawn through a TSL CRT (phosphor `tint`, white by default; halo,
+  scanlines, barrel) under black glossy glass (lit: sun highlight, sky reflection, a faint glare), the text in a pixel
+  `face` (`FACES`: `vt220` "Glass TTY VT220", public domain, the default; `vt100`), a glyph to a cell on its own pixel
+  grid at a whole `scale` (console 80 x 24 at 1, compact 56 x 21 at 2), redrawn only on change; the phosphor blooms
+  (`src/post.ts` `glowsHot`). Asleep beyond 16 m. Its quiet loop: `src/world/terminalSound.ts` (event `terminal.hum` at
+  the nearest terminal in 12 m, fed by each `update`). One of each kind stands in the lab (`shared/lab.ts`
+  `LAB_TERMINALS`, `src/world/labPlates.ts` `addLabTerminals`; the compact runs `labBoard`, the example program)
 - Work stations — `shared/stations.ts` `stations()`: the two sides of every unfolded level-2 cart (`shared/cart.ts`
   `cartWorkshops`, the workbench x < 0, the table x > 0) and the placed ones still standing from before the cart
   (shared/placed.ts `WORKBENCH`, `TABLE`, `CHEST`; models `tools/blender/stations.py` with the builders in

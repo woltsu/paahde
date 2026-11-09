@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu';
 import { heightAt } from '../../shared/terrain.ts';
 import { LAB_TERMINALS, labPlates } from '../../shared/lab.ts';
 import { NetTerminal, TERMINALS } from './netTerminal.ts';
+import { bar, fit, wrap, type TerminalProgram } from './terminalText.ts';
 
 function plate(text: string, w: number): THREE.Mesh {
   const c = document.createElement('canvas');
@@ -38,7 +39,33 @@ export function addLabPlates(scene: THREE.Object3D) {
   }
 }
 
-/** The lab's net terminals, each on a dark stand (shared/lab.ts LAB_TERMINALS); the caller updates them every frame. */
+/** An example of a custom terminal program (docs/terminals.md), on the lab's compact terminal: a status board redrawn
+ *  once a second (screen-style `setLines`), a prompt with the cursor blinking at it. */
+function labBoard(): TerminalProgram {
+  let clock = 0, shown = -1;
+  return {
+    update(text, dt) {
+      clock += dt;
+      const s = Math.floor(clock);
+      if (s === shown) return; // nothing new: no redraw, no upload
+      shown = s;
+      const w = text.cols;
+      text.setLines([
+        fit(' LAB TERMINAL ', w, 'center', '='),
+        '',
+        ` awake    ${fit(String(s), 6, 'right')} s`,
+        ` load     ${bar((Math.sin(clock * 0.7) + 1) / 2, 30)}`,
+        '',
+        ...wrap('A custom program: src/world/labPlates.ts labBoard. Any object with update(text, dt) will do; see docs/terminals.md.', w - 2).map((l) => ` ${l}`),
+      ]);
+      text.print(0, text.rows - 1, '> ');
+      text.moveTo(2, text.rows - 1);
+    },
+  };
+}
+
+/** The lab's net terminals, each on a dark stand (shared/lab.ts LAB_TERMINALS); the caller updates them every frame. The
+ *  console streams code (the default program), the compact runs `labBoard`. */
 export function addLabTerminals(scene: THREE.Object3D): NetTerminal[] {
   const standMat = new THREE.MeshStandardNodeMaterial({ color: 0x3a3d42, roughness: 0.7 });
   return LAB_TERMINALS.map(({ kind, x, z, facing }, i) => {
@@ -48,7 +75,7 @@ export function addLabTerminals(scene: THREE.Object3D): NetTerminal[] {
     stand.position.set(x, y + 0.37, z);
     stand.rotation.y = facing;
     stand.castShadow = stand.receiveShadow = true;
-    const t = new NetTerminal({ kind, seed: i + 1 });
+    const t = new NetTerminal({ kind, seed: i + 1, program: kind === 'compact' ? labBoard() : undefined });
     t.object.position.set(x, y + 0.74, z);
     t.object.rotation.y = facing;
     scene.add(stand, t.object);

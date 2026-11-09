@@ -3419,3 +3419,9 @@ canvas); the cursor holds in the last column of a full line instead of running o
 Then the console went to 80 x 24 like the real thing, at 1 canvas px to the face's pixel (an 832 x 632 canvas, mipmapped;
 a screen's `scale`, the compact keeps 2); the phosphor blooms through `glowsHot` (0.35 of its light: a soft halo round
 the text and the glass), and screens wake within 16 m (was 24).
+
+Then the screens became programmable (docs/terminals.md): the grid of text is a `TerminalText` (teletype `write`, screen
+`print`/`setLines`, a cursor, a version so the screen redraws only on change; `src/world/terminalText.ts`, no DOM, tested
+under Node), written each awake frame by a `TerminalProgram` (`update(text, dt)`, or a bare function) given as `program` or
+swapped at any time; the code stream moved out as the default program (`src/world/codeStream.ts`), `CodeScreen` became
+`TerminalScreen`. The lab's compact runs `labBoard`, a small status board, as the working example.

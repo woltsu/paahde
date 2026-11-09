@@ -31,6 +31,7 @@ Every push to `main` deploys to dev (https://dev.paahde.herkku.org/) within a fe
 - Loot, drops, recipes, gear slots, site layout: `docs/econsim.md`
 - The runner enemy (model, rig, gait, animations, its AI and server side `server/runners.ts`): `docs/runner.md`
 - Player-visible text: `docs/text.md`; character speech lines: `docs/speech.md`
+- Net terminals and what their screens show (programs, `src/world/terminalText.ts`): `docs/terminals.md`
 - Rendering & shadows: `docs/perf.md`; benchmarks: `docs/bench.md`; art direction: `docs/look.md`; item icons: `docs/icons.md`
 - Audio levels & full-mix measurement, samples and sound events (`src/audioConfig.ts`): `docs/audio.md`
 - Desktop app (`desktop/`, the way to Steam): `docs/desktop.md`
