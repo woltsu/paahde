@@ -64,7 +64,8 @@ export function buildBoxLevel<Z extends string>(L: LevelLayout<Z>, root: THREE.G
     root.add(mesh);
   }
   // The racks: one 12-triangle box per rack, origin at the bottom centre, front = +z, turned for rows facing -z.
-  const rack = new THREE.BoxGeometry(0.6, 2.0, 1.2).translate(0, 1, 0);
+  const rh = L.rackH ?? 2.0;
+  const rack = new THREE.BoxGeometry(0.6, rh, 1.2).translate(0, rh / 2, 0);
   const racks = new THREE.InstancedMesh(rack, mats.rack, Math.max(1, L.racks.length));
   racks.count = L.racks.length;
   const m4 = new THREE.Matrix4();

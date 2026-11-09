@@ -47,6 +47,8 @@ export type LevelLayout<Z extends string = ZoneId> = {
   spawns: LevelPoint[];
   /** Trigger volumes in front of the exit door: F in one leaves (server/world.ts). */
   exits: Box[];
+  /** How tall its racks stand (m; DC.rack.h, 2.0, when absent): the instanced racks and their shader follow it. */
+  rackH?: number;
   /** The far-light bake's texel (m; src/levels/datacenter/bake.ts TEXEL when absent). */
   bakeTexel?: number;
 };

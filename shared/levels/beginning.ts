@@ -162,8 +162,10 @@ export const SCREENS: readonly { x: number; y: number; z: number; face: 1 | -1 }
 /** The deck's rows of racks: either side of the lane, in islands of `per` racks with gaps between, a row every `pitch` m
  *  from `z0` to `z1`, the lamp posts on the lane's edges between them. */
 const FIELD = { z0: 30, z1: FAR + 150, pitch: 4.5, per: 8, gap: 2, islands: 4 };
+/** The deck's racks' height: full 48U racks, taller than the datacenter's 2 m (they read small from behind you). */
+export const RACK_H = 2.4;
 /** The cable trays' undersides over the racks: each row's, and the spines along the islands over them. */
-const TRAYS = { row: 2.45, spine: 2.9 };
+const TRAYS = { row: RACK_H + 0.45, spine: RACK_H + 0.9 };
 /** The gantries across the hall: their deck's underside (about half the hall's height), the tie beams between their
  *  pillars. */
 export const GANTRY = { y: 17, tie: 9 };
@@ -282,7 +284,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
         const a = LANE + j * rowStep, b = a + FIELD.per * 0.6;
         const [xa, xb] = side < 0 ? [-b, -a] : [a, b];
         const xc = islandX(side, j);
-        add('rack', 'hall', 'collide', xa, xb, 0, 2.0, z0, z1);
+        add('rack', 'hall', 'collide', xa, xb, 0, RACK_H, z0, z1);
         for (let i = 0; i < FIELD.per; i++) {
           const v = rand();
           racks.push({ x: xa + (i + 0.5) * 0.6, z: zc, face, variant: v < 0.75 ? 0 : v < 0.9 ? 1 : 2 });
@@ -291,7 +293,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
         add('paint', 'hall', 'draw', xa - 0.38, xb + 0.38, 0, 0.003, z1 + 0.3, z1 + 0.38);
         // The row's tray on its struts, its cables; the strut up to the spine.
         add('tray', 'hall', 'draw', xa + 0.1, xb - 0.1, TRAYS.row, TRAYS.row + 0.12, zc - 0.25, zc + 0.25);
-        for (const x of [xa + 0.6, xc, xb - 0.6]) add('steel', 'hall', 'draw', x - 0.03, x + 0.03, 2.0, TRAYS.row, zc - 0.03, zc + 0.03);
+        for (const x of [xa + 0.6, xc, xb - 0.6]) add('steel', 'hall', 'draw', x - 0.03, x + 0.03, RACK_H, TRAYS.row, zc - 0.03, zc + 0.03);
         add('cable', 'hall', 'draw', xa + 0.2, xb - 0.2, TRAYS.row + 0.12, TRAYS.row + 0.18, zc - 0.15, zc + 0.05);
         add('steel', 'hall', 'draw', xc - 0.03, xc + 0.03, TRAYS.row + 0.12, TRAYS.spine, zc + 0.12, zc + 0.18);
         // The strip under the spine over the aisle after this row; the lane-side islands' light the deck.
@@ -436,6 +438,7 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
     // Waking on the made bunk: standing up beside it, facing the door (yaw π looks down +z).
     spawns: [{ x: BUNK.x - 0.95, y: 0, z: 1.6, facing: Math.PI }],
     exits: [POD.hatch],
+    rackH: RACK_H,
     // The far-light bake only lights the rooms (the deck is the shell's): coarse over the long level.
     bakeTexel: 0.25,
   };

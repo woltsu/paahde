@@ -93,7 +93,7 @@ export class BeginningStage implements Stage {
     this.root.visible = false;
     this.root.matrixAutoUpdate = false;
     const maps = bakeMaps(L, bake);
-    const mats = makeMaterials(maps, undefined, { fog: true });
+    const mats = makeMaterials(maps, undefined, { fog: true, rackH: L.rackH });
     this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient, true);
     this.root.add(new RingShell().group);
     this.props = new Props(mats);

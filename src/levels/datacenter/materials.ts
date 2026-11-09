@@ -55,7 +55,9 @@ const lines = (c: F, pitch: number, width: number): F => {
 
 /** `stripsOff`: the light strips over z from `z0` up to the uniform `cut` are dark (the beginning's hall going out row by
  *  row, src/levels/beginning: a uniform, so no shader rebuild), the downlight discs there too. */
-export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }, opts: { fog?: boolean } = {}): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
+export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }, opts: { fog?: boolean; rackH?: number } = {}): Record<LevelMat, THREE.MeshStandardNodeMaterial> {
+  // The racks' height (LevelLayout.rackH): the door's edge, how many 1U rows fit, the network racks' patch strip.
+  const RH = opts.rackH ?? 2.0;
   // The level's own frame: the box geometry's flat position and normal (src/levels/boxLevel.ts boxGeometry: the same as
   // the local ones, but for boxes bent onto a ring).
   const LP = attribute('lpos', 'vec3') as unknown as V3, LN = attribute('lnor', 'vec3') as unknown as V3;
@@ -191,7 +193,7 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
     const fill = hash(inst.add(7.5)).mul(0.6).add(0.3);
     const front = ng.z.greaterThan(0.5), back = ng.z.lessThan(-0.5);
     const face = vec2(pg.x, pg.y);
-    const inner = step(abs(pg.x), 0.27).mul(step(0.03, pg.y)).mul(step(pg.y, 1.97));
+    const inner = step(abs(pg.x), 0.27).mul(step(0.03, pg.y)).mul(step(pg.y, RH - 0.03));
     const handle = step(0.2, pg.x).mul(step(pg.x, 0.215)).mul(step(0.9, pg.y)).mul(step(pg.y, 1.08));
     const perforated = v.lessThan(0.75), glass = v.greaterThanEqual(0.75).and(v.lessThan(0.9));
     const holes = holePattern(face, 0.008, 0.0014);
@@ -211,7 +213,7 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
     rackM.roughnessNode = select(front.and(glass), float(0.1), float(0.45).add(orange));
     // LEDs: a filled 1U row has a steady power LED and a blinking activity one.
     const s = hash(inst.mul(64).add(u));
-    const filled = step(s, fill).mul(step(u, 41)).mul(step(0, u));
+    const filled = step(s, fill).mul(step(u, Math.floor((RH - 0.2) / 0.04445))).mul(step(0, u));
     const ledAt = (x: number) => {
       const cell = vec2(pg.x.sub(x), fract(yy.div(U)).sub(0.5).mul(U));
       const r = 0.0015, aa = max(fw(pg.x), fw(yy));
@@ -227,7 +229,7 @@ export function makeMaterials(maps: BakeMaps, stripsOff?: { z0: number; cut: F }
     const tint = select(pick.lessThan(0.82), color(0x39ff6a), select(pick.lessThan(0.95), color(0xffb020), color(0x3a8bff))) as unknown as V3;
     const net = v.greaterThanEqual(0.9);
     // A blank network rack: amber lights on a patch strip at the top, seen through no holes (they're on the door).
-    const netRow = step(1.7, pg.y).mul(step(pg.y, 1.85));
+    const netRow = step(RH - 0.3, pg.y).mul(step(pg.y, RH - 0.15));
     const frontLed = tint.mul(ledAt(-0.21).add(ledAt(-0.19).mul(on))).mul(filled).mul(max(see, float(0.25)).mul(inner));
     const netLed = color(0xffb020).mul(ledAt(-0.2 + 0.05).mul(on)).mul(netRow).mul(inner);
     const backLed = color(0x39ff6a).mul(ledAt(0.18).mul(on)).mul(filled).mul(step(0.7, s)).mul(holes).mul(inner);

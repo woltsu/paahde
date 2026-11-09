@@ -15,11 +15,11 @@ const PLANE = 0.001;
 const AREA = 0.002;
 
 /** What a layout draws as boxes: its drawn boxes (gated ones too: their stage draws them) and its racks (instanced
- *  0.6 × 2.0 × 1.2 m, front along z: src/levels/boxLevel.ts). */
+ *  0.6 × rackH (2.0 by default) × 1.2 m, front along z: src/levels/boxLevel.ts). */
 function drawnBoxes(L) {
   const out = [];
   L.boxes.forEach((b, i) => { if (b.use !== 'collide') out.push({ b: b.b, what: `${b.mat} #${i} [${b.b.map((v) => +v.toFixed(3)).join(', ')}]` }); });
-  for (const r of L.racks) out.push({ b: [r.x - 0.3, r.x + 0.3, 0, 2, r.z - 0.6, r.z + 0.6], what: `rack at ${r.x.toFixed(2)}, ${r.z.toFixed(2)}` });
+  for (const r of L.racks) out.push({ b: [r.x - 0.3, r.x + 0.3, 0, L.rackH ?? 2, r.z - 0.6, r.z + 0.6], what: `rack at ${r.x.toFixed(2)}, ${r.z.toFixed(2)}` });
   return out;
 }
 
