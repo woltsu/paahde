@@ -181,3 +181,8 @@ are open (opening a seventh shuts the oldest at once); each is a few dozen boxes
 opening and freed after. Client-only: the door has no collision and nothing is sent (the level is private). Sounds:
 `rack.open`, `rack.shut` (the latch sample, pitched).
 
+**Net terminals (November 2026):** four console terminals (src/world/netTerminal.ts, streaming the game's code; white,
+green, amber, green) on desks against the side walls near the start of the deck, two a side (`DESKS`, `DESK` in
+shared/levels/beginning.ts: the desks are solid 'equipment' boxes), between the rib columns and the outer rack
+islands, their screens facing into the hall; hung on the ring by `ringAnchor` and updated by the stage.
+

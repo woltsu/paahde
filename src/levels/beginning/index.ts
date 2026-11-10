@@ -8,7 +8,7 @@
 // it is going; the pod rides down. All client-only: nothing here is in the sim. Built on the first visit and kept.
 import * as THREE from 'three/webgpu';
 import { color, densityFogFactor, float, fog } from 'three/tsl';
-import { BEGINNING, CABIN_LIGHT, CABINET, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
+import { BEGINNING, CABIN_LIGHT, CABINET, DESK, DESKS, GAP, GATE, POD, TRAY, beatAt, beginningLevel } from '../../../shared/levels/beginning.ts';
 import { CABINET_DONE, CABINET_GONE, CABINET_ID, CABINET_LEVEL, CABINET_SEED, RELAY, RELAY_INDEX } from '../../../shared/levels/beginningCabinet.ts';
 import { CRASH_REACH } from '../../../shared/crash.ts';
 import { hasItem, type Slots } from '../../../shared/items.ts';
@@ -36,6 +36,7 @@ import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
 import { HallSound } from './hallSound.ts';
 import { OpenRacks } from './rackDetail.ts';
+import { NetTerminal } from '../../world/netTerminal.ts';
 import { play } from '../../sounds.ts';
 import { Ride } from './ride.ts';
 import { StuckHints } from './stuck.ts';
@@ -75,6 +76,8 @@ export class BeginningStage implements Stage {
   /** The hall's jolt, fading (s left). */
   private jolt = 0;
   private box: BoxLevel;
+  /** The net terminals on their desks by the side walls, streaming code. */
+  private terminals: NetTerminal[] = [];
   /** The racks you've opened (only those get their insides modelled). */
   private racks: OpenRacks;
   private background = new THREE.Color(DATACENTER_ENV.background);
@@ -101,6 +104,13 @@ export class BeginningStage implements Stage {
     this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient, true);
     this.root.add(new RingShell().group);
     this.racks = new OpenRacks(this.root, this.box.racks, L.racks, L.rackH ?? 2, (opening) => play(opening ? 'rack.open' : 'rack.shut'));
+    DESKS.forEach((d, i) => {
+      const t = new NetTerminal({ seed: 11 + i, tint: (['white', 'green', 'amber', 'green'] as const)[i] });
+      t.object.position.set(d.x, DESK.h, d.z);
+      t.object.rotation.y = d.yaw;
+      this.root.add(ringAnchor(d.z, t.object));
+      this.terminals.push(t);
+    });
     this.props = new Props(mats);
     // Each prop onto the ring whole, at its own z (the space dome stays round the camera).
     this.props.group.updateMatrixWorld(true);
@@ -248,6 +258,7 @@ export class BeginningStage implements Stage {
     this.ambience.update(f.dt, cam, null);
     this.hall.update();
     this.racks.update(f.dt, me);
+    for (const t of this.terminals) t.update(f.dt, cam);
     this.fall.update(f.dt, this.rumble, beat === 6);
   }
 }

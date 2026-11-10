@@ -164,6 +164,14 @@ export const SCREENS: readonly { x: number; y: number; z: number; face: 1 | -1 }
 const FIELD = { z0: 30, z1: FAR + 150, pitch: 4.5, per: 8, gap: 2, islands: 4 };
 /** The deck's racks' height: full 48U racks, taller than the datacenter's 2 m (they read small from behind you). */
 export const RACK_H = 2.4;
+/** The net terminals on desks against the hall's side walls (src/world/netTerminal.ts, drawn by the stage): where
+ *  each desk's centre stands, which way its screen faces (yaw: -π/2 looks -x, into the hall from the east wall), and
+ *  the desk's size (along the wall, out from it) and height. Clear of the rib columns and the outer rack islands. */
+export const DESKS = [
+  { x: -(X - 1.6), z: 42, yaw: Math.PI / 2 }, { x: -(X - 1.6), z: 78, yaw: Math.PI / 2 },
+  { x: X - 1.6, z: 48, yaw: -Math.PI / 2 }, { x: X - 1.6, z: 84, yaw: -Math.PI / 2 },
+] as const;
+export const DESK = { along: 0.85, out: 1.05, h: 0.74 };
 /** The cable trays' undersides over the racks: each row's, and the spines along the islands over them. */
 const TRAYS = { row: RACK_H + 0.45, spine: RACK_H + 0.9 };
 /** The gantries across the hall: their deck's underside (about half the hall's height), the tie beams between their
@@ -315,6 +323,8 @@ export function beginningLayout(): LevelLayout<BeginningZone> {
       add('cable', 'hall', 'draw', xc - 0.2, xc + 0.1, TRAYS.spine + 0.1, TRAYS.spine + 0.16, FIELD.z0 - 0.2, lastRow + 0.2);
     }
   }
+  // The terminals' desks against the side walls (the terminals on them: the stage).
+  for (const d of DESKS) add('equipment', 'hall', 'both', d.x - DESK.out / 2, d.x + DESK.out / 2, 0, DESK.h, d.z - DESK.along / 2, d.z + DESK.along / 2);
   // The gantries.
   const D = RIB.depth, gaps = [LANE - 0.7, ...[0, 1, 2].map((j) => LANE + j * rowStep + FIELD.per * 0.6 + FIELD.gap / 2)];
   for (const gz of GANTRIES) {
