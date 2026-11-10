@@ -150,7 +150,7 @@ export const ENEMIES: Record<EnemyKind, Enemy> = {
     mass: 8,
     armor: ARMOR.thin,
   },
-  // Runners (shared/runner.ts): one comes for someone out in the open desert every 5–11 min, day or night
+  // Runners (shared/runner.ts): once a boss is beaten (shared/worldState.ts), one comes for someone out in the open desert every 5–11 min, day or night
   // (server/runners.ts GAP_MIN_MS..GAP_MAX_MS, past KEEP_OUT from the start), a third of them armed (ARMED_ODDS). It
   // stalks, then charges and bites (one bite kills; step aside as it comes), or (armed) shoots from afar; the eyes from
   // the front or both flank vents from the side kill it (3 and 2 + 2 rifle hits). Bare-handed you can only hide: in a

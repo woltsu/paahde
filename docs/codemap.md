@@ -465,6 +465,8 @@ Everything built is shared, and anyone can take a building down.
   interpolates them and handles the weak points; spoils in `shared/tables.ts` BOSS_SPOILS. Shared by the brains:
   delayed blasts (`server/blasts.ts`: due, blast, ball, column) and players' smoothed velocities (`server/tracks.ts`
   Tracks, also the crawler packs')
+- `shared/worldState.ts` — world state grown from the bosses beaten (`worldState(beaten)`, derived, never stored);
+  server/world.ts `applyWorldState` applies it at start and on each kind's first kill. Stages: one boss → runners
 - Each kind follows one pattern: numbers in `shared/<kind>.ts`, brain `server/<kind>.ts`, view `src/world/<kind>.ts`
   (built on `src/world/bossParts.ts`), sound `src/<kind>Sound.ts`, model `tools/blender/<kind>.py`. The kinds:
   - worm — 200 m, swims through the sand, bursts out under prey, charges half out of it, or flies a huge arc firing

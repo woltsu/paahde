@@ -15,6 +15,8 @@ import {
 import { BOT_DELAY_MS } from '../shared/guardians.ts';
 import { KEEP_OUT, RunnerServer } from '../server/runners.ts';
 import { Tracks } from '../server/tracks.ts';
+import { worldState } from '../shared/worldState.ts';
+import { BOSS_KINDS, bossBit } from '../shared/bosses.ts';
 
 /** A flat open spot out in the desert, with a clear view 60 m round it. */
 function flatSpot() {
@@ -166,6 +168,21 @@ test('the armed one keeps its distance and shoots; it gives up on someone gone i
   run(rs, [hidden], clock, 12);
   assert.equal(r.st, R_LEAVE, 'it gave up');
   assert.equal(r.prey, -1);
+});
+
+test('none come until the world lets them out (a boss beaten), then they do', () => {
+  const rs = new RunnerServer(0), clock = { now: 1000 }, out = player();
+  rs.out = false;
+  run(rs, [out], clock, 60 * 15);
+  assert.equal(rs.runners.length, 0, 'none before a boss is beaten');
+  rs.out = true;
+  run(rs, [out], clock, 60 * 12, () => rs.runners.length > 0);
+  assert.equal(rs.runners.length, 1, 'one came once let out');
+});
+
+test('world state: runners only once any boss is beaten', () => {
+  assert.equal(worldState(0).runners, false);
+  for (const k of BOSS_KINDS) assert.equal(worldState(bossBit(k)).runners, true, k);
 });
 
 test('they come for someone out in the open, never at the start, and go when nobody is about', () => {

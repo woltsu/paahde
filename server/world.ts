@@ -18,6 +18,7 @@ import { scrapKey, scrapTaken } from '../shared/scrap.ts';
 import { CLOTH, HOTBAR, ITEMS, levelOnlyItems, RETIRED, SCRAP, scrapItem, stackOf, withData, WIRING } from '../shared/items.ts';
 import { foundData, type Drop } from '../shared/lootRoll.ts';
 import { ENEMIES } from '../shared/enemies.ts';
+import { worldState } from '../shared/worldState.ts';
 import { allBeaten, BOSS_KINDS, BOSS_LIVES, BOSS_SEND_R, BOSSES, bossBit, receiverBoss, RELICS, type BossKind } from '../shared/bosses.ts';
 import { boxSize, OWN_BOXES } from '../shared/storage.ts';
 import { cartTableId, crashTaken, isTableId, tableId } from '../shared/crash.ts';
@@ -141,6 +142,12 @@ const jetCrashes = new JetCrashes(db);
 const harvesters = new HarvesterServer(performance.now());
 const bosses = new BossServer();
 const guardians = new GuardianServer();
+/** What the world does now, from the bosses beaten (shared/worldState.ts): at start and on each kind's first kill. */
+function applyWorldState() {
+  const w = worldState(beaten);
+  guardians.runners.out = w.runners;
+}
+applyWorldState();
 const throws = new ThrowServer(guardians);
 /** Heat per second from drone searchlights by player id, from the last bot tick. */
 
@@ -1382,7 +1389,8 @@ function dropBossSpoils(k: BossKill) {
     beaten |= bossBit(k.kind);
     lives += BOSS_LIVES;
     db.setSetting('bosses_beaten', beaten);
-        db.setSetting('lives', lives);
+    db.setSetting('lives', lives);
+    applyWorldState();
     for (const o of players.values()) send(o.ws, { t: 'lives', n: lives, beaten });
     console.log(`world ${WORLD_ID}: ${k.kind} beaten${allBeaten(beaten) ? ', world won' : ''}`);
   }

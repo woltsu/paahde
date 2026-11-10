@@ -2,7 +2,7 @@
 // the hits it takes. Owned and ticked by server/guardians.ts (its bites are that tick's `mauled`, its bolts are the
 // guardians' bolts), sent in its 'bots' (`r`). In memory only.
 //
-// Now and then (GAP_MIN_MS..GAP_MAX_MS) one is sent for someone out in the open desert (past KEEP_OUT from the start),
+// Once the world lets them out (`out`: shared/worldState.ts, a boss beaten), now and then (GAP_MIN_MS..GAP_MAX_MS) one is sent for someone out in the open desert (past KEEP_OUT from the start),
 // day or night: it comes from COME_MIN..COME_MAX m off at a trot, and once it sees them it hunts them:
 // - stalking: legs like the show's driver's (src/world/runner.ts Prowl): sprinting a third to two thirds of a lap round
 //   them, prowling to a spot a little in or out, or stopping to stare (jaws snapping), out on a ring (RING, the armed
@@ -120,6 +120,8 @@ const _a = { x: 0, z: 0, yaw: 0 }, _b = { x: 0, z: 0, yaw: 0 };
 
 export class RunnerServer {
   runners: Runner[] = [];
+  /** Whether they're sent out at all (shared/worldState.ts runners; server/world.ts sets it). Summons ignore it. */
+  out = true;
   private nextId = 1;
   private nextAt: number;
 
@@ -174,6 +176,11 @@ export class RunnerServer {
   /** Now and then one is sent for someone out in the open. */
   private send(now: number, exposed: BotPlayer[]) {
     if (now < this.nextAt) return;
+    if (!this.out) {
+      // Not yet: the first comes a while after they're let out, not the moment the boss falls.
+      this.nextAt = now + rand(FIRST_MIN_MS, GAP_MIN_MS);
+      return;
+    }
     const out = exposed.filter((p) => Math.hypot(p.x - ORIGIN.x, p.z - ORIGIN.z) > KEEP_OUT);
     if (!out.length || this.runners.filter((r) => r.deadAt < 0).length >= MAX_OUT) {
       this.nextAt = now + RETRY_MS;

@@ -11,7 +11,8 @@ See it: `models-lab.html?runner` (four at once), `?runner=prowl`, `?runner=armed
 
 ## How it hunts (server/runners.ts)
 
-- **Meeting one:** every 5–11 min (`GAP_MIN_MS..GAP_MAX_MS`; the first 2–5 min in) one is sent for someone out in the
+- **Meeting one:** none until the world has beaten a boss (any kind: `shared/worldState.ts` `runners`, set on
+  `RunnerServer.out` by server/world.ts; the debug summon ignores it). Then every 5–11 min (`GAP_MIN_MS..GAP_MAX_MS`; the first 2–5 min in) one is sent for someone out in the
   open desert past `KEEP_OUT` (250 m) from the start, day or night, a third of them armed (`ARMED_ODDS`); at most two
   out. It comes from 220–300 m off at a trot (a gallop when far), and once it sees them (`SIGHT` 110 m, line of sight
   from its eyes to their chest) it hunts them.
