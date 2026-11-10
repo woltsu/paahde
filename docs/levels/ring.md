@@ -188,3 +188,17 @@ islands, their screens facing into the hall; hung on the ring by `ringAnchor` an
 show the station's files on its own people (src/world/dossiers.ts, docs/terminals.md "The ring hall's dossiers"): a
 subject's file, a genome sequencer, a census grid and a cross-match, in desk order.
 
+
+**Overhead rails (November 2026):** two tracks run all the way round the ring under the ceiling, between its light
+bands (x ±18; the bands are at ±10 and ±26): each a pair of I-beams 6 m apart, their undersides 31 m over the deck
+(`RAILS`, `TRACKS` in `src/levels/beginning/carriages.ts`), hung from the ceiling on rods every 10 m with a tie across
+the pair at each. Eight underhung bridge cranes ride each track (`PER_TRACK`), the -x track's going +z (the walk's way),
+the +x track's against it: two end trucks with bogies on the beams' bottom flanges, twin yellow girders, a trolley with
+its hoist and a work lamp, amber beacons pulsing under the trucks; on two cables a hook and spreader with a rack, a
+container or nothing. They drive stop-and-go (legs of 40–220 m at up to ~3.6 m/s, stops of 6–16 s), never within 14 m
+of the one ahead, and at each stop the hoist lets the load down 2.5 m and takes it back up (its lowest, a rack's foot,
+stays ~2 m over the gantries' rails); the load swings on its cables as they speed up and slow down (a damped pendulum
+pushed by the carriage's acceleration). Client-only and out of reach (no collision, nothing in the sim; the motion is
+`carriages.ts`, pure and seeded, `tools/carriages.test.mjs`); drawn by `rails.ts`: the rails bent round the ring like
+the shell (`sheet`, strips of 4 m), the carriages instanced (seven draw calls for all sixteen), each placed whole by
+`ringMatrix` at its own z. They move only while the stage is up. No sound yet.

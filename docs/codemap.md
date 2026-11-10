@@ -78,7 +78,8 @@ when you find it stale.
   (the ride, the Esc menu's skip), strips level items on any move out, refuses hurt/die where `!mortal`, hides private
   levels' players. `src/levels/beginning/` — its stage (`index.ts`: doors, lights out, rumble, the cabinet's work site, the
   hatch's F; the root turned round the camera onto the ring), `ring.ts` (the ring's shell: deck, walls, ceiling, ribs and
-  their material, all the way round), `rackDetail.ts` (openable racks: F at one's front swings its door open on a
+  their material, all the way round), `rails.ts` + `carriages.ts` (the overhead rails all round the ring under the ceiling and the
+  bridge cranes riding them stop-and-go with swinging loads: the drawing, instanced; the motion, pure and seeded), `rackDetail.ts` (openable racks: F at one's front swings its door open on a
   model of its insides, built only for the racks opened, at most 20, its instance hidden meanwhile), `props.ts` (screens, cart, fallen gantry, blast door, the floor window's frame and
   glass, drawing, plaque, city labels), `pod.ts` (the pod: the relay's ghost in its junction box, the cover shutting, the hatch cut out of pod.glb
   and swung open), `cabin.ts` (the pod's cabin seen through the hatch, lit by the pool's `CABIN_LIGHT`), `podHull.ts`

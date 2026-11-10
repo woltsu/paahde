@@ -25,9 +25,10 @@ const STEP = 2;
 const BANDS = [-26, -10, 10, 26], BAND_HALF = 1.2, FIXTURE = 6;
 
 /** A sheet of the shell: `at(u, s)` the flat point of (u across it, s round the ring), `n` its flat normal; u over
- *  [u0, u1] in `nu` steps, s over [s0, s1]. Positions and normals bent onto the ring, the flat ones kept. */
-function sheet(out: Parts, at: (u: number, s: number) => [number, number, number], n: [number, number, number], u0: number, u1: number, nu: number, s0: number, s1: number) {
-  const ns = Math.max(1, Math.ceil((s1 - s0) / STEP));
+ *  [u0, u1] in `nu` steps, s over [s0, s1] in strips up to `strip` long. Positions and normals bent onto the ring, the
+ *  flat ones kept. (Also the overhead rails': rails.ts.) */
+export function sheet(out: Parts, at: (u: number, s: number) => [number, number, number], n: [number, number, number], u0: number, u1: number, nu: number, s0: number, s1: number, strip = STEP) {
+  const ns = Math.max(1, Math.ceil((s1 - s0) / strip));
   const base = out.lpos.length / 3;
   const p = [0, 0, 0], d = [0, 0, 0];
   for (let j = 0; j <= ns; j++) {
@@ -57,9 +58,9 @@ function sheet(out: Parts, at: (u: number, s: number) => [number, number, number
   }
 }
 
-type Parts = { pos: number[]; nor: number[]; lpos: number[]; lnor: number[]; idx: number[] };
+export type Parts = { pos: number[]; nor: number[]; lpos: number[]; lnor: number[]; idx: number[] };
 
-function geometry(parts: Parts): THREE.BufferGeometry {
+export function geometry(parts: Parts): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(parts.pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(parts.nor, 3));

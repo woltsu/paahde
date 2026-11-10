@@ -26,6 +26,7 @@ import { setLevelShade } from '../../world/materialLighting.ts';
 import { buildBoxLevel, ringAnchor, type BoxLevel } from '../boxLevel.ts';
 import { ringMatrixInverse } from '../../../shared/ring.ts';
 import { RingShell } from './ring.ts';
+import { OverheadRails } from './rails.ts';
 import type { Stage, StageFrame } from '../stage.ts';
 import { bakeDataSliced, bakeMaps } from '../datacenter/bake.ts';
 import { makeMaterials } from '../datacenter/materials.ts';
@@ -81,6 +82,8 @@ export class BeginningStage implements Stage {
   private terminals: NetTerminal[] = [];
   /** The racks you've opened (only those get their insides modelled). */
   private racks: OpenRacks;
+  /** The overhead rails round the ring and the cranes running on them. */
+  private rails = new OverheadRails();
   private background = new THREE.Color(DATACENTER_ENV.background);
   /** The dead cabinet (shared/levels/beginningCabinet.ts), taken apart in the real disassembly mode. */
   private cabinet: Junk;
@@ -104,6 +107,7 @@ export class BeginningStage implements Stage {
     const mats = makeMaterials(maps, undefined, { fog: true, rackH: L.rackH });
     this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient, true);
     this.root.add(new RingShell().group);
+    this.root.add(this.rails.group);
     this.racks = new OpenRacks(this.root, this.box.racks, L.racks, L.rackH ?? 2, (opening) => play(opening ? 'rack.open' : 'rack.shut'));
     DESKS.forEach((d, i) => {
       // Each desk shows the station's files on its people (src/world/dossiers.ts), a program of its own.
@@ -260,6 +264,7 @@ export class BeginningStage implements Stage {
     this.ambience.update(f.dt, cam, null);
     this.hall.update();
     this.racks.update(f.dt, me);
+    this.rails.update(f.dt, f.time);
     for (const t of this.terminals) t.update(f.dt, cam);
     this.fall.update(f.dt, this.rumble, beat === 6);
   }
