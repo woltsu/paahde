@@ -3425,3 +3425,5 @@ Then the screens became programmable (docs/terminals.md): the grid of text is a 
 under Node), written each awake frame by a `TerminalProgram` (`update(text, dt)`, or a bare function) given as `program` or
 swapped at any time; the code stream moved out as the default program (`src/world/codeStream.ts`), `CodeScreen` became
 `TerminalScreen`. The lab's compact runs `labBoard`, a small status board, as the working example.
+The deck's racks open: F at one swings its door out on a model of its insides, built only for the racks opened and
+freed after, its instanced copy hidden meanwhile (src/levels/beginning/rackDetail.ts, docs/levels/ring.md).

@@ -319,6 +319,9 @@ export const EVENTS = {
   'music.combat': { sounds: ['combat-drums'], gain: 0.55, route: 'music', by: 'src/music.ts (something is after you)' },
   'music.epic': { sounds: ['epic-battle'], gain: 0.7, route: 'music', by: 'src/music.ts (a boss, a guardian close by)' },
   'music.death': { sounds: ['death'], gain: 0.55, route: 'music', by: 'src/music.ts (you died)' },
+  // A server rack's door aboard the ring (src/levels/beginning/rackDetail.ts): its latch, lower opening than shutting.
+  'rack.open': { sounds: ['pickup'], gain: 0.22, pitch: 0.7, vary: 0.05, route: 'direct', by: 'src/levels/beginning/index.ts (OpenRacks)' },
+  'rack.shut': { sounds: ['pickup'], gain: 0.28, pitch: 0.85, vary: 0.05, route: 'direct', by: 'src/levels/beginning/index.ts (OpenRacks)' },
   // Level beds, looped while you're in the level.
   'beginning.hall': { sounds: ['space-hall-ambience'], gain: 0.3, route: 'direct', by: 'src/levels/beginning/hallSound.ts (the ring hall, quiet under everything)' },
   // Props' loops, at the nearest one in earshot.

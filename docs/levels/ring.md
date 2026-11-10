@@ -170,3 +170,14 @@ under it, lamps hung beneath; eight pillars (at the lane's edges and in the gaps
 carry it, tied at 9 m (across the lane too), with a cable riser up each from a cross tray over the spines. The fallen
 gantry's work lamps and two floods on the terminal's face light the far end.
 
+**Openable racks (November 2026):** F at a deck rack's front opens its door (`TEXT.prompt.open(TEXT.places.rack)`,
+again to shut it). The hall's racks stay one instanced mesh; only an opened rack gets a model of its own
+(`src/levels/beginning/rackDetail.ts`): the cabinet and its four rails, the door on its hinge (perforated, smoked glass
+or blank, the same pick the rack shader makes: `tslHash` is TSL's `hash` in JS), and its modules, seeded per rack:
+1U and 2U servers with vents or drive bays, 4U storage, blanking plates, gaps, the top-of-rack switch with its port
+lights, blinking status LEDs, a PDU and a cable bundle; a dim fill on their fronts stands in for the aisle's light. Its
+instance is scaled to nothing meanwhile and comes back when the door has shut, or once you are 25 m off. At most six
+are open (opening a seventh shuts the oldest at once); each is a few dozen boxes merged into five meshes, built on
+opening and freed after. Client-only: the door has no collision and nothing is sent (the level is private). Sounds:
+`rack.open`, `rack.shut` (the latch sample, pitched).
+

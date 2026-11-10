@@ -35,6 +35,8 @@ import { Pod } from './pod.ts';
 import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
 import { HallSound } from './hallSound.ts';
+import { OpenRacks } from './rackDetail.ts';
+import { play } from '../../sounds.ts';
 import { Ride } from './ride.ts';
 import { StuckHints } from './stuck.ts';
 
@@ -73,6 +75,8 @@ export class BeginningStage implements Stage {
   /** The hall's jolt, fading (s left). */
   private jolt = 0;
   private box: BoxLevel;
+  /** The racks you've opened (only those get their insides modelled). */
+  private racks: OpenRacks;
   private background = new THREE.Color(DATACENTER_ENV.background);
   /** The dead cabinet (shared/levels/beginningCabinet.ts), taken apart in the real disassembly mode. */
   private cabinet: Junk;
@@ -96,6 +100,7 @@ export class BeginningStage implements Stage {
     const mats = makeMaterials(maps, undefined, { fog: true, rackH: L.rackH });
     this.box = buildBoxLevel(L, this.root, mats, DATACENTER_ENV.ambient, true);
     this.root.add(new RingShell().group);
+    this.racks = new OpenRacks(this.root, this.box.racks, L.racks, L.rackH ?? 2, (opening) => play(opening ? 'rack.open' : 'rack.shut'));
     this.props = new Props(mats);
     // Each prop onto the ring whole, at its own z (the space dome stays round the camera).
     this.props.group.updateMatrixWorld(true);
@@ -151,6 +156,7 @@ export class BeginningStage implements Stage {
     this.fall.stop();
     this.hall.stop();
     this.stuck.clear();
+    this.racks.clear();
     this.rumble = 0;
   }
 
@@ -170,10 +176,16 @@ export class BeginningStage implements Stage {
   }
 
   /** At the pod's hatch: its panel dark until the relay is in (F puts it in, if it's in the bag), then, once the hatch
-   *  has swung open, F gets in. */
+   *  has swung open, F gets in. At a rack's front on the deck: F opens its door, or shuts it (rackDetail.ts). */
   interact(me: PlayerState, bag: Slots | undefined) {
     this.carrying = !!bag && hasItem(bag, RELAY);
-    if (me.level !== this.level || !inBox(POD.hatch, me.x, me.y, me.z) || me.gates & GATE.launch) return null;
+    if (me.level !== this.level || me.gates & GATE.launch) return null;
+    if (!inBox(POD.hatch, me.x, me.y, me.z)) {
+      // A rack's door, in front of it.
+      const i = me.y < 0.5 && me.y > -0.5 ? this.racks.at(me) : null;
+      if (i === null) return null;
+      return { prompt: this.racks.isOpen(i) ? TEXT.prompt.shut(TEXT.places.rack) : TEXT.prompt.open(TEXT.places.rack), act: () => this.racks.toggle(i) };
+    }
     const act = this.hatch;
     if (me.gates & GATE.powered) return this.pod.open ? { prompt: TEXT.prompt.getIn, act } : null;
     return bag && hasItem(bag, RELAY) ? { prompt: TEXT.prompt.place(TEXT.parts.relay), act } : null;
@@ -235,6 +247,7 @@ export class BeginningStage implements Stage {
     this.box.pool.update(f.dt, cam, zone);
     this.ambience.update(f.dt, cam, null);
     this.hall.update();
+    this.racks.update(f.dt, me);
     this.fall.update(f.dt, this.rumble, beat === 6);
   }
 }

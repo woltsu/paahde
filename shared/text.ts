@@ -160,6 +160,8 @@ const en = {
   /** Places you go into (shared/levels.ts): the doors' names, under the crosshair as "Open steel door". */
   places: {
     steelDoor: 'Steel door',
+    /** A server rack on the beginning's deck (src/levels/beginning/rackDetail.ts): its door opens. */
+    rack: 'Server rack',
   },
   prompt: {
     putDown: 'Put it down',
@@ -178,6 +180,8 @@ const en = {
     openPack: 'Open pack',
     openChest: 'Open chest',
     open: (what: string) => `Open ${lower(what)}`,
+    /** Something you opened, to shut again: "Close server rack". */
+    shut: (what: string) => `Close ${lower(what)}`,
     /** A broken vehicle lying in the world (shared/vehicles.ts): F opens its part slots. */
     repair: (what: string) => `Repair ${lower(what)}`,
     /** A working one: F gets on. */
