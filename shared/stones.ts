@@ -3,10 +3,10 @@
 // Unlike the rock formations (shared/rocks.ts, part of the heightfield) each is a prop of its own, so it can be rounder,
 // blockier and sharper than a heightfield can be.
 //
-// How stony the ground is (`stoniness`): the biome's own (`stones` in shared/biomes.ts: the canyons strewn with
-// rockfall, the mud flats next to bare), and in the dune sea the rocky country (`rockiness`) and the feet of the rock
-// formations, where their talus lies (`rockFoot`), and the foot of a canyon's walls. Deep sand buries them: on a big
-// dune there are none; in the corridors between the dunes, and on rock, they lie on the surface.
+// How stony the ground is (`stoniness`): only by rock. The feet of the rock formations, where their talus lies
+// (`rockFoot`), the foot of a canyon's walls, and bare rock itself (a tableland, a rock's top, a butte on a canyon's
+// floor); a biome may add its own (`stones` in shared/biomes.ts: a canyon's floor a few). Open sand has none. Deep sand
+// buries them: drifted over a rock's foot they are gone.
 //
 // Same determinism rules as shared/dunes.ts (the server collides with them, clients predict): integer hashing and exact
 // IEEE operations only, no trig (a stone's long axis is a rejection-sampled unit vector). The layout depends only on
@@ -25,7 +25,7 @@ import { duneFloor } from './dunes.ts';
 import { mulberry32, ss } from './noise.ts';
 import { originClear } from './origin.ts';
 import { onPodGround } from './podSpot.ts';
-import { rockFoot, rockiness } from './rocks.ts';
+import { rockFoot } from './rocks.ts';
 import { SCRAP_CELL, scrapPieces } from './scrap.ts';
 import { shelterWithin } from './shelters.ts';
 import { solarWithin } from './solarfarms.ts';
@@ -97,11 +97,12 @@ export function stoniness(x: number, z: number): number {
   if (LAB) return 0; // the dev test lab (shared/lab.ts) is a plain floor
   const g = groundAt(x, z);
   const sand = g.sand, rock = g.rock;
-  // The dune sea's own: a few strays anywhere, more in the rocky country, most at the feet of the rocks.
-  const sea = 0.05 + 0.4 * rockiness(x, z) + 0.85 * rockFoot(x, z);
-  let s = blend(x, z, (b) => b.stones, sea);
+  // Talus at the feet of the rocks, and the biome's own.
+  let s = 0.9 * rockFoot(x, z) + blend(x, z, (b) => b.stones, 0);
   // Rockfall heaped at the foot of a canyon's walls.
-  if (canyonAt(x, z)) s += 0.6 * canyonOut.foot;
+  if (canyonAt(x, z)) s += 0.7 * canyonOut.foot;
+  // Bare rock, or rock under a skin of sand: weathered pieces lying on it.
+  if (rock > -Infinity) s += 0.3 * (1 - ss((sand - rock) * (1 / 0.6)));
   // Deep sand buries them: how much lies over the dune floor, or over the rock where there is some.
   const depth = sand - Math.max(duneFloor(x, z, WORLD_SEED), rock);
   s *= 1 - ss((depth - 1) * (1 / 4));

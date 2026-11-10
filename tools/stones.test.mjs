@@ -45,19 +45,29 @@ function walk(st, d, secs) {
 }
 
 test('layout is the same every time it is made', () => {
-  const a = JSON.stringify([...stonesRound(4)]);
-  const b = JSON.stringify([...stonesRound(4)]);
+  const a = JSON.stringify([...stonesRound(60, 6)]);
+  const b = JSON.stringify([...stonesRound(60, 6)]);
   assert.equal(a, b);
-  assert.ok(a.length > 2, 'some stones near the origin');
+  assert.ok(a.length > 2, 'some stones round the origin');
 });
 
-test('rocky ground and canyons are stony, big dunes are bare', () => {
+/** No rock under or near any corner or the middle of cell (ix, iz). */
+function openSand(ix, iz) {
+  for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5]]) {
+    const x = (ix + u) * STONE_CELL, z = (iz + v) * STONE_CELL;
+    if (rockFoot(x, z) > 0 || groundAt(x, z).rock > -Infinity) return false;
+  }
+  return true;
+}
+
+test('stones lie by the rocks; open sand and big dunes are bare', () => {
   const cat = {};
   const cx = Math.floor(ORIGIN.x / STONE_CELL), cz = Math.floor(ORIGIN.z / STONE_CELL);
   for (let j = -30; j < 30; j++) for (let i = -30; i < 30; i++) {
     const ix = cx + i * 4, iz = cz + j * 4, x = (ix + 0.5) * STONE_CELL, z = (iz + 0.5) * STONE_CELL;
     const g = groundAt(x, z), depth = g.sand - Math.max(duneFloor(x, z, WORLD_SEED), g.rock);
-    const k = biomeAt(x, z) ?? (rockFoot(x, z) > 0.5 ? 'rockfoot' : depth > 10 ? 'bigdune' : 'other');
+    const foot = rockFoot(x, z);
+    const k = biomeAt(x, z) ?? (foot > 0.5 ? 'rockfoot' : depth > 10 ? 'bigdune' : openSand(ix, iz) ? 'sand' : 'other');
     const c = (cat[k] ??= { n: 0, stones: 0 });
     c.n++;
     c.stones += stonesIn(ix, iz).length;
@@ -65,7 +75,8 @@ test('rocky ground and canyons are stony, big dunes are bare', () => {
   const per = (k) => cat[k] ? cat[k].stones / cat[k].n : NaN;
   assert.ok(cat.rockfoot?.n > 10 && per('rockfoot') > 10, `rock feet stony: ${per('rockfoot')}`);
   assert.ok(cat.bigdune?.n > 10 && per('bigdune') < 0.5, `big dunes bare: ${per('bigdune')}`);
-  if (cat.canyon?.n > 10) assert.ok(per('canyon') > 8, `canyons stony: ${per('canyon')}`);
+  assert.ok(cat.sand?.n > 10 && per('sand') < 0.3, `open sand all but bare: ${per('sand')}`);
+  if (cat.canyon?.n > 10) assert.ok(per('canyon') > 3, `canyons stony: ${per('canyon')}`);
 });
 
 test('a big boulder is a wall, and you can stand on it', () => {

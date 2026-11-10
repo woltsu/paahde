@@ -154,9 +154,9 @@ when you find it stale.
 - `shared/rocks.ts` — rock formations (mesas, buttes, pillar fields, carved hills, jagged peaks, boulders; now and then a
   giant) placed by a rockiness noise, the kind by a regional style noise; part of `baseHeight` (max with the dunes).
   Steep rock is a wall in `step()`, craters stop at rock, `rock` attribute paints them in `src/world/sandMaterial.ts`
-- `shared/stones.ts` — loose stones and boulders (props, not heightfield): per 32 m cell, thinned to `stoniness` (biome
-  `stones` in shared/biomes.ts, rocky country, `rockFoot` talus in shared/rocks.ts, canyon wall feet; buried where the
-  sand is deep, so none on big dunes). Hitbox: an ellipse, a wall below its shoulder and ground above (`collideStones`
+- `shared/stones.ts` — loose stones and boulders (props, not heightfield): per 32 m cell, thinned to `stoniness` (only by rock:
+  `rockFoot` talus in shared/rocks.ts, canyon wall feet, bare rock, plus a biome's `stones`; open sand has none, deep
+  sand buries them). Hitbox: an ellipse, a wall below its shoulder and ground above (`collideStones`
   in `desertLevel.collide`), boulders stop shots (`addShotSolid` in shared/terrain.ts). Procedural meshes, instanced, in
   `src/world/stones.ts` (coloured by the sand shader's rock uniforms). Test: `tools/stones.test.mjs`.
 - `shared/canyons.ts` — canyons: Grand Canyon-scale gorges (8–14 km long, 220–400 m under the dune floor, up to

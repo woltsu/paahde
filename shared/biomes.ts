@@ -35,8 +35,8 @@ export type Biome = {
   empty?: boolean;
   /** false: no radio towers stand in it (shared/towers.ts): no high ground to put them on. */
   towers?: boolean;
-  /** How stony its ground is, 0..1: loose stones and boulders lying about (shared/stones.ts). The dune sea's is its own,
-   *  from the rocky country and the rocks' feet. */
+  /** How stony its open ground is, 0..1, besides the stones by its rock: loose stones lying about (shared/stones.ts).
+   *  None in the dune sea. */
   stones?: number;
 };
 
@@ -60,7 +60,7 @@ function blobs(o: { from: number; full: number; cover: number; size: number; edg
 const FADE_IN = 150;
 
 /** Canyons: Grand Canyon-scale gorges through a sandstone tableland (shared/canyons.ts); the air in them is clearer. */
-export const CANYON: Biome = { id: 'canyon', place: (x, z) => canyonCover(x, z), haze: 0.3, empty: true, stones: 0.75 };
+export const CANYON: Biome = { id: 'canyon', place: (x, z) => canyonCover(x, z), haze: 0.3, empty: true, stones: 0.1 };
 
 /** Dried lake beds: dead flat, cracked mud, no dunes and next to no rocks, no shade, and hotter than the sand. */
 export const MUDFLAT: Biome = {
@@ -68,7 +68,6 @@ export const MUDFLAT: Biome = {
   place: blobs({ from: 1000, full: 2400, cover: 0.35, size: 1200, edge: 0.035, seed: 41 }),
   groundHeat: { sun: 7, shade: 3 },
   towers: false,
-  stones: 0.03,
 };
 
 /** Every biome, in order of precedence. */
