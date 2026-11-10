@@ -176,7 +176,7 @@ again to shut it). The hall's racks stay one instanced mesh; only an opened rack
 or blank, the same pick the rack shader makes: `tslHash` is TSL's `hash` in JS), and its modules, seeded per rack:
 1U and 2U servers with vents or drive bays, 4U storage, blanking plates, gaps, the top-of-rack switch with its port
 lights, blinking status LEDs, a PDU and a cable bundle; a dim fill on their fronts stands in for the aisle's light. Its
-instance is scaled to nothing meanwhile and comes back when the door has shut, or once you are 25 m off. At most six
+instance is scaled to nothing meanwhile and comes back when the door has shut, or once you are 25 m off. At most 20
 are open (opening a seventh shuts the oldest at once); each is a few dozen boxes merged into five meshes, built on
 opening and freed after. Client-only: the door has no collision and nothing is sent (the level is private). Sounds:
 `rack.open`, `rack.shut` (the latch sample, pitched).

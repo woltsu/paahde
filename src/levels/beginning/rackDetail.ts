@@ -15,7 +15,7 @@ import type { PlayerState } from '../../../shared/sim.ts';
 type F = Node<'float'>;
 
 /** Most racks open at once (the farthest shuts when one more opens). */
-const MAX = 6;
+const MAX = 20;
 /** Walk this far from an open rack and it shuts (m). */
 const FORGET = 25;
 /** Reach to a rack's front (m), and how squarely you must face it (cos of the angle). */
