@@ -36,6 +36,7 @@ import { Props } from './props.ts';
 import { FallSound } from './sound.ts';
 import { HallSound } from './hallSound.ts';
 import { OpenRacks } from './rackDetail.ts';
+import { DOSSIER_PROGRAMS } from '../../world/dossiers.ts';
 import { NetTerminal } from '../../world/netTerminal.ts';
 import { play } from '../../sounds.ts';
 import { Ride } from './ride.ts';
@@ -105,7 +106,8 @@ export class BeginningStage implements Stage {
     this.root.add(new RingShell().group);
     this.racks = new OpenRacks(this.root, this.box.racks, L.racks, L.rackH ?? 2, (opening) => play(opening ? 'rack.open' : 'rack.shut'));
     DESKS.forEach((d, i) => {
-      const t = new NetTerminal({ seed: 11 + i, tint: (['white', 'green', 'amber', 'green'] as const)[i] });
+      // Each desk shows the station's files on its people (src/world/dossiers.ts), a program of its own.
+      const t = new NetTerminal({ program: DOSSIER_PROGRAMS[i % DOSSIER_PROGRAMS.length](11 + i), tint: (['white', 'green', 'amber', 'green'] as const)[i] });
       t.object.position.set(d.x, DESK.h, d.z);
       t.object.rotation.y = d.yaw;
       this.root.add(ringAnchor(d.z, t.object));

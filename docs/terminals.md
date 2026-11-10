@@ -97,8 +97,24 @@ Words a player reads on a terminal are player-visible text: they live in `shared
 any other, and the program takes them from there. Only dev-only screens (the lab's `labBoard` in
 `src/world/labPlates.ts`, the working example) compose their words in place. The code stream is decoration, not text.
 
+## The ring hall's dossiers (`src/world/dossiers.ts`)
+
+The beginning's four desks (docs/levels/ring.md) show the station reviewing its own people (docs/lore.md): low-res
+headshots with ids, variants (human, dwarf, gnome), compliance and a verdict, and their genomes as ATGC. One program a
+desk, in `DOSSIER_PROGRAMS` order: `subjectFile` (a face scans in, the fields type out, a genome rolls), `sequencer`
+(a turning double helix, the stream of bases, a face and a progress bar), `census` (twelve faces judged one at a time)
+and `crossMatch` (two faces, the second flicking through the records until it locks; their genomes aligned).
+
+- **Faces** are drawn, not loaded: `face(seed, variant)` is a pure 24 × 30 greyscale bitmap (lit ellipsoid head,
+  eyes, brows, nose, mouth, hair, beard, glasses; dwarves broad and bearded, gnomes small with long pointed ears),
+  painted into a small canvas per picture and shown with `{ smooth: false }`. Painting darkens the middles
+  (`CONTRAST`, a gamma), since the phosphor glows mid-greys up a lot.
+- **Words** come from `TEXT.tutorial.dossier`; ids, loci and bases are data. Everything is seeded by the desk, so a
+  desk shows the same people each visit.
+- Each program redraws 12 times a second at most (`ticking`), whole frames with `setLines([])` then `print`.
+
 ## Testing
 
 `tools/terminal-text.test.mjs` covers the text grid and the helpers; it runs under Node (`node --test`), with no
 browser. A program's logic can be tested the same way: make a `new TerminalText(cols, rows)`, call `update` with a `dt`,
-and read `text.lines()`.
+and read `text.lines()`. `tools/dossiers.test.mjs` does that for the ring hall's programs, and checks the faces.

@@ -731,6 +731,45 @@ const en = {
     cities: ['LAGOS', 'LIMA', 'DHAKA', 'CAIRO', 'TEHRAN', 'KARACHI', 'PERTH', 'PHOENIX'],
     /** The one card in the dust on the way down. */
     card: 'The last of them came down too.',
+    /** The ring hall's four net terminals (src/world/dossiers.ts): the station's files on its own people, in capitals. */
+    dossier: {
+      header: 'YASITU 3 / POPULATION REVIEW',
+      subject: 'SUBJECT',
+      name: 'NAME',
+      variant: 'VARIANT',
+      variants: { human: 'HUMAN', dwarf: 'DWARF', gnome: 'GNOME' },
+      habitat: 'HABITAT',
+      home: (ring: number, deck: number) => `RING ${ring} / DECK ${deck}`,
+      role: 'ROLE',
+      roles: ['DEPENDENT', 'DEPENDENT', 'DEPENDENT', 'SECURITY', 'MAINTENANCE', 'DEPENDENT, RETIRED'],
+      compliance: 'COMPLIANCE',
+      utility: 'UTILITY',
+      status: 'STATUS',
+      verdicts: { retain: 'RETAIN', review: 'UNDER REVIEW', surface: 'RETURN TO SURFACE' },
+      /** The verdicts short, under a face in a grid of them. */
+      marks: { retain: 'RETAIN', review: 'REVIEW', surface: 'SURFACE' },
+      genome: 'GENOME',
+      chromosome: (n: number) => `CHR ${String(n).padStart(2, '0')}`,
+      deviation: (locus: string) => `DEVIATION AT ${locus}`,
+      edited: (locus: string) => `EDITED ${locus}`,
+      analysing: (n: number, of: number) => `ANALYSING ${n} OF ${of}`,
+      sequencing: 'SEQUENCING',
+      census: 'CENSUS',
+      batch: (n: number) => `BATCH ${n}`,
+      assessed: (n: number, of: number) => `ASSESSED ${n}/${of}`,
+      assessing: 'ASSESSING',
+      crossMatch: 'CROSS-MATCH',
+      searching: 'SEARCHING RECORDS',
+      kin: { none: 'NO RELATION', sibling: 'SIBLING', parent: 'PARENT', duplicate: 'DUPLICATE' },
+      match: 'MATCH',
+      /** Who the files are about: surname, initial. */
+      names: [
+        'OKAFOR, A.', 'LINDQVIST, M.', 'TANAKA, R.', 'IBARRA, S.', 'MBEKI, T.', 'KOWALSKI, J.', 'NAZARI, F.',
+        'ADEYEMI, K.', 'HALVORSEN, E.', 'QUISPE, L.', 'RAHMAN, N.', 'VOSS, H.', 'CHEN, Y.', 'MORENO, D.',
+        'BAPTISTE, C.', 'OYELARAN, I.', 'PETROVA, A.', 'NAKAMURA, O.', 'ASANTE, B.', 'KARIMI, Z.',
+        'FERREIRA, P.', 'DUBOIS, G.', 'HOLM, U.',
+      ],
+    },
   },
 
   // ---- The character talking to themselves (src/speechLines.ts, docs/speech.md); a list: one picked at random -------
