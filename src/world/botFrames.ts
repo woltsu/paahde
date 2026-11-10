@@ -102,10 +102,11 @@ export function dronesAt(msgs: readonly BotsMsg[], time: number): DroneFrame[] {
 
 /** A runner as drawn (shared/runner.ts RUNNER_STRIDE): where, its heading, what it's doing (R_*), whether it hunts you
  *  (2) or someone else (1), what it looks at (look: null none), its gun (-1 carried, 0 raised, 1 charging), weak
- *  points broken, seconds dead (0 alive), its last bite (server ms). */
+ *  points broken, seconds dead (0 alive), its last bite (server ms), when its wreck last began to draw its jaws back
+ *  (server ms, 0 never). */
 export type RunnerFrame = {
   id: number; armed: boolean; x: number; z: number; yaw: number; st: number; hunt: number;
-  look: { x: number; y: number; z: number } | null; gun: number; broken: number; dead: number; snap: number;
+  look: { x: number; y: number; z: number } | null; gun: number; broken: number; dead: number; snap: number; lunge: number;
 };
 
 export function runnersAt(msgs: readonly BotsMsg[], time: number): RunnerFrame[] {
@@ -122,7 +123,7 @@ export function runnersAt(msgs: readonly BotsMsg[], time: number): RunnerFrame[]
     out.push({
       id: rb[j], armed: rb[j + 1] === 1, x: l(2), z: l(3), yaw: lerpAngle(p[k + 4], rb[j + 4], t), st: rb[j + 5], hunt: rb[j + 6],
       look: rb[j + 7] === 1 ? (both ? { x: l(8), y: l(9), z: l(10) } : { x: rb[j + 8], y: rb[j + 9], z: rb[j + 10] }) : null,
-      gun: rb[j + 11], broken: rb[j + 12], dead: rb[j + 13], snap: rb[j + 14],
+      gun: rb[j + 11], broken: rb[j + 12], dead: rb[j + 13], snap: rb[j + 14], lunge: rb[j + 15],
     });
   }
   return out;

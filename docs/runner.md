@@ -38,21 +38,30 @@ See it: `models-lab.html?runner` (four at once), `?runner=prowl`, `?runner=armed
   one. The blaster's burst hurts weak points within its radius. Any hit turns it on the shooter.
 - **Hits are checked** against where it was over the last second (its history: as clients drew it): a weak point within
   1.6 m (the gun core 2.6 m, it swings about on the arm), the hull within its box.
+- **Its wreck bites:** dead isn't done. Anyone out in the open coming within `WAKE_R` (3.2 m) of its maw (`WRECK_MAW`,
+  3.3 m ahead of its centre as it lies: between its head and its jaws' tips), once it has lain `STIR_MS` (2.5 s), wakes
+  it (`wreck`): its head rears, its eyes flicker and its jaws draw back wide for `RUNNER_WAKE_MS` (1 s, as drawn:
+  the server waits `BOT_DELAY_MS` more), then snap shut on whoever is still within `WRECK_BITE_R` (2.4 m): a live bite's
+  kill. A step back as it wakes and it snaps on nothing. It wakes again no sooner than `REST_MS` (2.5 s) after. Its
+  flanks and tail (its spoils lie at its centre) are safe.
 - **Death and loot:** it slumps where it fell (lying `WRECK_MS`, 90 s) and leaves its spoils (`shared/enemies.ts`
   runner, `shared/lootRoll.ts` `runnerDrops`, `shared/tables.ts` `RUNNER_SPOILS`, `RUNNER_GUN_SPOILS`): drive parts,
   the armed one's gun parts maybe, a servo heart now and then, a broken receiver rarely, two wiring.
-- **Tests:** `tools/runner.test.mjs` (bite, dodge, weak points vs plate, the armed one shooting and giving up, spawning).
+- **Tests:** `tools/runner.test.mjs` (bite, dodge, weak points vs plate, the wreck's bite, the armed one shooting and
+  giving up, spawning).
 
 ## Sync and the view
 
 'bots' `r` (`RUNNER_STRIDE`, shared/runner.ts): id, kind, x, z, yaw, state, hunt (2: you), look and its point, gun
-(-1 carried, 0 raised, 1 charging), broken, dead (s), snap (its last bite). `runnersAt` (src/world/botFrames.ts)
+(-1 carried, 0 raised, 1 charging), broken, dead (s), snap (its last bite), lunge (its wreck's last waking). `runnersAt` (src/world/botFrames.ts)
 interpolates it `BOT_DELAY_MS` behind like the walkers; `Runners` (src/world/runner.ts) drives a `Runner` per one:
 `alert` while charging, `look` while it stares, aims or charges, `charging` for the coils, `fire()` on the 'shot',
-`snap()` on a new bite, `dead` for the slump (body down onto its belly, rolled, eyes out, jaws slack). The rifle tests
+`snap()` on a new bite, `dead` for the slump (body down onto its belly, rolled, eyes out, jaws slack), `lunge()` on its
+wreck waking (and `snap()` `RUNNER_WAKE_MS` later, when the server bites). The rifle tests
 shots against `Runner.raycast` (boxes: hull, head, eyes, vents, gun housing and core; a weak point counts reached no
 more than 0.25 m past the armour round it). `GuardianFx.updateRunners` (src/guardians.ts) does the rest: aggro
-('runner' speech), combat, kills, the gun's whine and shot, bites, deaths, footfalls and dust.
+('runner' speech), combat, kills, the gun's whine and shot, bites, its wreck's warning (`runner.wake`: a servo groan under a ratchet quickening to the snap, on the warning bus),
+deaths, footfalls and dust.
 
 ## What it is
 
@@ -161,8 +170,10 @@ its loop it sprints a third to two thirds of a lap round the player (22–38 m o
     with the body.
   - `Runner.muzzle(out)` gives the muzzle's world position (for spawning a bolt or a flash); `gunObject` the moving gun.
 - **Bite:** `snap()` shuts the jaws hard and holds them 0.3 s (charging, they gape and chatter: `alert`).
-- **Death:** `dead` (seconds) slumps it: the feet stay put, the body sinks onto its belly, nose down, rolled a little,
-  the eyes go out and the jaws hang slack. No breaking apart.
+- **Death:** `dead` (seconds) slumps it: the feet stay put, the body sinks onto its belly, nose down (the head lies
+  still), rolled a little, the eyes go out and the jaws hang slack. No breaking apart.
+- **Its wreck waking:** `lunge()` rears the head off the sand, flickers the eyes back on and draws the jaws back wide
+  (~54°) for `RUNNER_WAKE_MS`; the `snap()` after shuts them hard and drives the head down.
 - **Footfalls:** `onFootfall(x, y, z, speed)` as each foot lands (thud and dust in `GuardianFx`).
 - **Not done yet:** hit reactions, a broken weak point dimming (todo-issues.md), its own sounds (it borrows the
   guardian's and crawler's), steering round wrecks and rocks.

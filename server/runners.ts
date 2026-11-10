@@ -15,6 +15,8 @@
 //   else. Anyone coming within CLOSE_R of either is charged at once.
 // It gives up (R_LEAVE, trotting away) when it has lost them for LOSE_MS, after GIVE_UP_MS, or when they're dead;
 // gone when nobody is within GONE_R. A storm front's static seizes it where it stands.
+// Dead, its wreck lies there WRECK_MS and still bites (`wreck`): anyone in the open coming within WAKE_R of its maw
+// wakes it, it draws its jaws back (RUNNER_WAKE_MS, as drawn) and snaps them on whoever is still within WRECK_BITE_R.
 import { BOT_DELAY_MS, lineOfSight } from '../shared/guardians.ts';
 import { heightAt } from '../shared/terrain.ts';
 import { ORIGIN } from '../shared/origin.ts';
@@ -22,7 +24,7 @@ import { seized, type Storm } from '../shared/storm.ts';
 import { bites, kills, type Gun } from '../shared/rifle.ts';
 import { ENEMIES } from '../shared/enemies.ts';
 import {
-  GUN_CHARGE_MS, GUN_FIRE_MS, GUN_RAISE_MS, JAW_REACH, R_AIM, R_CHARGE, R_DEAD, R_LEAVE, R_RECOVER, R_ROAM, R_STALK, RP_CORE, RP_EYES, RUNNER_ACCEL, RUNNER_BODY_Y,
+  GUN_CHARGE_MS, GUN_FIRE_MS, RUNNER_WAKE_MS, WRECK_MAW, GUN_RAISE_MS, JAW_REACH, R_AIM, R_CHARGE, R_DEAD, R_LEAVE, R_RECOVER, R_ROAM, R_STALK, RP_CORE, RP_EYES, RUNNER_ACCEL, RUNNER_BODY_Y,
   RUNNER_BRAKE, RUNNER_EYE_Y, RUNNER_GALLOP, RUNNER_POINTS, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK, runnerDead, TURN_SPRINT,
   TURN_STAND, TURN_WALK, type RunnerKind,
 } from '../shared/runner.ts';
@@ -81,6 +83,11 @@ const HULL_X = 1.4, HULL_Z = 3.5, HULL_Y = 4.2, HULL_SLACK = 1;
 const HIST_MS = 1000;
 /** A dead one lies there this long (ms). */
 const WRECK_MS = 90_000;
+/** Anyone within WAKE_R (m, flat) of its wreck's maw (shared/runner.ts WRECK_MAW), once it has lain STIR_MS, wakes it:
+ *  its jaws draw back (RUNNER_WAKE_MS, as drawn) and snap shut on whoever is within WRECK_BITE_R; it bites again no
+ *  sooner than REST_MS after. */
+export const WAKE_R = 3.2, WRECK_BITE_R = 2.4;
+const STIR_MS = 2500, REST_MS = 2500;
 
 /** A stalking leg: to (tx, tz) (by `via` first, if any: x, z), at `want` m/s, or stood staring; over at `until`. */
 type Leg = { tx: number; tz: number; via: [number, number] | null; want: number; stare: boolean; until: number };
@@ -105,6 +112,8 @@ export type Runner = {
   hits: number[]; broken: number; hull: number; deadAt: number;
   /** Its last bite (server ms, 0 none). */
   snapAt: number;
+  /** Its wreck: when it last began to draw its jaws back (server ms, 0 never), and whether that bite has snapped. */
+  lungeAt: number; lunged: boolean;
   /** Where it was (t, x, z, yaw, ...) over the last HIST_MS: as clients draw it. */
   hist: number[];
 };
@@ -138,7 +147,7 @@ export class RunnerServer {
       mark: p.id, prey: -1, huntAt: 0, seenAt: 0, px: p.x, pz: p.z, tx: p.x, tz: p.z, want: RUNNER_TROT, face: null,
       leg: null, stalkUntil: 0, charges: 0, committed: false, look: false, lx: 0, ly: 0, lz: 0,
       raisedAt: -1, chargeAt: -1, firedAt: 0, shots: 0, shotsWanted: 0,
-      hits: RUNNER_POINTS.map(() => 0), broken: 0, hull: 0, deadAt: -1, snapAt: 0, hist: [],
+      hits: RUNNER_POINTS.map(() => 0), broken: 0, hull: 0, deadAt: -1, snapAt: 0, lungeAt: 0, lunged: true, hist: [],
     };
     this.runners.push(r);
     if (hunting) this.hunt(r, p, now, 3000);
@@ -150,6 +159,13 @@ export class RunnerServer {
     this.spawn(kind, p, now, 45, true);
   }
 
+  /** Debug menu: a plain one's wreck 12 m from p, facing them (no spoils: it was never killed). */
+  summonWreck(p: BotPlayer, now: number) {
+    const r = this.spawn('plain', p, now, 12);
+    r.hist.push(now, r.x, r.z, r.yaw);
+    this.die(r, now, -1);
+  }
+
   /** Advance by dt (s) at server time `now`: sending them out, their hunting, moving. Who was bitten goes into `mauled`;
    *  bolts go out through `fire`. */
   tick(dt: number, now: number, players: BotPlayer[], storms: readonly Storm[], vel: Tracks, mauled: number[], fire: Fire) {
@@ -157,7 +173,10 @@ export class RunnerServer {
     this.send(now, exposed);
     const byId = new Map(exposed.map((p) => [p.id, p]));
     this.runners = this.runners.filter((r) => {
-      if (r.deadAt >= 0) return now - r.deadAt < WRECK_MS && players.some((p) => Math.hypot(p.x - r.x, p.z - r.z) < GONE_R);
+      if (r.deadAt >= 0) {
+        this.wreck(r, now, exposed, mauled);
+        return now - r.deadAt < WRECK_MS && players.some((p) => Math.hypot(p.x - r.x, p.z - r.z) < GONE_R);
+      }
       if (!players.some((p) => Math.hypot(p.x - r.x, p.z - r.z) < GONE_R)) return false;
       if (seized(storms, r.x, r.z, now)) {
         // Seized up: it stands there, staring at nothing, till the front has passed.
@@ -424,6 +443,25 @@ export class RunnerServer {
     if (r.snapAt === now) this.set(r, R_RECOVER, now);
   }
 
+  /** Its wreck: anyone near its maw wakes it; RUNNER_WAKE_MS after clients see it draw its jaws back (BOT_DELAY_MS
+   *  late), they snap shut on whoever is still within WRECK_BITE_R. */
+  private wreck(r: Runner, now: number, exposed: BotPlayer[], mauled: number[]) {
+    const mx = r.x + Math.sin(r.yaw) * WRECK_MAW, mz = r.z + Math.cos(r.yaw) * WRECK_MAW, gy = heightAt(mx, mz);
+    const near = (p: BotPlayer, d: number) => Math.hypot(p.x - mx, p.z - mz) < d && Math.abs(p.y - gy) < 3;
+    const snap = r.lungeAt + BOT_DELAY_MS + RUNNER_WAKE_MS;
+    if (!r.lunged) {
+      if (now < snap) return;
+      r.lunged = true;
+      for (const p of exposed) if (near(p, WRECK_BITE_R) && !mauled.includes(p.id)) mauled.push(p.id);
+      return;
+    }
+    if (now - r.deadAt < STIR_MS || now < snap + REST_MS) return;
+    if (exposed.some((p) => near(p, WAKE_R))) {
+      r.lungeAt = now;
+      r.lunged = false;
+    }
+  }
+
   /** Weak point i's place (world) on r as it was at t. */
   private point(r: Runner, i: number, t: number, out: { x: number; y: number; z: number }) {
     const w = this.at(r, t, _a), q = RUNNER_POINTS[i];
@@ -533,7 +571,7 @@ export class RunnerServer {
       const gun = r.st === R_AIM && r.raisedAt >= 0 ? (r.chargeAt >= 0 ? 1 : 0) : -1;
       out.push(r.id, r.kind === 'armed' ? 1 : 0, r2(r.x), r2(r.z), r3(r.yaw), r.st, r.prey < 0 ? 0 : r.prey === id ? 2 : 1,
         r.look ? 1 : 0, r.look ? r2(r.lx) : 0, r.look ? r2(r.ly) : 0, r.look ? r2(r.lz) : 0, gun, r.broken,
-        r.deadAt < 0 ? 0 : Math.round((time - r.deadAt) / 100) / 10 + 0.01, Math.round(r.snapAt));
+        r.deadAt < 0 ? 0 : Math.round((time - r.deadAt) / 100) / 10 + 0.01, Math.round(r.snapAt), Math.round(r.lungeAt));
     }
     return out;
   }

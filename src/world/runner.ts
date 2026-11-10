@@ -11,6 +11,8 @@
 // stops.
 //
 // The jaws flex idly, open slowly and snap shut while it stares, gape and chatter while it runs hot (`alert`).
+// Dead, it lies with its nose in the sand, jaws slack, but its wreck can wake (`lunge`): head reared, eyes flickering,
+// jaws drawn back wide, then snapped shut.
 // The body rides standY over the ground, pitched and rolled to the ground under its feet, bobbing with the stride
 // (twice a stride trotting; galloping, a rocking pitch), crouching lower the faster it goes, leaning into turns and
 // forward as it speeds up. The head looks at what it's given (`look`) or about, its eyes pulsing.
@@ -19,9 +21,12 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
-  R_CHARGE, RP_CORE, RP_EYES, RP_VENT_L, RP_VENT_R, RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WALK, type RunnerKind,
+  R_CHARGE, RP_CORE, RP_EYES, RP_VENT_L, RP_VENT_R, RUNNER, RUNNER_GALLOP, RUNNER_SPRINT, RUNNER_TROT, RUNNER_WAKE_MS, RUNNER_WALK, type RunnerKind, WRECK_MAW,
 } from '../../shared/runner.ts';
 import type { RunnerFrame } from './botFrames';
+
+/** Its wreck's jaws drawn back this long (s) before they snap. */
+const WAKE_S = RUNNER_WAKE_MS / 1000;
 
 const PARTS = ['Runner_Body', 'Runner_BodyArmed', 'Runner_ArmBase', 'Runner_ArmUpper', 'Runner_ArmFore', 'Runner_GunMount', 'Runner_Rifle', 'Runner_Head', 'Runner_JawL', 'Runner_JawR', 'Runner_HipL', 'Runner_HipR', 'Runner_ThighL', 'Runner_ThighR', 'Runner_ShinL', 'Runner_ShinR'] as const;
 type PartName = (typeof PARTS)[number];
@@ -186,8 +191,9 @@ export class Runner {
   auto = true;
   charging = false;
   private chargeLevel = 0;
-  /** Its last bite (s, `now` / 1000): the jaws snap shut. */
+  /** Its last bite (s, `now` / 1000): the jaws snap shut. Its wreck's last waking (s): the jaws drawn back. */
   private snapAt = -1e9;
+  private lungeAt = -1e9;
   /** Seconds since it died (0 alive): it slumps down on its legs, its eyes going out. */
   dead = 0;
   /** A foot came down at (x, y, z), the body going `speed` m/s. */
@@ -394,7 +400,12 @@ export class Runner {
 
     // The head: on what it watches, or about (less as it runs, nose down as it runs flat out), steadied against the rock.
     let hy: number, hp: number;
-    if (look) {
+    // Its wreck waking: the head rears off the sand as the jaws draw back, and drives down as they snap.
+    const wake = now / 1000 - this.lungeAt, waking = this.dead > 0 && wake >= 0 && wake < WAKE_S, bit = now / 1000 - this.snapAt < 0.3;
+    if (this.dead > 0) {
+      hy = 0;
+      hp = waking ? -0.4 * smooth(0, 0.4, wake) : bit ? 0.5 : 0.3;
+    } else if (look) {
       _v.copy(look);
       this.body.worldToLocal(_v).sub(_q.set(...R.neck));
       hy = Math.max(-1.1, Math.min(1.1, Math.atan2(_v.x, _v.z)));
@@ -405,16 +416,16 @@ export class Runner {
       hp = 0.18 + 0.12 * Math.sin(k * 1.1) * (1 - moving) + 0.15 * g;
     }
     this.headYaw = ease(this.headYaw, hy, look ? 7 : 3, dt);
-    this.headPitch = ease(this.headPitch, hp - rock * 0.8, 7, dt);
+    this.headPitch = ease(this.headPitch, hp - rock * 0.8, this.dead > 0 && bit ? 30 : 7, dt);
     this.neck.rotation.set(this.headPitch, this.headYaw, 0);
 
     // The jaws: flexing idly; staring at you, slowly opening wide and snapping shut; running hot, agape and chattering.
     const k = now / 1000 + this.seed;
     const snap = frac(k / 2.6), wide = snap < 0.85 ? 0.85 * smooth(0, 0.85, snap) : 0;
     let gape = this.alert > 0 ? 0.55 + 0.12 * Math.sin(k * 40) : look ? 0.04 + wide : 0.08 + 0.07 * Math.sin(k * 1.3) * Math.sin(k * 0.45);
-    // A bite: shut, held a moment. Dead: slack.
-    if (now / 1000 - this.snapAt < 0.3) gape = 0;
-    if (this.dead > 0) gape = 0.3 * fall;
+    // Dead: slack; its wreck waking, drawn back wide. A bite: shut, held a moment.
+    if (this.dead > 0) gape = waking ? 0.95 : 0.3 * fall;
+    if (bit) gape = 0;
     // Shutting is a snap, opening a slow spread.
     this.gape = ease(this.gape, gape, gape < this.gape ? 30 : 6, dt);
     this.jaws[0].rotation.y = this.gape;
@@ -422,7 +433,9 @@ export class Runner {
 
     if (this.arm) this.gun(dt, look, now);
 
-    const pulse = (0.75 + 0.25 * Math.sin(now / 170 + this.seed)) * (1 - smooth(0, 1.5, this.dead));
+    // Dead, the eyes go out; its wreck waking, they flicker back on till the snap.
+    const flicker = waking || bit ? 0.6 + 0.4 * Math.sin(now / 23 + this.seed) * Math.sin(now / 61) : 0;
+    const pulse = Math.max((0.75 + 0.25 * Math.sin(now / 170 + this.seed)) * (1 - smooth(0, 1.5, this.dead)), flicker);
     for (const e of this.eyes) e.emissiveIntensity = (e.userData.base as number) * pulse * (1 + 1.5 * this.alert);
   }
 
@@ -524,6 +537,11 @@ export class Runner {
   /** Bites now (`now` ms, as given to update): its jaws snap shut. */
   snap(now: number) {
     this.snapAt = now / 1000;
+  }
+
+  /** Its wreck wakes now (`now` ms, as given to update): the jaws draw back for RUNNER_WAKE_MS (then `snap`). */
+  lunge(now: number) {
+    this.lungeAt = now / 1000;
   }
 
   /**
@@ -677,14 +695,16 @@ const SHOW_R = 500;
  * (raycast).
  */
 export class Runners {
-  private views = new Map<number, { view: Runner; frame: RunnerFrame; dead: boolean; snap: number }>();
+  private views = new Map<number, { view: Runner; frame: RunnerFrame; dead: boolean; snap: number; lunge: number; biteAt: number }>();
   private look = new THREE.Vector3();
   private scene: THREE.Object3D;
   private ground: Ground;
   /** A foot came down (x, y, z), the body going `speed` m/s. */
   onFootfall: (x: number, y: number, z: number, speed: number) => void = () => {};
-  /** It bit someone (its jaws' tips at x, y, z). */
+  /** It bit someone (its jaws' tips at x, y, z), or its wreck snapped its jaws. */
   onSnap: (x: number, y: number, z: number) => void = () => {};
+  /** Its wreck woke, its jaws (x, y, z) drawn back to snap in `s` seconds. */
+  onLunge: (x: number, y: number, z: number, s: number) => void = () => {};
   /** It died, its body at (x, y, z). */
   onDeath: (x: number, y: number, z: number) => void = () => {};
 
@@ -709,7 +729,7 @@ export class Runners {
         view.onFootfall = (x, y, z, speed) => this.onFootfall(x, y, z, speed);
         this.scene.add(view.root);
         // One already dead (we just came by): no death throes.
-        v = { view, frame: f, dead: f.dead > 0, snap: f.snap };
+        v = { view, frame: f, dead: f.dead > 0, snap: f.snap, lunge: f.lunge, biteAt: 0 };
         this.views.set(f.id, v);
       }
       v.frame = f;
@@ -721,6 +741,19 @@ export class Runners {
         v.snap = f.snap;
         view.snap(now);
         this.onSnap(f.x + Math.sin(f.yaw) * 4, this.ground(f.x, f.z) + 1.6, f.z + Math.cos(f.yaw) * 4);
+      }
+      // Its wreck: drawing its jaws back, snapping them RUNNER_WAKE_MS on (when the server bites).
+      const mx = f.x + Math.sin(f.yaw) * WRECK_MAW, mz = f.z + Math.cos(f.yaw) * WRECK_MAW;
+      if (f.lunge && f.lunge !== v.lunge) {
+        v.lunge = f.lunge;
+        v.biteAt = now + RUNNER_WAKE_MS;
+        view.lunge(now);
+        this.onLunge(mx, this.ground(mx, mz) + 1, mz, WAKE_S);
+      }
+      if (v.biteAt && now >= v.biteAt) {
+        v.biteAt = 0;
+        view.snap(now);
+        this.onSnap(mx, this.ground(mx, mz) + 1, mz);
       }
       if (f.dead > 0 && !v.dead) {
         v.dead = true;

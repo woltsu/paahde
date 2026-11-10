@@ -170,6 +170,47 @@ defineSynth('crawler-rattle', {
   },
 });
 
+// A runner's wreck waking, snapping its jaws arg s from now: a servo groaning up from the dead under a ratchet of its
+// jaws drawing back, quickening to the snap.
+defineSynth('runner-wake', {
+  length: (o) => Math.max(0.1, Number(o.arg) || 1) + 0.1,
+  voice(ctx, p, t, m) {
+    const s = Math.max(0.1, Number(m.arg) || 1);
+    // The groan: a low saw sliding up, its filter opening, swelling and cut off at the snap.
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(48, t);
+    o.frequency.exponentialRampToValueAtTime(150, t + s);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(220, t);
+    lp.frequency.exponentialRampToValueAtTime(1400, t + s);
+    lp.Q.value = 4;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.15);
+    g.gain.linearRampToValueAtTime(0.8, t + s - 0.02);
+    g.gain.linearRampToValueAtTime(0, t + s + 0.03);
+    o.connect(lp).connect(g).connect(p);
+    o.start(t);
+    o.stop(t + s + 0.05);
+    // The ratchet: heavy clicks closer and closer together right up to the snap.
+    for (let at = 0.05; at < s; at += 0.11 - 0.08 * (at / s)) {
+      const k = at / s, when = t + at + Math.random() * 0.005;
+      const c = ctx.createOscillator();
+      c.type = 'square';
+      c.frequency.setValueAtTime(700 + 600 * k + Math.random() * 150, when);
+      c.frequency.exponentialRampToValueAtTime(220 + 200 * k, when + 0.03);
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.5 + 0.5 * k, when);
+      cg.gain.exponentialRampToValueAtTime(0.001, when + 0.03);
+      c.connect(cg).connect(p);
+      c.start(when);
+      c.stop(when + 0.035);
+    }
+  },
+});
+
 // A crawler going for you (arg 'bite': and getting you): a rattling chitter, or a snap of mandibles.
 defineSynth('crawler-chitter', {
   length: (m) => (m.arg === 'bite' ? 0.2 : 0.37),
@@ -279,6 +320,11 @@ class GuardianSound {
   /** A crawler at (x, y, z) crouches to lunge, springing `s` seconds from now. */
   rattle(x: number, y: number, z: number, s: number, ear: P) {
     if (s > 0) play('crawler.rattle', { x, y, z }, ear, { arg: s });
+  }
+
+  /** A runner's wreck at (x, y, z) wakes, to snap its jaws in `s` seconds. */
+  wake(x: number, y: number, z: number, s: number, ear: P) {
+    play('runner.wake', { x, y, z }, ear, { arg: s });
   }
 
   /** A crawler at (x, y, z) goes for you (`bite`: and gets you). */

@@ -122,7 +122,7 @@ export type ClientMsg =
   // Debug menu: bring the nearest guardian 90 m from you, a searchlight drone over you for a minute (by day too), or
   // a fixed-wing drone past you in about 15 s, a harvester crawling past (shared/harvester.ts), or a boss
   // (shared/bosses.ts) near you.
-  | { t: 'summon'; what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | 'runner' | 'runnerArmed' | BossKind }
+  | { t: 'summon'; what: 'guardian' | 'drone' | 'jet' | 'crawlers' | 'harvester' | 'runner' | 'runnerArmed' | 'runnerWreck' | BossKind }
   // A shot of the gun in hand (shared/rifle.ts GUNS) from (x, y, z) to where it stopped, (ex, ey, ez). `g`/`i`: the client
   // found it hit weak point i of walker g (i -1: just its body); `d`: it hit drone d; `j`: fixed-wing
   // drone j (shared/jets.ts); `h`/`hi`: intake core hi of harvester h (shared/harvester.ts; hi -1: its hull);

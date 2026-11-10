@@ -121,7 +121,7 @@ export class GuardianFx {
     this.scene = scene;
     this.nest = new Brood(scene, NEST_N * 2);
     this.runners = new Runners(scene, heightAt);
-    // A runner's feet: a heavy thud, louder at a gallop, and sand kicked up; its jaws snapping shut on someone; dying,
+    // A runner's feet: a heavy thud, louder at a gallop, and sand kicked up; its jaws snapping shut on someone (its wreck's too); dying,
     // its vents blow and it slumps down onto the sand.
     this.runners.onFootfall = (x, y, z, speed) => {
       guardianSound.footfall(x, y, z, 0.12 + 0.02 * Math.min(10, speed), this.ear);
@@ -131,6 +131,8 @@ export class GuardianFx {
       guardianSound.chitter(x, y, z, true);
       if (Math.hypot(x - this.ear.x, z - this.ear.z) < 12) this.jolt(BITE_SHAKE * 2);
     };
+    // Its wreck waking with someone at its head: a groan and a ratchet as its jaws draw back, then the snap above.
+    this.runners.onLunge = (x, y, z, s) => guardianSound.wake(x, y, z, s, this.ear);
     this.runners.onDeath = (x, y, z) => {
       zaps.burst(x, y, z, 0, 1, 0, 50, 6);
       for (let i = 0; i < 8; i++) zaps.puff(x + (Math.random() - 0.5) * 4, y + Math.random() * 2, z + (Math.random() - 0.5) * 4, 3 + Math.random() * 3, 3);

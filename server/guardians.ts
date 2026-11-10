@@ -793,6 +793,7 @@ export class GuardianServer {
   summon(what: unknown, p: BotPlayer, now: number) {
     if (what === 'drone') return this.drones.summon(p, now);
     if (what === 'runner' || what === 'runnerArmed') return this.runners.summon(what === 'runner' ? 'plain' : 'armed', p, now);
+    if (what === 'runnerWreck') return this.runners.summonWreck(p, now);
     if (what === 'crawlers') {
       const home: CrashSite = { ...this.sites[0], id: -this.nextSummon++, x: p.x, z: p.z };
       this.summoned.push(home);

@@ -13,7 +13,8 @@
 // (FIRE_MS; sidestep them), and moves on after a few shots; come close and it bites too. Weak points (red, glowing):
 // the eye cluster (from the front, as it charges you) and the vents on its flanks (side on, as it circles); break the
 // eyes or both vents and it dies. The armed one's gun has its power core at the back: break it and the gun goes
-// quiet. Its hull is a walker's plate (shared/enemies.ts). Drawn from the 'bots' message (`r`, RUNNER_STRIDE).
+// quiet. Its hull is a walker's plate (shared/enemies.ts). Downed, it isn't done: go near its head and the wreck draws
+// its jaws back and snaps them shut (RUNNER_WAKE_MS). Drawn from the 'bots' message (`r`, RUNNER_STRIDE).
 
 /** Rig lengths (body frame: +Z forward, Y up) in the model's units, which must match tools/blender/runner.py; in the
  *  world everything is `scale` times that. */
@@ -78,7 +79,13 @@ export const RUNNER_POINTS: readonly { x: number; y: number; z: number; hp: numb
 /** Dead with these broken (bit masks): the eyes, or both vents. */
 export const runnerDead = (broken: number) => (broken & (1 << RP_EYES)) !== 0 || (broken & 0b110) === 0b110;
 
+/** Its wreck still bites: someone near its head and it draws its jaws back for this long (ms, as drawn), then snaps
+ *  them shut (server/runners.ts `wreck`). Its maw, lying on its belly, is WRECK_MAW m ahead of its centre (between its
+ *  head and its jaws' tips). */
+export const RUNNER_WAKE_MS = 1000, WRECK_MAW = 3.3;
+
 /** 'bots' `r`, per runner: id, kind (0 plain, 1 armed), x, z, yaw, st (R_*), hunt (0 nobody, 1 someone else, 2 you),
  *  look (0/1) and the point it looks at (x, y, z), gun (-1 carried, 0 raised, 1 charging), broken (bit mask), dead (0
- *  alive, else seconds since), snap (server ms of its last bite, 0 none). */
-export const RUNNER_STRIDE = 15;
+ *  alive, else seconds since), snap (server ms of its last bite, 0 none), lunge (server ms its wreck last began to draw
+ *  its jaws back, 0 never). */
+export const RUNNER_STRIDE = 16;

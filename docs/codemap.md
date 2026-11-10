@@ -435,9 +435,10 @@ Everything built is shared, and anyone can take a building down.
   shared with its model `tools/blender/runner.py` (-> `runner.glb`), its speeds, turn rates, weak points (`RUNNER_POINTS`, `RP_*`), states (`R_*`)
   and its 'bots' `r` layout (`RUNNER_STRIDE`). Its AI is `server/runners.ts` (`RunnerServer`, owned and ticked by
   `server/guardians.ts`: sent for someone out in the open, stalks, charges and bites (committed within `COMMIT_R`: a late
-  sidestep dodges) or, armed, shoots the guardians' bolts from afar; hits checked against where it was drawn); drawn
+  sidestep dodges) or, armed, shoots the guardians' bolts from afar; hits checked against where it was drawn; its wreck
+  bites whoever lingers at its head, `wreck`); drawn
   from `runnersAt` (`src/world/botFrames.ts`) by `Runners` in `src/world/runner.ts` (`Runner`: rig, IK, trot/gallop gait,
-  `fire`, `snap`, the death slump, `raycast` hit boxes; `Prowl` moves one about for show), glue/sound in `src/guardians.ts`
+  `fire`, `snap`, the death slump, the wreck's `lunge`, `raycast` hit boxes; `Prowl` moves one about for show), glue/sound in `src/guardians.ts`
   `updateRunners`; seen in the models lab (`models-lab.html?runner`, `src/models/runnerLab.ts`); docs/runner.md
 - `shared/jets.ts` — fixed-wing drones: high fast flyovers (straight or big circles), day and night; 3 rifle hits and
   it glides down; scheduled by `server/jets.ts`, drawn by `src/world/jets.ts`, roar in `src/guardianSound.ts`

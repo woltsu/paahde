@@ -1,6 +1,6 @@
 // The runners (shared/runner.ts, server/runners.ts): one comes for someone out in the open, stalks them, then charges
 // and bites (or, armed, shoots from afar); a late step aside makes it miss; its eyes or both flank vents kill it, its
-// hull's plate turns the rifle.
+// hull's plate turns the rifle; its wreck still bites whoever lingers at its head.
 // Run with: node --test tools/runner.test.mjs
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -10,7 +10,7 @@ import { lineOfSight } from '../shared/guardians.ts';
 import { GUNS, PIERCER, RIFLE } from '../shared/rifle.ts';
 import {
   JAW_REACH, R_CHARGE, R_DEAD, R_LEAVE, R_RECOVER, R_STALK, RP_EYES, RP_VENT_L, RP_VENT_R, RUNNER_BODY_Y, RUNNER_POINTS,
-  RUNNER_STRIDE,
+  RUNNER_STRIDE, RUNNER_WAKE_MS, WRECK_MAW,
 } from '../shared/runner.ts';
 import { BOT_DELAY_MS } from '../shared/guardians.ts';
 import { KEEP_OUT, RunnerServer } from '../server/runners.ts';
@@ -39,11 +39,11 @@ const spot = flatSpot();
 const player = () => ({ id: 1, x: spot.x, y: spot.y, z: spot.z, safe: false });
 const vel = () => new Tracks({ k: (dt) => 1 - Math.exp(-dt * 6), jump: 25, onJump: 'keep' });
 
-/** Ticks at 10 Hz for `s` seconds (`step(p, r, t)` each tick first, stopping when it returns true); returns the bites,
- *  the bolts fired. */
+/** Ticks at 10 Hz for `s` seconds (`step(p, r, t)` each tick first, stopping when it returns true); returns the bites
+ *  (and when the first came), the bolts fired. */
 function run(rs, ps, clock, s, step = () => false) {
   const v = vel();
-  let bites = 0, bolts = 0;
+  let bites = 0, bolts = 0, bitAt = 0;
   for (let i = 0; i < s * 10; i++) {
     clock.now += 100;
     if (step(clock.now)) break;
@@ -52,8 +52,9 @@ function run(rs, ps, clock, s, step = () => false) {
     const mauled = [];
     rs.tick(0.1, clock.now, ps, [], v, mauled, () => bolts++);
     bites += mauled.length;
+    if (mauled.length && !bitAt) bitAt = clock.now;
   }
-  return { bites, bolts };
+  return { bites, bolts, bitAt };
 }
 
 /** Where a runner's weak point i is now (as the server reckons it; as drawn once it has stood still a moment). */
@@ -148,6 +149,64 @@ test('its eyes (from the front) or both flank vents kill it; the rifle bounces o
     let kill = null;
     for (let i = 0; i < 3 && !kill; i++) kill = rs.shoot(by, h.x, h.y, h.z, r.id, -1, now, piercer).kill;
     assert.ok(kill, 'three piercer slugs through its hull');
+  }
+});
+
+/** A runner shot dead (its eyes) standing still by `by`; the clock after. */
+function wreck(by) {
+  const rs = new RunnerServer(1e12), clock = { now: 1000 };
+  rs.spawn('plain', by, clock.now, 40);
+  run(rs, [{ ...by, safe: true }], clock, 1);
+  const r = rs.runners[0], e = pointOf(r, RP_EYES);
+  for (let i = 0; i < 3; i++) rs.shoot(by, e.x, e.y, e.z, r.id, RP_EYES, clock.now, GUNS[PIERCER]);
+  assert.equal(r.st, R_DEAD);
+  return { rs, r, clock };
+}
+/** Stood `ahead` m in front of runner r's centre and `side` m to its left. */
+const by = (r, ahead, side = 0) => {
+  const c = Math.cos(r.yaw), s = Math.sin(r.yaw);
+  return { ...player(), x: r.x + s * ahead + c * side, z: r.z + c * ahead - s * side };
+};
+
+test("its wreck bites whoever lingers at its head, after drawing its jaws back; a step back as it wakes and it misses", () => {
+  {
+    const { rs, r, clock } = wreck(player());
+    const p = by(r, WRECK_MAW + 1);
+    // Not while it's still slumping down.
+    assert.equal(run(rs, [p], clock, 1.5).bites, 0);
+    assert.equal(r.lungeAt, 0, 'it lies still the first moments');
+    run(rs, [p], clock, 2, () => r.lungeAt > 0);
+    const woke = r.lungeAt;
+    assert.ok(woke > 0, 'it woke with someone at its head');
+    const msg = rs.msg(clock.now, p.id, p.x, p.z);
+    assert.equal(msg.length, RUNNER_STRIDE);
+    assert.equal(msg[15], Math.round(woke), 'sent to clients');
+    // The jaws drawn back (as drawn, BOT_DELAY_MS late) for RUNNER_WAKE_MS, then the snap.
+    const { bites, bitAt } = run(rs, [p], clock, 3);
+    assert.ok(bites > 0, 'and bit them');
+    assert.ok(bitAt - woke >= BOT_DELAY_MS + RUNNER_WAKE_MS, `no sooner than drawn (${bitAt - woke} ms)`);
+  }
+  {
+    // Seeing it wake (BOT_DELAY_MS late), a step back at a run (7.5 m/s) for half a second: missed.
+    const { rs, r, clock } = wreck(player());
+    const p = by(r, WRECK_MAW + 1.5);
+    const back = [Math.sin(r.yaw), Math.cos(r.yaw)];
+    const { bites } = run(rs, [p], clock, 10, (now) => {
+      if (r.lungeAt > 0 && now >= r.lungeAt + BOT_DELAY_MS && now < r.lungeAt + BOT_DELAY_MS + 500) {
+        p.x += back[0] * 0.75;
+        p.z += back[1] * 0.75;
+      }
+      return r.lungeAt > 0 && r.lunged;
+    });
+    assert.ok(r.lungeAt > 0, 'it woke');
+    assert.equal(bites, 0, 'a step back and it snaps on nothing');
+  }
+  {
+    // At its flank or its tail (its spoils): it lies still.
+    const { rs, r, clock } = wreck(player());
+    const { bites } = run(rs, [by(r, 0, 2.5), by(r, -3)], clock, 10);
+    assert.equal(bites, 0);
+    assert.equal(r.lungeAt, 0, 'it never woke');
   }
 });
 

@@ -156,6 +156,7 @@ export const SYNTHS = {
   'crawler-tick': { trim: 0, what: "a crawler's foot: a dry little tick of claw on sand", by: GUARDIAN },
   'crawler-rattle': { trim: 0, what: 'a crawler crouching to lunge: a dry rattle quickening to the spring in arg s', by: GUARDIAN },
   'crawler-chitter': { trim: 0, what: "a crawler going for you: a rattling chitter (arg 'bite': a snap of mandibles)", by: GUARDIAN },
+  'runner-wake': { trim: 0, what: "a runner's wreck waking: a servo groaning up under a ratchet quickening to the snap in arg s", by: GUARDIAN },
   'cannon-charge': { trim: 0, what: "a guardian's cannon charging: a rising whine over arg s", by: GUARDIAN },
   'guardian-horn': { trim: 0, what: 'a guardian starting to hunt you: a low brass chord swelling and fading', by: GUARDIAN },
   'lock-chirp': { trim: 0, what: 'a drone locking on to you: two short rising chirps', by: GUARDIAN },
@@ -216,6 +217,9 @@ export const EVENTS = {
   'crawler.rattle': { sounds: ['crawler-rattle'], gain: 0.12, route: 'placed', ref: 4, hear: 40, warning: true, arg: 0.6, by: 'src/guardianSound.ts rattle' },
   'crawler.chitter': { sounds: ['crawler-chitter'], gain: 0.05, route: 'spatial', ref: 4, by: 'src/guardianSound.ts chitter' },
   'crawler.bite': { sounds: ['crawler-chitter'], gain: 0.1, route: 'spatial', ref: 4, arg: 'bite', by: 'src/guardianSound.ts chitter (bite)' },
+  // A runner's wreck waking to bite: the warning to step back, on the protected bus like the crawler's rattle, ~3 LU
+  // over it (offline: −11.0 LUFS at unity vs the rattle's −14.6, so ≈ −30 vs −33 LUFS at these gains). arg: seconds to the snap.
+  'runner.wake': { sounds: ['runner-wake'], gain: 0.11, route: 'placed', ref: 5, hear: 60, warning: true, arg: 1, by: 'src/guardianSound.ts wake' },
   'cannon.charge': { sounds: ['cannon-charge'], gain: 0.035, route: 'spatial', ref: 30, arg: 1.5, by: 'src/guardianSound.ts charge (arg: seconds)' },
   'guardian.horn': { sounds: ['guardian-horn'], gain: 0.22, route: 'spatial', ref: 60, by: 'src/guardianSound.ts horn' },
   'drone.lockOn': { sounds: ['lock-chirp'], gain: 0.07, route: 'direct', by: 'src/guardianSound.ts chirp' },
