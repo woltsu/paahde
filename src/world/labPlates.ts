@@ -40,10 +40,15 @@ export function addLabPlates(scene: THREE.Object3D) {
 }
 
 /** An example of a custom terminal program (docs/terminals.md), on the lab's compact terminal: a status board redrawn
- *  once a second (screen-style `setLines`), a prompt with the cursor blinking at it. */
+ *  once a second (screen-style `setLines`), an image on its right (`drawImage`, sized undistorted with `imageRows`; it
+ *  stays while the text is redrawn), a prompt with the cursor blinking at it. */
 function labBoard(): TerminalProgram {
   let clock = 0, shown = -1;
+  const PIC = 14; // the image's width (cells)
   return {
+    start(text) {
+      text.drawImage('./icons/items/compute_space.png', text.cols - PIC - 1, 2, PIC, text.imageRows(PIC, 128, 128));
+    },
     update(text, dt) {
       clock += dt;
       const s = Math.floor(clock);
@@ -56,7 +61,7 @@ function labBoard(): TerminalProgram {
         ` awake    ${fit(String(s), 6, 'right')} s`,
         ` load     ${bar((Math.sin(clock * 0.7) + 1) / 2, 30)}`,
         '',
-        ...wrap('A custom program: src/world/labPlates.ts labBoard. Any object with update(text, dt) will do; see docs/terminals.md.', w - 2).map((l) => ` ${l}`),
+        ...wrap('A custom program: src/world/labPlates.ts labBoard. Any object with update(text, dt) will do; see docs/terminals.md.', w - PIC - 4).map((l) => ` ${l}`),
       ]);
       text.print(0, text.rows - 1, '> ');
       text.moveTo(2, text.rows - 1);

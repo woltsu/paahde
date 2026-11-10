@@ -105,3 +105,50 @@ test('programs: a function is a program; typewriter types at its rate, then stop
   p.update(t, 1);
   assert.equal(t.version, v, 'nothing more once done');
 });
+
+test('images: placed in cells, removed by id, cleared, kept by setLines', () => {
+  const t = new TerminalText(10, 4);
+  const a = t.drawImage('./a.png', 1, 0.5, 4, 2);
+  const b = t.drawImage('./b.png', 6, 1, 3, 3, { smooth: false });
+  assert.notEqual(a, b);
+  assert.deepEqual(t.images().map((i) => [i.src, i.col, i.row, i.w, i.h, i.smooth]), [['./a.png', 1, 0.5, 4, 2, true], ['./b.png', 6, 1, 3, 3, false]]);
+  t.setLines(['text']);
+  assert.equal(t.images().length, 2, 'redrawing the text keeps the images');
+  assert.equal(t.removeImage(a), true);
+  assert.equal(t.removeImage(a), false);
+  assert.deepEqual(t.images().map((i) => i.id), [b]);
+  t.clearImages();
+  assert.equal(t.images().length, 0);
+  assert.equal(t.line(0).trimEnd(), 'text', 'clearImages leaves the text');
+  t.drawImage('./c.png', 0, 0, 1, 1);
+  t.clear();
+  assert.equal(t.images().length, 0, 'clear takes images too');
+});
+
+test('images scroll up with the text and drop once wholly off the top', () => {
+  const t = new TerminalText(8, 3);
+  t.drawImage('./tall.png', 0, 0, 2, 2);
+  t.drawImage('./low.png', 3, 2, 2, 1);
+  t.write('1\n2\n3\n'); // one line past the bottom: everything up a row
+  assert.deepEqual(t.images().map((i) => [i.src, i.row]), [['./tall.png', -1], ['./low.png', 1]]);
+  t.scroll(1);
+  assert.deepEqual(t.images().map((i) => [i.src, i.row]), [['./low.png', 0]], 'the tall one is gone off the top');
+});
+
+test('images: every change moves the version; touch for a redrawn canvas; rows for an undistorted image', () => {
+  const t = new TerminalText(10, 4, 2.5);
+  let v = t.version;
+  const id = t.drawImage('./a.png', 0, 0, 1, 1);
+  assert.ok(t.version > v);
+  v = t.version;
+  t.touch();
+  assert.ok(t.version > v);
+  v = t.version;
+  t.removeImage(id);
+  assert.ok(t.version > v);
+  v = t.version;
+  t.clearImages();
+  assert.equal(t.version, v, 'clearing nothing is no change');
+  assert.equal(t.cellAspect, 2.5);
+  assert.equal(t.imageRows(10, 64, 64), 4, 'a square 10 cells wide is 4 rows of 2.5-tall cells');
+});

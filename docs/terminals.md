@@ -63,6 +63,26 @@ Plus `moveTo(col, row)`, `showCursor(visible, blink = true)`, `scroll(n)`, and r
 `lines()`, `cols`, `rows`, `cursor`. Control characters are drawn as spaces; any printable character is kept (the VT220
 face has box-drawing and other glyphs beyond ASCII).
 
+### Images
+
+```ts
+const id = text.drawImage('./icons/items/well.png', col, row, w, h);          // in cells; fractions allowed
+const id2 = text.drawImage(myCanvas, 2, 3, 20, text.imageRows(20, myCanvas.width, myCanvas.height), { smooth: false });
+text.removeImage(id); text.clearImages();
+```
+
+- **Where and how big:** in cells, like the text: the top-left corner at (`col`, `row`), stretched to `w` × `h` cells;
+  fractions allowed, clipped at the grid's edges. Cells are taller than wide (`text.cellAspect`, height over width on
+  the glass: 2.5 on the console, 2 on the compact), so size an undistorted image with `text.imageRows(w, imgW, imgH)`.
+- **What from:** a URL (relative, `./...`, under `public/`; loaded once, shared by every screen, the screen redraws when
+  it arrives) or anything a canvas can draw (an `HTMLImageElement`, a canvas, an `ImageBitmap`). A program that draws
+  into its own canvas calls `text.touch()` after each change so the screen redraws.
+- **How it looks:** under the text, shown by brightness in the phosphor's colour, a monochrome tube; colour images go
+  grey, and black is the screen. `{ smooth: false }` keeps pixel art blocky when scaled.
+- **How long:** an image stays until `removeImage(id)`, `clearImages()` or `clear()`; `setLines` and `print` leave it.
+  It scrolls up with the text (teletype writes past the bottom) and is dropped once wholly off the top, so a log line
+  can carry a picture.
+
 Helpers: `fit(s, width, align, fill)` (cut or pad), `bar(frac, width)` (`[####....]`), `wrap(s, width)` (word wrap to
 lines), `typewriter(s, cps)` (a program that types `s` out and stops), `asProgram(fnOrProgram)`.
 

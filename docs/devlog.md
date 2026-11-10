@@ -3427,3 +3427,8 @@ swapped at any time; the code stream moved out as the default program (`src/worl
 `TerminalScreen`. The lab's compact runs `labBoard`, a small status board, as the working example.
 The deck's racks open: F at one swings its door out on a model of its insides, built only for the racks opened and
 freed after, its instanced copy hidden meanwhile (src/levels/beginning/rackDetail.ts, docs/levels/ring.md).
+
+Then images: `TerminalText.drawImage(src, col, row, w, h)` in cells (a URL loaded once for every screen, or any canvas
+source), under the text, by brightness in the phosphor's colour; kept until removed or cleared, scrolling with the
+text; `cellAspect` and `imageRows` size one undistorted. The shader reads brightness now, not the red channel.
+`labBoard` shows an item icon as the example.

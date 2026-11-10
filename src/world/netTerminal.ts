@@ -12,12 +12,12 @@
 import * as THREE from 'three/webgpu';
 import type { LightsNode } from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { abs, color, exp, float, fwidth, max, sin, smoothstep, texture, time, uv, vec2 } from 'three/tsl';
+import { abs, color, exp, float, fwidth, max, sin, smoothstep, texture, time, uv, vec2, vec3 } from 'three/tsl';
 import { glowsHot } from '../post.ts';
 import { glbMaterial } from './glbMaterial.ts';
 import { codeStream } from './codeStream.ts';
 import { dropTerminalSound, offerTerminalSound } from './terminalSound.ts';
-import { asProgram, type ProgramLike, type TerminalProgram, TerminalText } from './terminalText.ts';
+import { asProgram, type ProgramLike, type TerminalImageSource, type TerminalProgram, TerminalText } from './terminalText.ts';
 
 /** The kinds of terminal (tools/blender/terminal.py): the model, its object, the screen's opening (centre height, the
  *  tube's face, size: the script's C_SCREEN_* / SCREEN_*), the text grid on it, and the footprint (m, x by z). */
@@ -118,7 +118,8 @@ export class TerminalScreen {
   private readonly here = new THREE.Vector3();
 
   constructor(o: TerminalScreenOptions) {
-    this.text = new TerminalText(o.cols ?? 56, o.rows ?? 21);
+    const cols = o.cols ?? 56, rows = o.rows ?? 21;
+    this.text = new TerminalText(cols, rows, o.h / rows / (o.w / cols));
     this.prog = asProgram(o.program ?? codeStream(o.seed ?? 0));
     this.prog.start?.(this.text);
     const face = o.face ?? 'vt220';
@@ -126,7 +127,6 @@ export class TerminalScreen {
     this.scale = Math.max(1, Math.round(o.scale ?? 2));
     this.cellW = this.face.cell * this.scale;
     // Cells as tall as the screen's shape asks (a cell's on-glass aspect kept), the canvas the grid plus its margin.
-    const { cols, rows } = this.text;
     this.cellH = Math.round((this.cellW * (o.h / rows)) / (o.w / cols));
     this.canvas.width = cols * this.cellW + 2 * MARGIN;
     this.canvas.height = rows * this.cellH + 2 * MARGIN;
@@ -196,6 +196,28 @@ export class TerminalScreen {
 
   private readonly advances = new Map<string, number>();
 
+  /** An image source as the canvas can draw it: a URL's image once loaded (null until then; it redraws when in). */
+  private source(src: TerminalImageSource): CanvasImageSource | null {
+    if (typeof src !== 'string') return src;
+    let e = imageCache.get(src);
+    if (!e) {
+      const img = new Image();
+      e = { img, ok: false, waiting: new Set() };
+      const entry = e;
+      img.onload = () => {
+        entry.ok = true;
+        for (const s of entry.waiting) s.drawn = -1; // every screen that asked for it: redraw
+        entry.waiting.clear();
+      };
+      img.onerror = () => console.warn(`netTerminal: failed to load image ${src}`);
+      img.src = src;
+      imageCache.set(src, e);
+    }
+    if (e.ok) return e.img;
+    e.waiting.add(this);
+    return null;
+  }
+
   /** A glyph's width in the current face (measured once each). */
   private advance(ch: string): number {
     const key = this.pixelFont ? ch : `~${ch}`;
@@ -208,6 +230,21 @@ export class TerminalScreen {
     const g = this.g, t = this.text;
     g.fillStyle = '#000';
     g.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Images under the text, placed in cells, clipped to the grid (the tube shows them by brightness).
+    const imgs = t.images();
+    if (imgs.length) {
+      g.save();
+      g.beginPath();
+      g.rect(MARGIN, MARGIN, t.cols * this.cellW, t.rows * this.cellH);
+      g.clip();
+      for (const im of imgs) {
+        const src = this.source(im.src);
+        if (!src) continue;
+        g.imageSmoothingEnabled = im.smooth;
+        g.drawImage(src, MARGIN + im.col * this.cellW, MARGIN + im.row * this.cellH, im.w * this.cellW, im.h * this.cellH);
+      }
+      g.restore();
+    }
     g.fillStyle = '#fff';
     // A glyph to a cell, centred in it (a proportional face's too), on whole pixels of its own grid.
     const k = this.scale;
@@ -240,6 +277,9 @@ export class TerminalScreen {
   }
 }
 
+/** Images by URL, loaded once for every screen (`ok` once in; the screens `waiting` redraw then). */
+const imageCache = new Map<string, { img: HTMLImageElement; ok: boolean; waiting: Set<TerminalScreen> }>();
+
 /** The tube: the canvas as a mask lit in the phosphor's colour, a soft halo round the glyphs, scanlines (faded out
  *  where they would shimmer, far off), a slight barrel, dark rounded corners, a faint flicker; the glass's own dim glow
  *  in the phosphor's colour. All that is the glass's emission; the glass itself is black and glossy (a dielectric, the
@@ -251,7 +291,8 @@ function crtMaterial(tex: THREE.Texture, tint: number, pxW: number, pxH: number)
   const st = q.add(0.5);
   const inside = float(1).sub(smoothstep(0.44, 0.5, abs(q.x))).mul(float(1).sub(smoothstep(0.42, 0.5, abs(q.y))));
   const px = vec2(1.6 / pxW, 1.6 / pxH);
-  const tap = (dx: number, dy: number) => texture(tex, st.add(px.mul(vec2(dx, dy)))).r;
+  // By brightness: the text is white, an image any colour (a monochrome tube shows it in its phosphor's).
+  const tap = (dx: number, dy: number) => texture(tex, st.add(px.mul(vec2(dx, dy)))).rgb.dot(vec3(0.2126, 0.7152, 0.0722));
   const glyph = tap(0, 0);
   const halo = tap(1, 1).add(tap(-1, -1)).add(tap(1, -1)).add(tap(-1, 1)).mul(0.25);
   const lines = st.y.mul(pxH / 2);

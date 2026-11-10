@@ -18,6 +18,23 @@ export function asProgram(p: ProgramLike): TerminalProgram {
   return typeof p === 'function' ? { update: p } : p;
 }
 
+/** What an image on a screen is drawn from: a URL (relative, like './icons/items/well.png'; the screen loads and caches
+ *  it) or anything a canvas can draw (an image, a canvas, a bitmap; a program that redraws its own canvas calls
+ *  `touch()`). */
+export type TerminalImageSource = string | CanvasImageSource;
+
+/** An image on a screen, in cells: its top-left corner at (`col`, `row`), `w` by `h` cells (fractions allowed). */
+export type TerminalImage = {
+  readonly id: number;
+  readonly src: TerminalImageSource;
+  col: number;
+  row: number;
+  w: number;
+  h: number;
+  /** Smoothed when scaled (photos, renders) or kept blocky (pixel art). */
+  smooth: boolean;
+};
+
 /** Control characters (but newline and carriage return) drawn as nothing: a space. */
 const CONTROL = /[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/;
 
@@ -27,6 +44,8 @@ const CONTROL = /[\x00-\x09\x0b\x0c\x0e-\x1f\x7f]/;
  *    scrolling up off the bottom (a log, a shell, streamed output);
  *  - like a screen: `print` at a cell (clipped, no wrap or scroll, the cursor stays), `setLine`, `setLines` for a whole
  *    frame, `clear` (a status board, a menu, anything redrawn).
+ *  Images (`drawImage`) sit under the text, placed in cells, shown in the phosphor's colour by their brightness (a
+ *  monochrome tube); they stay until removed or cleared, and scroll up with the text.
  *  `version` changes with every change, so the screen redraws only when there is something new. */
 export class TerminalText {
   readonly cols: number;
@@ -36,11 +55,16 @@ export class TerminalText {
   readonly cursor = { col: 0, row: 0, visible: true, blink: true };
   /** Bumped by every change (the cursor's too). */
   version = 0;
+  /** A cell's height over its width on the glass (about 2-2.5 on the terminals): what `imageRows` sizes images by. */
+  readonly cellAspect: number;
   private readonly cells: string[][];
+  private readonly pics: TerminalImage[] = [];
+  private nextId = 1;
 
-  constructor(cols: number, rows: number) {
+  constructor(cols: number, rows: number, cellAspect = 2) {
     this.cols = Math.max(1, Math.floor(cols));
     this.rows = Math.max(1, Math.floor(rows));
+    this.cellAspect = cellAspect;
     this.cells = Array.from({ length: this.rows }, () => new Array<string>(this.cols).fill(' '));
   }
 
@@ -113,10 +137,51 @@ export class TerminalText {
     this.version++;
   }
 
-  /** Blank every cell; the cursor home. */
+  /** Blank every cell, no images; the cursor home. */
   clear() {
     for (const r of this.cells) r.fill(' ');
+    this.pics.length = 0;
     this.cursor.col = this.cursor.row = 0;
+    this.version++;
+  }
+
+  /** An image with its top-left corner at cell (`col`, `row`), stretched to `w` by `h` cells (fractions allowed; it may
+   *  hang off the edges, clipped there). Under the text, in the phosphor's colour. Returns its id, for `removeImage`. */
+  drawImage(src: TerminalImageSource, col: number, row: number, w: number, h: number, o: { smooth?: boolean } = {}): number {
+    const id = this.nextId++;
+    this.pics.push({ id, src, col, row, w, h, smooth: o.smooth ?? true });
+    this.version++;
+    return id;
+  }
+
+  /** How many rows an image `imgW` x `imgH` (px, or any units) takes at `cols` cells wide, undistorted. */
+  imageRows(cols: number, imgW: number, imgH: number): number {
+    return (cols * imgH) / imgW / this.cellAspect;
+  }
+
+  /** Take an image off (by its id from `drawImage`); false if it is not there. */
+  removeImage(id: number): boolean {
+    const i = this.pics.findIndex((p) => p.id === id);
+    if (i < 0) return false;
+    this.pics.splice(i, 1);
+    this.version++;
+    return true;
+  }
+
+  /** Take every image off (the text stays). */
+  clearImages() {
+    if (!this.pics.length) return;
+    this.pics.length = 0;
+    this.version++;
+  }
+
+  /** The images, in the order drawn (later on top). */
+  images(): readonly TerminalImage[] {
+    return this.pics;
+  }
+
+  /** Something the screen shows changed without a call here (a canvas a program draws into): redraw. */
+  touch() {
     this.version++;
   }
 
@@ -134,12 +199,18 @@ export class TerminalText {
     this.version++;
   }
 
-  /** Everything up `n` rows, blank rows in at the bottom; the cursor stays. */
+  /** Everything up `n` rows, images too (those wholly gone off the top dropped), blank rows in at the bottom; the
+   *  cursor stays. */
   scroll(n = 1) {
     for (let i = 0; i < n; i++) {
       const top = this.cells.shift()!;
       top.fill(' ');
       this.cells.push(top);
+    }
+    for (let i = this.pics.length - 1; i >= 0; i--) {
+      const p = this.pics[i];
+      p.row -= n;
+      if (p.row + p.h <= 0) this.pics.splice(i, 1);
     }
     this.version++;
   }

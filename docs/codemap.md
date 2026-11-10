@@ -270,7 +270,8 @@ Everything built is shared, and anyone can take a building down.
   small beige CRT on a plinth, `public/models/terminal.glb`; both from `tools/blender/terminal.py`; `.object` where it
   stands, screen toward +Z, `.update(dt, eye)` each frame; `lit` for indoor lights; `.program` / `.text`) and
   `TerminalScreen` (only the bulged glass, for any other model's screen). The screen draws a `TerminalText` grid
-  (`src/world/terminalText.ts`: teletype `write` and screen-style `print`/`setLines`, a cursor, `version`; helpers `fit`,
+  (`src/world/terminalText.ts`: teletype `write` and screen-style `print`/`setLines`, images in cells `drawImage` (by
+  URL or any canvas source, shown by brightness under the text, scrolling with it), a cursor, `version`; helpers `fit`,
   `bar`, `wrap`, `typewriter`; tested by `tools/terminal-text.test.mjs`) that a `TerminalProgram` writes each awake frame;
   the default, `src/world/codeStream.ts`, streams the game's own code (a script this page loaded, re-fetched from cache,
   chosen by `seed`; bursts, pauses, slow typed lines). Drawn through a TSL CRT (phosphor `tint`, white by default; halo,
