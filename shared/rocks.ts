@@ -441,3 +441,38 @@ export function rocksNear(x: number, z: number, r: number): boolean {
   }
   return false;
 }
+
+/** Furthest (m) past a rock's rim that its talus reaches (rockFoot). */
+const TALUS_MAX = 30;
+
+/** How near (x, z) is to the foot of a rock formation, 0..1: 1 at the foot of a big rock (and on it), easing to 0 a few
+ *  metres out from a small one and up to TALUS_MAX from a tall cliff. Where fallen stones lie (shared/stones.ts). Pure
+ *  function. */
+export function rockFoot(x: number, z: number): number {
+  if (LAB) return 0;
+  let best = 0;
+  for (let j = Math.floor((z - TALUS_MAX) / ROCK_CELL); j <= Math.floor((z + TALUS_MAX) / ROCK_CELL); j++) {
+    for (let i = Math.floor((x - TALUS_MAX) / ROCK_CELL); i <= Math.floor((x + TALUS_MAX) / ROCK_CELL); i++) {
+      for (const rk of rocksIn(i, j)) {
+        const dx = x - rk.x, dz = z - rk.z;
+        const out = rk.bound + TALUS_MAX;
+        if (Math.abs(dx) > out || Math.abs(dz) > out) continue;
+        // Distance past its rim (the ellipse, unwarped), in metres along the line out from its centre.
+        const u = (dx * rk.ax + dz * rk.az) * rk.invR, v = (dz * rk.ax - dx * rk.az) * rk.invRs;
+        const dn = Math.sqrt(u * u + v * v);
+        const span = Math.min(TALUS_MAX, 4 + rk.H * 0.4);
+        let w: number;
+        if (dn <= 1) w = 1;
+        else {
+          const past = (dn - 1) * Math.sqrt(dx * dx + dz * dz) / dn;
+          if (past >= span) continue;
+          w = ss(1 - past / span);
+        }
+        // A low boulder sheds little; a cliff a lot.
+        w *= Math.min(1, rk.H * (1 / 8));
+        if (w > best) best = w;
+      }
+    }
+  }
+  return best;
+}

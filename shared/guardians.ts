@@ -25,6 +25,7 @@
 // and leaves you be for IGNORE_MS.
 import { collideCrash } from './crashsites.ts';
 import { collideScrap } from './scrap.ts';
+import { collideStones } from './stones.ts';
 import { heightAt, SHOT_FINE, shotGround } from './terrain.ts';
 import { KILL } from './health.ts';
 import { indoors } from './shelters.ts';
@@ -72,7 +73,8 @@ export const F_STRIDE = 6;
 
 const _top = { x: 0, z: 0, vx: 0, vz: 0 };
 /** The top of whatever a walker's foot (of `scale`) put down at (x, z) stands on: sand, rock (part of heightAt), or
- *  the scrap and crash-site wrecks under its pad (their collision capsules, shared/scrap.ts, shared/crashsites.ts). */
+ *  the scrap, crash-site wrecks and stones under its pad (their hitboxes, shared/scrap.ts, shared/crashsites.ts,
+ *  shared/stones.ts). */
 export function footTop(x: number, z: number, scale: number): number {
   let top = heightAt(x, z);
   const h = FOOT_HALF * scale;
@@ -80,7 +82,8 @@ export function footTop(x: number, z: number, scale: number): number {
     _top.x = x + (i === 1 ? h : i === 2 ? -h : 0);
     _top.z = z + (i === 3 ? h : i === 4 ? -h : 0);
     // From far above, nothing pushes: the result is the highest capsule top under the point.
-    top = Math.max(top, collideScrap(_top, 1e6, 1e6, 0, 0), collideCrash(_top, 1e6, 1e6, 0, 0));
+    top = Math.max(top, collideScrap(_top, 1e6, 1e6, 0, 0), collideCrash(_top, 1e6, 1e6, 0, 0),
+      collideStones(_top, 1e6, 1e6, 0, 0));
   }
   return top;
 }

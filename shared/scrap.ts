@@ -23,6 +23,7 @@ import { solarWithin } from './solarfarms.ts';
 import { towerWithin } from './towers.ts';
 import { onPodGround } from './podSpot.ts';
 import { cellInRange } from './cells.ts';
+import { cellCache } from './cellCache.ts';
 import { mulberry32 } from './noise.ts';
 import { LAB } from './world.ts';
 import { baseHeight, heightAt, WORLD_SEED } from './terrain.ts';
@@ -102,15 +103,13 @@ function flatEnough(x: number, z: number): boolean {
 }
 
 const SPAWN_IX = Math.floor(ORIGIN_FRONT.x / SCRAP_CELL), SPAWN_IZ = Math.floor(ORIGIN_FRONT.z / SCRAP_CELL);
-const cache = new Map<string, ScrapPiece[]>();
 const NONE: ScrapPiece[] = [];
+// (Bounded: a long-lived server walks the whole world.)
+const cache = cellCache(8192, (ix, iz) => generate(ix, iz));
 
 /** The props of cell (ix, iz), cell (ix, iz) covering [ix·SCRAP_CELL, (ix+1)·SCRAP_CELL) on each axis. */
 export function scrapPieces(ix: number, iz: number): ScrapPiece[] {
-  const k = `${ix},${iz}`;
-  let list = cache.get(k);
-  if (!list) cache.set(k, (list = generate(ix, iz)));
-  return list;
+  return cache(ix, iz);
 }
 
 function generate(ix: number, iz: number): ScrapPiece[] {

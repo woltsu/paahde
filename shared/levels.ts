@@ -14,6 +14,7 @@ import { collideCrash } from './crashsites.ts';
 import { collideMachines } from './machineBoxes.ts';
 import { collideJetWrecks } from './jetcrash.ts';
 import { collideScrap } from './scrap.ts';
+import { collideStones } from './stones.ts';
 import { collidePods } from './pods.ts';
 import { heightAt } from './terrain.ts';
 import { tarpCeiling, tarpGround } from './tarp.ts';
@@ -105,7 +106,7 @@ function desertGround(x: number, z: number, prevY: number): number {
   return Math.max(sandAt(x, z, prevY), tarpGround(x, z, prevY), towerGround(x, z, prevY));
 }
 
-/** The desert: the dunes, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, the radio towers, what is built
+/** The desert: the dunes, the loose stones, scrap, crash sites, machines, downed jets, the pods, the shelters, the solar farms, the radio towers, what is built
  *  outside and the datacenter's door (shared/levels/entrance.ts). */
 export const desertLevel: Level = {
   id: DESERT,
@@ -114,7 +115,8 @@ export const desertLevel: Level = {
   collide(c, y, prevY, radius, height, stepUp, prevX, prevZ) {
     // Low pieces become the ground, tall ones push you out (the order is the sim's from before levels).
     const scrapTop = Math.max(collideScrap(c, y, prevY, radius, stepUp), collideCrash(c, y, prevY, radius, stepUp),
-      collideMachines(c, y, prevY, radius, stepUp), collideJetWrecks(c, y, prevY, radius, stepUp), collidePods(c, y, prevY, radius, stepUp));
+      collideMachines(c, y, prevY, radius, stepUp), collideJetWrecks(c, y, prevY, radius, stepUp), collidePods(c, y, prevY, radius, stepUp),
+      collideStones(c, y, prevY, radius, stepUp));
     const builtTop = Math.max(collideShelter(c, y, prevY, radius, height, stepUp, prevX, prevZ),
       collideOutdoor(c, y, prevY, radius, height, stepUp), collideEntrance(c, y, prevY, radius, height, stepUp),
       collideSolar(c, y, prevY, radius, height, stepUp), collideTowers(c, y, prevY, radius, height, stepUp));

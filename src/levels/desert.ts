@@ -27,6 +27,7 @@ import { PlacedView } from '../world/placed.ts';
 import { glbMaterial } from '../world/glbMaterial.ts';
 import { WireView } from '../world/wires.ts';
 import { Scrap } from '../world/scrap.ts';
+import { Stones } from '../world/stones.ts';
 import { CrashSites } from '../world/crashsites.ts';
 import { Dust } from '../world/dust.ts';
 import { MachineSites } from '../world/crash.ts';
@@ -59,6 +60,7 @@ export class DesertStage implements Stage {
   /** The power lines between them (shared/wires.ts). */
   wireView!: WireView;
   scrap!: Scrap;
+  stones!: Stones;
   crashSites!: CrashSites;
   dust!: Dust;
   blownSand!: BlownSand;
@@ -119,6 +121,7 @@ export class DesertStage implements Stage {
     d.wireView = new WireView(root);
     await slice();
     d.scrap = new Scrap(root);
+    d.stones = new Stones(root); // loose stones and boulders
     await slice();
     d.crashSites = new CrashSites(root);
     await slice();
@@ -191,6 +194,7 @@ export class DesertStage implements Stage {
       a.terrain = false;
     }
     this.scrap.update(focus);
+    this.stones.update(focus);
     this.crashSites.update(focus);
     this.pods.update(f.time);
     for (const t of this.labTerminals) t.update(f.dt, camera.position);

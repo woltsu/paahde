@@ -241,9 +241,20 @@ export function normalAt(x: number, z: number, out: { x: number; y: number; z: n
 }
 
 /** A shot at world (x, y, z) is stopped here: in the sand, a shelter's walls (down in one the sand above is its roof,
- *  not in the way), or a solar farm's tower or shed. */
+ *  not in the way), a solar farm's tower or shed, or what else has said it stops shots (addShotSolid: the boulders). */
 export function shotSolid(x: number, y: number, z: number): boolean {
-  return shelterSolid(x, y, z) ?? solarSolid(x, y, z) ?? towerSolid(x, y, z) ?? y <= heightAt(x, z);
+  const s = shelterSolid(x, y, z) ?? solarSolid(x, y, z) ?? towerSolid(x, y, z);
+  if (s != null) return s;
+  if (y <= heightAt(x, z)) return true;
+  for (const f of shotSolids) if (f(x, y, z)) return true;
+  return false;
+}
+
+/** More things that stop shots, added by their own modules as they load (shared/stones.ts: imported here it would make an
+ *  import cycle through the sim, which reads this module's constants as it loads). */
+const shotSolids: ((x: number, y: number, z: number) => boolean)[] = [];
+export function addShotSolid(f: (x: number, y: number, z: number) => boolean) {
+  shotSolids.push(f);
 }
 
 /** shotGround's finest step (m): by a shelter, a solar farm's buildings or a radio tower (their walls are ~0.5 m). */

@@ -15,6 +15,7 @@ import { SCRAP_CELL, scrapPieces } from './scrap.ts';
 import { PART_IDS, partOf, pickTier } from './parts.ts';
 import { BLASTER, GUNS, PISTOL, RIFLE } from './rifle.ts';
 import { rocksNear } from './rocks.ts';
+import { stonesNear } from './stones.ts';
 import { POD_LOOT_SPOTS, POD_MACHINE_SPOT, PODS, podLootSpot } from './pods.ts';
 import { nearPod, onPodGround, POD_BIKE_SPOTS, podToWorld } from './podSpot.ts';
 import type { JetKind } from './jetbreak.ts';
@@ -134,9 +135,9 @@ export function nearPiles() {
   return out;
 }
 
-/** Clear sand for a bike lying broken: no rock, no scrap pile's pieces near (x, z). */
+/** Clear sand for a bike lying broken: no rock, stone or scrap pile's pieces near (x, z). */
 function clearSand(x: number, z: number): boolean {
-  if (rocksNear(x, z, 3)) return false;
+  if (rocksNear(x, z, 3) || stonesNear(x, z, 2)) return false;
   const ix = Math.floor(x / SCRAP_CELL), iz = Math.floor(z / SCRAP_CELL);
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     if (scrapPieces(ix + dx, iz + dz).some((p) => Math.hypot(p.x - x, p.z - z) < 4)) return false;
@@ -230,7 +231,7 @@ export function cacheSpot(rand: Rand) {
     const a = between(rand, 0, Math.PI * 2), d = between(rand, CACHE_MIN_R, CACHE_MAX_R);
     x = ORIGIN.x + Math.sin(a) * d;
     z = ORIGIN.z + Math.cos(a) * d;
-    if (!overShelter(x, z, 10) && !nearPod(x, z, 10) && !rocksNear(x, z, 3)) break;
+    if (!overShelter(x, z, 10) && !nearPod(x, z, 10) && !rocksNear(x, z, 3) && !stonesNear(x, z, 1.5)) break;
   }
   return { x, z };
 }
