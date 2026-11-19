@@ -11,6 +11,7 @@
 // &pillion puts a passenger of the same body on the back of each quad; &turn=6 drives them round on the spot as if in a 6 m circle to the left (-6: right), for the riders' lean; &body=0,1,2
 // gives them those bodies (shared/look.ts BODIES) over the plain look. With one clip (?clip, ?ride), one character per look.
 // ?runner: the runner enemy walking and running over the dunes instead of the characters (src/models/runnerLab.ts).
+// lab.stl() (console, or tools/models/stl.mjs) exports the first character as posed to an STL.
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ScavengerModel, type ScavengerClip } from './scavenger';
@@ -157,7 +158,49 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-Object.assign(window, { lab: { models, camera, scene } });
+/** The posed character `i` as a binary STL (base64): every visible mesh (skinned ones as posed, the held item and
+ *  worn gear included) in the model's own space, Z up, millimetres, feet at z = 0. tools/models/stl.mjs saves it. */
+function stl(i = 0): string {
+  const root = models[i].m.root;
+  root.updateMatrixWorld(true);
+  const toRoot = root.matrixWorld.clone().invert();
+  const tris: number[] = [];
+  const v = new THREE.Vector3(), m = new THREE.Matrix4(), inst = new THREE.Matrix4();
+  root.traverseVisible((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry.attributes.position) return;
+    (mesh as THREE.SkinnedMesh).skeleton?.update();
+    const geo = mesh.geometry, index = geo.index, n = index ? index.count : geo.attributes.position.count;
+    const im = mesh as THREE.InstancedMesh;
+    for (let k = 0; k < (im.isInstancedMesh ? im.count : 1); k++) {
+      m.multiplyMatrices(toRoot, mesh.matrixWorld);
+      if (im.isInstancedMesh) m.multiply(im.getMatrixAt(k, inst));
+      const flip = m.determinant() < 0;
+      for (let t = 0; t + 2 < n; t += 3) {
+        for (const c of flip ? [0, 2, 1] : [0, 1, 2]) {
+          mesh.getVertexPosition(index ? index.getX(t + c) : t + c, v).applyMatrix4(m);
+          tris.push(v.x * 1000, -v.z * 1000, v.y * 1000); // Y up → Z up, m → mm
+        }
+      }
+    }
+  });
+  const count = tris.length / 9;
+  const buf = new DataView(new ArrayBuffer(84 + 50 * count));
+  buf.setUint32(80, count, true);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < count; t++) {
+    a.fromArray(tris, t * 9); b.fromArray(tris, t * 9 + 3); c.fromArray(tris, t * 9 + 6);
+    const nrm = c.clone().sub(b).cross(a.clone().sub(b)).normalize();
+    const off = 84 + 50 * t;
+    [nrm, a, b, c].forEach((p, j) => p.toArray().forEach((x, k) => buf.setFloat32(off + j * 12 + k * 4, x, true)));
+  }
+  let s = '';
+  const bytes = new Uint8Array(buf.buffer);
+  for (let j = 0; j < bytes.length; j += 0x8000) s += String.fromCharCode(...bytes.subarray(j, j + 0x8000));
+  return btoa(s);
+}
+
+Object.assign(window, { lab: { models, camera, scene, stl } });
 await renderer.init();
 const timer = new THREE.Timer();
 const label = document.getElementById('label')!;
