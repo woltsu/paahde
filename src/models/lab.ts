@@ -159,17 +159,20 @@ addEventListener('resize', () => {
 });
 
 /** The posed character `i` as a binary STL (base64): every visible mesh (skinned ones as posed, the held item and
- *  worn gear included) in the model's own space, Z up, millimetres, feet at z = 0. tools/models/stl.mjs saves it. */
+ *  worn gear included) in the model's own space, Z up, millimetres, feet at z = 0. Riding (?ride), the bike or quad
+ *  and the pillion come too, in the vehicle's space (wheels at z = 0). tools/models/stl.mjs saves it. */
 function stl(i = 0): string {
-  const root = models[i].m.root;
-  root.updateMatrixWorld(true);
+  const { m: rider, bike, back } = models[i];
+  const roots = [rider.root, ...(bike ? [bike.root] : []), ...(back ? [back.root] : [])];
+  const root = bike?.root ?? rider.root;
+  for (const r of roots) r.updateMatrixWorld(true);
   // Undo the root's place and turn, not its scale: that is the body's size (dwarf, gnome).
   const rp = new THREE.Vector3(), rq = new THREE.Quaternion();
   root.matrixWorld.decompose(rp, rq, new THREE.Vector3());
   const toRoot = new THREE.Matrix4().compose(rp, rq, new THREE.Vector3(1, 1, 1)).invert();
   const tris: number[] = [];
   const v = new THREE.Vector3(), m = new THREE.Matrix4(), inst = new THREE.Matrix4();
-  root.traverseVisible((o) => {
+  for (const r of roots) r.traverseVisible((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry.attributes.position) return;
     (mesh as THREE.SkinnedMesh).skeleton?.update();
