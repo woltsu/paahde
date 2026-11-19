@@ -163,7 +163,10 @@ addEventListener('resize', () => {
 function stl(i = 0): string {
   const root = models[i].m.root;
   root.updateMatrixWorld(true);
-  const toRoot = root.matrixWorld.clone().invert();
+  // Undo the root's place and turn, not its scale: that is the body's size (dwarf, gnome).
+  const rp = new THREE.Vector3(), rq = new THREE.Quaternion();
+  root.matrixWorld.decompose(rp, rq, new THREE.Vector3());
+  const toRoot = new THREE.Matrix4().compose(rp, rq, new THREE.Vector3(1, 1, 1)).invert();
   const tris: number[] = [];
   const v = new THREE.Vector3(), m = new THREE.Matrix4(), inst = new THREE.Matrix4();
   root.traverseVisible((o) => {
