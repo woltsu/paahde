@@ -3,7 +3,7 @@
 // e.g. node tools/models/stl.mjs data/rifle-aim.stl 'clip=Idle&item=laser_rifle&aim&pitch=0.1'
 // Opens http://localhost:5173/models-lab.html?<query> in headless Chrome (CHROME=path, default chromium; WebGL2, as
 // its WebGPU is flaky), lets the pose settle and the held item load, then saves `lab.stl()` (src/models/lab.ts):
-// Z up, millimetres, feet at z = 0.
+// Z up, millimetres, feet at z = 0. tools/models/stand.mjs puts it on a stand for printing.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
